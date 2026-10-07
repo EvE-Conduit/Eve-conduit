@@ -16,7 +16,7 @@
       conduit upgrade <eve-conduit-X.Y.Z-windows.zip>
       conduit rollback                       back to the previous release
       conduit repair                         redo the last steps of an upgrade that stopped half-way
-      conduit apply-update                   install an update approved on the website (run by the updater task)
+      conduit apply-update                   install an update or plugins approved on the website (run by the updater task)
       conduit plugin install <package>       PyPI name, git URL or path
       conduit plugin list
       conduit tray [on|off]                  open the tray control panel, or start it at sign-in (on/off)
@@ -119,6 +119,7 @@ function Invoke-Backup {
         }
         if ($LASTEXITCODE -ne 0) { throw 'Database dump failed' }
         Copy-Item $p.EnvFile, $p.Plugins -Destination $work
+        if (Test-Path -LiteralPath $p.PluginsSite) { Copy-Item $p.PluginsSite -Destination $work }
         (Get-Item $p.App).Target | Set-Content (Join-Path $work 'release.txt')
         $zip = "$work.zip"
         Compress-Archive -Path (Join-Path $work '*') -DestinationPath $zip
@@ -246,6 +247,85 @@ function Invoke-ApplyUpdate {
     finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Invoke-ApplyPluginRequest {
+    <#
+      Plugins installed or removed under Administration -> Plugins. conduit.plugins.installer checks the request
+      (signed catalog, pinned versions, git URLs only if conduit.env allows them) and writes plugins-site.txt.new.
+      Then: back up, pip, migrate, restart. If anything fails, the previous plugin list is put back.
+    #>
+    Assert-Admin
+    $updates = Get-ConduitUpdatesDir -Root $Root
+    if (-not (Test-Path -LiteralPath (Join-Path $updates 'plugins-request.json'))) { return }
+    $log = Join-Path $p.Logs 'updater.log'
+    $python = Join-Path $p.Venv 'Scripts\python.exe'
+    $helper = @('-I', '-m', 'conduit.plugins.installer')
+    $plan = @(Invoke-NativeCommand -FilePath $python -ArgumentList ($helper + @('prepare', $updates, $p.PluginsSite, $p.PluginSerial, '--env-file', $p.EnvFile)))
+    if ($LASTEXITCODE -ne 0) {
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) refused a plugin request: $($plan -join ' ')"
+        return
+    }
+    $id = ''
+    $summary = ''
+    $uninstall = @()
+    $reinstall = @()
+    foreach ($line in $plan) {
+        $kind, $value = "$line".Split("`t", 2)
+        switch ($kind) {
+            'id' { $id = $value }
+            'summary' { $summary = $value }
+            'uninstall' { $uninstall += $value }
+            'reinstall' { $reinstall += $value }
+        }
+    }
+    function Write-PluginResult([string]$Status, [string]$Message) {
+        Invoke-NativeCommand -FilePath $python -ArgumentList ($helper + @('result', $updates, $id, $Status, $Message)) | Out-Null
+    }
+    function Write-Log { process { Add-Content -LiteralPath $log -Value "$_" } }
+    Write-PluginResult 'running' "Installing: $summary"
+    Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) plugins: $summary"
+    $before = @(Invoke-NativeCommand -FilePath $python -ArgumentList ($helper + @('dists')))
+    $backup = "$($p.PluginsSite).bak"
+    if (Test-Path -LiteralPath $p.PluginsSite) { Copy-Item -LiteralPath $p.PluginsSite -Destination $backup -Force }
+    else { Set-Content -LiteralPath $backup -Value '' }
+    Move-Item -LiteralPath "$($p.PluginsSite).new" -Destination $p.PluginsSite -Force
+    $current = (Get-Item $p.App).Target
+    if ($current -is [array]) { $current = $current[0] }
+    try {
+        Invoke-Backup *>&1 | Write-Log
+        # Windows locks DLLs that are in use, so stop the app before pip replaces anything.
+        Stop-AppService
+        foreach ($pkg in $uninstall) {
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'uninstall', '--yes', '--disable-pip-version-check', $pkg) `
+                -FailMessage "Removing $pkg failed" | Write-Log
+        }
+        Install-ConduitPythonPackage -Root $Root -ReleaseDir $current -MariaDb:(Test-MariaDb) *>&1 | Write-Log
+        foreach ($url in $reinstall) {
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--force-reinstall', '--no-deps', '--disable-pip-version-check', $url) `
+                -FailMessage "Fetching $url again failed" | Write-Log
+        }
+        Invoke-Finish $current *>&1 | Write-Log
+        Restart-All
+        Remove-Item -LiteralPath $backup -Force
+        Write-PluginResult 'succeeded' 'The site has restarted with the changes.'
+    }
+    catch {
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) plugin change failed: $_. Putting the previous plugins back."
+        Move-Item -LiteralPath $backup -Destination $p.PluginsSite -Force
+        $after = @(Invoke-NativeCommand -FilePath $python -ArgumentList ($helper + @('dists')))
+        foreach ($pkg in ($after | Where-Object { $before -notcontains $_ })) {
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'uninstall', '--yes', '--disable-pip-version-check', $pkg) | Write-Log
+        }
+        try {
+            Stop-AppService
+            Install-ConduitPythonPackage -Root $Root -ReleaseDir $current -MariaDb:(Test-MariaDb) *>&1 | Write-Log
+            Invoke-Finish $current *>&1 | Write-Log
+        }
+        catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) putting the previous plugins back failed too: $_" }
+        Restart-All
+        Write-PluginResult 'failed' "That didn't work, so the previous plugins were put back (details in logs\updater.log)."
+    }
+}
+
 function Invoke-Rollback {
     Assert-Admin
     $file = Join-Path $Root 'previous.txt'
@@ -300,7 +380,7 @@ switch ($Command) {
     'backup' { Invoke-Backup }
     'upgrade' { Invoke-Upgrade ($Rest | Select-Object -First 1) }
     'rollback' { Invoke-Rollback }
-    'apply-update' { Invoke-ApplyUpdate }
+    'apply-update' { Invoke-ApplyUpdate; Invoke-ApplyPluginRequest }
     'repair' {
         # Migrations, static files, web front end and admin scripts for the release that's linked now.
         Assert-Admin

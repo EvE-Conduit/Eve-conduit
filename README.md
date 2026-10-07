@@ -42,7 +42,10 @@ Caddy obtains the HTTPS certificate for `CONDUIT_DOMAIN` automatically. On first
 
 ### Installing plugins
 
-Add the package to `requirements-plugins.txt` (a PyPI name, git URL or local path), then run `docker compose up -d --build`. New plugins appear switched off under **Administration → Plugins**.
+**Administration → Plugins → Browse** lists the official plugins and gives each one's line for
+`requirements-plugins.txt`. Add it (or any PyPI name, git URL or local path), then run `docker compose up -d --build`.
+New plugins appear switched off under **Administration → Plugins**. Windows and bare-metal installs install
+plugins from that page directly; see [plugins/README.md](plugins/README.md).
 
 ## Updating
 
@@ -117,7 +120,9 @@ plugins/conduit-example/   a complete plugin; copy it to start a new one
 
 ## Writing a plugin
 
-Start from `plugins/conduit-example`. A plugin has two parts.
+Start from `plugins/conduit-example`. Official plugins live in [`plugins/`](plugins/), which is published to
+[github.com/EvE-Conduit/plugins](https://github.com/EvE-Conduit/plugins) with a signed catalog; see
+[plugins/README.md](plugins/README.md). A plugin has two parts.
 
 **Python:** a `Plugin` subclass registered under the `conduit.plugins` entry point:
 

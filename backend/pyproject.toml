@@ -10,6 +10,7 @@ dependencies = [
     "celery[redis]>=5.5",
     "redis>=5",
     "httpx>=0.28",
+    "packaging>=24",
     "pyjwt[crypto]>=2.10",
     "cryptography>=44",
     "psycopg[binary]>=3.2",

@@ -8,7 +8,7 @@
 #   conduit upgrade <release.tar.gz>      install a new release (keeps the old one for rollback)
 #   conduit rollback                      switch back to the previous release
 #   conduit backup                        dump the database and config to /var/backups/conduit
-#   conduit apply-update                  install an update approved on the website (run by cron as root)
+#   conduit apply-update                  install an update or plugins approved on the website (run by cron as root)
 #   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
 #   conduit plugin list                   list installed plugins
 #   conduit run web|worker|beat           used by Supervisor to start the services
@@ -25,7 +25,12 @@ APP="$CONDUIT_HOME/app"
 VENV="$CONDUIT_HOME/venv"
 ENV_FILE="$CONDUIT_ETC/conduit.env"
 PLUGINS_FILE="$CONDUIT_ETC/plugins.txt"
+# Plugins installed from Administration -> Plugins (written only by apply-update) and the newest catalog it used.
+PLUGINS_SITE_FILE="$CONDUIT_ETC/plugins-site.txt"
+PLUGIN_SERIAL_FILE="$CONDUIT_ETC/plugin-catalog.serial"
 SUPERVISOR_GROUP=conduit
+# Steps whose failure must be noticed run as a new process of this script: inside "if ( ... )" bash ignores set -e.
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
 
 die() { echo "conduit: $*" >&2; exit 1; }
 
@@ -71,7 +76,7 @@ publish_web() {
 }
 
 install_python() {
-  # Backend plus every plugin listed in plugins.txt (paths are relative to the release).
+  # Backend plus every plugin in plugins.txt (paths are relative to the release) and plugins-site.txt.
   # Runs as root: the venv is root-owned so the service can't modify its own code.
   local release="$1" extras=""
   require_root
@@ -80,6 +85,9 @@ install_python() {
   (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade "./backend$extras")
   if [[ -s "$PLUGINS_FILE" ]]; then
     (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$PLUGINS_FILE")
+  fi
+  if grep -qv '^\s*\(#\|$\)' "$PLUGINS_SITE_FILE" 2>/dev/null; then
+    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$PLUGINS_SITE_FILE")
   fi
 }
 
@@ -166,6 +174,7 @@ subprocess.run(cmd, env=env, check=True)
 PY
   cp "$ENV_FILE" "$dir/conduit.env"
   [[ -f "$PLUGINS_FILE" ]] && cp "$PLUGINS_FILE" "$dir/plugins.txt"
+  [[ -f "$PLUGINS_SITE_FILE" ]] && cp "$PLUGINS_SITE_FILE" "$dir/plugins-site.txt"
   readlink -f "$APP" > "$dir/release.txt" || true
   tar -czf "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz" -C "$dir" .
   chmod 600 "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz"
@@ -195,12 +204,18 @@ for mid, e in sorted(registry.discover().items()):
 }
 
 # Run every two minutes by /etc/cron.d/conduit-update. The website (running as the conduit user) downloads and
-# verifies releases into the updates folder and leaves install-request.json there when an admin clicks Install.
-# Nothing in that folder is trusted: the release is copied to a root-only temp dir and its signature checked again
-# with the installed EvE Conduit before the normal upgrade runs.
+# verifies releases into the updates folder and leaves install-request.json there when an admin clicks Install,
+# or plugins-request.json when they install or remove plugins.
 cmd_apply_update() {
   require_root
   load_env
+  apply_release_request
+  apply_plugin_request
+}
+
+# Nothing in the updates folder is trusted: the release is copied to a root-only temp dir and its signature checked
+# again with the installed EvE Conduit before the normal upgrade runs.
+apply_release_request() {
   local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
   local request="$updates/install-request.json" result="$updates/install-result.json"
   local log="$CONDUIT_LOG/updater.log"
@@ -234,7 +249,7 @@ print(v if ok else "")' "$request" 2>/dev/null || true)
     write_result failed "The release failed its signature check: $check"; rm -rf "$work"; return 0
   fi
   echo "$(date -Is) installing $version: $check" >>"$log"
-  if ( cmd_upgrade "$work/$file" ) >>"$log" 2>&1; then
+  if "$SELF" upgrade "$work/$file" >>"$log" 2>&1; then
     write_result succeeded "EvE Conduit $version is running."
   else
     echo "$(date -Is) upgrade to $version failed; putting the running release back" >>"$log"
@@ -243,6 +258,77 @@ print(v if ok else "")' "$request" 2>/dev/null || true)
     write_result failed "The upgrade to $version failed and the previous version was put back (details in $log)."
   fi
   rm -rf "$work"
+}
+
+# The request is checked by conduit.plugins.installer (signed catalog, pinned versions, git URLs only if this
+# server's conduit.env allows them), which writes the new plugins-site.txt.new. Then: back up, pip, migrate,
+# restart; if anything fails, the previous plugin list is put back.
+apply_plugin_request() {
+  local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
+  local log="$CONDUIT_LOG/updater.log"
+  [[ -f "$updates/plugins-request.json" ]] || return 0
+  local helper=("$VENV/bin/python" -I -m conduit.plugins.installer)
+  local plan id="" summary="" kind value
+  local -a uninstall=() reinstall=()
+  if ! plan=$("${helper[@]}" prepare "$updates" "$PLUGINS_SITE_FILE" "$PLUGIN_SERIAL_FILE" --env-file "$ENV_FILE" 2>>"$log"); then
+    echo "$(date -Is) refused a plugin request (reason above)" >>"$log"
+    chown "$CONDUIT_USER:$CONDUIT_USER" "$updates/plugins-result.json" 2>/dev/null || true
+    return 0
+  fi
+  while IFS=$'\t' read -r kind value; do
+    case "$kind" in
+      id) id=$value ;;
+      summary) summary=$value ;;
+      uninstall) uninstall+=("$value") ;;
+      reinstall) reinstall+=("$value") ;;
+    esac
+  done <<<"$plan"
+  plugin_result() {  # status message
+    "${helper[@]}" result "$updates" "$id" "$1" "$2"
+    chown "$CONDUIT_USER:$CONDUIT_USER" "$updates/plugins-result.json" 2>/dev/null || true
+  }
+  plugin_result running "Installing: $summary"
+  echo "$(date -Is) plugins: $summary" >>"$log"
+  local before
+  before=$("${helper[@]}" dists | sort)
+  if [[ -f "$PLUGINS_SITE_FILE" ]]; then cp -p "$PLUGINS_SITE_FILE" "$PLUGINS_SITE_FILE.bak"; else : >"$PLUGINS_SITE_FILE.bak"; fi
+  mv "$PLUGINS_SITE_FILE.new" "$PLUGINS_SITE_FILE"
+  chown root:"$CONDUIT_USER" "$PLUGINS_SITE_FILE" 2>/dev/null || true
+  chmod 0640 "$PLUGINS_SITE_FILE"
+  local -a steps=()
+  for pkg in "${uninstall[@]}"; do steps+=("uninstall=$pkg"); done
+  for url in "${reinstall[@]}"; do steps+=("reinstall=$url"); done
+  if "$SELF" _apply-plugins "${steps[@]}" >>"$log" 2>&1; then
+    rm -f "$PLUGINS_SITE_FILE.bak"
+    plugin_result succeeded "The site has restarted with the changes."
+  else
+    echo "$(date -Is) plugin change failed; putting the previous plugins back" >>"$log"
+    mv "$PLUGINS_SITE_FILE.bak" "$PLUGINS_SITE_FILE"
+    local added
+    added=$(comm -13 <(echo "$before") <("${helper[@]}" dists | sort))
+    for pkg in $added; do "$VENV/bin/python" -m pip uninstall --quiet --yes "$pkg" >>"$log" 2>&1 || true; done
+    install_python "$(readlink -f "$APP")" >>"$log" 2>&1 || true
+    finish_deploy >>"$log" 2>&1 || true
+    supervisor restart "$SUPERVISOR_GROUP:*" >>"$log" 2>&1 || true
+    plugin_result failed "That didn't work, so the previous plugins were put back (details in $log)."
+  fi
+}
+
+# Internal (apply_plugin_request): back up, uninstall/reinstall what the plan says, install every listed plugin,
+# migrate and restart. Arguments are "uninstall=<package>" and "reinstall=<git URL>".
+cmd_apply_plugins() {
+  require_root
+  cmd_backup
+  local step
+  for step in "$@"; do
+    if [[ "$step" == uninstall=* ]]; then "$VENV/bin/python" -m pip uninstall --quiet --yes "${step#uninstall=}"; fi
+  done
+  install_python "$(readlink -f "$APP")"
+  for step in "$@"; do
+    if [[ "$step" == reinstall=* ]]; then "$VENV/bin/python" -m pip install --quiet --force-reinstall --no-deps "${step#reinstall=}"; fi
+  done
+  finish_deploy
+  supervisor restart "$SUPERVISOR_GROUP:*"
 }
 
 cmd_run() {
@@ -267,6 +353,7 @@ case "${1:-}" in
   rollback) cmd_rollback ;;
   backup) cmd_backup ;;
   apply-update) cmd_apply_update ;;
+  _apply-plugins) shift; cmd_apply_plugins "$@" ;;
   plugin) shift; cmd_plugin "$@" ;;
   run) shift; cmd_run "$@" ;;
   *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;

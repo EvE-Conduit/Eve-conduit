@@ -44,5 +44,11 @@ to re-encrypt everything with it. Then the old key can be removed from `CONDUIT_
 - **Stored settings** (dashboard layout, plugin settings) are limited to 64 KB each.
 - **Headers:** `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and a strict referrer policy from both
   Django and the bundled proxies.
-- **Audit log** for every login, impersonation, membership, permission, key and webhook change.
+- **Installing plugins from the website** goes through the same privileged updater as releases; the site itself
+  can't change its code. Catalog plugins come from a catalog signed with the release key and are pinned to a
+  commit; the updater checks the signature again and refuses a catalog older than one it already used. Plugins
+  from other git URLs are only accepted when the server's own config file says `CONDUIT_PLUGIN_URLS=true`, because
+  a plugin runs with the site's access to the database and members' tokens. Plugins installed on the server
+  (`plugins.txt`, the Docker image) can't be removed or changed from the website.
+- **Audit log** for every login, impersonation, membership, permission, key, webhook and plugin change.
 - **External API keys** are stored hashed, can be limited to IP ranges and given an expiry, and every call is logged.

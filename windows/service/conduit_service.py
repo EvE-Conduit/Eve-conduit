@@ -50,6 +50,7 @@ def load_settings(root: Path) -> None:
         os.environ.setdefault(key, value)  # real environment variables win
     os.environ.setdefault("CONDUIT_STATIC_ROOT", str(root / "data" / "static"))
     os.environ.setdefault("CONDUIT_LOG_DIR", str(root / "logs"))  # shown under Administration > Logs
+    os.environ.setdefault("CONDUIT_PLUGIN_SITE_FILE", str(root / "config" / "plugins-site.txt"))  # written by the updater
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "conduit.settings")
 
 
