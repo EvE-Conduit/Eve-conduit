@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
-import { Back, Check, External, Form as FormIcon, Hand, Users, X } from "./icons";
+import { Back, Check, External, Form as FormIcon, Hand, Settings, Users, X } from "./icons";
 import { Answer, Conversation, Progress, StatusBadge } from "./shared";
 import { type ApplicationInfo, BASE, type CharacterSummary, type Status } from "./types";
 
@@ -47,7 +47,14 @@ export function QueuePage() {
         title="Applications"
         icon={<Users />}
         description="People who want to join. Open one to see their answers and characters, talk to them, and accept or reject."
-        actions={canManage ? <Link to="/p/recruit/forms"><Button><FormIcon /> Forms</Button></Link> : undefined}
+        actions={
+          canManage ? (
+            <>
+              <Link to="/p/recruit/settings"><Button variant="ghost"><Settings /> Settings</Button></Link>
+              <Link to="/p/recruit/forms"><Button><FormIcon /> Forms</Button></Link>
+            </>
+          ) : undefined
+        }
       />
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-card py-3">

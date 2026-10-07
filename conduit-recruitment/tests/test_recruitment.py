@@ -186,7 +186,7 @@ def test_not_checked_while_the_discord_plugin_is_off(setup, discord_on, api_clie
     require_discord(api_client, recruiter)
     set_enabled("discord", False)
     api_client.force_login(recruiter)
-    plugin = api_client.call("get", "/api/p/recruit/forms").json()["settings"]["discord_plugin"]
+    plugin = api_client.call("get", "/api/p/recruit/settings").json()["discord_plugin"]
     assert plugin == {"installed": True, "enabled": False, "configured": False}
     api_client.force_login(applicant)
     assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
@@ -207,6 +207,7 @@ def test_cant_turn_on_without_the_discord_plugin_installed(setup, api_client, mo
 def test_only_form_managers_change_settings(setup, api_client):
     _, _, applicant, _ = setup
     api_client.force_login(applicant)
+    assert api_client.call("get", "/api/p/recruit/settings").status_code == 403
     assert api_client.call("put", "/api/p/recruit/settings", {"require_discord": True}).status_code == 403
 
 

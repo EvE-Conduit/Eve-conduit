@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { ApplyPage } from "./apply";
 import { FormsPage } from "./forms";
 import { ApplicationPage, QueuePage } from "./review";
+import { SettingsPage } from "./settings";
 import { BASE } from "./types";
 
 /** Recruiters land on the queue, everyone else on the application form. */
@@ -40,6 +41,7 @@ export default definePlugin({
     { path: "apply", Component: ApplyPage },
     { path: "applications/:id", Component: ApplicationPage },
     { path: "forms", Component: FormsPage },
+    { path: "settings", Component: SettingsPage },
   ],
   widgets: [{ id: "queue", title: "Recruitment", Component: RecruiterWidget, size: "sm", order: 30, permission: "recruit.review_applications" }],
 });
