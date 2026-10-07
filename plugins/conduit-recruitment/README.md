@@ -12,10 +12,11 @@ Application forms, a review queue, and accepting people into groups.
   and accept or reject it with a message. Accepting adds the applicant to the form's groups.
 - **Forms** (permission `recruit.manage_forms`): any number, e.g. one per corporation. Questions can be short or
   long answers, yes/no or pick-one, and required or not. Close a form to stop new applications.
-- **Require Discord** (on by default, per form): with the [Discord](../conduit-discord) plugin on, applicants must
-  link their Discord account and be on the server before they can send the form. The apply page tells them what's
-  missing and links to the Discord page; the check asks Discord live when they apply. Give your Guest state
-  `discord.access_discord` so applicants can link. Without the Discord plugin the setting does nothing.
+- **Require Discord** (off by default; the switch is at the top of the Forms page): applicants must link their
+  Discord account and be on your server before they can send an application. The apply page tells them what's
+  missing and links to the Discord page; Discord is asked live when they apply. **Needs the
+  [Discord](../conduit-discord) plugin installed, switched on and set up**; until it is, nothing is checked and the
+  Forms page says so. Give your Guest state `discord.access_discord` so applicants can link.
 - **Webhooks:** `recruit.application_submitted` and `recruit.application_decided` can be sent to Discord or Slack
   under Administration → Integrations.
 

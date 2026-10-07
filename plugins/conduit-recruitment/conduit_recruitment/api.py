@@ -39,10 +39,8 @@ def me(request):
     mine = Application.objects.filter(user=request.user).select_related("form", "user", "reviewer")
     current = next((a for a in mine if a.is_open), None)
     forms = list(Form.objects.filter(open=True))
-    # Only asked when it matters, since it's a call to Discord: not applying yet, and a form wants it.
-    discord = None
-    if current is None and any(f.require_discord for f in forms) and services.discord_checked():
-        discord = services.discord_status(request.user)
+    # Only asked when it matters, since it's a call to Discord: Require Discord is on and they're not applying yet.
+    discord = services.discord_status(request.user) if current is None and forms and services.discord_required() else None
     return {
         "forms": [services.form_out(f) for f in forms],
         "discord": discord,
@@ -145,7 +143,19 @@ def forms(request):
     return {
         "forms": [services.form_out(f, admin=True) for f in Form.objects.prefetch_related("accept_groups")],
         "groups": [{"id": g.pk, "name": g.name} for g in Group.objects.order_by("name")],
+        "settings": services.settings_out(),
     }
+
+
+class SettingsIn(Schema):
+    require_discord: bool
+
+
+@router.put("/settings")
+@require_perm("recruit.manage_forms")
+def update_settings(request, payload: SettingsIn):
+    _run(services.save_settings, payload.require_discord, request.user, request=request)
+    return services.settings_out()
 
 
 class FormIn(Schema):
@@ -154,7 +164,6 @@ class FormIn(Schema):
     questions: list[dict] = []
     accept_groups: list[int] = []
     open: bool = True
-    require_discord: bool = True
     order: int = 0
 
 

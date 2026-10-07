@@ -20,7 +20,7 @@ from conduit.eve.models import portrait_url
 from conduit.events import bus
 from conduit.notify.services import notify, users_with_perm
 
-from .models import Application, Comment, Form
+from .models import Application, Comment, Form, RecruitSettings
 
 KINDS = ("text", "long", "yesno", "choice")
 REVIEW_PERM = "recruit.review_applications"
@@ -68,8 +68,7 @@ def clean_questions(raw) -> list[dict]:
 
 
 def form_out(form: Form, *, admin: bool = False) -> dict:
-    out = {"id": form.pk, "name": form.name, "description": form.description, "questions": form.questions, "open": form.open,
-           "require_discord": form.require_discord}
+    out = {"id": form.pk, "name": form.name, "description": form.description, "questions": form.questions, "open": form.open}
     if admin:
         out["accept_groups"] = [{"id": g.pk, "name": g.name} for g in form.accept_groups.all()]
         out["applications"] = form.applications.count()
@@ -89,7 +88,6 @@ def save_form(form: Form | None, data: dict, by, request=None) -> Form:
         form.description = str(data.get("description", "")).strip()[:4000]
         form.questions = questions
         form.open = bool(data.get("open", True))
-        form.require_discord = bool(data.get("require_discord", True))
         form.order = int(data.get("order") or 0)
         form.save()
         form.accept_groups.set(groups)
@@ -101,15 +99,39 @@ def save_form(form: Form | None, data: dict, by, request=None) -> Form:
 # --- Discord ----------------------------------------------------------------------------------------------------
 
 
-def discord_checked() -> bool:
-    """Forms that require Discord are only enforced while the Discord plugin is on and set up."""
+def discord_plugin() -> dict:
+    """Where the Discord plugin stands, for the settings page: it must be installed, on and set up."""
+    from conduit.plugins import registry
     from conduit.plugins.services import is_enabled
 
-    if not is_enabled("discord"):
-        return False
-    from conduit_discord.models import DiscordSettings
+    installed = "discord" in registry.installed()
+    enabled = installed and is_enabled("discord")
+    configured = False
+    if enabled:
+        from conduit_discord.models import DiscordSettings
 
-    return DiscordSettings.load().configured
+        configured = DiscordSettings.load().configured
+    return {"installed": installed, "enabled": enabled, "configured": configured}
+
+
+def discord_required() -> bool:
+    """The Require Discord option is on and the Discord plugin can check it; otherwise nobody is held back."""
+    return RecruitSettings.load().require_discord and discord_plugin()["configured"]
+
+
+def save_settings(require_discord: bool, by, request=None) -> RecruitSettings:
+    s = RecruitSettings.load()
+    if require_discord and not discord_plugin()["installed"]:
+        raise RecruitError("Install the Discord plugin first: Administration → Plugins")
+    s.require_discord = require_discord
+    s.save()
+    record("recruit.settings_saved", f"turned Require Discord {'on' if require_discord else 'off'} for recruitment",
+           request=request, actor=by, target_type="plugin", details={"require_discord": require_discord})
+    return s
+
+
+def settings_out() -> dict:
+    return {"require_discord": RecruitSettings.load().require_discord, "discord_plugin": discord_plugin()}
 
 
 def discord_status(user) -> dict:
@@ -129,8 +151,8 @@ def discord_status(user) -> dict:
     return out
 
 
-def check_discord(user, form: Form) -> None:
-    if not form.require_discord or not discord_checked():
+def check_discord(user) -> None:
+    if not discord_required():
         return
     status = discord_status(user)
     if status["error"]:
@@ -172,7 +194,7 @@ def apply(user, form: Form, answers) -> Application:
         raise RecruitError("This form isn't taking applications right now")
     if open_application(user):
         raise RecruitError("You already have an application in progress")
-    check_discord(user, form)
+    check_discord(user)
     app = Application.objects.create(user=user, form=form, answers=clean_answers(form, answers))
     reviewers = [u for u in users_with_perm(REVIEW_PERM) if u.pk != user.pk]
     notify(reviewers, f"New application from {user.display_name}", form.name, link=f"/p/recruit/applications/{app.pk}",

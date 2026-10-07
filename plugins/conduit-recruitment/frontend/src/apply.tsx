@@ -42,7 +42,7 @@ export function ApplyPage() {
 
   if (isLoading || !data) return <Skeleton className="h-64" />;
   const current = data.current;
-  const discordBlocked = !!form?.require_discord && !!data.discord && !data.discord.ok;
+  const discordBlocked = !!form && !!data.discord && !data.discord.ok;
 
   return (
     <>
@@ -144,7 +144,7 @@ export function ApplyPage() {
                     {f.description && <p className="mt-1 line-clamp-3 text-sm text-muted">{f.description}</p>}
                     <div className="mt-2 text-xs text-subtle">
                       {f.questions.length} question{f.questions.length === 1 ? "" : "s"}
-                      {f.require_discord && data.discord && " · needs Discord"}
+                      {data.discord && " · needs Discord"}
                     </div>
                   </div>
                 </div>

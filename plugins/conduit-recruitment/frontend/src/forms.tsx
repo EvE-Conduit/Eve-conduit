@@ -1,17 +1,18 @@
 // Setting up what applicants fill in (recruit.manage_forms).
 import {
-  api, Badge, Button, Card, CardBody, ConfirmDialog, Dialog, EmptyState, Field, Input, PageHeader, Select, Skeleton, Switch, Textarea, toast,
+  Alert, api, Badge, Button, Card, CardBody, ConfirmDialog, Dialog, EmptyState, Field, Input, PageHeader, Select, Skeleton, Switch, Textarea, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 
 import { Back, Down, Form as FormIcon, Plus, Trash, Up } from "./icons";
-import { BASE, type FormInfo, type Kind, type Question } from "./types";
+import { BASE, type FormInfo, type Kind, type Question, type RecruitSettings } from "./types";
 
 interface FormsData {
   forms: FormInfo[];
   groups: { id: number; name: string }[];
+  settings: RecruitSettings;
 }
 
 interface Draft {
@@ -19,7 +20,6 @@ interface Draft {
   name: string;
   description: string;
   open: boolean;
-  require_discord: boolean;
   order: number;
   accept_groups: number[];
   questions: (Question & { choicesText?: string })[];
@@ -36,7 +36,6 @@ const EXAMPLE: Draft = {
   name: "",
   description: "",
   open: true,
-  require_discord: true,
   order: 0,
   accept_groups: [],
   questions: [
@@ -73,7 +72,7 @@ export function FormsPage() {
   });
 
   const edit = (f: FormInfo) =>
-    setDraft({ id: f.id, name: f.name, description: f.description, open: f.open, require_discord: f.require_discord, order: f.order ?? 0, accept_groups: (f.accept_groups ?? []).map((g) => g.id), questions: f.questions.map((q) => ({ ...q })) });
+    setDraft({ id: f.id, name: f.name, description: f.description, open: f.open, order: f.order ?? 0, accept_groups: (f.accept_groups ?? []).map((g) => g.id), questions: f.questions.map((q) => ({ ...q })) });
 
   return (
     <>
@@ -85,6 +84,7 @@ export function FormsPage() {
         description="What applicants fill in. Each form can add accepted applicants to groups, e.g. one form per corporation."
         actions={<Button variant="primary" onClick={() => setDraft({ ...EXAMPLE, questions: EXAMPLE.questions.map((q) => ({ ...q })) })}><Plus /> New form</Button>}
       />
+      {data && <SettingsCard settings={data.settings} />}
       {isLoading || !data ? (
         <Skeleton className="h-40" />
       ) : data.forms.length === 0 ? (
@@ -131,6 +131,54 @@ export function FormsPage() {
   );
 }
 
+/** Recruitment-wide options, above the forms. */
+function SettingsCard({ settings }: { settings: RecruitSettings }) {
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: (require_discord: boolean) => api.put<RecruitSettings>(`${BASE}/settings`, { require_discord }),
+    onSuccess: (s) => {
+      qc.setQueryData<FormsData>(["recruit", "forms"], (d) => (d ? { ...d, settings: s } : d));
+      toast.success(s.require_discord ? "Applicants now need Discord" : "Discord is no longer needed to apply");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const { installed, enabled, configured } = settings.discord_plugin;
+  const problem = !installed
+    ? "The Discord plugin isn't installed. Install it under Administration → Plugins to use this."
+    : !enabled
+      ? "The Discord plugin is installed but switched off, so this isn't checked. Switch it on under Administration → Plugins."
+      : !configured
+        ? "The Discord plugin isn't set up yet, so this isn't checked. Finish its setup on the Discord page."
+        : "";
+  return (
+    <Card className="mb-6">
+      <CardBody className="space-y-3">
+        <label className="flex items-start gap-3 text-sm">
+          <Switch
+            checked={settings.require_discord}
+            disabled={save.isPending || (!installed && !settings.require_discord)}
+            onCheckedChange={(on) => save.mutate(on)}
+            aria-label="Require Discord"
+          />
+          <span>
+            <span className="font-medium">Require Discord</span>
+            <span className="block text-muted">
+              Applicants must link their Discord account and be on your Discord server before they can send an application.
+            </span>
+            <span className="mt-1 block text-xs text-subtle">
+              Needs the Discord plugin installed, switched on and set up. Give your Guest state the "Can link a Discord
+              account" permission so applicants can link.
+            </span>
+          </span>
+        </label>
+        {problem && (
+          <Alert tone="warning" title={settings.require_discord ? "Not being checked" : "Discord plugin needed"}>{problem}</Alert>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
 function FormEditor({ draft, setDraft, groups, saving, onSave }: { draft: Draft; setDraft: (d: Draft | null) => void; groups: FormsData["groups"]; saving: boolean; onSave: () => void }) {
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
   const setQ = (i: number, patch: Partial<Draft["questions"][number]>) => set({ questions: draft.questions.map((q, n) => (n === i ? { ...q, ...patch } : q)) });
@@ -162,16 +210,6 @@ function FormEditor({ draft, setDraft, groups, saving, onSave }: { draft: Draft;
             <Switch checked={draft.open} onCheckedChange={(open) => set({ open })} /> Taking applications
           </label>
         </div>
-        <label className="flex items-start gap-3 text-sm">
-          <Switch checked={draft.require_discord} onCheckedChange={(require_discord) => set({ require_discord })} />
-          <span>
-            Require Discord
-            <span className="block text-xs text-muted">
-              Applicants must link their Discord account and be on the server before they can apply. Only checked while the
-              Discord plugin is on; give your Guest state the "Can link a Discord account" permission so they can link.
-            </span>
-          </span>
-        </label>
         <Field label="Introduction" hint="Shown above the questions: who you are, what you expect, what happens next.">
           <Textarea rows={3} value={draft.description} onChange={(e) => set({ description: e.target.value })} />
         </Field>

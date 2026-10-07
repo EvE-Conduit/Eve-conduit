@@ -13,8 +13,6 @@ class Form(models.Model):
     #: Groups an accepted applicant is added to.
     accept_groups = models.ManyToManyField(Group, blank=True, related_name="+")
     open = models.BooleanField(default=True)
-    #: Applicants must have linked Discord and be on the server. Checked only while the Discord plugin is on.
-    require_discord = models.BooleanField(default=True)
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -27,6 +25,21 @@ class Form(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class RecruitSettings(models.Model):
+    """Recruitment-wide options. One row."""
+
+    #: Applicants must have linked Discord and be on the server. Needs the Discord plugin installed, on and set up.
+    require_discord = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name_plural = "Recruitment settings"
+
+    @classmethod
+    def load(cls) -> "RecruitSettings":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 class Application(models.Model):
