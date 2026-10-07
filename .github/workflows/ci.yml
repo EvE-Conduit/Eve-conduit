@@ -90,8 +90,10 @@ jobs:
         with:
           name: release-files
           path: dist
+      # Windows PowerShell 5.1 itself (as the setup wizard uses), not started from PowerShell 7, whose module
+      # path would leak into it.
       - name: Install
-        shell: pwsh
+        shell: powershell
         run: |
           $zip = Get-ChildItem dist/eve-conduit-*-windows.zip | Select-Object -First 1
           Expand-Archive $zip.FullName -DestinationPath release
@@ -117,10 +119,9 @@ jobs:
           if (-not (Get-ScheduledTask -TaskName 'EvE Conduit updater' -ErrorAction SilentlyContinue)) { throw 'The updater task is missing' }
       - name: Uninstall
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
-          if (Test-Path C:\EvE-Conduit\uninstall.ps1) {
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\EvE-Conduit\uninstall.ps1 -Mode All -Yes -NoBackup
-          }
+          if (-not (Test-Path C:\EvE-Conduit\uninstall.ps1)) { Write-Host 'Nothing installed to remove.'; exit 0 }
+          & C:\EvE-Conduit\uninstall.ps1 -Mode All -Yes -NoBackup
           if (Get-Service conduit-* -ErrorAction SilentlyContinue) { throw 'Services are left behind' }
           if (Test-Path C:\EvE-Conduit) { throw 'The install folder is left behind' }
