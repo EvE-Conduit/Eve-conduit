@@ -42,7 +42,7 @@ export function MySrpPage() {
               </Link>
             )}
             <Button onClick={() => setClaim("link")}>
-              <LinkIcon /> Claim from kill link
+              <LinkIcon /> Claim from a link
             </Button>
           </div>
         }
@@ -73,7 +73,7 @@ export function MySrpPage() {
               <EmptyState
                 icon={<LifeBuoy />}
                 title="No unclaimed losses"
-                description="Losses show up here once your characters' killmails have synced (they need the killmail scope). Missing one? Claim it from its kill link."
+                description="Losses show up here once your characters' killmails have synced (they need the killmail scope). Missing one? Claim it from its zKillboard link."
               />
             ) : (
               <Table>
