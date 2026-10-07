@@ -289,3 +289,20 @@ def test_docker_gets_instructions(remote, admin_user, settings):
     with pytest.raises(installs.InstallError, match="docker compose"):
         installs.request(admin_user, [{"op": "install", "package": "conduit-discord"}])
 
+
+
+@pytest.mark.django_db
+def test_opening_the_page_loads_the_catalog(remote):
+    out = installs.overview()
+    assert [p["id"] for p in out["catalog"]] == ["discord", "timers"]
+    assert out["catalog_checked_at"]
+
+
+@pytest.mark.django_db
+def test_an_unreachable_catalog_is_reported_not_raised(monkeypatch):
+    def down(url, **kwargs):
+        raise httpx.ConnectError("no route")
+
+    monkeypatch.setattr(installs.httpx, "get", down)
+    out = installs.overview()
+    assert out["catalog"] == [] and "couldn't reach" in out["catalog_error"]

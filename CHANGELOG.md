@@ -3,6 +3,13 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.3
+
+### Fixed
+- **Administration → Plugins → Browse** loads the plugin catalog by itself when it's opened, instead of saying it
+  hasn't been loaded until the daily check or a click on "Refresh catalog". If GitHub can't be reached, the page
+  says so.
+
 ## 0.5.2
 
 ### New
