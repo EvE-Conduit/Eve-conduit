@@ -60,6 +60,9 @@ jobs:
       - name: PowerShell tests
         shell: pwsh
         run: |
+          # The real VC++ redistributable, so the runtime-unpacking test runs with expand.exe instead of being skipped.
+          $env:CONDUIT_TEST_VCREDIST = Join-Path $env:RUNNER_TEMP 'vc_redist.x64.exe'
+          Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile $env:CONDUIT_TEST_VCREDIST
           Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser -SkipPublisherCheck
           ./windows/tests/run-tests.ps1
       - uses: actions/download-artifact@v4
@@ -75,3 +78,49 @@ jobs:
         with:
           name: installer
           path: dist/EvE-Conduit-Setup-*.exe
+
+  windows-install:
+    # A real install, the way the setup wizard runs it: Windows PowerShell 5.1 with its output captured. Then the
+    # site must answer, and the uninstaller must remove everything.
+    needs: release-files
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Install
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist/eve-conduit-*-windows.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath release
+          $installer = (Get-ChildItem release -Directory | Select-Object -First 1).FullName + '\windows\install.ps1'
+          $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $installer, '-Yes', '-Domain', 'localhost',
+            '-Email', 'ci@example.com', '-NoTls', '-NoTray', '-InstallRoot', 'C:\EvE-Conduit', '-HttpPort', '8080',
+            '-PublicPorts', 'AsChosen', '-ResultFile', "$env:RUNNER_TEMP\result.txt")
+          $p = Start-Process powershell.exe -ArgumentList $argList -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput install.log -RedirectStandardError install.err
+          Get-Content install.log, install.err
+          if ($p.ExitCode -ne 0) { throw "install.ps1 exited with $($p.ExitCode)" }
+          Get-Content "$env:RUNNER_TEMP\result.txt"
+      - name: The site answers
+        shell: pwsh
+        run: |
+          Get-Service conduit-* | Format-Table Name, Status
+          $ok = $false
+          for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
+            try { $r = Invoke-WebRequest http://localhost:8080/api/core/bootstrap -UseBasicParsing; $ok = $r.StatusCode -eq 200 } catch { Start-Sleep 5 }
+          }
+          if (-not $ok) { Get-ChildItem C:\EvE-Conduit\logs | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName -Tail 40 }; throw 'The site never answered' }
+          ($r.Content | ConvertFrom-Json).site | Format-List name, version
+          if (-not (Get-ScheduledTask -TaskName 'EvE Conduit updater' -ErrorAction SilentlyContinue)) { throw 'The updater task is missing' }
+      - name: Uninstall
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path C:\EvE-Conduit\uninstall.ps1) {
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\EvE-Conduit\uninstall.ps1 -Mode All -Yes -NoBackup
+          }
+          if (Get-Service conduit-* -ErrorAction SilentlyContinue) { throw 'Services are left behind' }
+          if (Test-Path C:\EvE-Conduit) { throw 'The install folder is left behind' }

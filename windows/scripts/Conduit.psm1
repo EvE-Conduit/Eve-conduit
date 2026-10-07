@@ -291,7 +291,7 @@ function Expand-VcRuntime {
     param(
         [Parameter(Mandatory)][string]$Installer,
         [Parameter(Mandatory)][string]$Destination,
-        [scriptblock]$Extractor = { param($Cab, $OutDir) & expand.exe -F:* $Cab $OutDir | Out-Null; if ($LASTEXITCODE) { throw "expand.exe failed on $Cab" } }
+        [scriptblock]$Extractor = { param($Cab, $OutDir) Invoke-NativeCommand -FilePath 'expand.exe' -ArgumentList @('-F:*', $Cab, $OutDir) -FailMessage "expand.exe failed on $Cab" | Out-Null }
     )
     $bytes = [IO.File]::ReadAllBytes($Installer)
     $text = [Text.Encoding]::GetEncoding(28591).GetString($bytes)   # 1 byte = 1 char, so offsets match
@@ -313,7 +313,7 @@ function Expand-VcRuntime {
         try { $stream.Write($bytes, $best.Offset, [int]$best.Size) } finally { $stream.Dispose() }
         $payloads = Join-Path $work 'payloads'
         New-Item -ItemType Directory -Path $payloads | Out-Null
-        Invoke-NativeCommand -FilePath $Extractor -ArgumentList @($outer, $payloads) | Out-Null
+        & $Extractor $outer $payloads
         $found = @{}
         foreach ($payload in Get-ChildItem -LiteralPath $payloads -File) {
             $head = New-Object byte[] 4
@@ -322,7 +322,7 @@ function Expand-VcRuntime {
             if ([Text.Encoding]::ASCII.GetString($head) -ne 'MSCF') { continue }
             $inner = Join-Path $work $payload.Name
             New-Item -ItemType Directory -Path $inner | Out-Null
-            Invoke-NativeCommand -FilePath $Extractor -ArgumentList @($payload.FullName, $inner) | Out-Null
+            & $Extractor $payload.FullName $inner
             foreach ($dll in $script:VcRuntimeDlls) {
                 $file = Join-Path $inner "${dll}_amd64"
                 if (-not $found.ContainsKey($dll) -and (Test-Path -LiteralPath $file)) { $found[$dll] = $file }
