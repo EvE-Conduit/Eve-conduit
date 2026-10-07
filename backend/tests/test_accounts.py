@@ -119,7 +119,7 @@ def test_sso_callback_logs_in(client, monkeypatch):
         lambda t: {"sub": "CHARACTER:EVE:91000005", "name": "Fresh", "owner": "o", "scp": "publicData"},
     )
     resp = client.get(f"/sso/callback?code=abc&state={state}")
-    assert resp.status_code == 302 and resp["Location"] == "/"
+    assert resp.status_code == 302 and resp["Location"] == "/home"  # the landing page, the default start page
     me = client.get("/api/core/bootstrap").json()["user"]
     assert me["name"] == "Fresh"
 

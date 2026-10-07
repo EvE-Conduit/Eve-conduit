@@ -23,6 +23,7 @@ import { AdminGroups } from "@/pages/admin/Groups";
 import { AdminCompliance } from "@/pages/admin/Compliance";
 import { AdminApi } from "@/pages/admin/Api";
 import { AdminHealth } from "@/pages/admin/Health";
+import { LandingEditor } from "@/pages/admin/LandingEditor";
 import { AdminIntegrations } from "@/pages/admin/Integrations";
 import { AdminLogs } from "@/pages/admin/Logs";
 import { AdminMembers } from "@/pages/admin/Members";
@@ -38,6 +39,7 @@ import { Corporations } from "@/pages/Corporations";
 import { Dashboard } from "@/pages/Dashboard";
 import { GroupManage } from "@/pages/GroupManage";
 import { Groups } from "@/pages/Groups";
+import { Home } from "@/pages/Home";
 import { Login } from "@/pages/Login";
 import { NotFound } from "@/pages/NotFound";
 import { Notifications } from "@/pages/Notifications";
@@ -91,6 +93,7 @@ async function start() {
       element: <AppShell />,
       children: [
         { index: true, element: <Dashboard /> },
+        { path: "home", element: <Home /> },
         { path: "characters", element: <Characters /> },
         { path: "characters/:id", element: <CharacterSheet /> },
         { path: "corporations", element: <Corporations /> },
@@ -111,6 +114,7 @@ async function start() {
         { path: "admin/health", element: <AdminHealth /> },
         { path: "admin/integrations", element: <AdminIntegrations /> },
         { path: "admin/settings", element: <AdminSettings /> },
+        { path: "admin/settings/landing", element: <LandingEditor /> },
         { path: "admin/updates", element: <AdminUpdates /> },
         ...pluginRoutes(plugins),
         { path: "*", element: <NotFound /> },

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Construction, DoorOpen, Palette, Search, Settings2, ShieldPlus, UserMinus } from "lucide-react";
+import { Construction, DoorOpen, Palette, PencilLine, Search, Settings2, ShieldPlus, UserMinus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 import { BrandingForm, type BrandingValues } from "@/components/BrandingForm";
@@ -87,7 +88,18 @@ export function AdminSettings() {
         </Card>
 
         <Card>
-          <CardHeader icon={<DoorOpen />} title="Start page" description="Where people land after signing in. Links to other pages still take them there." />
+          <CardHeader
+            icon={<DoorOpen />}
+            title="Start page"
+            description="Where people land after signing in. Links to other pages still take them there."
+            actions={
+              <Link to="/admin/settings/landing">
+                <Button size="sm" variant="subtle">
+                  <PencilLine /> Edit landing page
+                </Button>
+              </Link>
+            }
+          />
           <CardBody>
             <Field label="After signing in, show" hint="Plugin pages appear here once the plugin is enabled, e.g. Announcements.">
               <Select value={values.start_page} onChange={(e) => setValues({ ...values, start_page: e.target.value })} className="max-w-sm">
@@ -150,6 +162,7 @@ export function AdminSettings() {
 /** Pages that make sense to land on: the dashboard, a few core pages, and every enabled plugin's pages. */
 function startPages(plugins: Bootstrap["plugins"], current: string) {
   const pages = [
+    { value: "/home", label: "Home (landing page)" },
     { value: "", label: "Dashboard" },
     { value: "/characters", label: "Characters" },
     { value: "/groups", label: "Groups" },

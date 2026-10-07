@@ -19,6 +19,9 @@ const ICONS: Record<string, LucideIcon> = {
   trophy: Trophy, truck: Truck, users: Users, wallet: Wallet, wrench: Wrench, zap: Zap,
 };
 
+/** Every name iconFor understands, A to Z (for pickers). */
+export const ICON_NAMES = Object.keys(ICONS).sort();
+
 export function iconFor(name: string | null | undefined): LucideIcon {
   return (name && ICONS[name]) || Box;
 }
