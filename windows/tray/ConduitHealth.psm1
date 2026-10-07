@@ -101,15 +101,39 @@ function Get-HttpStatus {
     catch { return 0 }
 }
 
+$script:StepWords = @{ backup = 'backing up'; install = 'installing'; migrate = 'updating the database'; restart = 'restarting' }
+
+function Read-ConduitProgress {
+    <#
+    .SYNOPSIS
+    The updater's progress.json (copied into the tray folder while an update or plugin install runs), or $null when nothing is running. Returns @{ Kind; Target; Step; Text }. Ignores a file older than 30 minutes.
+    #>
+    param([Parameter(Mandatory)][string]$Path, [datetime]$Now = (Get-Date))
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    try {
+        $json = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+        # PowerShell 7 turns ISO dates in JSON into DateTime by itself; Windows PowerShell 5.1 leaves them as text.
+        $at = if ($json.at -is [datetime]) { $json.at.ToUniversalTime() }
+        else { [datetime]::Parse([string]$json.at, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal -bor [Globalization.DateTimeStyles]::AssumeUniversal) }
+    }
+    catch { return $null }
+    if (($Now.ToUniversalTime() - $at).TotalMinutes -gt 30) { return $null }
+    $step = [string]$json.step
+    if (-not $script:StepWords.ContainsKey($step)) { return $null }
+    $what = if ([string]$json.kind -eq 'plugins') { 'Installing plugins' } elseif ($json.target) { "Updating to $($json.target)" } else { 'Updating' }
+    return @{ Kind = [string]$json.kind; Target = [string]$json.target; Step = $step; Text = "${what}: $($script:StepWords[$step])..." }
+}
+
 function Get-ConduitHealth {
     <#
     .SYNOPSIS
-    Checks every component and returns @{ Overall = 'Healthy'|'Degraded'|'Down'|'NotInstalled'; Items = @(...); Summary = '...' }.  $ServiceStatus maps service id -> 'Running' | 'Stopped' | 'StartPending' | ... (from Get-Service on Windows). Services missing from it aren't installed. $Probe can replace the network checks in tests.
+    Checks every component and returns @{ Overall = 'Healthy'|'Degraded'|'Down'|'Updating'|'NotInstalled'; Items = @(...); Summary = '...' }.  $ServiceStatus maps service id -> 'Running' | 'Stopped' | 'StartPending' | ... (from Get-Service on Windows). Services missing from it aren't installed. $Probe can replace the network checks in tests. $Progress (from Read-ConduitProgress) means the updater is at work: services it stopped are expected to be down, so the result is 'Updating' instead of a problem.
     #>
     param(
         [Parameter(Mandatory)]$Settings,
         [Parameter(Mandatory)][System.Collections.IDictionary]$ServiceStatus,
-        [scriptblock]$Probe
+        [scriptblock]$Probe,
+        [hashtable]$Progress
     )
     if (-not $Probe) {
         $Probe = {
@@ -168,6 +192,12 @@ function Get-ConduitHealth {
     if (-not $items) {
         return @{ Overall = 'NotInstalled'; Items = @(); Summary = 'EvE Conduit services not found' }
     }
+    if ($Progress) {
+        foreach ($item in $items) {
+            if ($item.Level -ne 'OK') { $item.Level = 'Warning'; $item.Detail = "$($item.Detail) (expected during the update)" }
+        }
+        return @{ Overall = 'Updating'; Items = $items; Summary = $Progress.Text }
+    }
     $down = @($items | Where-Object Level -eq 'Down')
     $warn = @($items | Where-Object Level -eq 'Warning')
     if ($down) {
@@ -185,4 +215,4 @@ function Get-ConduitHealth {
     return @{ Overall = $overall; Items = $items; Summary = $summary }
 }
 
-Export-ModuleMember -Function Read-TraySetting, Test-TcpPort, Test-RedisPing, Get-HttpStatus, Get-ConduitHealth
+Export-ModuleMember -Function Read-TraySetting, Test-TcpPort, Test-RedisPing, Get-HttpStatus, Read-ConduitProgress, Get-ConduitHealth

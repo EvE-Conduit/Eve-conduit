@@ -22,7 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from conduit import __version__
-from conduit.updates.services import INSTRUCTIONS, can_install, kind, updates_dir
+from conduit.updates.services import INSTRUCTIONS, can_install, kind, progress, updates_dir
 
 from . import catalog as cat
 from . import registry
@@ -369,6 +369,7 @@ def overview() -> dict:
              "auto_update": name in state.auto_update}
             for name, d in sorted(dists.items())
         ],
+        "progress": progress(),
         "job": {
             "state": state.job_state,
             "summary": state.job_summary,

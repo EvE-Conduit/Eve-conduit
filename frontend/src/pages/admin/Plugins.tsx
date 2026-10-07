@@ -18,9 +18,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { TabPanel, Tabs } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
+import { UpdateSteps } from "@/components/updates/UpdateSteps";
 import { api } from "@/lib/api";
 import { BOOTSTRAP_KEY } from "@/lib/bootstrap";
 import { iconFor } from "@/lib/icons";
+import type { UpdateProgress } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
 
 type Source = "catalog" | "git" | "server";
@@ -65,6 +67,7 @@ interface Overview {
   catalog_checked_at: string | null;
   catalog_error: string;
   packages: InstalledPackage[];
+  progress: UpdateProgress | null;
   job: {
     state: "none" | "requested" | "running" | "succeeded" | "failed";
     summary: string;
@@ -105,7 +108,7 @@ export function AdminPlugins() {
     queryFn: () => api.get<Overview>("/api/admin/plugin-installs"),
     retry: true,
     // While the updater works the site restarts; failed requests simply keep retrying.
-    refetchInterval: (q) => (q.state.data && ["requested", "running"].includes(q.state.data.job.state) ? 5000 : false),
+    refetchInterval: (q) => (q.state.data && (["requested", "running"].includes(q.state.data.job.state) || q.state.data.progress) ? 5000 : false),
   });
   const set = (d: Overview) => {
     qc.setQueryData(KEY, d);
@@ -564,9 +567,12 @@ function JobStatus({ data, onCancel, cancelling }: { data: Overview; onCancel: (
   }
   if (job.state === "running") {
     return (
-      <Alert tone="warning" className="mb-6" icon={<Loader2 className="animate-spin" />} title={`Installing: ${job.summary}`}>
-        The site restarts while this happens. This page reconnects by itself.
-      </Alert>
+      <div className="mb-6 space-y-3">
+        <Alert tone="warning" icon={<Loader2 className="animate-spin" />} title={`Installing: ${job.summary}`}>
+          The site restarts near the end. This page reconnects by itself.
+        </Alert>
+        {data.progress?.kind === "plugins" && <UpdateSteps progress={data.progress} />}
+      </div>
     );
   }
   if (job.state === "failed") {

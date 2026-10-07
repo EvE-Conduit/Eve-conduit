@@ -28,6 +28,8 @@ PLUGINS_FILE="$CONDUIT_ETC/plugins.txt"
 # Plugins installed from Administration -> Plugins (written only by apply-update) and the newest catalog it used.
 PLUGINS_SITE_FILE="$CONDUIT_ETC/plugins-site.txt"
 PLUGIN_SERIAL_FILE="$CONDUIT_ETC/plugin-catalog.serial"
+# This script, installed from each release so fixes to it arrive with updates.
+CONDUIT_BIN=${CONDUIT_BIN:-/usr/local/bin/conduit}
 SUPERVISOR_GROUP=conduit
 # Steps whose failure must be noticed run as a new process of this script: inside "if ( ... )" bash ignores set -e.
 SELF=$(readlink -f "${BASH_SOURCE[0]}")
@@ -91,6 +93,26 @@ install_python() {
   fi
 }
 
+# How far an update has got, for Administration -> Updates / Plugins and the banner members see:
+# <updates>/progress.json, removed when the update is over. "progress <release|plugins> <version|-> <step>"
+# with step backup, install, migrate or restart; "progress clear" removes it.
+progress() {
+  local dir="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}" now
+  [[ -d "$dir" ]] || return 0
+  if [[ "$1" == clear ]]; then rm -f "$dir/progress.json"; return 0; fi
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  export PROGRESS_STARTED=${PROGRESS_STARTED:-$now}
+  printf '{"kind": "%s", "target": "%s", "step": "%s", "started_at": "%s", "at": "%s"}\n' \
+    "$1" "${2#-}" "$3" "$PROGRESS_STARTED" "$now" >"$dir/progress.json.tmp" || return 0
+  chmod 0644 "$dir/progress.json.tmp"
+  mv -f "$dir/progress.json.tmp" "$dir/progress.json"
+}
+
+install_admin_script() {  # release dir
+  [[ "${CONDUIT_TESTING:-}" == 1 ]] && return 0
+  install -m 0755 "$1/deploy/baremetal/conduit" "$CONDUIT_BIN"
+}
+
 finish_deploy() {
   manage migrate --noinput
   manage collectstatic --noinput -v0
@@ -106,6 +128,8 @@ cmd_upgrade() {
   [[ -n "$version" ]] || die "not an EvE Conduit release (no VERSION file)"
   local target="$CONDUIT_HOME/releases/$version"
   [[ "$(readlink -f "$APP")" == "$target" ]] && die "release $version is already the running release"
+  load_env
+  progress release "$version" backup
   echo "Backing up before upgrading..."
   cmd_backup
   # Unpack and install from a staging directory; it only becomes a release once everything worked,
@@ -118,6 +142,7 @@ cmd_upgrade() {
   tar -xzf "$tarball" -C "$staging" --strip-components=1
   [[ "${CONDUIT_TESTING:-}" == 1 ]] || chown -R root:"$CONDUIT_USER" "$staging"
   echo "Installing $version..."
+  progress release "$version" install
   install_python "$staging"
   mv "$staging" "$target"
   trap - EXIT
@@ -125,9 +150,13 @@ cmd_upgrade() {
   previous=$(readlink -f "$APP" || true)
   ln -sfn "$target" "$APP"
   [[ -n "$previous" ]] && ln -sfn "$previous" "$CONDUIT_HOME/previous"
+  progress release "$version" migrate
   finish_deploy
   publish_web "$target"
+  install_admin_script "$target"
+  progress release "$version" restart
   supervisor restart "$SUPERVISOR_GROUP:*"
+  progress clear
   echo "EvE Conduit $version is running. 'conduit rollback' returns to the previous release."
 }
 
@@ -145,6 +174,7 @@ cmd_rollback() {
   ln -sfn "$current" "$CONDUIT_HOME/previous"
   manage collectstatic --noinput -v0
   publish_web "$previous"
+  install_admin_script "$previous"
   supervisor restart "$SUPERVISOR_GROUP:*"
 }
 
@@ -250,11 +280,13 @@ print(v if ok else "")' "$request" 2>/dev/null || true)
   fi
   echo "$(date -Is) installing $version: $check" >>"$log"
   if "$SELF" upgrade "$work/$file" >>"$log" 2>&1; then
+    progress clear
     write_result succeeded "EvE Conduit $version is running."
   else
     echo "$(date -Is) upgrade to $version failed; putting the running release back" >>"$log"
     install_python "$(readlink -f "$APP")" >>"$log" 2>&1 || true
     supervisor restart "$SUPERVISOR_GROUP:*" >>"$log" 2>&1 || true
+    progress clear
     write_result failed "The upgrade to $version failed and the previous version was put back (details in $log)."
   fi
   rm -rf "$work"
@@ -300,6 +332,7 @@ apply_plugin_request() {
   for url in "${reinstall[@]}"; do steps+=("reinstall=$url"); done
   if "$SELF" _apply-plugins "${steps[@]}" >>"$log" 2>&1; then
     rm -f "$PLUGINS_SITE_FILE.bak"
+    progress clear
     plugin_result succeeded "The site has restarted with the changes."
   else
     echo "$(date -Is) plugin change failed; putting the previous plugins back" >>"$log"
@@ -310,6 +343,7 @@ apply_plugin_request() {
     install_python "$(readlink -f "$APP")" >>"$log" 2>&1 || true
     finish_deploy >>"$log" 2>&1 || true
     supervisor restart "$SUPERVISOR_GROUP:*" >>"$log" 2>&1 || true
+    progress clear
     plugin_result failed "That didn't work, so the previous plugins were put back (details in $log)."
   fi
 }
@@ -318,16 +352,21 @@ apply_plugin_request() {
 # migrate and restart. Arguments are "uninstall=<package>" and "reinstall=<git URL>".
 cmd_apply_plugins() {
   require_root
+  load_env
+  progress plugins - backup
   cmd_backup
   local step
   for step in "$@"; do
     if [[ "$step" == uninstall=* ]]; then "$VENV/bin/python" -m pip uninstall --quiet --yes "${step#uninstall=}"; fi
   done
+  progress plugins - install
   install_python "$(readlink -f "$APP")"
   for step in "$@"; do
     if [[ "$step" == reinstall=* ]]; then "$VENV/bin/python" -m pip install --quiet --force-reinstall --no-deps "${step#reinstall=}"; fi
   done
+  progress plugins - migrate
   finish_deploy
+  progress plugins - restart
   supervisor restart "$SUPERVISOR_GROUP:*"
 }
 

@@ -67,10 +67,11 @@ $icons = @{
     Healthy      = New-StatusIcon ([System.Drawing.Color]::FromArgb(255, 52, 211, 153))
     Degraded     = New-StatusIcon ([System.Drawing.Color]::FromArgb(255, 251, 191, 36))
     Down         = New-StatusIcon ([System.Drawing.Color]::FromArgb(255, 244, 63, 94))
+    Updating     = New-StatusIcon ([System.Drawing.Color]::FromArgb(255, 56, 189, 248))
     NotInstalled = New-StatusIcon ([System.Drawing.Color]::FromArgb(255, 100, 116, 139))
     Checking     = New-StatusIcon ([System.Drawing.Color]::FromArgb(255, 100, 116, 139))
 }
-$labels = @{ Healthy = 'Healthy'; Degraded = 'Needs attention'; Down = 'Problem'; NotInstalled = 'Not installed'; Checking = 'Checking...' }
+$labels = @{ Healthy = 'Healthy'; Degraded = 'Needs attention'; Down = 'Problem'; Updating = 'Updating'; NotInstalled = 'Not installed'; Checking = 'Checking...' }
 
 # --- actions -----------------------------------------------------------------------------------------
 function Invoke-AdminCommand([string[]]$Arguments, [switch]$KeepOpen) {
@@ -96,7 +97,10 @@ function Get-ServiceState {
 }
 
 function Update-Health {
-    $health = Get-ConduitHealth -Settings $script:Settings -ServiceStatus (Get-ServiceState)
+    $progress = Read-ConduitProgress -Path (Join-Path $PSScriptRoot 'progress.json')
+    $health = Get-ConduitHealth -Settings $script:Settings -ServiceStatus (Get-ServiceState) -Progress $progress
+    # Look more often while the updater works, so the steps show as they happen.
+    $timer.Interval = if ($progress) { 5000 } else { 30000 }
     $script:LastHealth = $health
     $notify.Icon = $icons[$health.Overall]
     # NotifyIcon text is limited to 63 characters on .NET Framework.
@@ -106,7 +110,15 @@ function Update-Health {
     $header.Text = "EvE Conduit $($script:Settings.Version): $($labels[$health.Overall])"
 
     if ($script:LastOverall -and $health.Overall -ne $script:LastOverall) {
-        if ($health.Overall -eq 'Healthy') {
+        if ($health.Overall -eq 'Updating') {
+            $notify.ShowBalloonTip(8000, 'EvE Conduit is updating', "$($health.Summary) The site is offline for a minute or two.", [System.Windows.Forms.ToolTipIcon]::Info)
+        }
+        elseif ($health.Overall -eq 'Healthy' -and $script:LastOverall -eq 'Updating') {
+            # The installed version may have changed; the updater rewrote settings.json.
+            try { $script:Settings = Read-TraySetting $settingsPath } catch { Write-Verbose "settings.json unreadable: $_" }
+            $notify.ShowBalloonTip(6000, 'Update finished', "EvE Conduit $($script:Settings.Version) is running.", [System.Windows.Forms.ToolTipIcon]::Info)
+        }
+        elseif ($health.Overall -eq 'Healthy') {
             $notify.ShowBalloonTip(5000, 'EvE Conduit is healthy again', 'All services are running.', [System.Windows.Forms.ToolTipIcon]::Info)
         }
         elseif ($health.Overall -eq 'Down') {
@@ -127,13 +139,13 @@ function Update-StatusForm {
     $list.Items.Clear()
     foreach ($item in $script:LastHealth.Items) {
         $row = New-Object System.Windows.Forms.ListViewItem $item.Name
-        [void]$row.SubItems.Add($(switch ($item.Level) { 'OK' { 'OK' } 'Warning' { 'Attention' } default { 'Problem' } }))
+        [void]$row.SubItems.Add($(switch ($item.Level) { 'OK' { 'OK' } 'Warning' { if ($script:LastHealth.Overall -eq 'Updating') { 'Updating' } else { 'Attention' } } default { 'Problem' } }))
         [void]$row.SubItems.Add($(if ($item.Port) { [string]$item.Port } else { '' }))
         [void]$row.SubItems.Add($item.Detail)
         $row.Tag = $item.Id
         $row.ForeColor = switch ($item.Level) {
             'OK' { [System.Drawing.Color]::FromArgb(255, 21, 128, 61) }
-            'Warning' { [System.Drawing.Color]::FromArgb(255, 180, 83, 9) }
+            'Warning' { if ($script:LastHealth.Overall -eq 'Updating') { [System.Drawing.Color]::FromArgb(255, 3, 105, 161) } else { [System.Drawing.Color]::FromArgb(255, 180, 83, 9) } }
             default { [System.Drawing.Color]::FromArgb(255, 190, 18, 60) }
         }
         [void]$list.Items.Add($row)
@@ -226,7 +238,6 @@ $notify.Add_DoubleClick({ Show-StatusForm })
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 1000
 $timer.Add_Tick({
-        $timer.Interval = 30000
         try { Update-Health }
         catch {
             $notify.Icon = $icons['NotInstalled']

@@ -3,6 +3,21 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.2
+
+### New
+- **See an update happen.** While the updater installs a new version or plugins, Administration → Updates and
+  → Plugins show each step as it happens (backing up, installing, updating the database, restarting). Everyone
+  else sees a banner saying the site is updating, and while it restarts, a "back in a minute" page that reloads
+  by itself. When the new version is running, open pages offer a reload.
+- **Windows tray panel:** shows "Updating to 0.5.x: installing..." with a blue icon while an update runs, instead
+  of reporting the stopped services as a problem, and says when the update has finished.
+
+### Fixed
+- **Linux:** the `conduit` command in `/usr/local/bin` now comes from each new release. Before, it stayed as
+  installed, so fixes to the updater never arrived. Run this once after updating to 0.5.2 to pick them up:
+  `sudo install -m 0755 /opt/conduit/app/deploy/baremetal/conduit /usr/local/bin/conduit`
+
 ## 0.5.1
 
 ### Fixed

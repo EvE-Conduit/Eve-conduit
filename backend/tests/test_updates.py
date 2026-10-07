@@ -224,3 +224,37 @@ def test_version_compare():
     from conduit.updates.versions import is_newer, parse
 
     assert is_newer("v0.10.0", "0.9.9") and not is_newer("0.4.0", "0.4.0") and parse("1.2") is None
+
+
+# --- progress while the updater works ----------------------------------------------------------------------
+
+
+def write_progress(tmp_path, **fields):
+    from datetime import UTC, datetime
+
+    data = {"kind": "release", "target": NEXT, "step": "install", "started_at": "2026-10-07T12:00:00Z",
+            "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), **fields}
+    (tmp_path / "progress.json").write_text(json.dumps(data))
+
+
+@pytest.mark.django_db
+def test_progress_is_shown_to_admins_and_everyone(tmp_path, client, admin_user):
+    assert services.progress() is None
+    write_progress(tmp_path)
+    assert services.progress() == {"kind": "release", "target": NEXT, "step": "install",
+                                   "steps": ["backup", "install", "migrate", "restart"], "started_at": "2026-10-07T12:00:00Z"}
+    assert services.state_out(UpdateState.load())["progress"]["step"] == "install"
+    # Everyone gets it with the bootstrap, signed in or not.
+    assert client.get("/api/core/bootstrap").json()["site"]["updating"]["target"] == NEXT
+
+
+@pytest.mark.django_db
+def test_stale_or_odd_progress_is_ignored(tmp_path):
+    write_progress(tmp_path, at="2020-01-01T00:00:00Z")
+    assert services.progress() is None
+    write_progress(tmp_path, step="rm -rf")
+    assert services.progress() is None
+    write_progress(tmp_path, kind="plugins", target="<script>")
+    assert services.progress()["target"] == ""
+    (tmp_path / "progress.json").write_text("{not json")
+    assert services.progress() is None

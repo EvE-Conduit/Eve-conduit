@@ -1,5 +1,5 @@
-import { Construction, UserCog, Wrench } from "lucide-react";
-import { useState } from "react";
+import { Construction, Loader2, RefreshCw, UserCog, Wrench } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
@@ -7,7 +7,52 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useBootstrap } from "@/lib/bootstrap";
 
+import { updateTitle } from "@/components/updates/UpdateSteps";
+
 import { BrandMark } from "./Brand";
+
+const STEP_WORDS = { backup: "backing up", install: "installing", migrate: "updating the database", restart: "restarting" } as const;
+export const UPDATING_KEY = "conduit:updating";
+
+/** Everyone sees this while the updater works: the site goes offline for a minute or two at the end. Once the
+ * new version is running, offers a reload so the browser gets its front end too. */
+export function UpdatingBanner() {
+  const { site } = useBootstrap();
+  const [loadedVersion] = useState(site.version);
+  const updating = site.updating;
+  useEffect(() => {
+    try {
+      if (updating) localStorage.setItem(UPDATING_KEY, JSON.stringify(updating));
+      else localStorage.removeItem(UPDATING_KEY);
+    } catch {
+      // storage unavailable; the offline screen just says less
+    }
+  }, [updating]);
+
+  if (updating) {
+    return (
+      <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-info/30 bg-info-soft px-4 py-2 text-sm">
+        <Loader2 className="size-4 animate-spin text-info-fg" />
+        <span className="font-medium text-text">{updateTitle(updating)}</span>
+        <span className="text-muted">
+          Now {STEP_WORDS[updating.step]}. The site is offline for a minute or two near the end, and comes back by itself.
+        </span>
+      </div>
+    );
+  }
+  if (site.version !== loadedVersion) {
+    return (
+      <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-success/30 bg-success-soft px-4 py-2 text-sm">
+        <span className="font-medium text-text">EvE Conduit {site.version} is running.</span>
+        <span className="text-muted">Reload to get the new version of this page.</span>
+        <Button size="xs" variant="secondary" onClick={() => window.location.reload()}>
+          <RefreshCw /> Reload
+        </Button>
+      </div>
+    );
+  }
+  return null;
+}
 
 /** Shown while an admin is signed in as someone else. */
 export function ImpersonationBanner() {

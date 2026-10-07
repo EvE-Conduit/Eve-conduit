@@ -13,7 +13,15 @@ export function fetchBootstrap() {
 const BootstrapContext = createContext<Bootstrap | null>(null);
 
 export function BootstrapProvider({ initial, children }: { initial: Bootstrap; children: ReactNode }) {
-  const { data } = useQuery({ queryKey: BOOTSTRAP_KEY, queryFn: fetchBootstrap, initialData: initial, staleTime: 60_000 });
+  const { data } = useQuery({
+    queryKey: BOOTSTRAP_KEY,
+    queryFn: fetchBootstrap,
+    initialData: initial,
+    staleTime: 60_000,
+    // Notice an update starting (and finishing) without anyone reloading; quickly while one runs.
+    refetchInterval: (q) => (q.state.data?.site.updating ? 5_000 : 120_000),
+    retry: true,
+  });
   return <BootstrapContext.Provider value={data}>{children}</BootstrapContext.Provider>;
 }
 
