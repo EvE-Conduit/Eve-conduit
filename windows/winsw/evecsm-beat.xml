@@ -1,0 +1,30 @@
+<!--
+  EVECSM scheduler - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  The installer copies this next to a copy of WinSW named evecsm-beat.exe and fills in {{...}}.
+-->
+<service>
+  <id>evecsm-beat</id>
+  <name>EVECSM scheduler</name>
+  <description>EVECSM scheduler: queues periodic jobs (Celery beat).</description>
+  <executable>{{ROOT}}\venv\Scripts\python.exe</executable>
+  <arguments>"{{ROOT}}\app\windows\service\evecsm_service.py" beat</arguments>
+  <workingdirectory>{{ROOT}}</workingdirectory>
+  <env name="EVECSM_ROOT" value="{{ROOT}}" />
+  <depend>evecsm-garnet</depend>
+  <startmode>Automatic</startmode>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="2 min" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>{{ROOT}}\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

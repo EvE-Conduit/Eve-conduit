@@ -1,0 +1,5 @@
+# Modules installed alongside EVECSM, one per line: PyPI names, git URLs or paths.
+# Paths are relative to the release directory.
+#   Docker:     edit this file, then: docker compose up -d --build
+#   Bare metal: the installer copies it to /etc/evecsm/modules.txt; use "sudo evecsm module install <name>"
+./modules/evecsm-example

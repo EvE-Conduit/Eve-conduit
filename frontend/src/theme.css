@@ -1,0 +1,221 @@
+/*
+ * Design tokens shared by the site and every module bundle: the "Bridge HUD" look.
+ * Dark, flat surfaces, thin accent-tinted hairlines, square corners, corner brackets on panels,
+ * Chakra Petch for type and JetBrains Mono for numbers. No glows, gradients or soft shadows.
+ *
+ * Attributes on <html> (set by lib/preferences.ts from the user's preferences):
+ *   data-theme="dark|light"      resolved theme ("system" is resolved in JS)
+ *   data-contrast="high"         stronger text, borders and focus rings
+ *   data-density="compact"       tighter padding in cards and tables
+ *   data-text-scale="0|1|2"      100% / 112.5% / 125% root font size
+ *   data-motion="reduce"         no animations or transitions
+ *
+ * The install's accent colour is set at runtime as --brand (site settings). --site-accent is
+ * derived from it per theme (deepened in light mode so it stays readable on white).
+ */
+
+:root,
+:root[data-theme="dark"] {
+  --brand: #22d3ee;
+  --site-accent: var(--brand);
+  --accent-fg: var(--accent-fg-dark, #041016);
+  --accent-ink: color-mix(in oklab, var(--site-accent) 85%, white);
+
+  --bg: #05080c;
+  --surface: #0a1018;
+  --surface-2: #0d141e;
+  --surface-3: #142030;
+  --surface-raised: #0c131c;
+  --border: color-mix(in oklab, var(--site-accent) 16%, rgb(148 163 184 / 0.1));
+  --border-strong: color-mix(in oklab, var(--site-accent) 30%, rgb(148 163 184 / 0.16));
+  --hairline: rgb(148 163 184 / 0.09);
+  --text: #e6edf3;
+  --muted: #a9b4c0;
+  --subtle: #7d8a99;
+  --hover: color-mix(in oklab, var(--site-accent) 8%, transparent);
+  --hover-strong: color-mix(in oklab, var(--site-accent) 14%, transparent);
+  --overlay: rgb(2 4 8 / 0.72);
+  --grid-line: transparent;
+  --bracket: var(--site-accent);
+
+  --danger: #ff5c5c;
+  --danger-fg: #ff8a8a;
+  --success: #5ee0a0;
+  --success-fg: #8eecc0;
+  --warning: #f5b14c;
+  --warning-fg: #f8c97e;
+  --info: #7dd3fc;
+  --info-fg: #a5e2fd;
+
+  --chart-1: var(--site-accent);
+  --chart-2: #f5b14c;
+  --chart-3: #a78bfa;
+  --chart-4: #f472b6;
+  --chart-5: #5ee0a0;
+  --chart-6: #7dd3fc;
+
+  --elev-1: none;
+  --elev-2: none;
+  --elev-3: 0 24px 64px -20px rgb(0 0 0 / 0.9);
+  --panel-gradient: var(--surface);
+
+  --pad-card: 1.25rem;
+  --pad-cell-y: 0.625rem;
+  --pad-cell-x: 1.25rem;
+
+  color-scheme: dark;
+}
+
+/* Light: the same HUD on a chart-table: pale steel ground, white panels, dark ink. */
+:root[data-theme="light"] {
+  --site-accent: color-mix(in oklab, var(--brand) 62%, #04121a);
+  --accent-fg: var(--accent-fg-light, #ffffff);
+  --accent-ink: color-mix(in oklab, var(--brand) 50%, #04121a);
+
+  --bg: #e9edf0;
+  --surface: #ffffff;
+  --surface-2: #f5f7f9;
+  --surface-3: #e3e8ec;
+  --surface-raised: #ffffff;
+  --border: color-mix(in oklab, var(--site-accent) 22%, rgb(15 23 42 / 0.12));
+  --border-strong: color-mix(in oklab, var(--site-accent) 40%, rgb(15 23 42 / 0.2));
+  --hairline: rgb(15 23 42 / 0.08);
+  --text: #0a121a;
+  --muted: #384552;
+  --subtle: #56636f;
+  --hover: color-mix(in oklab, var(--site-accent) 7%, transparent);
+  --hover-strong: color-mix(in oklab, var(--site-accent) 13%, transparent);
+  --overlay: rgb(10 18 26 / 0.45);
+  --bracket: var(--site-accent);
+
+  --danger: #d1242f;
+  --danger-fg: #a40e26;
+  --success: #08875a;
+  --success-fg: #066a47;
+  --warning: #c26a00;
+  --warning-fg: #8a4b00;
+  --info: #0b6fb8;
+  --info-fg: #095a96;
+
+  --chart-2: #c26a00;
+  --chart-3: #6d4fd6;
+  --chart-4: #c2326f;
+  --chart-5: #08875a;
+  --chart-6: #0b6fb8;
+
+  --elev-1: none;
+  --elev-2: none;
+  --elev-3: 0 24px 60px -18px rgb(10 18 26 / 0.3);
+  --panel-gradient: var(--surface);
+
+  color-scheme: light;
+}
+
+:root[data-contrast="high"] {
+  --text: #ffffff;
+  --muted: #d3dae4;
+  --subtle: #b4bfcc;
+  --border: color-mix(in oklab, var(--site-accent) 45%, rgb(203 213 225 / 0.3));
+  --border-strong: color-mix(in oklab, var(--site-accent) 65%, rgb(203 213 225 / 0.4));
+  --accent-ink: color-mix(in oklab, var(--site-accent) 60%, white);
+}
+:root[data-theme="light"][data-contrast="high"] {
+  --text: #000000;
+  --muted: #1f2937;
+  --subtle: #374151;
+  --border: rgb(15 23 42 / 0.4);
+  --border-strong: rgb(15 23 42 / 0.6);
+  --accent-ink: color-mix(in oklab, var(--brand) 35%, black);
+}
+
+:root[data-density="compact"] {
+  --pad-card: 0.875rem;
+  --pad-cell-y: 0.375rem;
+  --pad-cell-x: 0.875rem;
+}
+
+:root[data-text-scale="1"] { font-size: 112.5%; }
+:root[data-text-scale="2"] { font-size: 125%; }
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-hover: var(--hover);
+  --color-hover-strong: var(--hover-strong);
+  --color-overlay: var(--overlay);
+  --color-hairline: var(--hairline);
+
+  --color-accent: var(--site-accent);
+  --color-accent-soft: color-mix(in oklab, var(--site-accent) 14%, transparent);
+  --color-accent-strong: color-mix(in oklab, var(--site-accent) 80%, white);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
+  --color-danger-fg: var(--danger-fg);
+  --color-success: var(--success);
+  --color-success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-soft: color-mix(in oklab, var(--warning) 13%, transparent);
+  --color-warning-fg: var(--warning-fg);
+  --color-info: var(--info);
+  --color-info-soft: color-mix(in oklab, var(--info) 12%, transparent);
+  --color-info-fg: var(--info-fg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  --shadow-e1: var(--elev-1);
+  --shadow-e2: var(--elev-2);
+  --shadow-e3: var(--elev-3);
+
+  --spacing-card: var(--pad-card);
+  --spacing-cell-y: var(--pad-cell-y);
+  --spacing-cell-x: var(--pad-cell-x);
+
+  --font-sans: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  /* Square corners everywhere; rounded-full stays round for status dots. */
+  --radius-xs: 0px;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 3px;
+  --radius-3xl: 3px;
+  --radius-4xl: 4px;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade-in: fade-in 0.2s ease-out both;
+  --animate-scale-in: scale-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+}

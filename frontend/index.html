@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" class="dark" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05080c" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>EVECSM</title>
+    <script>
+      // Pick the theme before the first paint, so light-theme users don't see a dark flash.
+      try {
+        var t = localStorage.getItem("evecsm:theme");
+        if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        if (t === "light") { document.documentElement.dataset.theme = "light"; document.documentElement.className = "light"; }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
