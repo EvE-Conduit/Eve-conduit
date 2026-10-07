@@ -3,6 +3,12 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.4
+
+### New
+- **Search contracts by item.** Character sheet → Contracts has a search box: type part of an item name (or a
+  contract title) to find the contracts that hold it. Each match shows the items it found and how many.
+
 ## 0.5.3
 
 ### Fixed
