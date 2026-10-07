@@ -157,7 +157,9 @@ def bootstrap(request):
                         "name": mod.name,
                         "version": mod.version,
                         "nav": [vars(n) for n in mod.nav if not n.permission or request.user.has_perm(n.permission)],
-                        "entry": static(mod.frontend) if mod.frontend else None,
+                        # The version in the URL makes browsers fetch a plugin's new bundle after an update
+                        # (static files keep their name and may be cached for days).
+                        "entry": f"{static(mod.frontend)}?v={mod.version}" if mod.frontend else None,
                     }
                 )
     out = {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
