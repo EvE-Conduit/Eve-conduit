@@ -1,0 +1,29 @@
+[project]
+name = "conduit-srp"
+version = "1.0.0"
+description = "Ship replacement: members claim their losses from synced killmails, reviewers approve a payout and mark it paid."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+srp = "conduit_srp.plugin:SrpPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Ship Replacement (SRP)"
+icon = "life-buoy"
+category = "Military"
+min_conduit = "0.5.6"
+esi_scopes = ["esi-killmails.read_killmails.v1"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_srp*"]
+
+[tool.setuptools.package-data]
+conduit_srp = ["static/**/*"]
