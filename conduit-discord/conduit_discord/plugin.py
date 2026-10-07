@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class DiscordPlugin(Plugin):
     id = "discord"
     name = "Discord"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Members link their Discord account and join your server; roles and nicknames follow their groups and state."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-discord"
@@ -14,6 +14,8 @@ class DiscordPlugin(Plugin):
     api = "conduit_discord.api:router"
     frontend = "conduit_discord/plugin.js"
     nav = (NavItem("Discord", "", "message-square"),)
+    # Who may link is decided by discord.access_discord (give it to states), so guests can be let in too.
+    members_only = False
     # Group and state changes sync straight away; this catches anything missed (people who left the server,
     # roles changed by hand in Discord, permissions changed on a state).
     periodic_tasks = {"sync-all": {"task": "conduit_discord.tasks.sync_all", "schedule": 6 * 3600.0}}

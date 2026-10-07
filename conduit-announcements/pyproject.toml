@@ -1,6 +1,6 @@
 [project]
 name = "conduit-announcements"
-version = "1.0.0"
+version = "1.0.1"
 description = "Announcements: news from leadership for everyone or chosen states and groups, with pinning, scheduling, notifications and a dashboard widget."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ announcements = "conduit_announcements.plugin:AnnouncementsPlugin"
 name = "Announcements"
 icon = "bell"
 category = "Communication"
-min_conduit = "0.5.6"
+min_conduit = "0.5.11"
 
 [build-system]
 requires = ["setuptools>=75"]
