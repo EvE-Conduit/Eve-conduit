@@ -1,0 +1,27 @@
+[project]
+name = "conduit-recruitment"
+version = "1.0.0"
+description = "Recruitment: application forms, a review queue with each applicant's characters, notes and messages, and accepting into groups."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+dependencies = ["conduit>=0.5.6"]
+
+[project.entry-points."conduit.plugins"]
+recruit = "conduit_recruitment.plugin:RecruitmentPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Recruitment"
+icon = "users"
+category = "HR"
+min_conduit = "0.5.6"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_recruitment*"]
+
+[tool.setuptools.package-data]
+conduit_recruitment = ["static/**/*"]
