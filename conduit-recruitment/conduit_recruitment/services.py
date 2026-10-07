@@ -68,7 +68,8 @@ def clean_questions(raw) -> list[dict]:
 
 
 def form_out(form: Form, *, admin: bool = False) -> dict:
-    out = {"id": form.pk, "name": form.name, "description": form.description, "questions": form.questions, "open": form.open}
+    out = {"id": form.pk, "name": form.name, "description": form.description, "questions": form.questions, "open": form.open,
+           "require_discord": form.require_discord}
     if admin:
         out["accept_groups"] = [{"id": g.pk, "name": g.name} for g in form.accept_groups.all()]
         out["applications"] = form.applications.count()
@@ -88,12 +89,56 @@ def save_form(form: Form | None, data: dict, by, request=None) -> Form:
         form.description = str(data.get("description", "")).strip()[:4000]
         form.questions = questions
         form.open = bool(data.get("open", True))
+        form.require_discord = bool(data.get("require_discord", True))
         form.order = int(data.get("order") or 0)
         form.save()
         form.accept_groups.set(groups)
     record("recruit.form_saved", f"saved recruitment form {form.name}", request=request, actor=by, target_type="plugin",
            details={"form_id": form.pk})
     return form
+
+
+# --- Discord ----------------------------------------------------------------------------------------------------
+
+
+def discord_checked() -> bool:
+    """Forms that require Discord are only enforced while the Discord plugin is on and set up."""
+    from conduit.plugins.services import is_enabled
+
+    if not is_enabled("discord"):
+        return False
+    from conduit_discord.models import DiscordSettings
+
+    return DiscordSettings.load().configured
+
+
+def discord_status(user) -> dict:
+    """Whether the user has linked Discord and is on the server, asking Discord live. ``ok`` is True when both are."""
+    from conduit_discord import discord_api
+    from conduit_discord.models import DiscordAccount, DiscordSettings
+
+    acct = DiscordAccount.objects.filter(user=user).first()
+    out = {"linked": acct is not None, "username": acct.username if acct else None, "on_server": False, "error": ""}
+    if acct is not None:
+        s = DiscordSettings.load()
+        try:
+            out["on_server"] = discord_api.member(s.bot_token, s.guild_id, acct.discord_id) is not None
+        except discord_api.DiscordError:
+            out["error"] = "Couldn't reach Discord to check; try again in a minute"
+    out["ok"] = out["linked"] and out["on_server"]
+    return out
+
+
+def check_discord(user, form: Form) -> None:
+    if not form.require_discord or not discord_checked():
+        return
+    status = discord_status(user)
+    if status["error"]:
+        raise RecruitError(status["error"], 503)
+    if not status["linked"]:
+        raise RecruitError("Link your Discord account (on the Discord page) before you apply", 403)
+    if not status["on_server"]:
+        raise RecruitError("Join our Discord server (on the Discord page) before you apply", 403)
 
 
 # --- applying -------------------------------------------------------------------------------------------------
@@ -127,6 +172,7 @@ def apply(user, form: Form, answers) -> Application:
         raise RecruitError("This form isn't taking applications right now")
     if open_application(user):
         raise RecruitError("You already have an application in progress")
+    check_discord(user, form)
     app = Application.objects.create(user=user, form=form, answers=clean_answers(form, answers))
     reviewers = [u for u in users_with_perm(REVIEW_PERM) if u.pk != user.pk]
     notify(reviewers, f"New application from {user.display_name}", form.name, link=f"/p/recruit/applications/{app.pk}",
