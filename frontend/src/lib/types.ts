@@ -38,6 +38,8 @@ export interface CurrentUser {
   main: CharacterBrief | null;
   state: StateBrief | null;
   is_admin: boolean;
+  /** The super admin, who claimed the site; always an administrator. */
+  is_owner?: boolean;
   permissions: string[];
   unread_notifications: number;
   preferences: Preferences;
@@ -117,7 +119,7 @@ export interface Bootstrap {
     update_available?: string | null;
     /** Set while the updater installs a release or plugins; the site restarts at the end. */
     updating?: UpdateProgress | null;
-    /** An install waiting for the updater to pick it up (it looks every two minutes); admins only. */
+    /** An install waiting for the updater to pick it up (usually within seconds); admins only. */
     update_pending?: { kind: "release" | "plugins"; target: string; summary?: string; requested_at: string | null } | null;
   };
   setup: { completed: boolean; sso_configured: boolean; callback_url: string; admin_claimed: boolean };

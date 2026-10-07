@@ -54,8 +54,9 @@ what changed in [CHANGELOG.md](CHANGELOG.md). Each install checks once a day and
 **Administration → Updates** shows the changelog and asks before downloading and again before installing.
 
 - **Windows and Linux installs** install the update themselves: a small updater (a SYSTEM scheduled task on
-  Windows, a root cron job on Linux) checks the release's signature, backs up, upgrades and rolls back if
-  anything fails. Nothing happens until an administrator clicks Install.
+  Windows, a root systemd path unit on Linux, with a cron job as backup) starts within seconds of the click,
+  checks the release's signature, backs up, upgrades and rolls back if anything fails. Nothing happens until an
+  administrator clicks Install.
 - **Docker installs** show the commands to run (`git pull` and `docker compose up -d --build`).
 - Releases are signed: `SHA256SUMS` is signed with the project's Ed25519 key, whose public half is built into
   EvE Conduit (`backend/conduit/updates/keys.py`). A release that doesn't match is refused.

@@ -21,7 +21,7 @@ interface Run {
 type Phase = "waiting" | "working" | "reconnecting" | "done" | "failed";
 
 const STEPS: { id: string; label: string; hint: string }[] = [
-  { id: "waiting", label: "Waiting for the updater", hint: "It looks for new requests every two minutes." },
+  { id: "waiting", label: "Waiting for the updater", hint: "It usually starts within a few seconds." },
   { id: "backup", label: "Backing up", hint: "A copy of the database and settings, in case anything goes wrong." },
   { id: "install", label: "Installing", hint: "Putting the new files in place." },
   { id: "migrate", label: "Updating the database", hint: "Bringing the database up to date for the new version." },

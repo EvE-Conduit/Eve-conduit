@@ -77,3 +77,51 @@ def test_only_admins_choose_admins(user, api_client):
     assert api_client.call("post", f"/api/admin/admins/{other.pk}").status_code == 403
     other.refresh_from_db()
     assert not other.is_superuser
+
+
+def test_whoever_claims_the_site_is_the_super_admin(user, api_client):
+    from tests.conftest import make_user
+
+    site = SiteSettings.load()
+    api_client.force_login(user)
+    assert api_client.call("post", "/api/setup/claim", {"token": site.setup_token}).status_code == 200
+    assert SiteSettings.load().owner_id == user.pk
+    assert api_client.call("get", "/api/core/bootstrap").json()["user"]["is_owner"]
+    # A second claim (before setup is finished) makes another admin, not another owner.
+    other = make_user(90000002, "Other Pilot")
+    api_client.force_login(other)
+    api_client.call("post", "/api/setup/claim", {"token": site.setup_token})
+    assert SiteSettings.load().owner_id == user.pk
+
+
+def test_super_admin_cant_be_removed(admin_user, user, api_client):
+    SiteSettings.objects.update_or_create(pk=1, defaults={"owner": admin_user})
+    user.is_superuser = True
+    user.save()
+    api_client.force_login(user)
+    admins = {a["name"]: a for a in api_client.call("get", "/api/admin/admins").json()}
+    assert admins["Admin Pilot"]["is_owner"] and not admins["Pilot One"]["is_owner"]
+    resp = api_client.call("delete", f"/api/admin/admins/{admin_user.pk}")
+    assert resp.status_code == 400 and "super admin" in resp.json()["detail"]
+    admin_user.refresh_from_db()
+    assert admin_user.is_superuser
+    # The super admin can still remove other admins.
+    api_client.force_login(admin_user)
+    assert api_client.call("delete", f"/api/admin/admins/{user.pk}").status_code == 200
+
+
+def test_existing_sites_find_their_owner(admin_user, user):
+    import importlib
+
+    from django.apps import apps
+
+    from conduit.audit.models import AuditEvent
+
+    owner_migration = importlib.import_module("conduit.site.migrations.0007_site_owner")
+    user.is_superuser = True
+    user.save()
+    SiteSettings.load()
+    # Pilot One claimed the site; Admin Pilot was made an administrator later.
+    AuditEvent.objects.create(action="setup.admin_claimed", summary="claimed", actor_type="user", actor_id=user.pk, actor_name=user.display_name)
+    owner_migration.find_owner(apps, None)
+    assert SiteSettings.load().owner_id == user.pk

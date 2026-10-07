@@ -8,7 +8,9 @@
 #   conduit upgrade <release.tar.gz>      install a new release (keeps the old one for rollback)
 #   conduit rollback                      switch back to the previous release
 #   conduit backup                        dump the database and config to /var/backups/conduit
-#   conduit apply-update                  install an update or plugins approved on the website (run by cron as root)
+#   conduit apply-update                  install an update or plugins approved on the website (run as root by
+#                                         the conduit-update.path watcher, with cron as a backup)
+#   conduit setup-updater                 (re)install that watcher
 #   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
 #   conduit plugin list                   list installed plugins
 #   conduit run web|worker|beat           used by Supervisor to start the services
@@ -233,14 +235,74 @@ for mid, e in sorted(registry.discover().items()):
   esac
 }
 
-# Run every two minutes by /etc/cron.d/conduit-update. The website (running as the conduit user) downloads and
-# verifies releases into the updates folder and leaves install-request.json there when an admin clicks Install,
-# or plugins-request.json when they install or remove plugins.
+# The website (running as the conduit user) downloads and verifies releases into the updates folder and leaves
+# install-request.json there when an admin clicks Install, or plugins-request.json when they install or remove
+# plugins. systemd's conduit-update.path starts this the moment such a file appears; /etc/cron.d/conduit-update
+# also runs it every two minutes, as a backup and on systems without systemd. A lock keeps the two apart.
 cmd_apply_update() {
   require_root
   load_env
+  local lock=${CONDUIT_UPDATE_LOCK:-/run/lock/conduit-update.lock}
+  exec 9>"$lock"
+  if [[ -n "${INVOCATION_ID:-}" ]]; then
+    # Started by systemd: wait for a run already in progress. Returning straight away while the request file is
+    # still there would make conduit-update.path trigger again and again.
+    flock 9
+  else
+    flock -n 9 || return 0   # cron: a run is already in progress
+  fi
+  # Installs from before the watcher existed get it on the first run of this (newer) script.
+  install_update_watcher
   apply_release_request
   apply_plugin_request
+}
+
+# conduit-update.path watches the updates folder and starts conduit-update.service ("conduit apply-update") as soon
+# as a request appears, so updates start within seconds instead of at the next cron run. Rewritten only when it
+# changed. Does nothing without systemd (cron alone then).
+install_update_watcher() {
+  [[ "${CONDUIT_TESTING:-}" == 1 ]] && return 0
+  command -v systemctl >/dev/null && [[ -d /run/systemd/system ]] || return 0
+  local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}" dir=/etc/systemd/system changed=0 unit want
+  for unit in service path; do
+    if [[ $unit == service ]]; then
+      want="[Unit]
+Description=EvE Conduit: install an update or plugins approved on the website
+
+[Service]
+Type=oneshot
+ExecStart=$CONDUIT_BIN apply-update
+# An upgrade backs up the database and reinstalls packages; give it time.
+TimeoutStartSec=2h"
+    else
+      want="[Unit]
+Description=EvE Conduit: start the updater when the website asks for an install
+
+[Path]
+PathExistsGlob=$updates/*-request.json
+Unit=conduit-update.service
+
+[Install]
+WantedBy=multi-user.target"
+    fi
+    if [[ "$(cat "$dir/conduit-update.$unit" 2>/dev/null)" != "$want" ]]; then
+      printf '%s\n' "$want" >"$dir/conduit-update.$unit"
+      changed=1
+    fi
+  done
+  if [[ $changed == 1 ]]; then
+    systemctl daemon-reload
+    systemctl enable conduit-update.path >/dev/null 2>&1 || true
+    # Not --now from inside conduit-update.service: the path unit would queue this service again straight away.
+    systemctl start --no-block conduit-update.path || true
+  fi
+  return 0
+}
+
+cmd_setup_updater() {
+  require_root
+  load_env
+  install_update_watcher
 }
 
 # Nothing in the updates folder is trusted: the release is copied to a root-only temp dir and its signature checked
@@ -392,6 +454,7 @@ case "${1:-}" in
   rollback) cmd_rollback ;;
   backup) cmd_backup ;;
   apply-update) cmd_apply_update ;;
+  setup-updater) cmd_setup_updater ;;
   _apply-plugins) shift; cmd_apply_plugins "$@" ;;
   plugin) shift; cmd_plugin "$@" ;;
   run) shift; cmd_run "$@" ;;

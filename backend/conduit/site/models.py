@@ -1,5 +1,6 @@
 import secrets
 
+from django.conf import settings
 from django.db import models
 
 
@@ -13,6 +14,8 @@ class SiteSettings(models.Model):
     setup_completed = models.BooleanField(default=False)
     # One-time code that lets the first person claim admin. Shown in the server logs.
     setup_token = models.CharField(max_length=64, blank=True)
+    # The super admin: whoever claimed the site with the setup code. Always an administrator; nobody can remove them.
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     # While on, only people who can manage the site get in; everyone else sees the message.
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.CharField(max_length=300, blank=True)

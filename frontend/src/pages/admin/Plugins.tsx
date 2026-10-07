@@ -561,7 +561,7 @@ function JobStatus({ data, onCancel, cancelling }: { data: Overview; onCancel: (
           </Button>
         }
       >
-        {job.message || `${who} ${timeAgo(job.requested_at)}. The updater checks every two minutes.`}
+        {job.message || `${who} ${timeAgo(job.requested_at)}. The updater usually starts within a few seconds.`}
       </Alert>
     );
   }

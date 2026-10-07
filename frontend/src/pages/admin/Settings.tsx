@@ -166,6 +166,7 @@ interface AdminUser {
   name: string;
   main: CharacterBrief | null;
   is_you: boolean;
+  is_owner: boolean;
   last_login: string | null;
 }
 
@@ -212,7 +213,7 @@ function Administrators() {
       <CardHeader
         icon={<ShieldPlus />}
         title="Administrators"
-        description="Administrators can do everything, including choosing other administrators. For narrower jobs, give a group the permissions it needs instead."
+        description="Administrators can do everything, including choosing other administrators. The super admin, who claimed the site, always stays one. For narrower jobs, give a group the permissions it needs instead."
       />
       <CardBody className="space-y-4">
         <ul className="divide-y divide-border border border-border">
@@ -222,21 +223,28 @@ function Administrators() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   {a.name}
+                  {a.is_owner && <Badge size="xs" tone="warning">Super admin</Badge>}
                   {a.is_you && <Badge size="xs" tone="accent">You</Badge>}
                 </div>
                 <div className="truncate text-xs text-muted">
                   {a.main?.corporation?.name ?? "No corporation"} · last signed in {timeAgo(a.last_login)}
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={(data ?? []).length <= 1}
-                title={(data ?? []).length <= 1 ? "The site needs at least one administrator" : undefined}
-                onClick={() => setRemoving(a)}
-              >
-                <UserMinus /> Remove
-              </Button>
+              {a.is_owner ? (
+                <span className="px-3 text-xs text-subtle" title="Claimed the site with the setup code, so always stays an administrator">
+                  Can't be removed
+                </span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={(data ?? []).length <= 1}
+                  title={(data ?? []).length <= 1 ? "The site needs at least one administrator" : undefined}
+                  onClick={() => setRemoving(a)}
+                >
+                  <UserMinus /> Remove
+                </Button>
+              )}
             </li>
           ))}
         </ul>

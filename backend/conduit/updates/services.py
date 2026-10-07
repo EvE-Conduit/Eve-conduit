@@ -374,7 +374,7 @@ def state_out(state: UpdateState) -> dict:
 
 
 def pending_for_bootstrap() -> dict | None:
-    """An install an admin asked for that the updater hasn't started yet (it looks every two minutes)."""
+    """An install an admin asked for that the updater hasn't started yet (it usually starts within seconds; at most two minutes)."""
     from conduit.plugins.models import PluginInstaller
 
     from conduit.plugins.installs import sync_result as sync_plugin_result

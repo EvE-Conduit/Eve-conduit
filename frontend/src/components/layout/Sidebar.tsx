@@ -175,7 +175,7 @@ export function Sidebar({
               </div>
               {user.is_admin ? (
                 <Badge tone="accent" variant="dot" size="xs">
-                  Admin
+                  {user.is_owner ? "Super admin" : "Admin"}
                 </Badge>
               ) : (
                 user.state && (

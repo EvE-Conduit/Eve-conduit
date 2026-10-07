@@ -823,18 +823,46 @@ function Set-ConduitProgress {
     }
 }
 
-function Register-ConduitUpdater {
-    <# The SYSTEM task that installs updates an administrator asked for on the website. Checks every two minutes. #>
+# The updater task runs "conduit watch-updates", which waits for a request and starts it within seconds. The task's
+# two-minute trigger only matters when the watcher isn't running (after a reboot, an install, or if it stopped):
+# with -MultipleInstances IgnoreNew it does nothing while one is.
+$script:UpdaterCommand = 'watch-updates'
+$script:UpdateRequestFiles = @('install-request.json', 'plugins-request.json')
+
+function Test-ConduitUpdateRequest {
+    <# True when the website has left an install or plugin request in the updates folder. #>
+    param([Parameter(Mandatory)][string]$UpdatesDir)
+    foreach ($name in $script:UpdateRequestFiles) {
+        if (Test-Path -LiteralPath (Join-Path $UpdatesDir $name)) { return $true }
+    }
+    return $false
+}
+
+function Get-ConduitUpdaterArgument {
+    <# The updater task's command line (also used to tell whether a registered task is the current kind). #>
     param([Parameter(Mandatory)][string]$Root)
-    $script = Join-Path $Root 'conduit.ps1'
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-        -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$script`" apply-update"
+    "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$(Join-Path $Root 'conduit.ps1')`" $script:UpdaterCommand"
+}
+
+function Register-ConduitUpdater {
+    <# The SYSTEM task that installs updates an administrator asked for on the website (see watch-updates). #>
+    param([Parameter(Mandatory)][string]$Root)
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument (Get-ConduitUpdaterArgument -Root $Root)
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 2)
     $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
+    # The watcher stops by itself after 12 hours (and after each install); a day leaves room for a long install.
+    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Days 1) `
         -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $script:UpdaterTaskName -Action $action -Trigger $trigger -Principal $principal `
         -Settings $settings -Description 'Installs EvE Conduit updates that an administrator approved on the website.' -Force | Out-Null
+}
+
+function Test-ConduitUpdaterCurrent {
+    <# Whether the registered updater task runs the watcher (installs from before 0.5.8 ran apply-update every two minutes). #>
+    param([Parameter(Mandatory)][string]$Root)
+    $task = Get-ScheduledTask -TaskName $script:UpdaterTaskName -ErrorAction SilentlyContinue
+    if (-not $task) { return $false }
+    return @($task.Actions | Where-Object { $_.Arguments -eq (Get-ConduitUpdaterArgument -Root $Root) }).Count -gt 0
 }
 
 function Unregister-ConduitUpdater {
