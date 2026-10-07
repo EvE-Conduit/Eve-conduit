@@ -42,6 +42,8 @@ export interface CorpHeader extends Entity {
   member_count: number | null;
   registered_characters: number;
   can_view_wallets: boolean;
+  /** Has corp.refresh_corporations, so may ask ESI for fresh data now. */
+  can_refresh: boolean;
   sections: CorpSectionStatus[];
 }
 

@@ -393,3 +393,18 @@ def test_structure_sync_names_our_structures_for_everyone(people, fake):
     for s in Structure.objects.all():
         loc = Location.objects.get(pk=s.structure_id)
         assert loc.resolved and loc.name == s.name and loc.owner_id == CORP
+
+
+@pytest.mark.django_db
+def test_refreshing_a_corporation_takes_a_permission(people, api_client, monkeypatch):
+    queued = []
+    monkeypatch.setattr("conduit.corp.tasks.sync_section.delay", lambda cid, key: queued.append(key))
+    _, _, line = people
+    line = grant(line, "view_own_corporation")
+    api_client.force_login(line)
+    assert api_client.call("get", f"/api/corporations/{CORP}").json()["can_refresh"] is False
+    assert api_client.call("post", f"/api/corporations/{CORP}/refresh").status_code == 403 and not queued
+    line = grant(line, "refresh_corporations")
+    api_client.force_login(line)
+    assert api_client.call("get", f"/api/corporations/{CORP}").json()["can_refresh"] is True
+    assert api_client.call("post", f"/api/corporations/{CORP}/refresh").status_code == 200 and queued
