@@ -32,6 +32,9 @@ from .models import PluginInstaller
 log = logging.getLogger(__name__)
 
 CHECK_COOLDOWN_KEY = "conduit:plugins:catalog-check"
+AUTO_REFRESH_KEY = "conduit:plugins:catalog-auto"
+#: Opening Administration -> Plugins fetches the catalog when the copy here is missing or older than this.
+CATALOG_MAX_AGE = timedelta(hours=6)
 STALE_REQUEST = timedelta(minutes=10)
 BUSY = (PluginInstaller.Job.REQUESTED, PluginInstaller.Job.RUNNING)
 PLUGIN_INSTRUCTIONS = {
@@ -336,8 +339,20 @@ def check_for_updates() -> str:
 # --- for the admin page ---------------------------------------------------------------------------------
 
 
+def _refresh_if_stale(state: PluginInstaller) -> PluginInstaller:
+    """Fetch the catalog when it's missing or old, at most every five minutes (whoever opens the page first)."""
+    fresh = state.catalog.get("plugins") is not None and state.catalog_checked_at \
+        and timezone.now() - state.catalog_checked_at < CATALOG_MAX_AGE
+    if fresh or not cache.add(AUTO_REFRESH_KEY, 1, 300):
+        return state
+    try:
+        return refresh_catalog()
+    except InstallError:
+        return PluginInstaller.load()  # the error is stored and shown on the page
+
+
 def overview() -> dict:
-    state = sync_result(PluginInstaller.load())
+    state = _refresh_if_stale(sync_result(PluginInstaller.load()))
     dists = packages()
     updates = available_updates(state, dists)
     catalog = []
