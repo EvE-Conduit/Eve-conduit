@@ -1,0 +1,62 @@
+# Publishes the signed plugin catalog that installs read under Administration -> Plugins.
+#
+# The plugins live in github.com/EvE-Conduit/plugins (a mirror of plugins/, pushed by scripts/publish-plugins.sh).
+# This workflow takes that repository's latest commit, builds catalog.json with every plugin pinned to it, signs
+# it with RELEASE_SIGNING_KEY (the release key, which only this repository holds) and publishes catalog.json and
+# catalog.json.sig on the release tagged "plugin-catalog". publish-plugins.sh starts it; it also runs hourly and
+# does nothing when the catalog is already up to date.
+name: Plugin catalog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-catalog
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: EvE-Conduit/plugins
+          path: plugins-repo
+      - name: Anything new?
+        id: check
+        run: |
+          sha=$(git -C plugins-repo rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          published=$(gh release download plugin-catalog -p catalog.json -O - 2>/dev/null \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin).get("commit", ""))' 2>/dev/null || true)
+          if [[ "$published" == "$sha" && "$GITHUB_EVENT_NAME" == schedule ]]; then
+            echo "Catalog already pins $sha"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.skip != '1'
+        with:
+          python-version: "3.13"
+      - name: Build, sign and publish
+        if: steps.check.outputs.skip != '1'
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          SHA: ${{ steps.check.outputs.sha }}
+        run: |
+          pip install --quiet cryptography
+          python plugins-repo/scripts/build_catalog.py --repo EvE-Conduit/plugins --commit "$SHA" \
+            --serial "$(git -C plugins-repo log -1 --format=%ct)" > catalog.json
+          cat catalog.json
+          python scripts/sign-release.py catalog.json
+          gh release view plugin-catalog >/dev/null 2>&1 || \
+            gh release create plugin-catalog --title "Plugin catalog" --latest=false \
+              --notes "The signed list of plugins EvE Conduit offers under Administration -> Plugins, built from github.com/EvE-Conduit/plugins. Not a release of EvE Conduit."
+          gh release upload plugin-catalog catalog.json catalog.json.sig --clobber

@@ -242,9 +242,11 @@ CONDUIT_UPDATES_DIR = env("CONDUIT_UPDATES_DIR", str(BASE_DIR / "updates"))
 CONDUIT_UPDATE_REPO = env("CONDUIT_UPDATE_REPO", "EvE-Conduit/Eve-conduit")
 CONDUIT_UPDATE_CHECK = env_bool("CONDUIT_UPDATE_CHECK", True)
 CONDUIT_UPDATE_PRERELEASES = env_bool("CONDUIT_UPDATE_PRERELEASES")
-# Signed catalog of official plugins (github.com/EvE-Conduit/plugins), offered under Administration > Plugins.
+# Signed catalog of official plugins (from github.com/EvE-Conduit/plugins), offered under Administration > Plugins.
+# Published by this repository's "Plugin catalog" workflow, which holds the signing key.
 CONDUIT_PLUGIN_CATALOG_URL = env(
-    "CONDUIT_PLUGIN_CATALOG_URL", "https://github.com/EvE-Conduit/plugins/releases/download/catalog/catalog.json")
+    "CONDUIT_PLUGIN_CATALOG_URL",
+    "https://github.com/EvE-Conduit/Eve-conduit/releases/download/plugin-catalog/catalog.json")
 # Let administrators install plugins from any git URL over HTTPS. A plugin runs with the site's access to the
 # server and database, so only the server owner can turn this on (the updater reads it from the config file).
 CONDUIT_PLUGIN_URLS = env_bool("CONDUIT_PLUGIN_URLS")
