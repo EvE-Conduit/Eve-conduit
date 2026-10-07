@@ -123,6 +123,7 @@ def test_state_from_another_session_is_refused(setup, api_client):
 def test_no_access_no_link(setup, api_client):
     pilot, _ = setup
     pilot.user_permissions.clear()
+    pilot.state.permissions.clear()  # every state may link by default; this admin took it away
     api_client.force_login(pilot)
     assert api_client.call("post", "/api/p/discord/link").status_code == 403
 
@@ -144,6 +145,7 @@ def test_losing_access_strips_roles_or_kicks(setup, discord, api_client):
     add_member(pilot, caps, "admin")
     link(api_client, pilot)
     pilot.user_permissions.clear()
+    pilot.state.permissions.clear()
     pilot = type(pilot).objects.get(pk=pilot.pk)  # drop the permission cache
     assert services.sync_user(pilot) == ""
     assert discord.members[ME]["roles"] == []
@@ -221,3 +223,22 @@ def test_mappings_api(setup, api_client, admin_user):
     pilot.state = member_state
     pilot.save()
     assert services.desired_roles(pilot) == {R_MEMBER}
+
+
+def test_every_state_may_link_discord_by_default(db):
+    import importlib
+
+    from django.apps import apps
+
+    from conduit.access.models import State
+
+    new = State.objects.create(name="Blue", priority=5)
+    assert new.permissions.filter(codename="access_discord").exists()
+
+    old = State.objects.create(name="Old", priority=6)
+    old.permissions.clear()  # as if made before the plugin was installed
+    importlib.import_module("conduit_discord.migrations.0002_default_access").grant_to_every_state(apps, None)
+    assert old.permissions.filter(codename="access_discord").exists()
+    old.permissions.clear()
+    old.save()  # taking it away sticks: only new states get it
+    assert not old.permissions.filter(codename="access_discord").exists()

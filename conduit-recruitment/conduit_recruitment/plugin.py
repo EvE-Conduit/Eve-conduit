@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class RecruitmentPlugin(Plugin):
     id = "recruit"
     name = "Recruitment"
-    version = "1.1.1"
+    version = "1.1.2"
     description = "Application forms, a review queue with each applicant's characters, notes and messages, and accepting into groups."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-recruitment"

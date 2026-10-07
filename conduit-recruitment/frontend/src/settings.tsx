@@ -53,8 +53,8 @@ function RequireDiscord({ settings }: { settings: RecruitSettings }) {
               Applicants must link their Discord account and be on your Discord server before they can send an application.
             </span>
             <span className="mt-1 block text-xs text-subtle">
-              Needs the Discord plugin installed, switched on and set up. Give your Guest state the "Can link a Discord
-              account" permission so applicants can link.
+              Needs the Discord plugin installed, switched on and set up. Applicants also need the "Can link a Discord
+              account" permission, which every state has unless you took it away.
             </span>
           </span>
         </label>

@@ -16,8 +16,10 @@ How syncing works:
 - Only roles mapped to a group or state are touched. Roles given by hand in Discord stay.
 - Roles change straight away when someone joins or leaves a group, their state changes or they pick another
   main. Everyone is checked again every 6 hours, which also catches people who left the server.
-- People without `discord.access_discord` (give it to your member states) lose their mapped roles, or are kicked
-  from the server if "Remove people who lose access" is on.
+- Every state gets `discord.access_discord` by default (existing states when the plugin is installed or updated
+  to 1.0.2, and every new state), so guests can link too, e.g. to apply. Take it off a state under
+  Administration → Access to keep them out; people without it lose their mapped roles, or are kicked from the
+  server if "Remove people who lose access" is on.
 - Nicknames take `{character}`, `{corp_ticker}`, `{corp}`, `{alliance_ticker}` and `{alliance}`. Leave the format
   empty to let people choose their own. Discord doesn't let anyone change the server owner's nickname.
 
