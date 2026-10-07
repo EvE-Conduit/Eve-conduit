@@ -44,7 +44,7 @@ def test_bootstrap_lists_enabled_module_for_signed_in_users(user, client):
     client.force_login(user)
     plugins = client.get("/api/core/bootstrap").json()["plugins"]
     assert plugins[0]["id"] == "sample"
-    assert plugins[0]["entry"] == "/static/sample/plugin.js"
+    assert plugins[0]["entry"] == "/static/sample/plugin.js?v=1.0.0"  # versioned, so updates aren't stuck in caches
 
 
 @pytest.mark.django_db
