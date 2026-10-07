@@ -794,6 +794,35 @@ function Write-ConduitUpdateResult {
     [IO.File]::WriteAllText($Path, $json, (New-Object Text.UTF8Encoding $false))
 }
 
+function Set-ConduitProgress {
+    <#
+      How far an update has got: progress.json in the updates folder (for the website) and in the tray folder (the
+      tray panel runs as the signed-in user, who can only read that folder). -Clear removes both when it's over.
+      Steps: backup, install, migrate, restart.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [ValidateSet('release', 'plugins')][string]$Kind = 'release',
+        [string]$Target = '',
+        [ValidateSet('backup', 'install', 'migrate', 'restart')][string]$Step = 'backup',
+        [switch]$Clear
+    )
+    $paths = @((Join-Path (Get-ConduitUpdatesDir -Root $Root) 'progress.json'), (Join-Path (Join-Path $Root 'tray') 'progress.json'))
+    if ($Clear) {
+        foreach ($path in $paths) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+        $script:ProgressStarted = $null
+        return
+    }
+    $now = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    if (-not (Get-Variable -Name ProgressStarted -Scope Script -ErrorAction SilentlyContinue) -or -not $script:ProgressStarted) { $script:ProgressStarted = $now }
+    $json = [ordered]@{ kind = $Kind; target = $Target; step = $Step; started_at = $script:ProgressStarted; at = $now } | ConvertTo-Json -Compress
+    foreach ($path in $paths) {
+        if (-not (Test-Path -LiteralPath (Split-Path $path -Parent))) { continue }
+        try { [IO.File]::WriteAllText($path, $json, (New-Object Text.UTF8Encoding $false)) }
+        catch { Write-Verbose "Couldn't write $path ($_)" }   # progress is only informative
+    }
+}
+
 function Register-ConduitUpdater {
     <# The SYSTEM task that installs updates an administrator asked for on the website. Checks every two minutes. #>
     param([Parameter(Mandatory)][string]$Root)

@@ -10,10 +10,12 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { Alert, Progress } from "@/components/ui/feedback";
 import { EmptyState, PageHeader, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UpdateSteps } from "@/components/updates/UpdateSteps";
 import { api } from "@/lib/api";
 import { BOOTSTRAP_KEY } from "@/lib/bootstrap";
 import { date } from "@/lib/format";
 import { Markdown } from "@/lib/markdown";
+import type { UpdateProgress } from "@/lib/types";
 import { timeAgo } from "@/lib/utils";
 
 interface Release {
@@ -36,6 +38,7 @@ interface UpdateStatus {
   check_error: string;
   latest: string | null;
   releases: Release[];
+  progress: UpdateProgress | null;
   download: { state: "none" | "downloading" | "ready" | "failed"; version: string | null; size: number; received: number; error: string };
   install: { state: "none" | "requested" | "running" | "succeeded" | "failed"; version: string | null; requested_at: string | null; requested_by: string | null; message: string };
 }
@@ -59,7 +62,7 @@ export function AdminUpdates() {
     refetchInterval: (q) => {
       const d = q.state.data;
       if (d?.download.state === "downloading") return 1000;
-      if (d && (d.install.state === "requested" || d.install.state === "running")) return 5000;
+      if (d && (d.install.state === "requested" || d.install.state === "running" || d.progress)) return 5000;
       return false;
     },
   });
@@ -240,6 +243,17 @@ function Action({ data, latest, onDownload, onInstall }: { data: UpdateStatus; l
 
 function InstallStatus({ data, onCancel, cancelling, onRetry }: { data: UpdateStatus; onCancel: () => void; cancelling: boolean; onRetry: () => void }) {
   const { install } = data;
+  // Also when someone runs "conduit upgrade" on the server: the progress file says so.
+  if (install.state === "running" || data.progress?.kind === "release") {
+    return (
+      <div className="mb-6 space-y-3">
+        <Alert tone="warning" icon={<Loader2 className="animate-spin" />} title={`Installing EvE Conduit ${data.progress?.target || install.version}`}>
+          The site restarts near the end. This page reconnects and reloads by itself.
+        </Alert>
+        {data.progress?.kind === "release" && <UpdateSteps progress={data.progress} />}
+      </div>
+    );
+  }
   if (install.state === "requested") {
     return (
       <Alert
@@ -254,13 +268,6 @@ function InstallStatus({ data, onCancel, cancelling, onRetry }: { data: UpdateSt
         }
       >
         {install.message || `Asked by ${install.requested_by ?? "an administrator"} ${timeAgo(install.requested_at)}. The updater checks every two minutes.`}
-      </Alert>
-    );
-  }
-  if (install.state === "running") {
-    return (
-      <Alert tone="warning" className="mb-6" icon={<Loader2 className="animate-spin" />} title={`Installing EvE Conduit ${install.version}`}>
-        The site restarts during the install. This page reconnects and reloads by itself.
       </Alert>
     );
   }

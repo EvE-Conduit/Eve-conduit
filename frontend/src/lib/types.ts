@@ -92,6 +92,15 @@ export interface PluginEntry {
   entry: string | null;
 }
 
+/** What the install's updater is doing right now (from its progress file). */
+export interface UpdateProgress {
+  kind: "release" | "plugins";
+  target: string;
+  step: "backup" | "install" | "migrate" | "restart";
+  steps: UpdateProgress["step"][];
+  started_at: string;
+}
+
 export interface Bootstrap {
   site: {
     name: string;
@@ -104,6 +113,8 @@ export interface Bootstrap {
     django_admin: boolean;
     /** Newest available EvE Conduit version; only sent to people who can manage the site. */
     update_available?: string | null;
+    /** Set while the updater installs a release or plugins; the site restarts at the end. */
+    updating?: UpdateProgress | null;
   };
   setup: { completed: boolean; sso_configured: boolean; callback_url: string; admin_claimed: boolean };
   user: CurrentUser | null;

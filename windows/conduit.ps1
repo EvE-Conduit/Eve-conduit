@@ -181,11 +181,13 @@ function Invoke-Upgrade([string]$Zip) {
         $current = (Get-Item $p.App).Target
         if ($current -is [array]) { $current = $current[0] }
         if ($target -eq $current) { throw "Release $version is already running. Upgrades need a newer version number (backend/pyproject.toml)." }
+        Set-ConduitProgress -Root $Root -Kind release -Target $version -Step backup
         Write-Host 'Backing up before upgrading...'
         Invoke-Backup
         # Windows locks DLLs that are in use, so stop the app before pip replaces anything.
         Stop-AppService
         Write-Host "Installing $version..."
+        Set-ConduitProgress -Root $Root -Kind release -Target $version -Step install
         try {
             Install-ConduitPythonPackage -Root $Root -ReleaseDir $inner[0].FullName -MariaDb:(Test-MariaDb)
         }
@@ -201,11 +203,17 @@ function Invoke-Upgrade([string]$Zip) {
         Set-Content -LiteralPath (Join-Path $Root 'previous.txt') -Value $current
         Set-ConduitAppLink -Root $Root -ReleaseDir $target
         Set-ConduitAcl -Root $Root
+        Set-ConduitProgress -Root $Root -Kind release -Target $version -Step migrate
         Invoke-Finish $target
+        Set-ConduitProgress -Root $Root -Kind release -Target $version -Step restart
         Restart-All
+        Set-ConduitProgress -Root $Root -Clear
         Write-Host "EvE Conduit $version is running. 'conduit rollback' returns to the previous release."
     }
-    finally { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+    finally {
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+        Set-ConduitProgress -Root $Root -Clear
+    }
 }
 
 function Invoke-ApplyUpdate {
@@ -291,6 +299,7 @@ function Invoke-ApplyPluginRequest {
     $current = (Get-Item $p.App).Target
     if ($current -is [array]) { $current = $current[0] }
     try {
+        Set-ConduitProgress -Root $Root -Kind plugins -Step backup
         Invoke-Backup *>&1 | Write-Log
         # Windows locks DLLs that are in use, so stop the app before pip replaces anything.
         Stop-AppService
@@ -298,13 +307,17 @@ function Invoke-ApplyPluginRequest {
             Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'uninstall', '--yes', '--disable-pip-version-check', $pkg) `
                 -FailMessage "Removing $pkg failed" | Write-Log
         }
+        Set-ConduitProgress -Root $Root -Kind plugins -Step install
         Install-ConduitPythonPackage -Root $Root -ReleaseDir $current -MariaDb:(Test-MariaDb) *>&1 | Write-Log
         foreach ($url in $reinstall) {
             Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--force-reinstall', '--no-deps', '--disable-pip-version-check', $url) `
                 -FailMessage "Fetching $url again failed" | Write-Log
         }
+        Set-ConduitProgress -Root $Root -Kind plugins -Step migrate
         Invoke-Finish $current *>&1 | Write-Log
+        Set-ConduitProgress -Root $Root -Kind plugins -Step restart
         Restart-All
+        Set-ConduitProgress -Root $Root -Clear
         Remove-Item -LiteralPath $backup -Force
         Write-PluginResult 'succeeded' 'The site has restarted with the changes.'
     }
@@ -322,6 +335,7 @@ function Invoke-ApplyPluginRequest {
         }
         catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) putting the previous plugins back failed too: $_" }
         Restart-All
+        Set-ConduitProgress -Root $Root -Clear
         Write-PluginResult 'failed' "That didn't work, so the previous plugins were put back (details in logs\updater.log)."
     }
 }

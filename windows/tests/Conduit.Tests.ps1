@@ -423,6 +423,43 @@ Describe 'Health verdict' {
     It 'says when nothing is installed' {
         (Get-ConduitHealth -Settings $settings -ServiceStatus ([ordered]@{}) -Probe $allUp).Overall | Should -Be 'NotInstalled'
     }
+    It 'is Updating, not Down, while the updater has the services stopped' {
+        $s = [ordered]@{} + $running; $s['conduit-web'] = 'Stopped'
+        $progress = @{ Kind = 'release'; Target = '0.5.2'; Step = 'install'; Text = 'Updating to 0.5.2: installing...' }
+        $h = Get-ConduitHealth -Settings $settings -ServiceStatus $s -Probe $allUp -Progress $progress
+        $h.Overall | Should -Be 'Updating'
+        $h.Summary | Should -Be 'Updating to 0.5.2: installing...'
+        ($h.Items | Where-Object Id -eq 'conduit-web').Level | Should -Be 'Warning'
+    }
+}
+
+Describe 'Update progress' {
+    BeforeAll {
+        Import-Module (Join-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'tray') 'ConduitHealth.psm1') -Force
+        $root = Join-Path ([IO.Path]::GetTempPath()) "conduit-progress-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Force -Path (Join-Path $root 'tray'), (Join-Path (Join-Path $root 'data') 'updates') | Out-Null
+    }
+    AfterAll { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+    It 'is written for the website and the tray, then cleared' {
+        Set-ConduitProgress -Root $root -Kind release -Target '0.5.2' -Step migrate
+        $site = Get-Content -LiteralPath (Join-Path $root 'data/updates/progress.json') -Raw | ConvertFrom-Json
+        $site.step | Should -Be 'migrate'
+        $site.target | Should -Be '0.5.2'
+        $p = Read-ConduitProgress -Path (Join-Path $root 'tray/progress.json')
+        $p.Text | Should -Be 'Updating to 0.5.2: updating the database...'
+        Set-ConduitProgress -Root $root -Clear
+        Test-Path (Join-Path $root 'tray/progress.json') | Should -BeFalse
+        Read-ConduitProgress -Path (Join-Path $root 'tray/progress.json') | Should -BeNullOrEmpty
+    }
+    It 'ignores <Why>' -ForEach @(
+        @{ Json = '{"kind":"release","target":"0.5.2","step":"install","at":"2020-01-01T00:00:00Z"}'; Why = 'a file left over from long ago' }
+        @{ Json = '{"kind":"release","target":"0.5.2","step":"format c:","at":"2099-01-01T00:00:00Z"}'; Why = 'an unknown step' }
+        @{ Json = '{not json'; Why = 'a broken file' }
+    ) {
+        $path = Join-Path $root 'odd.json'
+        Set-Content -LiteralPath $path -Value $Json
+        Read-ConduitProgress -Path $path -Now ([datetime]'2026-10-07') | Should -BeNullOrEmpty
+    }
 }
 
 Describe 'Update requests' {

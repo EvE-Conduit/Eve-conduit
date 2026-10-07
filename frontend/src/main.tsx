@@ -1,12 +1,14 @@
 import "./index.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider, type RouteObject } from "react-router";
 import { Toaster } from "sonner";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { UPDATING_KEY } from "@/components/layout/Banners";
+import { updateTitle } from "@/components/updates/UpdateSteps";
 import { PluginBoundary } from "@/components/PluginBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api";
@@ -15,6 +17,7 @@ import { PluginsProvider } from "@/lib/pluginContext";
 import { loadPlugins, type LoadedPlugin } from "@/lib/plugins";
 import { applyPluginStyles } from "@/lib/pluginStyles";
 import { applyPreferences, applyStoredTheme } from "@/lib/preferences";
+import type { UpdateProgress } from "@/lib/types";
 import { AdminAccess } from "@/pages/admin/Access";
 import { AdminCompliance } from "@/pages/admin/Compliance";
 import { AdminApi } from "@/pages/admin/Api";
@@ -134,15 +137,33 @@ async function start() {
   );
 }
 
+/** The API didn't answer. Usually the site is restarting (often for an update): keep trying and come back by itself. */
 function Offline() {
+  const [updating] = useState<UpdateProgress | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(UPDATING_KEY) ?? "null");
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchBootstrap().then(() => location.reload(), () => undefined);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
   return (
     <div className="backdrop-space grid min-h-full place-items-center px-4 text-center">
-      <div>
+      <div className="max-w-md">
         <div className="mx-auto mb-5 size-3 animate-ping rounded-none bg-warning" />
-        <h1 className="text-xl font-semibold">Can't reach the server</h1>
-        <p className="mt-2 text-sm text-muted">The site is starting up or offline. This page will work again once it's back.</p>
+        <h1 className="text-xl font-semibold">{updating ? `${updateTitle(updating)}` : "Can't reach the server"}</h1>
+        <p className="mt-2 text-sm text-muted">
+          {updating
+            ? "The site is restarting with the new version. This page reloads by itself when it's back, usually within a minute or two."
+            : "The site is starting up or offline. This page reloads by itself as soon as it answers again."}
+        </p>
         <button onClick={() => location.reload()} className="mt-6 rounded-lg border border-border-strong px-4 py-2 text-sm hover:bg-hover-strong">
-          Try again
+          Try now
         </button>
       </div>
     </div>

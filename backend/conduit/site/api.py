@@ -17,6 +17,7 @@ from conduit.plugins import registry
 from conduit.plugins.services import enabled_ids, sync_installed
 from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
+from conduit.updates.services import progress as update_progress
 
 from .models import SiteSettings
 
@@ -37,6 +38,8 @@ class SiteOut(Schema):
     django_admin: bool
     #: Newest available version, only for people who can install it.
     update_available: str | None = None
+    #: Set while the updater is installing a release or plugins (the site restarts at the end).
+    updating: dict | None = None
 
 
 class SetupOut(Schema):
@@ -85,6 +88,7 @@ def site_out(site: SiteSettings) -> dict:
         "version": __version__,
         "maintenance": {"enabled": site.maintenance_mode, "message": site.maintenance_message},
         "django_admin": settings.CONDUIT_DJANGO_ADMIN,
+        "updating": update_progress(),
     }
 
 
