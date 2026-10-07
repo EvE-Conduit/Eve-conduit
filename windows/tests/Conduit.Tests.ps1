@@ -451,3 +451,28 @@ Describe 'Update requests' {
         finally { Remove-Item -LiteralPath $path -ErrorAction SilentlyContinue }
     }
 }
+
+Describe 'External programs under Windows PowerShell 5.1 with captured output' -Skip:(-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') {
+    # The setup wizard runs the installer with its output captured. There, Windows PowerShell 5.1 turns anything a
+    # program writes to stderr into an error, which used to abort the install on a harmless warning.
+    BeforeAll {
+        $module = (Resolve-Path (Join-Path $PSScriptRoot '..\scripts\Conduit.psm1')).Path
+        function Invoke-Captured([string]$Body) {
+            $script = "`$ErrorActionPreference = 'Stop'; Import-Module '$module' -Force; $Body"
+            $out = & powershell.exe -NoProfile -NonInteractive -Command $script 2>&1 | Out-String
+            return @{ Code = $LASTEXITCODE; Output = $out }
+        }
+    }
+    It 'keeps going when a program warns on stderr but succeeds' {
+        $r = Invoke-Captured "Invoke-NativeCommand -FilePath cmd.exe -ArgumentList @('/c', 'echo a warning 1>&2 & echo done') -FailMessage 'failed'; 'AFTER'"
+        $r.Code | Should -Be 0
+        $r.Output | Should -Match 'a warning'
+        $r.Output | Should -Match 'AFTER'
+    }
+    It 'stops with the failure message when a program fails' {
+        $r = Invoke-Captured "Invoke-NativeCommand -FilePath cmd.exe -ArgumentList @('/c', 'exit 3') -FailMessage 'Step failed'; 'AFTER'"
+        $r.Code | Should -Not -Be 0
+        $r.Output | Should -Match 'Step failed \(exit code 3\)'
+        $r.Output | Should -Not -Match 'AFTER'
+    }
+}

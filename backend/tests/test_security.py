@@ -292,3 +292,13 @@ def test_security_checks_flag_risky_settings():
 def test_health_lists_security_warnings(admin_user, api_client):
     api_client.force_login(admin_user)
     assert isinstance(api_client.call("get", "/api/admin/health").json()["security"], list)
+
+
+@pytest.mark.django_db
+def test_security_warnings_are_deploy_checks_only():
+    """Ordinary management commands (migrate...) must not print them: installers treat stderr as failure."""
+    from django.core.checks import run_checks
+
+    with override_settings(DEBUG=False, CONDUIT_TOKEN_KEY=""):
+        assert not [m for m in run_checks() if m.id.startswith("conduit.")]
+        assert any(m.id == "conduit.W001" for m in run_checks(include_deployment_checks=True))

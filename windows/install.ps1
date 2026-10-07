@@ -304,10 +304,8 @@ Copy-VcRuntime (Join-Path $p.Bin 'garnet\net10.0')
 # --- 5. Python ------------------------------------------------------------------------------------------
 Write-Step 'Installing Python 3.12 and the virtualenv'
 $uv = Join-Path $p.Bin 'uv\uv.exe'
-& $uv python install 3.12
-if ($LASTEXITCODE -ne 0) { throw 'uv python install failed' }
-& $uv venv --seed --python 3.12 $p.Venv
-if ($LASTEXITCODE -ne 0) { throw 'Creating the virtualenv failed' }
+Invoke-NativeCommand -FilePath $uv -ArgumentList @('python', 'install', '3.12') -FailMessage 'uv python install failed' | Out-Host
+Invoke-NativeCommand -FilePath $uv -ArgumentList @('venv', '--seed', '--python', '3.12', $p.Venv) -FailMessage 'Creating the virtualenv failed' | Out-Host
 $pythonHome = ((Get-Content (Join-Path $p.Venv 'pyvenv.cfg')) -match '^home\s*=' | Select-Object -First 1) -replace '^home\s*=\s*', ''
 if ($pythonHome) { Copy-VcRuntime $pythonHome.Trim() }  # e.g. msvcp140.dll, which some packages need
 
@@ -331,10 +329,10 @@ if ($installDb) {
         $pwFile = Join-Path $p.Tmp 'pgpass.txt'
         [IO.File]::WriteAllText($pwFile, $superPassword)
         try {
-            & (Join-Path $pgHome 'bin\initdb.exe') -D $pgData -U postgres "--pwfile=$pwFile" --encoding=UTF8 `
-                --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C --auth=scram-sha-256 `
-                -c listen_addresses=127.0.0.1 -c "port=$dbPort"
-            if ($LASTEXITCODE -ne 0) { throw 'initdb failed' }
+            Invoke-NativeCommand -FilePath (Join-Path $pgHome 'bin\initdb.exe') -FailMessage 'initdb failed' -ArgumentList @(
+                '-D', $pgData, '-U', 'postgres', "--pwfile=$pwFile", '--encoding=UTF8',
+                '--locale-provider=builtin', '--builtin-locale=C.UTF-8', '--locale=C', '--auth=scram-sha-256',
+                '-c', 'listen_addresses=127.0.0.1', '-c', "port=$dbPort") | Out-Host
         }
         finally { Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue }
         $dbService = 'conduit-postgres'
@@ -347,8 +345,8 @@ if ($installDb) {
         $mdbHome = Join-Path $p.Bin 'mariadb'
         Expand-ZipSubset -Zip $zip -Prefix 'mariadb-11.8.9-winx64/bin/', 'mariadb-11.8.9-winx64/share/', 'mariadb-11.8.9-winx64/lib/' -Destination $mdbHome -StripPrefix 'mariadb-11.8.9-winx64/' | Out-Null
         $mdbData = Join-Path $p.Data 'mariadb'
-        & (Join-Path $mdbHome 'bin\mariadb-install-db.exe') "--datadir=$mdbData" "--password=$superPassword" "--port=$dbPort"
-        if ($LASTEXITCODE -ne 0) { throw 'mariadb-install-db failed' }
+        Invoke-NativeCommand -FilePath (Join-Path $mdbHome 'bin\mariadb-install-db.exe') -FailMessage 'mariadb-install-db failed' `
+            -ArgumentList @("--datadir=$mdbData", "--password=$superPassword", "--port=$dbPort") | Out-Host
         # Local connections only, full Unicode.
         Add-Content -LiteralPath (Join-Path $mdbData 'my.ini') -Value @('', '[mysqld]', 'bind-address=127.0.0.1', 'character-set-server=utf8mb4', 'collation-server=utf8mb4_unicode_ci')
         # Credentials for the service's clean shutdown (readable by Administrators and the services only).
@@ -409,6 +407,8 @@ New-Item -ItemType Directory -Force -Path (Join-Path $InstallRoot 'tray') | Out-
 Copy-Item -Path (Join-Path $target 'windows\tray\*') -Destination (Join-Path $InstallRoot 'tray') -Force
 Write-TraySetting -Root $InstallRoot -Database $dbKind
 Copy-Item -LiteralPath (Join-Path $target 'windows\uninstall.ps1') -Destination (Join-Path $InstallRoot 'uninstall.ps1') -Force
+# The uninstaller needs the module next to it; copy it now so even an install that fails later can be removed.
+Copy-Item -LiteralPath (Join-Path $target 'windows\scripts\Conduit.psm1') -Destination (Join-Path $InstallRoot 'Conduit.psm1') -Force
 
 Write-Step 'Locking down folder permissions'
 Set-ConduitAcl -Root $InstallRoot
@@ -433,15 +433,18 @@ if ($installDb) {
         $sql = "CREATE DATABASE conduit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; " +
         "CREATE USER 'conduit'@'localhost' IDENTIFIED BY '$appPassword'; CREATE USER 'conduit'@'127.0.0.1' IDENTIFIED BY '$appPassword'; " +
         "GRANT ALL PRIVILEGES ON conduit.* TO 'conduit'@'localhost'; GRANT ALL PRIVILEGES ON conduit.* TO 'conduit'@'127.0.0.1'; FLUSH PRIVILEGES;"
-        & (Join-Path $p.Bin 'mariadb\bin\mariadb.exe') "--defaults-extra-file=$(Join-Path $p.Config 'mariadb-admin.cnf')" -e $sql
+        Invoke-NativeCommand -FilePath (Join-Path $p.Bin 'mariadb\bin\mariadb.exe') -FailMessage 'Creating the EvE Conduit database failed' `
+            -ArgumentList @("--defaults-extra-file=$(Join-Path $p.Config 'mariadb-admin.cnf')", '-e', $sql) | Out-Host
     }
     else {
         $env:PGPASSWORD = $superPassword
-        & (Join-Path $p.Bin 'postgres\bin\psql.exe') -h 127.0.0.1 -p $ports.Database -U postgres -v ON_ERROR_STOP=1 -q `
-            -c "CREATE USER conduit WITH PASSWORD '$appPassword';" -c "CREATE DATABASE conduit OWNER conduit ENCODING 'UTF8';"
-        Remove-Item Env:PGPASSWORD
+        try {
+            Invoke-NativeCommand -FilePath (Join-Path $p.Bin 'postgres\bin\psql.exe') -FailMessage 'Creating the EvE Conduit database failed' -ArgumentList @(
+                '-h', '127.0.0.1', '-p', "$($ports.Database)", '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q',
+                '-c', "CREATE USER conduit WITH PASSWORD '$appPassword';", '-c', "CREATE DATABASE conduit OWNER conduit ENCODING 'UTF8';") | Out-Host
+        }
+        finally { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
     }
-    if ($LASTEXITCODE -ne 0) { throw 'Creating the EvE Conduit database failed' }
 }
 
 Write-Step 'Preparing the database'

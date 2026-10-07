@@ -3,6 +3,16 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.4.2
+
+### Fixed
+- **Windows installer:** the install stopped right after setting up the database, on a harmless warning
+  ("System check identified some issues"). Under the setup wizard, Windows PowerShell treated anything a program
+  printed on its error stream as a failure. Programs are now judged by their exit code only.
+- The security warnings (for example "the Django back-office is reachable") no longer print before every
+  management command. They're on Administration → Health and in `conduit manage check --deploy`.
+- If an install fails part-way, the uninstaller can now always remove what was installed.
+
 ## 0.4.1
 
 ### Fixed

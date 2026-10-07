@@ -107,14 +107,14 @@ function Invoke-Backup {
             $dump = Find-DatabaseTool 'pg_dump.exe'
             $env:PGPASSWORD = $password
             $port = if ($url.Port -gt 0) { $url.Port } else { 5432 }
-            & $dump -h $url.Host -p $port -U $user -Fc -f (Join-Path $work 'database.dump') $dbName
+            Invoke-NativeCommand -FilePath $dump -ArgumentList @('-h', $url.Host, '-p', "$port", '-U', $user, '-Fc', '-f', (Join-Path $work 'database.dump'), $dbName) | Out-Host
             Remove-Item Env:PGPASSWORD
         }
         else {
             $dump = Find-DatabaseTool 'mariadb-dump.exe'
             $env:MYSQL_PWD = $password
             $port = if ($url.Port -gt 0) { $url.Port } else { 3306 }
-            & $dump -h $url.Host -P $port -u $user --single-transaction --routines "--result-file=$(Join-Path $work 'database.sql')" $dbName
+            Invoke-NativeCommand -FilePath $dump -ArgumentList @('-h', $url.Host, '-P', "$port", '-u', $user, '--single-transaction', '--routines', "--result-file=$(Join-Path $work 'database.sql')", $dbName) | Out-Host
             Remove-Item Env:MYSQL_PWD
         }
         if ($LASTEXITCODE -ne 0) { throw 'Database dump failed' }
@@ -231,7 +231,8 @@ function Invoke-ApplyUpdate {
             Copy-Item -LiteralPath (Join-Path $updates $name) -Destination $work -ErrorAction Stop
         }
         $python = Join-Path $p.Venv 'Scripts\python.exe'
-        $check = & $python -I -m conduit.updates.verify (Join-Path $work $req.File) (Join-Path $work 'SHA256SUMS') (Join-Path $work 'SHA256SUMS.sig') 2>&1
+        $check = Invoke-NativeCommand -FilePath $python -ArgumentList @('-I', '-m', 'conduit.updates.verify',
+            (Join-Path $work $req.File), (Join-Path $work 'SHA256SUMS'), (Join-Path $work 'SHA256SUMS.sig'))
         if ($LASTEXITCODE -ne 0) { throw "The release failed its signature check: $check" }
         Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) installing $($req.Version): $check"
         Invoke-Upgrade (Join-Path $work $req.File) *>&1 | ForEach-Object { "$_" } | Add-Content -LiteralPath $log
