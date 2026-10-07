@@ -258,3 +258,32 @@ def test_stale_or_odd_progress_is_ignored(tmp_path):
     assert services.progress()["target"] == ""
     (tmp_path / "progress.json").write_text("{not json")
     assert services.progress() is None
+
+
+@pytest.mark.django_db
+def test_admins_see_a_waiting_install_in_the_bootstrap(github, admin_user, user, client, tmp_path):
+    services.check()
+    services.start_download(NEXT)
+    services.request_install(admin_user)
+    client.force_login(admin_user)
+    pending = client.get("/api/core/bootstrap").json()["site"]["update_pending"]
+    assert pending["kind"] == "release" and pending["target"] == NEXT
+    client.force_login(user)
+    assert client.get("/api/core/bootstrap").json()["site"].get("update_pending") is None
+    # Once the updater is at work, the progress takes over.
+    write_progress(tmp_path)
+    client.force_login(admin_user)
+    site = client.get("/api/core/bootstrap").json()["site"]
+    assert site["update_pending"] is None and site["updating"]["step"] == "install"
+
+
+@pytest.mark.django_db
+def test_a_finished_install_is_not_shown_as_waiting(github, admin_user, client, tmp_path):
+    services.check()
+    services.start_download(NEXT)
+    services.request_install(admin_user)
+    # The updater did its work and restarted the site before anything read its result.
+    (tmp_path / "install-result.json").write_text(json.dumps({"version": NEXT, "status": "succeeded"}))
+    client.force_login(admin_user)
+    assert client.get("/api/core/bootstrap").json()["site"]["update_pending"] is None
+    assert UpdateState.load().install_state == UpdateState.Install.SUCCEEDED

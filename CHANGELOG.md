@@ -3,6 +3,14 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.5
+
+### New
+- **An update window.** While an update or plugin install runs, a window in the middle of the screen shows what's
+  happening: waiting for the updater, backing up, installing, updating the database, restarting, with the time
+  so far. It stays up while the site restarts and reconnects by itself, then says the new version is running
+  and reloads the page. Everyone sees it; "Hide" leaves just the banner at the top.
+
 ## 0.5.4
 
 ### New

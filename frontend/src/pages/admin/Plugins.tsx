@@ -129,7 +129,7 @@ export function AdminPlugins() {
     onSuccess: (d) => {
       set(d);
       setSelected([]);
-      toast.success("Sent to the updater");
+      qc.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
     },
     onError,
   });

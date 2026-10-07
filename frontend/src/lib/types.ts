@@ -115,6 +115,8 @@ export interface Bootstrap {
     update_available?: string | null;
     /** Set while the updater installs a release or plugins; the site restarts at the end. */
     updating?: UpdateProgress | null;
+    /** An install waiting for the updater to pick it up (it looks every two minutes); admins only. */
+    update_pending?: { kind: "release" | "plugins"; target: string; summary?: string; requested_at: string | null } | null;
   };
   setup: { completed: boolean; sso_configured: boolean; callback_url: string; admin_claimed: boolean };
   user: CurrentUser | null;
