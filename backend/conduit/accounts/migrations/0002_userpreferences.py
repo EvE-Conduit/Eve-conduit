@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
                 ("high_contrast", models.BooleanField(default=False)),
                 ("muted_categories", models.JSONField(blank=True, default=list)),
                 ("dashboard", models.JSONField(blank=True, default=dict)),
-                ("modules", models.JSONField(blank=True, default=dict)),
+                ("plugins", models.JSONField(blank=True, default=dict)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
             ],
         ),

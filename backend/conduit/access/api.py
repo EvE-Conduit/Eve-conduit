@@ -421,7 +421,7 @@ class PermissionOut(Schema):
 @router.get("/permissions", response=list[PermissionOut])
 @require_perm("site.manage_access")
 def list_permissions(request):
-    """Permissions worth granting: the site's own and every module's, not Django internals."""
+    """Permissions worth granting: the site's own and every plugin's, not Django internals."""
     from django.apps import apps
 
     hidden = {"admin", "auth", "contenttypes", "sessions"}

@@ -1,6 +1,6 @@
 """A small in-process event bus.
 
-Core and modules announce things that happened with ``emit``; anything can listen with ``on``::
+Core and plugins announce things that happened with ``emit``; anything can listen with ``on``::
 
     from conduit.events import bus
 
@@ -14,7 +14,7 @@ Handlers run after the surrounding transaction commits, so they never see rolled
 a failing handler is logged without breaking the code that emitted the event. Admins can also send
 events to Discord, Slack or any URL as webhooks (see ``models.Webhook``).
 
-Modules declare the events they emit with ``register`` so they show up in the webhook editor.
+Plugins declare the events they emit with ``register`` so they show up in the webhook editor.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class EventType:
     name: str
     label: str
     description: str = ""
-    module: str | None = None
+    plugin: str | None = None
 
 
 @dataclass
@@ -53,9 +53,9 @@ EVENT_TYPES: dict[str, EventType] = {}
 _handlers: dict[str, list[Callable[[Event], None]]] = defaultdict(list)
 
 
-def register(name: str, label: str, description: str = "", module: str | None = None) -> EventType:
+def register(name: str, label: str, description: str = "", plugin: str | None = None) -> EventType:
     """Declare an event so admins can pick it for webhooks."""
-    EVENT_TYPES[name] = EventType(name, label, description, module)
+    EVENT_TYPES[name] = EventType(name, label, description, plugin)
     return EVENT_TYPES[name]
 
 

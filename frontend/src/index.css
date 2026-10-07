@@ -42,7 +42,7 @@
 }
 
 @layer components {
-  /* Page ground: flat. (The name is kept for module bundles that use it.) */
+  /* Page ground: flat. (The name is kept for plugin bundles that use it.) */
   .backdrop-space { background-color: var(--bg); }
   /* A HUD panel: flat surface, accent-tinted hairline, and corner brackets top-left and bottom-right. */
   .panel {
@@ -73,7 +73,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
   }
-  /* Kept for module bundles; no gradients or glows in this look. */
+  /* Kept for plugin bundles; no gradients or glows in this look. */
   .text-gradient { color: var(--text); }
   .glow-accent { box-shadow: 0 0 0 1px var(--site-accent); }
   .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }

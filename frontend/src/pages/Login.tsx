@@ -9,7 +9,7 @@ import { SSO_ERRORS } from "@/lib/messages";
 const FEATURES = [
   { icon: ShieldCheck, title: "One login for everything", text: "Sign in with EVE Online. Your groups, services and tools follow you." },
   { icon: Radar, title: "All your characters together", text: "Link alts once and see skills, wallets and assets side by side." },
-  { icon: Boxes, title: "Built to grow", text: "New tools arrive as modules your leadership can switch on." },
+  { icon: Boxes, title: "Built to grow", text: "New tools arrive as plugins your leadership can switch on." },
 ];
 
 export function Login() {

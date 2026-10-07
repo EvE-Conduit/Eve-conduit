@@ -91,7 +91,7 @@ function Get-ConduitPath {
         Cache    = Join-Path $Root 'cache'
         Tmp      = Join-Path $Root 'tmp'
         EnvFile  = Join-Path (Join-Path $Root 'config') 'conduit.env'
-        Modules  = Join-Path (Join-Path $Root 'config') 'modules.txt'
+        Plugins  = Join-Path (Join-Path $Root 'config') 'plugins.txt'
     }
 }
 
@@ -208,8 +208,8 @@ function Get-ReleaseVersion {
     return $version
 }
 
-function Get-ModuleRequirement {
-    <# Lines of requirements-modules.txt that name a module (no comments or blanks). #>
+function Get-PluginRequirement {
+    <# Lines of requirements-plugins.txt that name a module (no comments or blanks). #>
     param([Parameter(Mandatory)][string]$Path)
     @(Get-Content -LiteralPath $Path | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
 }
@@ -648,7 +648,7 @@ function Set-ConduitUninstallEntry {
         Publisher       = 'EvE Conduit'
         InstallLocation = $Root
         UninstallString = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Root 'uninstall.ps1')`""
-        URLInfoAbout    = 'https://github.com/conduit'
+        URLInfoAbout    = 'https://github.com/EvE-Conduit/Eve-conduit'
     }
     foreach ($name in $values.Keys) { Set-ItemProperty -Path $key -Name $name -Value $values[$name] }
     New-ItemProperty -Path $key -Name NoModify -Value 1 -PropertyType DWord -Force | Out-Null
@@ -689,8 +689,8 @@ function Install-ConduitPythonPackage {
         # Not --quiet: pip's "Collecting ..." lines and download bars are the progress indicator.
         & $python -m pip install --upgrade --disable-pip-version-check $backend 'waitress>=3'
         if ($LASTEXITCODE -ne 0) { throw 'Installing the EvE Conduit backend failed' }
-        if ((Test-Path -LiteralPath $p.Modules) -and (Get-ModuleRequirement $p.Modules)) {
-            & $python -m pip install --upgrade --disable-pip-version-check -r $p.Modules
+        if ((Test-Path -LiteralPath $p.Plugins) -and (Get-PluginRequirement $p.Plugins)) {
+            & $python -m pip install --upgrade --disable-pip-version-check -r $p.Plugins
             if ($LASTEXITCODE -ne 0) { throw 'Installing modules failed' }
         }
     }

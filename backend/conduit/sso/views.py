@@ -24,7 +24,7 @@ from conduit.esi.tokens import (
     sso_configured,
     verify_access_token,
 )
-from conduit.modules.services import required_scopes
+from conduit.plugins.services import required_scopes
 
 log = logging.getLogger(__name__)
 SESSION_KEY = "conduit_sso"
@@ -62,7 +62,7 @@ def _start(request, mode: str, scopes: list[str]):
 
 
 def _all_scopes() -> list[str]:
-    """Every EVE SSO scope (or ESI_SCOPES), plus anything the sheet or an enabled module needs."""
+    """Every EVE SSO scope (or ESI_SCOPES), plus anything the sheet or an enabled plugin needs."""
     from conduit.corp.registry import all_scopes as corporation_scopes
 
     return [*settings.ESI_LOGIN_SCOPES, *(settings.ESI_SCOPES or ALL_SCOPES), *required_scopes(), *corporation_scopes()]

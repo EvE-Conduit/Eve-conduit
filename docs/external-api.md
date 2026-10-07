@@ -16,7 +16,7 @@ through the external API at `/api/v1/`. Its interactive docs are at `/api/v1/doc
    | State membership | `states:write` | Add/remove characters, corporations, alliances from a state (never states that grant administrator permissions) |
    | Notifications | `notify:write`, `notify:links` | Send in-app notifications to users, character owners or group members |
    | Logs | `logs:audit`, `logs:requests`, `logs:service`, `logs:esi` | Audit, API request, service and ESI call logs |
-   | Modules | `m.<module>:<scope>` | Whatever a module offers; only while the module is enabled |
+   | Plugins | `p.<plugin>:<scope>` | Whatever a plugin offers; only while the plugin is enabled |
 
 2. **Administration > API > Keys:** create a key for each service with only the scopes it needs. You can
    limit a key to IP addresses or CIDR ranges and give it an expiry date. The secret (`evk_...`) is shown
@@ -36,7 +36,7 @@ through the external API at `/api/v1/`. Its interactive docs are at `/api/v1/doc
 - `401`: no key, a wrong key, or a revoked or expired key.
 - `403`: the key isn't allowed from this IP, the API is switched off, or the key lacks the scope.
   The `detail` field says which.
-- `404`: the object doesn't exist, or the API belongs to a module that is disabled.
+- `404`: the object doesn't exist, or the API belongs to a plugin that is disabled.
 
 Lists take `limit` (at most 500) and `offset`, and return `{"items": [...], "count": n}`.
 
@@ -54,7 +54,7 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
 ## What gets logged
 
 - **Audit log:** sign-ins and sign-outs, characters added, removed or made main, groups and states
-  created, changed or deleted, group joins, leaves and member changes, module and site settings changes,
+  created, changed or deleted, group joins, leaves and member changes, plugin and site settings changes,
   first-run setup, and API keys and APIs. Changes made through the API name the key that made them.
 - **API request log:** every call to `/api/v1/`, refused ones included: key, method, path, status,
   duration, IP and user agent.
@@ -76,10 +76,10 @@ Old entries are deleted every night. The defaults are 365 days for the audit log
 30 for the service log and 7 for the ESI call log (`CONDUIT_AUDIT_LOG_DAYS`, `CONDUIT_API_LOG_DAYS`,
 `CONDUIT_SERVICE_LOG_DAYS`, `CONDUIT_ESI_LOG_DAYS`; `0` keeps entries forever).
 
-## Adding an external API to a module
+## Adding an external API to a plugin
 
 ```python
-class FleetsModule(Module):
+class FleetsModule(Plugin):
     id = "fleets"
     external_api = "conduit_fleets.external:router"
     external_scopes = {"read": "Read fleet schedules", "write": "Create fleets"}
@@ -93,12 +93,12 @@ from conduit.external.auth import require_scope
 router = Router()
 
 @router.get("/schedule")
-@require_scope("m.fleets:read")
+@require_scope("p.fleets:read")
 def schedule(request):
     return [...]
 ```
 
-The router is mounted at `/api/v1/m/fleets/`. It appears under Administration > API as its own API,
+The router is mounted at `/api/v1/p/fleets/`. It appears under Administration > API as its own API,
 which an admin switches on separately. Scope names containing `write` are flagged as write access.
 
 ## Sending notifications
@@ -107,12 +107,12 @@ With the Notifications API on and a key holding `notify:write`, a bot can ping p
 
 ```bash
 curl -X POST -H "Authorization: Bearer evk_..." -H "Content-Type: application/json" \
-  -d '{"group_ids": [4], "title": "Form up in Jita", "body": "Doctrine: Ferox", "link": "/m/fleets", "level": "warning"}' \
+  -d '{"group_ids": [4], "title": "Form up in Jita", "body": "Doctrine: Ferox", "link": "/p/fleets", "level": "warning"}' \
   https://auth.example.com/api/v1/notifications
 ```
 
 Recipients are the union of `user_ids`, the owners of `character_ids` and the members of `group_ids`. `level` is
 `info`, `success`, `warning` or `danger`; `category` (default `system`) lets people mute kinds of notifications.
-`link` is a path on the site (`/m/fleets`). Links to other sites (`https://...`) also need the `notify:links` scope,
+`link` is a path on the site (`/p/fleets`). Links to other sites (`https://...`) also need the `notify:links` scope,
 so a leaked bot key can't be used to send members phishing links; people are still asked before they leave the site. The reply says how many people got it (`sent`) out of how many
 were addressed (`recipients`); the difference muted that category.

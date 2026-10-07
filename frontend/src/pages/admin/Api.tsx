@@ -30,7 +30,7 @@ interface ApiArea {
   description: string;
   enabled: boolean;
   available: boolean;
-  module: string | null;
+  plugin: string | null;
   base_path: string;
   scopes: ApiScope[];
 }
@@ -363,7 +363,7 @@ function ScopePicker({ value, onChange }: { value: string[]; onChange: (v: strin
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-subtle">{area.label}</span>
                 {off && (
                   <Badge color="var(--warning)" className="text-[11px]">
-                    {area.available ? "API is off" : "Module disabled"}
+                    {area.available ? "API is off" : "Plugin disabled"}
                   </Badge>
                 )}
                 {all.length > 1 && (
@@ -395,7 +395,7 @@ function ScopePicker({ value, onChange }: { value: string[]; onChange: (v: strin
             </div>
           );
         })}
-        {/* Scopes on the key that no API offers any more (e.g. an uninstalled module). */}
+        {/* Scopes on the key that no API offers any more (e.g. an uninstalled plugin). */}
         {data && value.filter((s) => !data.some((a) => a.scopes.some((x) => x.scope === s))).length > 0 && (
           <div className="px-1 text-xs text-subtle">
             Also on this key, no longer offered:{" "}
@@ -494,7 +494,7 @@ function Areas() {
             <CardHeader
               title={area.label}
               description={<span className="font-mono">{area.base_path}</span>}
-              icon={area.module ? <Puzzle /> : <Network />}
+              icon={area.plugin ? <Puzzle /> : <Network />}
               actions={
                 <Switch
                   checked={area.enabled}
@@ -506,7 +506,7 @@ function Areas() {
             />
             <div className="flex-1 space-y-3 p-5">
               <p className="text-sm text-muted">{area.description}</p>
-              {!area.available && <p className="text-xs text-warning-fg">The {area.module} module is disabled. Enable it under Modules to offer this API.</p>}
+              {!area.available && <p className="text-xs text-warning-fg">The {area.plugin} plugin is disabled. Enable it under Plugins to offer this API.</p>}
               <ul className="space-y-1.5">
                 {area.scopes.map((s) => (
                   <li key={s.scope} className="flex items-start gap-2 text-xs">

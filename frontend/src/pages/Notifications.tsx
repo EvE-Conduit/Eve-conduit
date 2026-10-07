@@ -41,7 +41,7 @@ export function Notifications() {
         eyebrow="Account"
         title="Notifications"
         icon={<Bell />}
-        description="Messages from the site and its modules: group decisions, characters that need a new login, alerts and more."
+        description="Messages from the site and its plugins: group decisions, characters that need a new login, alerts and more."
         actions={
           <>
             <Link to="/settings#notifications">

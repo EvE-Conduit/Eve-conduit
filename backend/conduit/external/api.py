@@ -22,7 +22,7 @@ from conduit.audit.api import audit_out, filter_audit, filter_service, service_o
 from conduit.audit.models import AuditEvent, ServiceLog
 from conduit.audit.services import record
 from conduit.eve.models import EveAlliance, EveCorporation
-from conduit.modules import registry as module_registry
+from conduit.plugins import registry as plugin_registry
 from conduit.paging import MAX_LIMIT, page
 from conduit.schemas import alliance_out, character_brief, corp_out
 
@@ -448,11 +448,11 @@ def send_notification(request, payload: NotificationIn):
 external_api.add_router("/", router)
 external_api.add_router("/corporations", corp_external_router)
 
-for module_id, module in module_registry.installed().items():
-    if not module.external_api:
+for plugin_id, plugin in plugin_registry.installed().items():
+    if not plugin.external_api:
         continue
     try:
-        path, _, attr = module.external_api.partition(":")
-        external_api.add_router(f"/m/{module_id}", getattr(importlib.import_module(path), attr), tags=[module.name])
+        path, _, attr = plugin.external_api.partition(":")
+        external_api.add_router(f"/p/{plugin_id}", getattr(importlib.import_module(path), attr), tags=[plugin.name])
     except Exception:
-        log.exception("Could not mount the external API of module %s", module_id)
+        log.exception("Could not mount the external API of plugin %s", plugin_id)

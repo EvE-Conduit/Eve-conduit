@@ -298,8 +298,8 @@ def test_rule_sets_match_any_and_unknown_types(user):
 
 
 @pytest.mark.django_db
-def test_modules_can_register_rules(user):
-    rules.register_rule("always", "Always", lambda u, p: True, module="sample")
+def test_plugins_can_register_rules(user):
+    rules.register_rule("always", "Always", lambda u, p: True, plugin="sample")
     try:
         assert rules.evaluate_ruleset(user, {"rules": [{"type": "always", "params": {}}]})
     finally:

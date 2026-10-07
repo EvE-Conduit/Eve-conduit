@@ -110,7 +110,7 @@ A Windows PC isn't a server by default. Change these so the site stays up:
 | Restart after editing `.env` | `docker compose up -d` |
 | Back up the database | `docker compose exec db pg_dump -U conduit -Fc conduit > backup.dump` |
 | Update | `git pull` (or unpack the new source next to the old one and copy your `.env` across), then `docker compose up -d --build` |
-| Install a module | add it to `requirements-modules.txt`, then `docker compose up -d --build` |
+| Install a plugin | add it to `requirements-plugins.txt`, then `docker compose up -d --build` |
 
 ## Windows Server
 

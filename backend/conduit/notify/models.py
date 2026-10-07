@@ -15,7 +15,7 @@ class Notification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     level = models.CharField(max_length=10, choices=Level.choices, default=Level.INFO)
-    #: Groups notifications for muting in preferences, e.g. "groups", "tokens", "m.timers".
+    #: Groups notifications for muting in preferences, e.g. "groups", "tokens", "p.timers".
     category = models.CharField(max_length=40, default="system")
     title = models.CharField(max_length=200)
     body = models.TextField(blank=True)

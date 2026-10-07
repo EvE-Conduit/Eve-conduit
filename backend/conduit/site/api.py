@@ -13,8 +13,8 @@ from pydantic import field_validator
 from conduit import __version__
 from conduit.audit.services import record
 from conduit.esi.tokens import sso_configured
-from conduit.modules import registry
-from conduit.modules.services import enabled_ids, sync_installed
+from conduit.plugins import registry
+from conduit.plugins.services import enabled_ids, sync_installed
 from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
 
@@ -59,7 +59,7 @@ class UserOut(Schema):
     pending_group_requests: int
 
 
-class ModuleEntry(Schema):
+class PluginEntry(Schema):
     id: str
     name: str
     version: str
@@ -71,7 +71,7 @@ class BootstrapOut(Schema):
     site: SiteOut
     setup: SetupOut
     user: UserOut | None
-    modules: list[ModuleEntry]
+    plugins: list[PluginEntry]
 
 
 def site_out(site: SiteSettings) -> dict:
@@ -133,11 +133,11 @@ def bootstrap(request):
     get_token(request)
     site = SiteSettings.load()
     on = enabled_ids()
-    modules = []
+    plugins = []
     if request.user.is_authenticated:
         for mid, mod in registry.installed().items():
             if mid in on:
-                modules.append(
+                plugins.append(
                     {
                         "id": mid,
                         "name": mod.name,
@@ -146,7 +146,7 @@ def bootstrap(request):
                         "entry": static(mod.frontend) if mod.frontend else None,
                     }
                 )
-    return {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "modules": modules}
+    return {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
 
 
 @router.post("/logout", auth=django_auth)

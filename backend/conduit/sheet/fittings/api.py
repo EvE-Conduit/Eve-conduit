@@ -42,7 +42,7 @@ def eft(fit: Fitting, types) -> str:
 def fittings(request, character_id: int):
     rows = list(Fitting.objects.filter(character=viewable_character(request, character_id)))
     types = types_by_id({f.ship_type_id for f in rows})
-    out = [{"id": f.fitting_id, "name": f.name, "ship": type_out(f.ship_type_id, types), "modules": len(f.items)} for f in rows]
+    out = [{"id": f.fitting_id, "name": f.name, "ship": type_out(f.ship_type_id, types), "plugins": len(f.items)} for f in rows]
     return sorted(out, key=lambda f: (f["ship"]["group"], f["ship"]["name"], f["name"]))
 
 

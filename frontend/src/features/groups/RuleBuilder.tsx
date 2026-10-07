@@ -126,7 +126,7 @@ function RuleRow({ rule, spec, onChange, onRemove }: { rule: Rule; spec?: RuleTy
   if (!spec) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-warning/35 bg-warning-soft px-4 py-3 text-sm">
-        <span className="flex-1">Unknown rule “{rule.type}” (was its module removed?). It never matches.</span>
+        <span className="flex-1">Unknown rule “{rule.type}” (was its plugin removed?). It never matches.</span>
         <Button size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove rule">
           <Trash2 />
         </Button>

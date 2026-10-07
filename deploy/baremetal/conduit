@@ -8,8 +8,8 @@
 #   conduit upgrade <release.tar.gz>      install a new release (keeps the old one for rollback)
 #   conduit rollback                      switch back to the previous release
 #   conduit backup                        dump the database and config to /var/backups/conduit
-#   conduit module install <package>      install a module (PyPI name, git URL or path)
-#   conduit module list                   list installed modules
+#   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
+#   conduit plugin list                   list installed plugins
 #   conduit run web|worker|beat           used by Supervisor to start the services
 set -euo pipefail
 
@@ -23,7 +23,7 @@ CONDUIT_USER=${CONDUIT_USER:-conduit}
 APP="$CONDUIT_HOME/app"
 VENV="$CONDUIT_HOME/venv"
 ENV_FILE="$CONDUIT_ETC/conduit.env"
-MODULES_FILE="$CONDUIT_ETC/modules.txt"
+PLUGINS_FILE="$CONDUIT_ETC/plugins.txt"
 SUPERVISOR_GROUP=conduit
 
 die() { echo "conduit: $*" >&2; exit 1; }
@@ -70,15 +70,15 @@ publish_web() {
 }
 
 install_python() {
-  # Backend plus every module listed in modules.txt (paths are relative to the release).
+  # Backend plus every plugin listed in plugins.txt (paths are relative to the release).
   # Runs as root: the venv is root-owned so the service can't modify its own code.
   local release="$1" extras=""
   require_root
   load_env
   [[ "${DATABASE_URL:-}" == mysql* ]] && extras="[mysql]"
   (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade "./backend$extras")
-  if [[ -s "$MODULES_FILE" ]]; then
-    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$MODULES_FILE")
+  if [[ -s "$PLUGINS_FILE" ]]; then
+    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$PLUGINS_FILE")
   fi
 }
 
@@ -164,7 +164,7 @@ else:
 subprocess.run(cmd, env=env, check=True)
 PY
   cp "$ENV_FILE" "$dir/conduit.env"
-  [[ -f "$MODULES_FILE" ]] && cp "$MODULES_FILE" "$dir/modules.txt"
+  [[ -f "$PLUGINS_FILE" ]] && cp "$PLUGINS_FILE" "$dir/plugins.txt"
   readlink -f "$APP" > "$dir/release.txt" || true
   tar -czf "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz" -C "$dir" .
   chmod 600 "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz"
@@ -172,24 +172,24 @@ PY
   echo "Backup written to $CONDUIT_BACKUPS/conduit-$stamp.tar.gz (contains secrets; keep it safe)"
 }
 
-cmd_module() {
+cmd_plugin() {
   case "${1:-}" in
     install)
       local pkg="${2:-}"
-      [[ -n "$pkg" ]] || die "usage: conduit module install <package|git URL|path>"
+      [[ -n "$pkg" ]] || die "usage: conduit plugin install <package|git URL|path>"
       require_root
-      grep -qxF "$pkg" "$MODULES_FILE" 2>/dev/null || echo "$pkg" >> "$MODULES_FILE"
+      grep -qxF "$pkg" "$PLUGINS_FILE" 2>/dev/null || echo "$pkg" >> "$PLUGINS_FILE"
       install_python "$(readlink -f "$APP")"
       finish_deploy
       supervisor restart "$SUPERVISOR_GROUP:*"
-      echo "Installed. Switch it on under Administration -> Modules."
+      echo "Installed. Switch it on under Administration -> Plugins."
       ;;
     list)
-      manage shell -c "from conduit.modules import registry
+      manage shell -c "from conduit.plugins import registry
 for mid, e in sorted(registry.discover().items()):
-    print(f\"{mid:20} {e.module.version:10} {'OK' if e.ok else 'BROKEN: ' + '; '.join(e.problems)}\")"
+    print(f\"{mid:20} {e.plugin.version:10} {'OK' if e.ok else 'BROKEN: ' + '; '.join(e.problems)}\")"
       ;;
-    *) die "usage: conduit module install <package> | conduit module list" ;;
+    *) die "usage: conduit plugin install <package> | conduit plugin list" ;;
   esac
 }
 
@@ -214,7 +214,7 @@ case "${1:-}" in
   upgrade) shift; cmd_upgrade "$@" ;;
   rollback) cmd_rollback ;;
   backup) cmd_backup ;;
-  module) shift; cmd_module "$@" ;;
+  plugin) shift; cmd_plugin "$@" ;;
   run) shift; cmd_run "$@" ;;
   *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

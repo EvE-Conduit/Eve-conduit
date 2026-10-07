@@ -1,8 +1,8 @@
 """The one way EvE Conduit talks to ESI.
 
-Modules must go through this client rather than calling ESI themselves. It
+Plugins must go through this client rather than calling ESI themselves. It
 respects ESI caching (``Expires``/``ETag``), tracks the shared error limit and
-the per-route rate limits, and refreshes character tokens, so one module can't
+the per-route rate limits, and refreshes character tokens, so one plugin can't
 get the whole install banned.
 """
 

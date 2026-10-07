@@ -6,7 +6,7 @@ import {
   Wallet, Wrench, Zap, type LucideIcon,
 } from "lucide-react";
 
-/** Icons a module can name in its nav entries (lucide names, kebab-case). */
+/** Icons a plugin can name in its nav entries (lucide names, kebab-case). */
 const ICONS: Record<string, LucideIcon> = {
   activity: Activity, anchor: Anchor, award: Award, "bar-chart": BarChart3, bell: Bell, "book-open": BookOpen,
   box: Box, boxes: Boxes, briefcase: Briefcase, building: Building2, calendar: Calendar, clock: Clock, coins: Coins,

@@ -82,7 +82,7 @@ def test_sso_login_requests_every_scope(client):
     from urllib.parse import parse_qs, urlsplit
 
     from conduit.esi.scopes import ALL_SCOPES
-    from conduit.modules.services import required_scopes
+    from conduit.plugins.services import required_scopes
 
     url = client.get("/sso/login")["Location"]
     scopes = parse_qs(urlsplit(url).query)["scope"][0].split()

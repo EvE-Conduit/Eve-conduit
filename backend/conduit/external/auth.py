@@ -1,12 +1,12 @@
 """API key authentication for /api/v1/, and the scope check every external route uses.
 
-Services send ``Authorization: Bearer evk_...`` (or ``X-API-Key: evk_...``). Module routes guard
+Services send ``Authorization: Bearer evk_...`` (or ``X-API-Key: evk_...``). Plugin routes guard
 themselves the same way core routes do::
 
     from conduit.external.auth import require_scope
 
     @router.get("/fleets")
-    @require_scope("m.fleets:read")
+    @require_scope("p.fleets:read")
     def fleets(request): ...
 """
 

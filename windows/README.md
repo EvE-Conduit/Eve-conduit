@@ -36,6 +36,26 @@ the folder added to the system PATH (for the `conduit` command), the tray panel'
 
 ## Quick install
 
+1. Download **`EvE-Conduit-Setup-X.Y.Z.exe`** from the
+   [releases page](https://github.com/EvE-Conduit/Eve-conduit/releases) and run it. Windows asks for
+   administrator rights. The setup isn't code-signed yet, so SmartScreen may warn about an unrecognised
+   app: choose **More info → Run anyway**.
+2. The wizard asks for the install folder, your domain and email, HTTPS or plain HTTP, PostgreSQL or
+   MariaDB, the ports (checked against what's already in use), and optionally your EVE application's
+   Client ID and Secret Key. It shows the callback URL to register at
+   <https://developers.eveonline.com/applications>.
+3. Installing takes about 5 to 15 minutes; the wizard shows each step. The finish page shows your site's
+   address and the one-time **setup code**: open the site, sign in with your main character and enter it.
+
+If something fails, the wizard shows the last lines of the log; the full log is
+`<install folder>\logs\installer.log` (or `%TEMP%\EvE-Conduit-installer.log` if the folder wasn't
+created). Running a newer setup on a machine that already has EvE Conduit offers to upgrade it. See
+[installer/README.md](installer/README.md) for silent installs and how the setup is built.
+
+### Quick install with PowerShell (alternative)
+
+The setup runs the same `install.ps1` underneath; you can also run it yourself.
+
 1. Download `eve-conduit-X.Y.Z-windows.zip`. In PowerShell, **unblock it before extracting** so Windows
    doesn't block the scripts:
    ```powershell
@@ -135,7 +155,7 @@ one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `
    `config\database-admin.txt`.
 6. Copies the release to `releases\X.Y.Z`, points the `app` junction at it, writes `config\conduit.env`
    with fresh secrets and your ports, generates `config\Caddyfile`, and installs EvE Conduit, waitress and
-   the modules.
+   the plugins.
 7. Locks down permissions: code and config are writable only by Administrators and SYSTEM. The
    services run as **Local Service**, which can read the code and config and write only to `data` and `logs`.
 8. Registers the services (`conduit-postgres` or `conduit-mariadb`, `conduit-garnet`, `conduit-web`,
@@ -154,7 +174,7 @@ one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `
 | `bin\postgres` or `bin\mariadb` | the database server |
 | `bin\garnet`, `bin\dotnet` | Garnet and its private .NET runtime |
 | `bin\caddy`, `bin\uv`, `bin\winsw`, `bin\vcruntime` | web server, Python tool, service wrapper, Visual C++ DLLs |
-| `config` | `conduit.env`, `modules.txt`, `Caddyfile`, `database-admin.txt` |
+| `config` | `conduit.env`, `plugins.txt`, `Caddyfile`, `database-admin.txt` |
 | `data` | the database files, static files, Caddy certificates, scheduler state |
 | `web` | the front end Caddy serves |
 | `services` | WinSW service wrappers and their configs |
@@ -171,7 +191,7 @@ To do it by hand, follow the installer's steps above. Everything runs from the i
 - **Python:** `bin\uv\uv.exe python install 3.12` (with `UV_PYTHON_INSTALL_DIR=<folder>\python`), then
   `uv venv --seed --python 3.12 <folder>\venv`, then from the release folder
   `<folder>\venv\Scripts\python -m pip install .\backend waitress` (add `[mysql]` for MariaDB) and
-  `pip install -r <folder>\config\modules.txt`.
+  `pip install -r <folder>\config\plugins.txt`.
 - **PostgreSQL:** unzip `pgsql\bin`, `pgsql\lib` and `pgsql\share` from the EDB binaries zip into
   `<folder>\bin\postgres`. Then run `initdb -D <folder>\data\postgres -U postgres --pwfile=... --encoding=UTF8
   --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C --auth=scram-sha-256 -c listen_addresses=127.0.0.1 -c port=5432`,
@@ -199,8 +219,8 @@ In an **Administrator** terminal:
 | Any Django command | `conduit manage <command>` |
 | Setup code again | `conduit setup-code` |
 | Back up database and config | `conduit backup` |
-| Install a module | `conduit module install conduit-something` |
-| List modules | `conduit module list` |
+| Install a plugin | `conduit plugin install conduit-something` |
+| List plugins | `conduit plugin list` |
 
 | Open the tray control panel | `conduit tray` (`conduit tray on` / `off`: start it at sign-in or not) |
 | Remove EvE Conduit | `conduit uninstall` |
@@ -257,6 +277,9 @@ entry, the sign-in entry and the Apps & features entry, and deletes the files. A
 For scripts: `conduit uninstall -Mode All -BackupTo D:\Backups -Yes` (or `-Mode KeepData`, `-NoBackup`).
 
 ## Updating
+
+Run the newer `EvE-Conduit-Setup-X.Y.Z.exe`: it finds the existing install and offers to upgrade it, which
+runs the same `conduit upgrade` as below. Or, in an Administrator terminal:
 
 ```powershell
 Unblock-File .\eve-conduit-X.Y.Z-windows.zip

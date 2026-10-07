@@ -70,7 +70,7 @@ class Token(models.Model):
 
 
 class UserPreferences(models.Model):
-    """How a person likes the site: theme, density, time display, muted notifications, module settings."""
+    """How a person likes the site: theme, density, time display, muted notifications, plugin settings."""
 
     class Theme(models.TextChoices):
         SYSTEM = "system"
@@ -94,8 +94,8 @@ class UserPreferences(models.Model):
     muted_categories = models.JSONField(default=list, blank=True)
     #: Hidden/ordered dashboard widgets: {"hidden": ["Wallet:networth"], "order": [...]}.
     dashboard = models.JSONField(default=dict, blank=True)
-    #: Per-module settings, keyed by module id. Each module owns its own value.
-    modules = models.JSONField(default=dict, blank=True)
+    #: Per-plugin settings, keyed by plugin id. Each plugin owns its own value.
+    plugins = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

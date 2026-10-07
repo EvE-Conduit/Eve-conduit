@@ -7,8 +7,8 @@ A rule set is stored as JSON::
         {"type": "main_corporation", "params": {"corporations": [98000001]}, "negate": true},
     ]}
 
-An empty rule set always passes. Modules add rule types with ``register_rule`` (from the files
-listed in ``Module.group_rules``)::
+An empty rule set always passes. Plugins add rule types with ``register_rule`` (from the files
+listed in ``Plugin.group_rules``)::
 
     from conduit.access.rules import Param, register_rule
 
@@ -70,7 +70,7 @@ class RuleType:
     description: str = ""
     #: ``explain(params) -> str``: the requirement in words, e.g. "Gunnery at level 4 or higher".
     explain: Callable[[dict], str] | None = None
-    module: str | None = None
+    plugin: str | None = None
     category: str = "General"
 
     def spec(self) -> dict:
@@ -79,7 +79,7 @@ class RuleType:
             "label": self.label,
             "description": self.description,
             "category": self.category,
-            "module": self.module,
+            "plugin": self.plugin,
             "params": [p.spec() for p in self.params],
         }
 
@@ -88,11 +88,11 @@ RULE_TYPES: dict[str, RuleType] = {}
 
 
 def register_rule(key: str, label: str, evaluate: Callable, *, params=(), description: str = "",
-                  explain: Callable | None = None, module: str | None = None, category: str = "Modules") -> RuleType:
+                  explain: Callable | None = None, plugin: str | None = None, category: str = "Plugins") -> RuleType:
     for p in params:
         if p.type not in PARAM_TYPES:
             raise ValueError(f"rule {key}: unknown parameter type {p.type!r}")
-    RULE_TYPES[key] = RuleType(key, label, evaluate, tuple(params), description, explain, module, category)
+    RULE_TYPES[key] = RuleType(key, label, evaluate, tuple(params), description, explain, plugin, category)
     return RULE_TYPES[key]
 
 
@@ -160,7 +160,7 @@ def validate_ruleset(data) -> dict:
 def _evaluate_rule(user, rule: dict) -> bool:
     rtype = RULE_TYPES.get(rule.get("type"))
     if rtype is None:
-        log.warning("Unknown group rule type %s (module removed?); treating it as failed", rule.get("type"))
+        log.warning("Unknown group rule type %s (plugin removed?); treating it as failed", rule.get("type"))
         return False
     try:
         result = bool(rtype.evaluate(user, rule.get("params") or {}))
@@ -408,12 +408,12 @@ _register_builtins()
 
 
 def load_module_rules():
-    """Import every enabled-or-not installed module's ``group_rules`` files; they register on import."""
-    from conduit.modules import registry
+    """Import every enabled-or-not installed plugin's ``group_rules`` files; they register on import."""
+    from conduit.plugins import registry
 
     for mid, mod in registry.installed().items():
         for path in getattr(mod, "group_rules", ()) or ():
             try:
                 importlib.import_module(path)
             except Exception:
-                log.exception("Could not load group rules %s of module %s", path, mid)
+                log.exception("Could not load group rules %s of plugin %s", path, mid)

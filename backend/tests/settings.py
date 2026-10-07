@@ -4,7 +4,7 @@ import os
 os.environ.update(
     {
         "CONDUIT_SECRET_KEY": "test-secret",
-        "CONDUIT_EXTRA_MODULES": "tests.sample_module.module:SampleModule",
+        "CONDUIT_EXTRA_PLUGINS": "tests.sample_plugin.plugin:SamplePlugin",
         "ESI_CLIENT_ID": "test-client",
         "ESI_SECRET_KEY": "test-secret-key",
         "CONDUIT_SITE_URL": "http://localhost:5173",

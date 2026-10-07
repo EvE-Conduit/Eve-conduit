@@ -179,15 +179,15 @@ ENV
 umask 022
 chown root:"$SERVICE_USER" "$CONDUIT_ETC/conduit.env"
 chmod 0640 "$CONDUIT_ETC/conduit.env"
-grep -v '^\s*#' "$RELEASE_DIR/requirements-modules.txt" | sed '/^\s*$/d' > "$CONDUIT_ETC/modules.txt"
-chown root:"$SERVICE_USER" "$CONDUIT_ETC/modules.txt"
+grep -v '^\s*#' "$RELEASE_DIR/requirements-plugins.txt" | sed '/^\s*$/d' > "$CONDUIT_ETC/plugins.txt"
+chown root:"$SERVICE_USER" "$CONDUIT_ETC/plugins.txt"
 
 # --- 6. application ---------------------------------------------------------------------
 step "Installing EvE Conduit $VERSION"
 EXTRAS=""
 [[ $DB == mariadb ]] && EXTRAS="[mysql]"
 (cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q "./backend$EXTRAS")
-(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q -r "$CONDUIT_ETC/modules.txt")
+(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q -r "$CONDUIT_ETC/plugins.txt")
 cp -a "$RELEASE_DIR/web/." "$CONDUIT_WWW/web/"
 conduit manage migrate --noinput
 conduit manage collectstatic --noinput -v0

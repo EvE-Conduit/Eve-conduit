@@ -196,7 +196,7 @@ def test_external_links_need_their_own_scope(client, user):
 
     assert post(plain, body).status_code == 403
     assert post(plain, {**body, "link": "//phish.example"}).status_code == 400
-    assert post(plain, {**body, "link": "/m/fleets"}).status_code == 200
+    assert post(plain, {**body, "link": "/p/fleets"}).status_code == 200
     assert post(linked, body).status_code == 200
     assert Notification.objects.count() == 2
 
@@ -210,7 +210,7 @@ def test_settings_are_size_limited(user, api_client):
     prefs = api_client.call("get", "/api/me/preferences").json()
     huge = {"order": ["x" * 1000] * 100}
     assert api_client.call("put", "/api/me/preferences", {**prefs, "dashboard": huge}).status_code == 400
-    assert api_client.call("put", "/api/me/preferences/modules/sample", {"value": "x" * 70000}).status_code == 400
+    assert api_client.call("put", "/api/me/preferences/plugins/sample", {"value": "x" * 70000}).status_code == 400
 
 
 # --- compliance needs its own permission ----------------------------------------------------------

@@ -1,8 +1,8 @@
 /**
- * @conduit/sdk — everything a module's front end may use from the host.
+ * @conduit/sdk — everything a plugin's front end may use from the host.
  *
- * Module bundles import from "@conduit/sdk", "react", "react-router" and
- * "@tanstack/react-query"; the host supplies all of them at runtime, so modules
+ * Plugin bundles import from "@conduit/sdk", "react", "react-router" and
+ * "@tanstack/react-query"; the host supplies all of them at runtime, so plugins
  * share one React and look native.
  *
  * Styling: use the theme tokens (bg-surface, text-muted, border-border, bg-accent, text-accent-ink,
@@ -10,8 +10,8 @@
  * pages work in the dark, light and high-contrast themes. See theme.css for the full list.
  */
 export { api, ApiError, request } from "@/lib/api";
-export { defineModule } from "@/lib/modules";
-export type { CharacterTab, DashboardWidget, ModuleFrontend, ModuleRoute } from "@/lib/modules";
+export { definePlugin } from "@/lib/plugins";
+export type { CharacterTab, DashboardWidget, PluginFrontend, ModuleRoute } from "@/lib/plugins";
 export { useBootstrap, useCurrentUser, useHasPerm } from "@/lib/bootstrap";
 export type * from "@/lib/types";
 export { cn, timeAgo } from "@/lib/utils";

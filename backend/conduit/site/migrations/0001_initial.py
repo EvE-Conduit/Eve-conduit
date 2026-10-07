@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
                 "permissions": [
                     ("manage_site", "Can change site settings"),
                     ("manage_access", "Can manage states and groups"),
-                    ("manage_modules", "Can enable and disable modules"),
+                    ("manage_plugins", "Can enable and disable modules"),
                     ("view_members", "Can see the member list"),
                 ],
             },

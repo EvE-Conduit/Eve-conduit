@@ -214,7 +214,7 @@ export function AdminHealth() {
                   <Badge>Django {data.about.django}</Badge>
                   <Badge>{data.about.database}</Badge>
                   <Badge>{num(data.about.users)} users</Badge>
-                  <Badge>{data.about.modules_enabled} modules on</Badge>
+                  <Badge>{data.about.modules_enabled} plugins on</Badge>
                   {data.about.debug && <Badge color="var(--warning)">DEBUG on</Badge>}
                 </div>
               </CardBody>

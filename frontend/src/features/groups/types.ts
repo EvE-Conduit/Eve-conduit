@@ -31,7 +31,7 @@ export interface RuleTypeSpec {
   label: string;
   description: string;
   category: string;
-  module: string | null;
+  plugin: string | null;
   params: RuleParamSpec[];
 }
 

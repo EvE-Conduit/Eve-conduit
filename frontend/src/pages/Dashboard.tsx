@@ -5,7 +5,7 @@ import { Link } from "react-router";
 import { toast } from "sonner";
 
 import { tokenProblem } from "@/components/CharacterCard";
-import { ModuleBoundary } from "@/components/ModuleBoundary";
+import { PluginBoundary } from "@/components/PluginBoundary";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,8 @@ import { CommsWidget, NetWorthWidget, SkillTrainingWidget } from "@/features/das
 import { api } from "@/lib/api";
 import { useBootstrap, useHasPerm } from "@/lib/bootstrap";
 import { clock } from "@/lib/format";
-import { useLoadedModules } from "@/lib/moduleContext";
-import type { DashboardWidget } from "@/lib/modules";
+import { useLoadedPlugins } from "@/lib/pluginContext";
+import type { DashboardWidget } from "@/lib/plugins";
 import { useUnreadCount } from "@/lib/notifications";
 import { DEFAULT_PREFERENCES, useSavePreferences } from "@/lib/preferences";
 import type { MyGroup } from "@/lib/types";
@@ -36,8 +36,8 @@ type Placed = DashboardWidget & { moduleName: string; key: string };
 export function Dashboard() {
   useSsoResultToasts();
   const { user, site } = useBootstrap();
-  const modules = useLoadedModules();
-  const canManageModules = useHasPerm("site.manage_modules");
+  const plugins = useLoadedPlugins();
+  const canManageModules = useHasPerm("site.manage_plugins");
   const unread = useUnreadCount();
   const savePrefs = useSavePreferences();
   const [editing, setEditing] = useState(false);
@@ -55,7 +55,7 @@ export function Dashboard() {
     { id: "networth", title: "Net worth", Component: NetWorthWidget, size: "md" as const, order: 0, moduleName: "Wallet" },
     { id: "training", title: "Skill training", Component: SkillTrainingWidget, size: "md" as const, order: 1, moduleName: "Skills" },
     { id: "comms", title: "Comms", Component: CommsWidget, size: "lg" as const, order: 2, moduleName: "Notifications" },
-    ...modules.flatMap((m) => (m.frontend.widgets ?? []).map((w) => ({ ...w, moduleName: m.info.name }))),
+    ...plugins.flatMap((m) => (m.frontend.widgets ?? []).map((w) => ({ ...w, moduleName: m.info.name }))),
   ]
     .map((w) => ({ ...w, key: `${w.moduleName}:${w.id}` }))
     .sort((a, b) => {
@@ -217,12 +217,12 @@ export function Dashboard() {
         <Card>
           <EmptyState
             icon={<Puzzle />}
-            title="Your dashboard fills up as modules are enabled"
-            description="Modules add widgets here: wallets, skill queues, fleet timers and more."
+            title="Your dashboard fills up as plugins are enabled"
+            description="Plugins add widgets here: wallets, skill queues, fleet timers and more."
             action={
               canManageModules ? (
-                <Link to="/admin/modules">
-                  <Button variant="primary">Browse modules</Button>
+                <Link to="/admin/plugins">
+                  <Button variant="primary">Browse plugins</Button>
                 </Link>
               ) : undefined
             }
@@ -283,9 +283,9 @@ function Widget({
         }
       />
       <CardBody className="flex-1">
-        <ModuleBoundary name={moduleName} compact>
+        <PluginBoundary name={moduleName} compact>
           <widget.Component />
-        </ModuleBoundary>
+        </PluginBoundary>
       </CardBody>
     </Card>
   );

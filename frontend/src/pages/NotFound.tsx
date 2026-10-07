@@ -13,7 +13,7 @@ export function NotFound() {
       <div className="mt-8 font-mono text-sm font-semibold tracking-widest text-subtle">404</div>
       <h1 className="hud-title mt-2 text-3xl">Lost in space</h1>
       <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted">
-        There's nothing at these coordinates. The page may have moved, or its module is switched off.
+        There's nothing at these coordinates. The page may have moved, or its plugin is switched off.
       </p>
       <div className="mt-8 flex gap-2">
         <Button variant="ghost" onClick={() => navigate(-1)}>

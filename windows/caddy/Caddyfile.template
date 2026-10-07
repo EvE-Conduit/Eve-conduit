@@ -23,7 +23,7 @@
 		reverse_proxy 127.0.0.1:{{APP_PORT}}
 	}
 
-	# Django static files, including module front ends.
+	# Django static files, including plugin front ends.
 	handle /static/* {
 		uri strip_prefix /static
 		root * "{{ROOT_FWD}}/data/static"

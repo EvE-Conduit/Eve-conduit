@@ -22,7 +22,7 @@ class SiteSettings(models.Model):
         permissions = [
             ("manage_site", "Can change site settings"),
             ("manage_access", "Can manage states and groups"),
-            ("manage_modules", "Can enable and disable modules"),
+            ("manage_plugins", "Can enable and disable plugins"),
             ("view_members", "Can see the member list"),
             ("manage_api", "Can manage API keys and switch APIs on and off"),
             ("view_logs", "Can view the audit, API request and service logs"),

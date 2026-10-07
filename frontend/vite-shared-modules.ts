@@ -58,7 +58,7 @@ export function sharedModules(): Plugin {
     },
     load(id) {
       if (id === "\0" + HOST_CLASSES) {
-        // The classes the site's own stylesheet was built from; see lib/moduleStyles.ts.
+        // The classes the site's own stylesheet was built from; see lib/pluginStyles.ts.
         const src = fileURLToPath(new URL("./src", import.meta.url));
         return `export default ${JSON.stringify(scanCandidates(src))};`;
       }
