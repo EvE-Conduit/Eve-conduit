@@ -3,6 +3,22 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.11
+
+### Changed
+- **Plugins are for members only.** Guests (people in the public "Everyone" state) and anyone without a state no
+  longer see members' plugins: they're left out of the sidebar, their pages and API refuse them, and they add
+  nothing to search. Members are everyone in another state, plus administrators. **Discord** and **Recruitment**
+  stay open, so guests can still apply and link Discord (Discord is still gated by `discord.access_discord`).
+- **Update Discord and Recruitment to 1.0.1** (Administration → Plugins) together with this release; older
+  versions count as members-only, so guests couldn't apply or link Discord until they're updated.
+- Announcements 1.0.1 only notifies members.
+- Plugin authors: plugins are members-only unless they set `members_only = False`. See "Members-only plugins" in
+  `docs/platform.md`.
+
+### Fixed
+- A switched-off plugin's main API route (e.g. `/api/p/announcements`, without a trailing slash) still answered.
+
 ## 0.5.10
 
 ### New
