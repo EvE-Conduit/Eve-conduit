@@ -3,6 +3,29 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.13
+
+### Changed
+- **Browsers no longer cache the site.** Every page, plugin, file and API answer is sent with
+  `Cache-Control: no-cache`: browsers check back on each load (a quick "unchanged" when nothing changed), so updates
+  show up at once. **Bare metal and Windows:** updating doesn't rewrite the web server config, so after this update
+  run `sudo conduit web-headers` (bare metal) or `conduit web-headers` in an Administrator terminal (Windows) once.
+  It only changes the old cache lines and leaves the rest of your config alone; later updates do it for you. Docker
+  needs nothing.
+- **Refreshing from ESI takes a permission.** Character and corporation data comes from the scheduler (characters
+  are checked every 2 minutes, corporations every 5). The Refresh buttons that ask ESI right away are now only for
+  people with the new **Can refresh character data from ESI now** (`sheet.refresh_characters`) or **Can refresh
+  corporation data from ESI now** (`corp.refresh_corporations`) permissions, and administrators. Owners no longer
+  get it automatically: give it to a group or state under Administration → Access if you want them to have it.
+
+### Plugins
+- **Discord 1.0.2:** every state may link Discord by default, guests included (Recruitment's Require Discord needs
+  that). Existing states get it when the plugin updates, new states when they're made; take it off a state under
+  Administration → Access to keep it out.
+- **Recruitment 1.1.2:** the Settings page text matches that.
+- **Example (Server Status) 0.1.1:** no longer switched on for new sites; it's a template for plugin authors.
+  Sites that have it on keep it on.
+
 ## 0.5.12
 
 ### Fixed
