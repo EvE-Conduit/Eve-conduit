@@ -1,0 +1,19 @@
+.env
+**/node_modules/
+**/.venv/
+**/__pycache__/
+*.egg-info/
+*.sqlite3
+backend/staticfiles/
+frontend/dist/
+.pytest_cache/
+
+# Lab environment, not part of the project
+@cache
+@uploads/
+dist/
+
+# Editors and local tools
+**/.ipynb_checkpoints/
+.claude/
+.design-scratch/

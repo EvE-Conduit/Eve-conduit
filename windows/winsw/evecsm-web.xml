@@ -1,0 +1,30 @@
+<!--
+  EVECSM web - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  The installer copies this next to a copy of WinSW named evecsm-web.exe and fills in {{...}}.
+-->
+<service>
+  <id>evecsm-web</id>
+  <name>EVECSM web</name>
+  <description>EVECSM web application (waitress on 127.0.0.1:8000).</description>
+  <executable>{{ROOT}}\venv\Scripts\python.exe</executable>
+  <arguments>"{{ROOT}}\app\windows\service\evecsm_service.py" web</arguments>
+  <workingdirectory>{{ROOT}}</workingdirectory>
+  <env name="EVECSM_ROOT" value="{{ROOT}}" />
+  <depend>evecsm-garnet</depend>{{DB_DEPEND}}
+  <startmode>Automatic</startmode>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="2 min" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>{{ROOT}}\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

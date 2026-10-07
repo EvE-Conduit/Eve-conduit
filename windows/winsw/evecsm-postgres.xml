@@ -1,0 +1,32 @@
+<!--
+  EVECSM PostgreSQL - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  Runs the portable database server from the install folder. The installer fills in {{...}}.
+  WinSW needs <startarguments> (not <arguments>) when a <stopexecutable> is given.
+-->
+<service>
+  <id>evecsm-postgres</id>
+  <name>EVECSM PostgreSQL</name>
+  <description>PostgreSQL database for EVECSM (portable, from the install folder).</description>
+  <executable>{{ROOT}}\bin\postgres\bin\postgres.exe</executable>
+  <startarguments>-D &quot;{{ROOT}}\data\postgres&quot;</startarguments>
+  <stopexecutable>{{ROOT}}\bin\postgres\bin\pg_ctl.exe</stopexecutable>
+  <stoparguments>stop -D &quot;{{ROOT}}\data\postgres&quot; -m fast -w</stoparguments>
+  <workingdirectory>{{ROOT}}</workingdirectory>
+  <env name="EVECSM_ROOT" value="{{ROOT}}" />
+  <startmode>Automatic</startmode>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="2 min" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>90 sec</stoptimeout>
+  <logpath>{{ROOT}}\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

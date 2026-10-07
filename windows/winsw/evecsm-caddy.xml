@@ -1,0 +1,32 @@
+<!--
+  EVECSM Caddy - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  The installer copies this next to a copy of WinSW named evecsm-caddy.exe and fills in {{...}}.
+-->
+<service>
+  <id>evecsm-caddy</id>
+  <name>EVECSM Caddy</name>
+  <description>Web server and automatic HTTPS for EVECSM.</description>
+  <executable>{{ROOT}}\bin\caddy\caddy.exe</executable>
+  <arguments>run --config "{{ROOT}}\config\Caddyfile" --adapter caddyfile</arguments>
+  <workingdirectory>{{ROOT}}</workingdirectory>
+  <env name="EVECSM_ROOT" value="{{ROOT}}" />
+  <env name="XDG_DATA_HOME" value="{{ROOT}}\data\caddy" />
+  <env name="XDG_CONFIG_HOME" value="{{ROOT}}\data\caddy" />
+  <depend>evecsm-web</depend>
+  <startmode>Automatic</startmode>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="2 min" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>{{ROOT}}\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

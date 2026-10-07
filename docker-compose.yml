@@ -1,0 +1,68 @@
+# Copy .env.example to .env, fill it in, then: docker compose up -d --build
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  image: evecsm-backend
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://evecsm:${POSTGRES_PASSWORD}@db:5432/evecsm
+    REDIS_URL: redis://redis:6379/0
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  web:
+    <<: *backend
+    command: web
+
+  worker:
+    <<: *backend
+    command: worker
+    depends_on: [web]
+
+  beat:
+    <<: *backend
+    command: beat
+    depends_on: [web]
+
+  caddy:
+    build: ./frontend
+    image: evecsm-frontend
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+    depends_on: [web]
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: evecsm
+      POSTGRES_USER: evecsm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evecsm"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
+  caddy_data:
