@@ -302,3 +302,8 @@ def test_security_warnings_are_deploy_checks_only():
     with override_settings(DEBUG=False, CONDUIT_TOKEN_KEY=""):
         assert not [m for m in run_checks() if m.id.startswith("conduit.")]
         assert any(m.id == "conduit.W001" for m in run_checks(include_deployment_checks=True))
+
+
+@pytest.mark.django_db
+def test_nothing_is_cached_by_browsers(client):
+    assert client.get("/api/core/bootstrap")["Cache-Control"] == "no-cache"

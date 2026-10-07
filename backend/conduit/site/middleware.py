@@ -38,3 +38,17 @@ class ImpersonationGuardMiddleware:
                 return JsonResponse({"detail": message}, status=403)
             return HttpResponseForbidden(message)
         return self.get_response(request)
+
+
+class NoCacheMiddleware:
+    """Browsers keep nothing: they check back on every load (a quick 304 when a static file hasn't changed), so
+    updates to the site and its plugins show up at once. Responses that ask for ``no-store`` keep it."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if "no-store" not in response.get("Cache-Control", ""):
+            response["Cache-Control"] = "no-cache"
+        return response

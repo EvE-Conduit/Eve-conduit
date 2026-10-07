@@ -27,19 +27,19 @@
 	handle /static/* {
 		uri strip_prefix /static
 		root * "{{ROOT_FWD}}/data/static"
-		header Cache-Control "public, max-age=604800"
+		header Cache-Control "no-cache"
 		file_server
 	}
 
-	# Hashed front-end bundles never change.
 	handle /assets/* {
 		root * "{{ROOT_FWD}}/web"
-		header Cache-Control "public, max-age=31536000, immutable"
+		header Cache-Control "no-cache"
 		file_server
 	}
 
-	# Everything else is the single-page app. Don't cache it, so a new release shows up at once
-	# (header runs before try_files, so match everything here rather than /index.html).
+	# Everything else is the single-page app. Nothing is cached: browsers check back on every load (a quick
+	# 304 when nothing changed), so updates show up at once. (header runs before try_files, so match everything
+	# here rather than /index.html.)
 	handle {
 		root * "{{ROOT_FWD}}/web"
 		header Cache-Control "no-cache"
