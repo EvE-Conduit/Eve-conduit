@@ -98,3 +98,15 @@ Describe 'Setup result' {
         Format-SetupResult ([ordered]@{ Version = '0.4.0'; SiteUrl = "https://a`r`nb" }) | Should -Be @('Version=0.4.0', 'SiteUrl=https://a  b')
     }
 }
+
+Describe 'Problem lines for the wizard' {
+    It 'reports nothing when there are no problems, however the empty list is wrapped' {
+        @(ConvertTo-ProblemLine @()).Count | Should -Be 0
+        @(ConvertTo-ProblemLine @(, @())).Count | Should -Be 0
+        @(ConvertTo-ProblemLine @(@(Get-SetupProblem -Values ([ordered]@{ Domain = 'auth.example.com'; Email = 'a@b.co'; InstallRoot = 'D:\EvE-Conduit' })))).Count | Should -Be 0
+    }
+    It 'gives one line per problem' {
+        $lines = @(ConvertTo-ProblemLine (@(, @('Port 80 is in use', 'Enter a valid email address.')) + @('Drive D: is full', '')))
+        $lines | Should -Be @('PROBLEM: Port 80 is in use', 'PROBLEM: Enter a valid email address.', 'PROBLEM: Drive D: is full')
+    }
+}
