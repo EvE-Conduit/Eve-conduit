@@ -103,12 +103,13 @@ def core_areas() -> list[Area]:
         Area(
             "logs",
             "Logs",
-            "Pull the audit log, the API request log, the service log and the ESI call log, e.g. into a SIEM or a "
+            "Pull the audit log, the snooper log, the API request log, the service log and the ESI call log, e.g. into a SIEM or a "
             "Discord log channel. "
             "Supports incremental polling with after_id.",
-            "/api/v1/logs/audit, /logs/requests, /logs/service, /logs/esi",
+            "/api/v1/logs/audit, /logs/snooper, /logs/requests, /logs/service, /logs/esi",
             (
                 Scope("logs:audit", "Read the audit log", "Who changed what: logins, characters, groups, states, plugins, API keys"),
+                Scope("logs:snooper", "Read the snooper log", "Who looked at other members' character sheets"),
                 Scope("logs:requests", "Read the API request log", "Every call made to this API, by any key"),
                 Scope("logs:service", "Read the service log", "Warnings and errors the server logged"),
                 Scope("logs:esi", "Read the ESI call log", "Every request the server sent to ESI and how it went"),

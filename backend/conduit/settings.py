@@ -227,6 +227,7 @@ LOGGING = {
 # --- Logs and the external API ---------------------------------------------------
 # Days to keep each log; 0 keeps it forever. Purged nightly.
 CONDUIT_AUDIT_LOG_DAYS = int(env("CONDUIT_AUDIT_LOG_DAYS", "365"))
+CONDUIT_SNOOP_LOG_DAYS = int(env("CONDUIT_SNOOP_LOG_DAYS", "365"))
 CONDUIT_API_LOG_DAYS = int(env("CONDUIT_API_LOG_DAYS", "90"))
 CONDUIT_SERVICE_LOG_DAYS = int(env("CONDUIT_SERVICE_LOG_DAYS", "30"))
 CONDUIT_ESI_LOG_DAYS = int(env("CONDUIT_ESI_LOG_DAYS", "7"))

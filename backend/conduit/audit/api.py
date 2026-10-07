@@ -1,4 +1,4 @@
-"""Administration > Logs: the audit log, the service log and the server's log files."""
+"""Administration > Logs: the audit log, the snooper log, the service log and the server's log files."""
 
 import os
 from datetime import datetime
@@ -12,7 +12,7 @@ from ninja.errors import HttpError
 from conduit.paging import page
 from conduit.permissions import require_perm
 
-from .models import AuditEvent, ServiceLog
+from .models import AuditEvent, ServiceLog, SnoopEvent
 
 router = Router(tags=["admin"])
 LEVELS = ("WARNING", "ERROR", "CRITICAL")
@@ -48,6 +48,31 @@ def filter_audit(qs, action: str = "", actor: str = "", q: str = "", since: date
     return qs
 
 
+def snoop_out(e: SnoopEvent) -> dict:
+    return {
+        "id": e.pk,
+        "at": e.at.isoformat(),
+        "viewer": {"id": e.viewer_id, "name": e.viewer_name},
+        "impersonating": e.impersonating or None,
+        "character": {"id": e.character_id, "name": e.character_name},
+        "owner": {"id": e.owner_id, "name": e.owner_name} if e.owner_id else None,
+        "section": e.section,
+        "ip": e.ip,
+    }
+
+
+def filter_snoop(qs, viewer: str = "", target: str = "", section: str = "", since: datetime | None = None):
+    if viewer:
+        qs = qs.filter(viewer_name__icontains=viewer)
+    if target:
+        qs = qs.filter(Q(character_name__icontains=target) | Q(owner_name__icontains=target))
+    if section:
+        qs = qs.filter(section=section)
+    if since:
+        qs = qs.filter(at__gte=since)
+    return qs
+
+
 def filter_service(qs, level: str = "", logger: str = "", q: str = ""):
     if level:
         level = level.upper()
@@ -71,6 +96,20 @@ def audit_log(request, action: str = "", actor: str = "", q: str = "", since: da
 @require_perm("site.view_logs")
 def audit_actions(request):
     return list(AuditEvent.objects.order_by("action").values_list("action", flat=True).distinct())
+
+
+@router.get("/logs/snooper")
+@require_perm("site.view_logs")
+def snooper_log(request, viewer: str = "", target: str = "", section: str = "", since: datetime | None = None,
+                limit: int = 50, offset: int = 0):
+    """Who looked at whose characters. Owners looking at their own characters aren't listed."""
+    return page(filter_snoop(SnoopEvent.objects.all(), viewer, target, section, since), snoop_out, limit, offset)
+
+
+@router.get("/logs/snooper/sections", response=list[str])
+@require_perm("site.view_logs")
+def snooper_sections(request):
+    return list(SnoopEvent.objects.order_by("section").values_list("section", flat=True).distinct())
 
 
 @router.get("/logs/service")

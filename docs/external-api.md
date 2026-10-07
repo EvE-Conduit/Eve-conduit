@@ -42,7 +42,7 @@ Lists take `limit` (at most 500) and `offset`, and return `{"items": [...], "cou
 
 ## Polling the logs
 
-`/api/v1/logs/audit`, `/logs/requests`, `/logs/service` and `/logs/esi` return entries oldest first after `after_id`,
+`/api/v1/logs/audit`, `/logs/snooper`, `/logs/requests`, `/logs/service` and `/logs/esi` return entries oldest first after `after_id`,
 plus `next_after_id`. Store that number and pass it on the next poll, and no entry is missed or repeated:
 
 ```bash
@@ -56,6 +56,11 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
 - **Audit log:** sign-ins and sign-outs, characters added, removed or made main, groups and states
   created, changed or deleted, group joins, leaves and member changes, plugin and site settings changes,
   first-run setup, and API keys and APIs. Changes made through the API name the key that made them.
+- **Snooper log:** every time someone opens a character sheet that isn't theirs (HR, recruiters,
+  directors with the `sheet.view_*_characters` permissions or a plugin's sheet access): who looked, at
+  which character and whose it is, which section, and from which IP. Looking at your own characters is
+  never recorded. The same person, character and section is recorded once per 10 minutes. While an admin
+  is signed in as someone else, the admin is named as the viewer.
 - **API request log:** every call to `/api/v1/`, refused ones included: key, method, path, status,
   duration, IP and user agent.
 - **Service log:** warnings and errors the web server and worker log (turn this off with
@@ -69,11 +74,11 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
   and callers, and the current error limit. `CONDUIT_ESI_LOG=errors` records only failures; `off` records
   nothing.
 
-Admins see all four under **Administration > Logs** (permission `site.view_logs`). Managing keys and
+Admins see all five under **Administration > Logs** (permission `site.view_logs`). Managing keys and
 switching APIs on and off needs `site.manage_api`.
 
-Old entries are deleted every night. The defaults are 365 days for the audit log, 90 for the request log,
-30 for the service log and 7 for the ESI call log (`CONDUIT_AUDIT_LOG_DAYS`, `CONDUIT_API_LOG_DAYS`,
+Old entries are deleted every night. The defaults are 365 days for the audit and snooper logs, 90 for the request log,
+30 for the service log and 7 for the ESI call log (`CONDUIT_AUDIT_LOG_DAYS`, `CONDUIT_SNOOP_LOG_DAYS`, `CONDUIT_API_LOG_DAYS`,
 `CONDUIT_SERVICE_LOG_DAYS`, `CONDUIT_ESI_LOG_DAYS`; `0` keeps entries forever).
 
 ## Adding an external API to a plugin

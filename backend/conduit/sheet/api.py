@@ -5,6 +5,7 @@ from ninja import Router
 from ninja.errors import HttpError
 
 from conduit.accounts.models import Character
+from conduit.audit.services import record_snoop
 from conduit.schemas import character_brief
 
 from . import registry
@@ -21,7 +22,16 @@ def viewable_character(request, character_id: int) -> Character:
     )
     if not can_view(request.user, character):
         raise HttpError(403, "You can't view this character")
+    record_snoop(request, character, _section_of(request, character_id))
     return character
+
+
+def _section_of(request, character_id: int) -> str:
+    """``/api/characters/<id>/wallet/journal`` -> "wallet"; the bare header is "sheet"."""
+    path = getattr(request, "path", "") or ""
+    marker = f"/{character_id}/"
+    rest = path.split(marker, 1)[1] if marker in path else ""
+    return rest.split("/", 1)[0] or "sheet"
 
 
 def my_characters(request):
