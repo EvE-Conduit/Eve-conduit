@@ -38,8 +38,14 @@ def me(request):
     """The open forms and the signed-in user's own applications."""
     mine = Application.objects.filter(user=request.user).select_related("form", "user", "reviewer")
     current = next((a for a in mine if a.is_open), None)
+    forms = list(Form.objects.filter(open=True))
+    # Only asked when it matters, since it's a call to Discord: not applying yet, and a form wants it.
+    discord = None
+    if current is None and any(f.require_discord for f in forms) and services.discord_checked():
+        discord = services.discord_status(request.user)
     return {
-        "forms": [services.form_out(f) for f in Form.objects.filter(open=True)],
+        "forms": [services.form_out(f) for f in forms],
+        "discord": discord,
         "current": services.application_out(current, request.user, detail=True) if current else None,
         "past": [services.application_out(a, request.user) for a in mine if not a.is_open],
         "is_recruiter": request.user.has_perm(REVIEW_PERM),
@@ -148,6 +154,7 @@ class FormIn(Schema):
     questions: list[dict] = []
     accept_groups: list[int] = []
     open: bool = True
+    require_discord: bool = True
     order: int = 0
 
 

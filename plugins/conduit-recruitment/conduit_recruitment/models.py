@@ -13,6 +13,8 @@ class Form(models.Model):
     #: Groups an accepted applicant is added to.
     accept_groups = models.ManyToManyField(Group, blank=True, related_name="+")
     open = models.BooleanField(default=True)
+    #: Applicants must have linked Discord and be on the server. Checked only while the Discord plugin is on.
+    require_discord = models.BooleanField(default=True)
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
