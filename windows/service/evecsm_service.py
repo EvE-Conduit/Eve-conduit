@@ -1,8 +1,8 @@
-"""Starts EVECSM's processes on native Windows.
+"""Starts EvE Conduit's processes on native Windows.
 
 Windows can't run gunicorn (it needs fork) and Celery's default "prefork" pool,
 so this launcher uses waitress for the web server and Celery's thread pool for
-the worker. Everything else is the unchanged EVECSM backend.
+the worker. Everything else is the unchanged EvE Conduit backend.
 
     python evecsm_service.py web            # HTTP on EVECSM_BIND (default 127.0.0.1:8000)
     python evecsm_service.py worker         # Celery worker, thread pool
@@ -67,7 +67,7 @@ def run_web() -> None:
         trusted_proxy_count=1,
         trusted_proxy_headers={"x-forwarded-for", "x-forwarded-proto", "x-forwarded-host"},
         clear_untrusted_proxy_headers=True,
-        ident="EVECSM",
+        ident="EvE Conduit",
     )
 
 

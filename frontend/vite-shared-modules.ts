@@ -1,6 +1,6 @@
 /**
  * Lets separately built module bundles share the host's copy of React, the
- * router, React Query and the EVECSM SDK.
+ * router, React Query and the EvE Conduit SDK.
  *
  * Each shared package is exposed as a stable ES module at /sdk/<name>.js and
  * an import map pointing the bare specifiers at those files is put in

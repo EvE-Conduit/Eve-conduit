@@ -1,12 +1,12 @@
 <!--
-  EVECSM MariaDB - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit MariaDB - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   Runs the portable database server from the install folder. The installer fills in {{...}}.
   WinSW needs <startarguments> (not <arguments>) when a <stopexecutable> is given.
 -->
 <service>
   <id>evecsm-mariadb</id>
-  <name>EVECSM MariaDB</name>
-  <description>MariaDB database for EVECSM (portable, from the install folder).</description>
+  <name>EvE Conduit MariaDB</name>
+  <description>MariaDB database for EvE Conduit (portable, from the install folder).</description>
   <executable>{{ROOT}}\bin\mariadb\bin\mariadbd.exe</executable>
   <startarguments>--defaults-file=&quot;{{ROOT}}\data\mariadb\my.ini&quot; --console</startarguments>
   <stopexecutable>{{ROOT}}\bin\mariadb\bin\mariadb-admin.exe</stopexecutable>

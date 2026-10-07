@@ -1,4 +1,4 @@
-"""The contract every EVECSM module implements.
+"""The contract every EvE Conduit module implements.
 
 A module is an installable Python package that exposes a ``Module`` subclass
 through the ``evecsm.modules`` entry point group::

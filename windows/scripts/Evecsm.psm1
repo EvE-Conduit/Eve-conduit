@@ -1,4 +1,4 @@
-# Shared helpers for the EVECSM Windows installer (install.ps1) and admin command (evecsm.ps1).
+# Shared helpers for the EvE Conduit Windows installer (install.ps1) and admin command (evecsm.ps1).
 # Must keep working on Windows PowerShell 5.1, which every Windows install has.
 # Functions that don't touch Windows-only APIs are covered by tests\Evecsm.Tests.ps1, which also
 # runs on Linux/macOS PowerShell.
@@ -202,7 +202,7 @@ function Get-ReleaseVersion {
     <# The VERSION file at the top of an unpacked release folder. #>
     param([Parameter(Mandatory)][string]$ReleaseDir)
     $file = Join-Path $ReleaseDir 'VERSION'
-    if (-not (Test-Path -LiteralPath $file)) { throw "$ReleaseDir is not an EVECSM release (no VERSION file)" }
+    if (-not (Test-Path -LiteralPath $file)) { throw "$ReleaseDir is not an EvE Conduit release (no VERSION file)" }
     $version = (Get-Content -LiteralPath $file -TotalCount 1).Trim()
     if ($version -notmatch '^[0-9A-Za-z.+-]+$') { throw "Unexpected version '$version'" }
     return $version
@@ -214,7 +214,7 @@ function Get-ModuleRequirement {
     @(Get-Content -LiteralPath $Path | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
 }
 
-$script:DefaultInstallRoot = 'C:\EVECSM'
+$script:DefaultInstallRoot = 'C:\EvE-Conduit'
 
 function Get-DefaultInstallRoot { return $script:DefaultInstallRoot }
 
@@ -232,9 +232,9 @@ function Get-InstallRootProblem {
       installer also checks the drive itself (exists, local, free space) and that the folder is empty.
     #>
     param([AllowEmptyString()][string]$Path)
-    if (-not $Path) { return 'Enter a folder, for example D:\EVECSM.' }
-    if ($Path -notmatch '^[A-Za-z]:\\') { return 'Use a full path on a local drive, for example D:\EVECSM (network paths are not supported).' }
-    if ($Path -match '^[A-Za-z]:\\?$') { return "Don't install into the root of a drive; use a folder such as $($Path.Substring(0, 2))\EVECSM." }
+    if (-not $Path) { return 'Enter a folder, for example D:\EvE-Conduit.' }
+    if ($Path -notmatch '^[A-Za-z]:\\') { return 'Use a full path on a local drive, for example D:\EvE-Conduit (network paths are not supported).' }
+    if ($Path -match '^[A-Za-z]:\\?$') { return "Don't install into the root of a drive; use a folder such as $($Path.Substring(0, 2))\EvE-Conduit." }
     # These break the service definitions (XML, WinSW's %VAR% expansion) or the PATH variable.
     if ($Path -match '[&<>"''%;|*?]' -or $Path.Substring(2).Contains(':')) { return 'The path can''t contain & < > " '' % ; | * ? or an extra colon.' }
     foreach ($part in $Path.Substring(3).Split('\')) {
@@ -340,7 +340,7 @@ function Expand-VcRuntime {
 # --- ports -----------------------------------------------------------------------------------
 
 function Get-DefaultPort {
-    <# The ports EVECSM uses unless told otherwise. #>
+    <# The ports EvE Conduit uses unless told otherwise. #>
     return [ordered]@{ Http = 80; Https = 443; App = 8000; Cache = 6379; Postgres = 5432; MariaDB = 3306 }
 }
 
@@ -500,7 +500,7 @@ function Get-TraySetting {
         HttpsPort    = $https
         AppPort      = [int](($env_['EVECSM_BIND'] -split ':')[-1])
         CachePort    = $cache.Port
-        # Only checked when EVECSM runs the database itself.
+        # Only checked when EvE Conduit runs the database itself.
         DatabasePort = $(if ($Database -ne 'None') { $dbUrl.Port } else { 0 })
         Database     = $Database
         Version      = $version
@@ -638,14 +638,14 @@ function Start-EvecsmTray {
 }
 
 function Set-EvecsmUninstallEntry {
-    <# The "Apps & features" entry, so EVECSM can be removed like any other program. #>
+    <# The "Apps & features" entry, so EvE Conduit can be removed like any other program. #>
     param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Version)
     $key = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\EVECSM'
     New-Item -Path $key -Force | Out-Null
     $values = [ordered]@{
-        DisplayName     = 'EVECSM'
+        DisplayName     = 'EvE Conduit'
         DisplayVersion  = $Version
-        Publisher       = 'EVECSM'
+        Publisher       = 'EvE Conduit'
         InstallLocation = $Root
         UninstallString = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Root 'uninstall.ps1')`""
         URLInfoAbout    = 'https://github.com/evecsm'
@@ -688,7 +688,7 @@ function Install-EvecsmPythonPackage {
     try {
         # Not --quiet: pip's "Collecting ..." lines and download bars are the progress indicator.
         & $python -m pip install --upgrade --disable-pip-version-check $backend 'waitress>=3'
-        if ($LASTEXITCODE -ne 0) { throw 'Installing the EVECSM backend failed' }
+        if ($LASTEXITCODE -ne 0) { throw 'Installing the EvE Conduit backend failed' }
         if ((Test-Path -LiteralPath $p.Modules) -and (Get-ModuleRequirement $p.Modules)) {
             & $python -m pip install --upgrade --disable-pip-version-check -r $p.Modules
             if ($LASTEXITCODE -ne 0) { throw 'Installing modules failed' }

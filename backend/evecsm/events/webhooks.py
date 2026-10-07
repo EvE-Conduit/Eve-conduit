@@ -42,12 +42,12 @@ def render(kind: str, event: dict) -> dict:
             "description": text,
             "color": LEVEL_COLORS.get(level, LEVEL_COLORS["info"]),
             "timestamp": event["at"],
-            "footer": {"text": f"EVECSM · {event['event']}"},
+            "footer": {"text": f"EvE Conduit · {event['event']}"},
         }
         link = event.get("data", {}).get("link")
         if link:
             embed["url"] = site + link if link.startswith("/") else link
-        return {"username": "EVECSM", "embeds": [embed]}
+        return {"username": "EvE Conduit", "embeds": [embed]}
     # slack
     return {"text": f"*{title}*\n{text}" if text else f"*{title}*"}
 

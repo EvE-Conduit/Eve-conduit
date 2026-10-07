@@ -1,11 +1,11 @@
 <!--
-  EVECSM scheduler - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit scheduler - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   The installer copies this next to a copy of WinSW named evecsm-beat.exe and fills in {{...}}.
 -->
 <service>
   <id>evecsm-beat</id>
-  <name>EVECSM scheduler</name>
-  <description>EVECSM scheduler: queues periodic jobs (Celery beat).</description>
+  <name>EvE Conduit scheduler</name>
+  <description>EvE Conduit scheduler: queues periodic jobs (Celery beat).</description>
   <executable>{{ROOT}}\venv\Scripts\python.exe</executable>
   <arguments>"{{ROOT}}\app\windows\service\evecsm_service.py" beat</arguments>
   <workingdirectory>{{ROOT}}</workingdirectory>

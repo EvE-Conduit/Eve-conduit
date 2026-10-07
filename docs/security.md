@@ -1,6 +1,6 @@
 # Security
 
-What EVECSM does to protect an install, and what the operator should set.
+What EvE Conduit does to protect an install, and what the operator should set.
 
 ## Before going live
 
@@ -17,7 +17,7 @@ lists them too.
 
 ### Setting or changing the token key
 
-Old tokens stay readable while you switch: EVECSM decrypts with the current key, any keys in
+Old tokens stay readable while you switch: EvE Conduit decrypts with the current key, any keys in
 `EVECSM_TOKEN_KEY_PREVIOUS`, and the key derived from the secret key. After restarting with the new key, run
 
 ```sh

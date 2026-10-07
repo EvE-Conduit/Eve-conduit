@@ -2,15 +2,15 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Installs EVECSM natively on Windows, entirely inside one folder.
+    Installs EvE Conduit natively on Windows, entirely inside one folder.
 
 .DESCRIPTION
-    Run from an unpacked Windows release (evecsm-X.Y.Z-windows.zip), in an Administrator PowerShell:
+    Run from an unpacked Windows release (eve-conduit-X.Y.Z-windows.zip), in an Administrator PowerShell:
 
         Set-ExecutionPolicy -Scope Process Bypass
         .\windows\install.ps1 -Domain auth.example.com -Email you@example.com
 
-    It asks where to install (suggesting C:\EVECSM) and which port each service should use.
+    It asks where to install (suggesting C:\EvE-Conduit) and which port each service should use.
     Everything is installed into, and runs from, that folder: Python, PostgreSQL or MariaDB, Garnet
     (Redis-compatible cache/queue) with its own .NET runtime, Caddy (web server + HTTPS) and the WinSW
     service wrappers. Nothing goes to Program Files; winget isn't used. Every download is checked
@@ -30,13 +30,13 @@
 .PARAMETER NoTls
     Serve plain HTTP (for a LAN, or when another proxy terminates HTTPS).
 .PARAMETER InstallRoot
-    Folder to install into, e.g. D:\EVECSM. If omitted you're asked. Required together with -Yes.
+    Folder to install into, e.g. D:\EvE-Conduit. If omitted you're asked. Required together with -Yes.
 .PARAMETER HttpPort
     Port Caddy listens on for HTTP (default 80). Asked if omitted.
 .PARAMETER HttpsPort
     Port Caddy listens on for HTTPS (default 443). Asked if omitted.
 .PARAMETER AppPort
-    Local port of the EVECSM web application, behind Caddy (default 8000). Asked if omitted.
+    Local port of the EvE Conduit web application, behind Caddy (default 8000). Asked if omitted.
 .PARAMETER CachePort
     Local port of Garnet, the cache and task queue (default 6379). Asked if omitted.
 .PARAMETER DatabasePort
@@ -100,14 +100,14 @@ function Get-InstallRootDriveProblem([string]$Path) {
     $full = [IO.Path]::GetFullPath($Path).TrimEnd('\') + '\'
     $release = [IO.Path]::GetFullPath($releaseDir).TrimEnd('\') + '\'
     if ($full.StartsWith($release, [StringComparison]::OrdinalIgnoreCase) -or $release.StartsWith($full, [StringComparison]::OrdinalIgnoreCase)) {
-        return "Choose a folder outside the unpacked release ($($release.TrimEnd('\'))), for example C:\EVECSM."
+        return "Choose a folder outside the unpacked release ($($release.TrimEnd('\'))), for example C:\EvE-Conduit."
     }
     $drive = New-Object System.IO.DriveInfo ($Path.Substring(0, 1))
     if (-not $drive.IsReady) { return "Drive $($drive.Name) doesn't exist or isn't ready." }
     if ($drive.DriveType -ne [System.IO.DriveType]::Fixed) { return "Drive $($drive.Name) is a $($drive.DriveType.ToString().ToLower()) drive; use a fixed local disk." }
     $freeGb = [math]::Round($drive.AvailableFreeSpace / 1GB, 1)
-    if ($freeGb -lt 5) { return "Drive $($drive.Name) has only $freeGb GB free; EVECSM needs at least 5 GB." }
-    if (Test-Path -LiteralPath (Join-Path $Path 'config\evecsm.env')) { return "EVECSM is already installed in $Path. Use 'evecsm upgrade <zip>' instead." }
+    if ($freeGb -lt 5) { return "Drive $($drive.Name) has only $freeGb GB free; EvE Conduit needs at least 5 GB." }
+    if (Test-Path -LiteralPath (Join-Path $Path 'config\evecsm.env')) { return "EvE Conduit is already installed in $Path. Use 'evecsm upgrade <zip>' instead." }
     if ((Test-Path -LiteralPath $Path) -and (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) {
         return "$Path already contains files. Choose an empty or new folder; the installer locks down its permissions."
     }
@@ -117,8 +117,8 @@ function Get-InstallRootDriveProblem([string]$Path) {
 function Read-InstallRoot {
     $default = Get-DefaultInstallRoot
     Write-Host ''
-    Write-Host 'Where should EVECSM be installed?' -ForegroundColor Cyan
-    Write-Host 'Everything is installed into and runs from this folder: EVECSM, Python, the database,'
+    Write-Host 'Where should EvE Conduit be installed?' -ForegroundColor Cyan
+    Write-Host 'Everything is installed into and runs from this folder: EvE Conduit, Python, the database,'
     Write-Host 'the cache, the web server, settings, logs and backups.'
     while ($true) {
         $answer = Read-Host "Install folder [$default]"
@@ -150,12 +150,12 @@ function Get-ExcludedPortRange {
 $releaseDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $version = Get-ReleaseVersion $releaseDir
 if (-not (Test-Path (Join-Path $releaseDir 'web\index.html'))) { throw 'Run this from an unpacked Windows release (web\ is missing).' }
-if (-not [Environment]::Is64BitOperatingSystem) { throw 'EVECSM needs 64-bit Windows.' }
-if ([Environment]::OSVersion.Version.Build -lt 17763) { throw 'EVECSM needs Windows 10 1809 / Windows Server 2019 or newer.' }
+if (-not [Environment]::Is64BitOperatingSystem) { throw 'EvE Conduit needs 64-bit Windows.' }
+if ([Environment]::OSVersion.Version.Build -lt 17763) { throw 'EvE Conduit needs Windows 10 1809 / Windows Server 2019 or newer.' }
 $Domain = $Domain.Trim() -replace '^[A-Za-z]+://', '' -replace '/+$', ''   # accept a pasted URL
 if ($Domain -notmatch '^[A-Za-z0-9.-]+$') { throw "'$Domain' doesn't look like a hostname. Pass just the name, e.g. -Domain auth.example.com (no https://, port or path)." }
 if (Get-Service -Name 'evecsm-web' -ErrorAction SilentlyContinue) {
-    throw "EVECSM is already installed on this machine (service evecsm-web exists). Use 'evecsm upgrade <zip>' instead."
+    throw "EvE Conduit is already installed on this machine (service evecsm-web exists). Use 'evecsm upgrade <zip>' instead."
 }
 $installDb = -not $DatabaseUrl
 
@@ -167,7 +167,7 @@ if ($InstallRoot) {
     if ($problem) { throw "-InstallRoot ${InstallRoot}: $problem" }
 }
 elseif ($Yes) {
-    throw 'With -Yes nothing is asked, so also say where to install: -InstallRoot C:\EVECSM (or another folder).'
+    throw 'With -Yes nothing is asked, so also say where to install: -InstallRoot C:\EvE-Conduit (or another folder).'
 }
 else {
     $InstallRoot = Read-InstallRoot
@@ -181,7 +181,7 @@ $given = @{ Http = $HttpPort; Https = $HttpsPort; App = $AppPort; Cache = $Cache
 $labels = [ordered]@{
     Http     = @("Web server, HTTP (public)", $defaults.Http)
     Https    = @("Web server, HTTPS (public)", $defaults.Https)
-    App      = @("EVECSM application (this machine only)", $defaults.App)
+    App      = @("EvE Conduit application (this machine only)", $defaults.App)
     Cache    = @("Garnet cache and task queue (this machine only)", $defaults.Cache)
     Database = @("$Database database (this machine only)", $dbDefault)
 }
@@ -195,7 +195,7 @@ $ports = [ordered]@{}
 $ask = -not $Yes -and @($wanted | Where-Object { -not $given[$_] }).Count -gt 0
 if ($ask) {
     Write-Host ''
-    Write-Host 'Which ports should EVECSM use? Press Enter to keep the suggested port.' -ForegroundColor Cyan
+    Write-Host 'Which ports should EvE Conduit use? Press Enter to keep the suggested port.' -ForegroundColor Cyan
 }
 while ($true) {
     foreach ($name in $wanted) {
@@ -236,7 +236,7 @@ if ($customWeb -and -not $NoTls -and -not $standardPublic -and $ports.Http -ne 8
 
 # --- 3. confirm ---------------------------------------------------------------------------------------
 Write-Host ''
-Write-Host "Installing EVECSM $version"
+Write-Host "Installing EvE Conduit $version"
 Write-Host "  folder:    $InstallRoot"
 Write-Host "  site:      $siteUrl"
 Write-Host "  database:  $(if ($installDb) { "$Database in the install folder, port $($ports.Database)" } else { 'existing server (-DatabaseUrl)' })"
@@ -355,13 +355,13 @@ if ($installDb) {
     Set-Content -LiteralPath $adminNote -Value @(
         "Database administrator password (user: $(if ($isMariaDb) { 'root' } else { 'postgres' }), port $dbPort)",
         $superPassword,
-        'Keep this safe; EVECSM itself uses the evecsm user from evecsm.env.'
+        'Keep this safe; EvE Conduit itself uses the evecsm user from evecsm.env.'
     )
     $dbDepend = "`r`n  <depend>$dbService</depend>"
 }
 
-# --- 7. EVECSM itself ----------------------------------------------------------------------------------------
-Write-Step "Installing EVECSM $version"
+# --- 7. EvE Conduit itself ----------------------------------------------------------------------------------------
+Write-Step "Installing EvE Conduit $version"
 $target = Join-Path $p.Releases $version
 if (Test-Path $target) { Remove-Item -LiteralPath $target -Recurse -Force }
 Copy-Item -LiteralPath $releaseDir -Destination $target -Recurse
@@ -419,7 +419,7 @@ foreach ($id in Get-EvecsmServiceId -Database $dbKind) {
 }
 
 if ($installDb) {
-    Write-Step 'Creating the EVECSM database'
+    Write-Step 'Creating the EvE Conduit database'
     Start-Service $dbService
     Wait-EvecsmDatabase -Root $InstallRoot
     if ($isMariaDb) {
@@ -434,7 +434,7 @@ if ($installDb) {
             -c "CREATE USER evecsm WITH PASSWORD '$appPassword';" -c "CREATE DATABASE evecsm OWNER evecsm ENCODING 'UTF8';"
         Remove-Item Env:PGPASSWORD
     }
-    if ($LASTEXITCODE -ne 0) { throw 'Creating the EVECSM database failed' }
+    if ($LASTEXITCODE -ne 0) { throw 'Creating the EvE Conduit database failed' }
 }
 
 Write-Step 'Preparing the database'
@@ -479,7 +479,7 @@ else {
 
 # --- done ---------------------------------------------------------------------------------------------------------------
 $elapsed = (Get-Date) - $script:InstallStart
-Write-Host ("`n==> EVECSM $version is installed in $InstallRoot ({0}:{1:00})" -f [int][math]::Floor($elapsed.TotalMinutes), $elapsed.Seconds) -ForegroundColor Cyan
+Write-Host ("`n==> EvE Conduit $version is installed in $InstallRoot ({0}:{1:00})" -f [int][math]::Floor($elapsed.TotalMinutes), $elapsed.Seconds) -ForegroundColor Cyan
 ($setupOutput -split "`n") | Where-Object { $_ -match 'setup code|ESI_' } | ForEach-Object { Write-Host $_.Trim() -ForegroundColor Yellow }
 Get-Service evecsm-* | Format-Table -AutoSize Name, Status, DisplayName
 Write-Host @"

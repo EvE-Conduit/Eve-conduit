@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build dist/evecsm-<version>.tar.gz: backend, modules, docs, deploy files and the prebuilt
+# Build dist/eve-conduit-<version>.tar.gz: backend, modules, docs, deploy files and the prebuilt
 # front end, so servers never need Node.js.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION=$(python3 -c "import re;print(re.search(r'^version = \"(.+)\"', open('backend/pyproject.toml').read(), re.M)[1])")
-NAME="evecsm-$VERSION"
+NAME="eve-conduit-$VERSION"
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 

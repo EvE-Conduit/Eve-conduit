@@ -1,11 +1,11 @@
-# EVECSM on native Windows
+# EvE Conduit on native Windows
 
-Runs EVECSM directly on Windows as Windows services, with no Docker and no WSL. **Everything is
-installed into, and runs from, one folder you choose**: EVECSM, Python, the database server, the cache,
+Runs EvE Conduit directly on Windows as Windows services, with no Docker and no WSL. **Everything is
+installed into, and runs from, one folder you choose**: EvE Conduit, Python, the database server, the cache,
 the web server, settings, logs and backups. Nothing goes to `Program Files`, and nothing is installed
 system-wide (no winget, no Visual C++ or .NET installers).
 
-Outside that folder, only Windows' own registrations change: the EVECSM services, one firewall rule,
+Outside that folder, only Windows' own registrations change: the EvE Conduit services, one firewall rule,
 the folder added to the system PATH (for the `evecsm` command), the tray panel's sign-in entry and the
 "Apps & features" entry. The [uninstaller](#uninstalling) removes all of them.
 
@@ -36,27 +36,27 @@ the folder added to the system PATH (for the `evecsm` command), the tray panel's
 
 ## Quick install
 
-1. Download `evecsm-X.Y.Z-windows.zip`. In PowerShell, **unblock it before extracting** so Windows
+1. Download `eve-conduit-X.Y.Z-windows.zip`. In PowerShell, **unblock it before extracting** so Windows
    doesn't block the scripts:
    ```powershell
-   Unblock-File $HOME\Downloads\evecsm-X.Y.Z-windows.zip
-   Expand-Archive $HOME\Downloads\evecsm-X.Y.Z-windows.zip -DestinationPath $HOME\Downloads
+   Unblock-File $HOME\Downloads\eve-conduit-X.Y.Z-windows.zip
+   Expand-Archive $HOME\Downloads\eve-conduit-X.Y.Z-windows.zip -DestinationPath $HOME\Downloads
    ```
 2. Open **PowerShell as Administrator** and run:
    ```powershell
-   cd $HOME\Downloads\evecsm-X.Y.Z-windows
+   cd $HOME\Downloads\eve-conduit-X.Y.Z-windows
    Set-ExecutionPolicy -Scope Process Bypass
    .\windows\install.ps1 -Domain auth.example.com -Email you@example.com
    ```
 3. Answer the questions (press Enter to accept each suggestion):
    ```
-   Where should EVECSM be installed?
-   Install folder [C:\EVECSM]: D:\EVECSM
+   Where should EvE Conduit be installed?
+   Install folder [C:\EvE-Conduit]: D:\EvE-Conduit
 
-   Which ports should EVECSM use? Press Enter to keep the suggested port.
+   Which ports should EvE Conduit use? Press Enter to keep the suggested port.
      Web server, HTTP (public) [80]:
      Web server, HTTPS (public) [443]:
-     EVECSM application (this machine only) [8000]:
+     EvE Conduit application (this machine only) [8000]:
      Garnet cache and task queue (this machine only) [6379]:
      Postgres database (this machine only) [5432]:
    ```
@@ -81,7 +81,7 @@ the folder added to the system PATH (for the `evecsm` command), the tray panel's
 The folder must be:
 
 - a full path on a **fixed local drive**, not a network share or USB stick, and not the root of a
-  drive (`D:\EVECSM`, not `D:\`)
+  drive (`D:\EvE-Conduit`, not `D:\`)
 - **empty or new**, because the installer locks down its permissions
 - outside `C:\Windows`, `C:\Users` and `C:\ProgramData`
 - under 80 characters (Python packages add deep paths inside it, and Windows has a path-length limit)
@@ -94,9 +94,9 @@ The folder must be:
 |---|---|---|
 | Web server, HTTP (Caddy) | 80 | the internet |
 | Web server, HTTPS (Caddy) | 443 | the internet |
-| EVECSM application (waitress) | 8000 | this machine only (127.0.0.1) |
+| EvE Conduit application (waitress) | 8000 | this machine only (127.0.0.1) |
 | Garnet cache and task queue | 6379 | this machine only |
-| PostgreSQL / MariaDB | 5432 / 3306 | this machine only (only asked when EVECSM installs the database) |
+| PostgreSQL / MariaDB | 5432 / 3306 | this machine only (only asked when EvE Conduit installs the database) |
 
 The installer rejects ports that are invalid, chosen twice, already used by another program, or
 inside a range Windows reserves (Hyper-V, WSL and Docker reserve some). It opens only the two web
@@ -134,18 +134,18 @@ one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `
    `data\mariadb`. It listens on 127.0.0.1 only, and the administrator password is saved to
    `config\database-admin.txt`.
 6. Copies the release to `releases\X.Y.Z`, points the `app` junction at it, writes `config\evecsm.env`
-   with fresh secrets and your ports, generates `config\Caddyfile`, and installs EVECSM, waitress and
+   with fresh secrets and your ports, generates `config\Caddyfile`, and installs EvE Conduit, waitress and
    the modules.
 7. Locks down permissions: code and config are writable only by Administrators and SYSTEM. The
    services run as **Local Service**, which can read the code and config and write only to `data` and `logs`.
 8. Registers the services (`evecsm-postgres` or `evecsm-mariadb`, `evecsm-garnet`, `evecsm-web`,
-   `evecsm-worker`, `evecsm-beat` and `evecsm-caddy`), creates the EVECSM database, runs the migrations
+   `evecsm-worker`, `evecsm-beat` and `evecsm-caddy`), creates the EvE Conduit database, runs the migrations
    and starts everything. Services start automatically at boot and restart if they crash.
 9. Opens the web ports in Windows Firewall, and puts the `evecsm` command on the PATH.
-10. Adds EVECSM to **Apps & features**, and starts the **tray control panel**, which then starts
+10. Adds EvE Conduit to **Apps & features**, and starts the **tray control panel**, which then starts
     whenever anyone signs in (skip with `-NoTray`; skipped automatically on Server Core).
 
-### Folder layout (shown for `C:\EVECSM`)
+### Folder layout (shown for `C:\EvE-Conduit`)
 
 | Path | Contents |
 |---|---|
@@ -186,7 +186,7 @@ To do it by hand, follow the installer's steps above. Everything runs from the i
 - **Services:** for each `windows\winsw\<id>.xml`, replace the `{{...}}` placeholders, save it as
   `<folder>\services\<id>.xml` next to a copy of `WinSW-x64.exe` named `<id>.exe`, and run `<id>.exe install`.
 
-## Running EVECSM
+## Running EvE Conduit
 
 In an **Administrator** terminal:
 
@@ -203,20 +203,20 @@ In an **Administrator** terminal:
 | List modules | `evecsm module list` |
 
 | Open the tray control panel | `evecsm tray` (`evecsm tray on` / `off`: start it at sign-in or not) |
-| Remove EVECSM | `evecsm uninstall` |
+| Remove EvE Conduit | `evecsm uninstall` |
 
-The services also show up in **services.msc** as "EVECSM ...".
+The services also show up in **services.msc** as "EvE Conduit ...".
 
 ## Tray control panel
 
-A hexagon icon by the clock shows EVECSM's health at a glance:
+A hexagon icon by the clock shows EvE Conduit's health at a glance:
 
 | Icon | Meaning |
 |---|---|
 | Green | Healthy: every service runs **and** answers on its port |
 | Amber | Needs attention: a background service (worker or scheduler) is stopped, or something is still starting |
 | Red | Problem: the database, cache, application or web server is stopped or not answering |
-| Grey | Checking, or EVECSM isn't installed |
+| Grey | Checking, or EvE Conduit isn't installed |
 
 It checks every 30 seconds and shows a notification when the health changes. The checks go beyond
 "is the service running": the database must accept connections, Garnet must answer `PING`, the
@@ -237,7 +237,7 @@ rights; anything that changes the services asks for administrator rights.
 
 ## Uninstalling
 
-Use **Settings → Apps → EVECSM → Uninstall**, or in an Administrator terminal:
+Use **Settings → Apps → EvE Conduit → Uninstall**, or in an Administrator terminal:
 
 ```powershell
 evecsm uninstall
@@ -259,8 +259,8 @@ For scripts: `evecsm uninstall -Mode All -BackupTo D:\Backups -Yes` (or `-Mode K
 ## Updating
 
 ```powershell
-Unblock-File .\evecsm-X.Y.Z-windows.zip
-evecsm upgrade .\evecsm-X.Y.Z-windows.zip
+Unblock-File .\eve-conduit-X.Y.Z-windows.zip
+evecsm upgrade .\eve-conduit-X.Y.Z-windows.zip
 ```
 
 This backs up first, stops the app (Windows locks files that are in use), installs the new release
@@ -271,11 +271,11 @@ release; database migrations aren't undone, so restore the backup if the old ver
 
 ## Limitations
 
-- **Celery doesn't officially support Windows.** EVECSM uses Celery's thread pool, which works on
+- **Celery doesn't officially support Windows.** EvE Conduit uses Celery's thread pool, which works on
   Windows, but problems specific to Windows may get no help from the Celery project.
 - **Garnet stands in for Redis.** It's Microsoft's open-source, Redis-compatible server. Celery needs
   its Lua scripting, which the service enables (`--lua`). Garnet keeps the queue in memory, so tasks
-  waiting at the moment of a restart are lost. That's harmless here: every EVECSM job is periodic and
+  waiting at the moment of a restart are lost. That's harmless here: every EvE Conduit job is periodic and
   simply runs again.
 - **Keep the machine on.** Set *Sleep: Never* and Windows Update active hours, as for any server.
 

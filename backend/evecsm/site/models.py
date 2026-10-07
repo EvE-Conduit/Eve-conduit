@@ -6,7 +6,7 @@ from django.db import models
 class SiteSettings(models.Model):
     """Per-install branding and first-run setup state. There is only ever one row."""
 
-    name = models.CharField(max_length=60, default="EVECSM")
+    name = models.CharField(max_length=60, default="EvE Conduit")
     tagline = models.CharField(max_length=120, blank=True)
     accent = models.CharField(max_length=7, default="#22d3ee")
     logo_url = models.URLField(blank=True)

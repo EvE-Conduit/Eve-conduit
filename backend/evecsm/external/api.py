@@ -35,7 +35,7 @@ from .models import ApiRequest
 log = logging.getLogger(__name__)
 
 external_api = NinjaAPI(
-    title="EVECSM external API",
+    title="EvE Conduit external API",
     version=__version__,
     description=(
         "For other services. Authenticate with an API key from Administration > API: "

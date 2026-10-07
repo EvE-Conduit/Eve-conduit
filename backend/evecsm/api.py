@@ -28,7 +28,7 @@ from evecsm.sheet.api import router as sheet_router
 
 log = logging.getLogger(__name__)
 
-api = NinjaAPI(title="EVECSM API", version=__version__, urls_namespace="api")
+api = NinjaAPI(title="EvE Conduit API", version=__version__, urls_namespace="api")
 
 api.add_router("/core", core_router)
 api.add_router("", search_router, auth=django_auth)

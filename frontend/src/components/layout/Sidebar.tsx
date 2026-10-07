@@ -148,7 +148,7 @@ export function Sidebar({
               )}
             </button>
           )}
-          {!onToggleCollapsed && !collapsed && <div className="mt-2 px-2 text-[11px] text-subtle">EVECSM v{site.version}</div>}
+          {!onToggleCollapsed && !collapsed && <div className="mt-2 px-2 text-[11px] text-subtle">EvE Conduit v{site.version}</div>}
         </div>
       )}
     </div>

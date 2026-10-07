@@ -1,11 +1,11 @@
 <!--
-  EVECSM worker - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit worker - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   The installer copies this next to a copy of WinSW named evecsm-worker.exe and fills in {{...}}.
 -->
 <service>
   <id>evecsm-worker</id>
-  <name>EVECSM worker</name>
-  <description>EVECSM background jobs: ESI syncs, static data, prices (Celery, thread pool).</description>
+  <name>EvE Conduit worker</name>
+  <description>EvE Conduit background jobs: ESI syncs, static data, prices (Celery, thread pool).</description>
   <executable>{{ROOT}}\venv\Scripts\python.exe</executable>
   <arguments>"{{ROOT}}\app\windows\service\evecsm_service.py" worker</arguments>
   <workingdirectory>{{ROOT}}</workingdirectory>

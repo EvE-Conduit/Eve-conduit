@@ -1,12 +1,12 @@
 <!--
-  EVECSM PostgreSQL - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit PostgreSQL - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   Runs the portable database server from the install folder. The installer fills in {{...}}.
   WinSW needs <startarguments> (not <arguments>) when a <stopexecutable> is given.
 -->
 <service>
   <id>evecsm-postgres</id>
-  <name>EVECSM PostgreSQL</name>
-  <description>PostgreSQL database for EVECSM (portable, from the install folder).</description>
+  <name>EvE Conduit PostgreSQL</name>
+  <description>PostgreSQL database for EvE Conduit (portable, from the install folder).</description>
   <executable>{{ROOT}}\bin\postgres\bin\postgres.exe</executable>
   <startarguments>-D &quot;{{ROOT}}\data\postgres&quot;</startarguments>
   <stopexecutable>{{ROOT}}\bin\postgres\bin\pg_ctl.exe</stopexecutable>

@@ -1,4 +1,4 @@
-/** Small fetch wrapper for the EVECSM API: JSON in/out, CSRF header, readable errors. */
+/** Small fetch wrapper for the EvE Conduit API: JSON in/out, CSRF header, readable errors. */
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {

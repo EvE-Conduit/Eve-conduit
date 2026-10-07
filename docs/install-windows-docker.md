@@ -1,7 +1,7 @@
 # Windows: Docker Desktop
 
-The easiest way to run EVECSM on Windows. Docker Desktop runs the same Linux containers as the
-Docker install on Linux, using WSL2 (Windows' built-in Linux layer). Nothing in EVECSM changes.
+The easiest way to run EvE Conduit on Windows. Docker Desktop runs the same Linux containers as the
+Docker install on Linux, using WSL2 (Windows' built-in Linux layer). Nothing in EvE Conduit changes.
 
 **Good for:** a home server or an always-on PC. **Not ideal for:** a laptop that sleeps, or Windows
 Server (see the [notes at the end](#windows-server)).
@@ -33,19 +33,19 @@ docker version
 docker compose version
 ```
 
-## 2. Get EVECSM
+## 2. Get EvE Conduit
 
-Docker builds EVECSM from its **source code**, which includes `docker-compose.yml` and `.env.example`.
-Don't use the `evecsm-X.Y.Z.tar.gz` release download; that one is for bare-metal installs.
+Docker builds EvE Conduit from its **source code**, which includes `docker-compose.yml` and `.env.example`.
+Don't use the `eve-conduit-X.Y.Z.tar.gz` release download; that one is for bare-metal installs.
 
 With [Git for Windows](https://git-scm.com/download/win):
 
 ```powershell
-git clone <repository URL> C:\EVECSM
-cd C:\EVECSM
+git clone <repository URL> C:\EvE-Conduit
+cd C:\EvE-Conduit
 ```
 
-Or download the repository's source ZIP, unpack it to `C:\EVECSM`, and `cd` into that folder.
+Or download the repository's source ZIP, unpack it to `C:\EvE-Conduit`, and `cd` into that folder.
 
 ## 3. Configure
 
@@ -85,7 +85,7 @@ Open `https://your-domain`, sign in with your main character and enter the code.
 - **Windows Firewall:** Docker Desktop usually adds rules itself. If the site isn't reachable from
   outside, run this in an Administrator PowerShell:
   ```powershell
-  New-NetFirewallRule -DisplayName "EVECSM HTTP/HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow
+  New-NetFirewallRule -DisplayName "EvE Conduit HTTP/HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow
   ```
 - **Certificates:** Caddy gets a Let's Encrypt certificate automatically once your domain points at your
   public IP and port 80 is reachable.
@@ -103,7 +103,7 @@ A Windows PC isn't a server by default. Change these so the site stays up:
 
 ## Day to day
 
-| Task | Command (PowerShell, in the EVECSM folder) |
+| Task | Command (PowerShell, in the EvE Conduit folder) |
 |---|---|
 | Status | `docker compose ps` |
 | Logs | `docker compose logs -f web` (or `worker`, `beat`) |
@@ -115,6 +115,6 @@ A Windows PC isn't a server by default. Change these so the site stays up:
 ## Windows Server
 
 Docker Desktop is a Windows 10/11 product. Windows Server's own Docker engine runs *Windows* containers,
-not the Linux containers EVECSM uses. On Windows Server, use the [native Windows install](../windows/README.md),
+not the Linux containers EvE Conduit uses. On Windows Server, use the [native Windows install](../windows/README.md),
 or a Linux virtual machine (Hyper-V) with the [Linux Docker](../README.md) or
 [bare-metal](install-baremetal.md) instructions.

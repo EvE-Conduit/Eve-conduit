@@ -1,4 +1,4 @@
-# EVECSM
+# EvE Conduit
 
 A self-hosted platform for EVE Online corporations and alliances: EVE login, alt management and access control in a small core, with everything else added as modules.
 
@@ -13,14 +13,14 @@ A self-hosted platform for EVE Online corporations and alliances: EVE login, alt
 
 ## Installing
 
-There are two supported ways to run EVECSM:
+There are two supported ways to run EvE Conduit:
 
 - **Docker** (below): everything in containers, the same on any OS. Recommended if you're unsure.
 - **Bare metal**: installed directly on Ubuntu, Debian or Rocky/Alma/RHEL with PostgreSQL or MariaDB,
   Supervisor and nginx, in the style of the Alliance Auth and SeAT manual installs. See
   [docs/install-baremetal.md](docs/install-baremetal.md). An install script automates it.
 
-Releases are built with `scripts/build-release.sh`, which produces `dist/evecsm-X.Y.Z.tar.gz` with the front end prebuilt.
+Releases are built with `scripts/build-release.sh`, which produces `dist/eve-conduit-X.Y.Z.tar.gz` with the front end prebuilt.
 
 ## Running it (Docker)
 

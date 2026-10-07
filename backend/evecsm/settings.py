@@ -1,4 +1,4 @@
-"""EVECSM settings. Everything an operator changes comes from environment variables."""
+"""EvE Conduit settings. Everything an operator changes comes from environment variables."""
 
 import os
 from pathlib import Path

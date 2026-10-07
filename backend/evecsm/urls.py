@@ -6,7 +6,7 @@ from evecsm.api import api
 from evecsm.external.api import external_api
 from evecsm.sso import views as sso
 
-admin.site.site_header = "EVECSM administration"
+admin.site.site_header = "EvE Conduit administration"
 
 urlpatterns = [
     path("api/v1/", external_api.urls),  # before api/ so the web UI's API never shadows it

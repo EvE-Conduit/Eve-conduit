@@ -115,7 +115,7 @@ function SsoStep({ callbackUrl, onRecheck }: { callbackUrl: string; onRecheck: (
   return (
     <Step
       title="Connect EVE Online login"
-      description="EVECSM signs people in through EVE's official SSO. Each site registers its own application with CCP."
+      description="EvE Conduit signs people in through EVE's official SSO. Each site registers its own application with CCP."
       footer={<Button variant="primary" onClick={onRecheck}>I've done this, check again</Button>}
     >
       <ol className="space-y-5 text-sm">
