@@ -4,7 +4,8 @@ version = "1.0.0"
 description = "Recruitment: application forms, a review queue with each applicant's characters, notes and messages, and accepting into groups."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
-dependencies = ["conduit>=0.5.6"]
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
 
 [project.entry-points."conduit.plugins"]
 recruit = "conduit_recruitment.plugin:RecruitmentPlugin"
