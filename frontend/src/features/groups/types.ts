@@ -16,7 +16,7 @@ export interface RuleSet {
 
 export interface RuleParamSpec {
   name: string;
-  type: "int" | "str" | "bool" | "choice" | "state" | "group" | "skill" | "corporation" | "alliance";
+  type: "int" | "str" | "bool" | "choice" | "state" | "group" | "skill" | "corporation" | "alliance" | "ship" | "ship_group" | "item";
   label: string;
   multiple: boolean;
   choices: { value: string; label: string }[];

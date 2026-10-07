@@ -3,6 +3,14 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.9
+
+### New
+- **Asset rules for groups.** Group requirements and smart groups can check what people own, from the character
+  sheet's synced assets: **Owns ship** (any of the chosen ships), **Owns ship class** (e.g. any Dreadnought or
+  Force Auxiliary) and **Has item** (e.g. at least 10 PLEX, quantities added up), each on the main or on any
+  character, with a minimum count. Plugins can use the new `ship`, `ship_group` and `item` parameter types.
+
 ## 0.5.8
 
 ### New

@@ -173,7 +173,7 @@ function RuleRow({ rule, spec, onChange, onRemove }: { rule: Rule; spec?: RuleTy
 }
 
 function ParamInput({ spec, value, onChange }: { spec: RuleParamSpec; value: unknown; onChange: (v: unknown) => void }) {
-  const wide = spec.multiple || ["skill", "corporation", "alliance"].includes(spec.type);
+  const wide = spec.multiple || ["skill", "corporation", "alliance", "ship", "ship_group", "item"].includes(spec.type);
   const field = (child: React.ReactNode) => (
     <Field label={spec.label} hint={spec.help || undefined} className={wide ? "sm:col-span-2" : undefined}>
       {child}
@@ -251,7 +251,16 @@ interface Option {
   hint: string;
 }
 
-/** Search-and-pick for skills, corporations and alliances. */
+const PLACEHOLDERS: Record<string, string> = {
+  skill: "Search skills, e.g. Gunnery",
+  ship: "Search ships, e.g. Revelation",
+  ship_group: "Search ship classes, e.g. Dreadnought",
+  item: "Search items, e.g. PLEX",
+};
+/** Kinds from the static data: every item exists, so "nothing found" just means a typo. */
+const SDE_KINDS = new Set(["skill", "ship", "ship_group", "item"]);
+
+/** Search-and-pick for skills, ships, ship classes, items, corporations and alliances. */
 function OptionPicker({ kind, multiple, value, onChange }: { kind: string; multiple: boolean; value: unknown; onChange: (v: unknown) => void }) {
   const ids = asIds(value);
   const [q, setQ] = useState("");
@@ -271,7 +280,7 @@ function OptionPicker({ kind, multiple, value, onChange }: { kind: string; multi
     onChange(multiple ? (ids.includes(o.id) ? ids : [...ids, o.id]) : o.id);
     setQ("");
   };
-  const placeholder = kind === "skill" ? "Search skills, e.g. Gunnery" : `Search ${kind}s by name or ticker`;
+  const placeholder = PLACEHOLDERS[kind] ?? `Search ${kind}s by name or ticker`;
   return (
     <div className="space-y-2">
       {ids.length > 0 && (
@@ -279,7 +288,7 @@ function OptionPicker({ kind, multiple, value, onChange }: { kind: string; multi
           {ids.map((id) => (
             <span key={id} className="inline-flex items-center gap-1.5 rounded-md bg-surface-3 py-1 pl-2 pr-1 text-xs ring-1 ring-border">
               {names[id]?.name ?? `#${id}`}
-              {names[id]?.hint && <span className="font-mono text-subtle">{kind === "skill" ? "" : `[${names[id]?.hint}]`}</span>}
+              {names[id]?.hint && !SDE_KINDS.has(kind) && <span className="font-mono text-subtle">[{names[id]?.hint}]</span>}
               <button
                 type="button"
                 onClick={() => onChange(multiple ? ids.filter((x) => x !== id) : "")}
@@ -302,7 +311,7 @@ function OptionPicker({ kind, multiple, value, onChange }: { kind: string; multi
                 <Spinner className="px-2 py-1.5" />
               ) : !results.data?.length ? (
                 <div className="px-2 py-1.5 text-xs text-subtle">
-                  Nothing found.{kind !== "skill" && " Only corporations and alliances already known to this site are listed."}
+                  Nothing found.{!SDE_KINDS.has(kind) && " Only corporations and alliances already known to this site are listed."}
                 </div>
               ) : (
                 results.data.map((o) => (
