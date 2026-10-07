@@ -143,8 +143,13 @@ def forms(request):
     return {
         "forms": [services.form_out(f, admin=True) for f in Form.objects.prefetch_related("accept_groups")],
         "groups": [{"id": g.pk, "name": g.name} for g in Group.objects.order_by("name")],
-        "settings": services.settings_out(),
     }
+
+
+@router.get("/settings")
+@require_perm("recruit.manage_forms")
+def settings(request):
+    return services.settings_out()
 
 
 class SettingsIn(Schema):

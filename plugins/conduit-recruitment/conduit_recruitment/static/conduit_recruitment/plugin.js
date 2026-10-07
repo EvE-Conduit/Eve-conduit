@@ -91,6 +91,13 @@ var B = (e) => /* @__PURE__ */ R(z, {
 }), Y = (e) => /* @__PURE__ */ R(z, {
 	...e,
 	children: [/* @__PURE__ */ L("path", { d: "m12 19-7-7 7-7" }), /* @__PURE__ */ L("path", { d: "M19 12H5" })]
+}), le = (e) => /* @__PURE__ */ R(z, {
+	...e,
+	children: [/* @__PURE__ */ L("path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }), /* @__PURE__ */ L("circle", {
+		cx: "12",
+		cy: "12",
+		r: "3"
+	})]
 }), X = {
 	new: {
 		label: "New",
@@ -121,7 +128,7 @@ function Q({ status: e }) {
 		children: X[e].label
 	});
 }
-function le({ app: e }) {
+function ue({ app: e }) {
 	let t = e.status === "accepted" || e.status === "rejected" || e.status === "withdrawn", n = [
 		{
 			label: "Submitted",
@@ -153,7 +160,7 @@ function le({ app: e }) {
 		}, n))
 	});
 }
-function ue({ q: e, value: t, onChange: n }) {
+function de({ q: e, value: t, onChange: n }) {
 	let r = /* @__PURE__ */ R("span", {
 		className: "block text-[13px] font-medium text-text",
 		children: [e.label, e.required && /* @__PURE__ */ L("span", {
@@ -202,7 +209,7 @@ function ue({ q: e, value: t, onChange: n }) {
 		]
 	});
 }
-function de({ value: e }) {
+function fe({ value: e }) {
 	return e === !0 ? /* @__PURE__ */ L("span", { children: "Yes" }) : e === !1 ? /* @__PURE__ */ L("span", { children: "No" }) : e == null || e === "" ? /* @__PURE__ */ L("span", {
 		className: "text-subtle",
 		children: "No answer"
@@ -211,13 +218,13 @@ function de({ value: e }) {
 		children: e
 	});
 }
-var fe = {
+var pe = {
 	claimed: "took this application",
 	accepted: "accepted the application",
 	rejected: "rejected the application",
 	withdrawn: "withdrew the application"
 };
-function pe({ comments: e, recruiter: i, onSend: a, disabled: o }) {
+function me({ comments: e, recruiter: i, onSend: a, disabled: o }) {
 	let [s, c] = F(""), [l, u] = F(i), [d, f] = F(!1), p = async () => {
 		if (s.trim()) {
 			f(!0);
@@ -237,7 +244,7 @@ function pe({ comments: e, recruiter: i, onSend: a, disabled: o }) {
 			children: i ? "No notes or messages yet." : "No messages yet. Recruiters may write to you here."
 		}) : /* @__PURE__ */ L("ol", {
 			className: "space-y-3",
-			children: e.map((e) => e.event && fe[e.event] ? /* @__PURE__ */ R("li", {
+			children: e.map((e) => e.event && pe[e.event] ? /* @__PURE__ */ R("li", {
 				className: "flex items-center gap-2 text-xs text-muted",
 				children: [
 					/* @__PURE__ */ L("span", { className: "h-px flex-1 bg-border" }),
@@ -247,7 +254,7 @@ function pe({ comments: e, recruiter: i, onSend: a, disabled: o }) {
 							children: e.author
 						}),
 						" ",
-						fe[e.event],
+						pe[e.event],
 						" · ",
 						k(e.created_at),
 						e.text && ![
@@ -334,12 +341,12 @@ function pe({ comments: e, recruiter: i, onSend: a, disabled: o }) {
 }
 //#endregion
 //#region src/apply.tsx
-var me = ["recruit", "me"];
-function he() {
+var he = ["recruit", "me"];
+function ge() {
 	let e = N(), t = te(), { data: n, isLoading: c, isFetching: u, refetch: d } = M({
-		queryKey: me,
+		queryKey: he,
 		queryFn: () => w.get(`${Z}/me`)
-	}), [p, m] = F(null), [h, _] = F({}), [v, y] = F(!1), b = () => e.invalidateQueries({ queryKey: me }), x = j({
+	}), [p, m] = F(null), [h, _] = F({}), [v, y] = F(!1), b = () => e.invalidateQueries({ queryKey: he }), x = j({
 		mutationFn: () => w.post(`${Z}/applications`, {
 			form_id: p.id,
 			answers: h
@@ -365,7 +372,7 @@ function he() {
 				})
 			}) : void 0
 		}),
-		!S && !p && /* @__PURE__ */ L(_e, { app: n.past[0] }),
+		!S && !p && /* @__PURE__ */ L(ve, { app: n.past[0] }),
 		S ? /* @__PURE__ */ R("div", {
 			className: "grid gap-6 xl:grid-cols-[1fr_380px]",
 			children: [
@@ -375,10 +382,10 @@ function he() {
 						title: S.form.name,
 						description: `Sent ${E(S.created_at)}`,
 						actions: /* @__PURE__ */ L(Q, { status: S.status })
-					}), /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(le, { app: S }) })] }), /* @__PURE__ */ R(i, { children: [/* @__PURE__ */ L(o, {
+					}), /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(ue, { app: S }) })] }), /* @__PURE__ */ R(i, { children: [/* @__PURE__ */ L(o, {
 						title: "Messages",
 						description: "Between you and the recruiters."
-					}), /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(pe, {
+					}), /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(me, {
 						comments: S.comments ?? [],
 						recruiter: !1,
 						onSend: (e) => w.post(`${Z}/applications/${S.id}/comments`, { text: e }).then(b)
@@ -391,7 +398,7 @@ function he() {
 						children: (S.questions ?? []).map((e) => /* @__PURE__ */ R("div", { children: [/* @__PURE__ */ L("div", {
 							className: "text-xs text-muted",
 							children: e.label
-						}), /* @__PURE__ */ L(de, { value: e.answer })] }, e.id))
+						}), /* @__PURE__ */ L(fe, { value: e.answer })] }, e.id))
 					})] }), /* @__PURE__ */ R(r, {
 						variant: "ghost",
 						className: "w-full text-danger-fg",
@@ -414,7 +421,7 @@ function he() {
 			children: /* @__PURE__ */ R(a, {
 				className: "space-y-6",
 				children: [
-					C && /* @__PURE__ */ L(ge, {
+					C && /* @__PURE__ */ L(_e, {
 						status: n.discord,
 						checking: u,
 						onCheck: () => d()
@@ -423,7 +430,7 @@ function he() {
 						className: "text-sm text-muted",
 						children: "No questions: just send it."
 					}),
-					p.questions.map((e) => /* @__PURE__ */ L(ue, {
+					p.questions.map((e) => /* @__PURE__ */ L(de, {
 						q: e,
 						value: h[e.id],
 						onChange: (t) => _((n) => ({
@@ -511,7 +518,7 @@ function he() {
 		})
 	] });
 }
-function ge({ status: t, checking: n, onCheck: i }) {
+function _e({ status: t, checking: n, onCheck: i }) {
 	let a = t.error ? "We couldn't check your Discord" : t.linked ? "Join our Discord server first" : "Link your Discord account first", o = t.error ? t.error : t.linked ? `Your Discord account ${t.username ?? ""} is linked but isn't on our server. Join it from the Discord page, then come back.` : "This application needs your Discord account linked and you on our server. Link it on the Discord page, then come back.";
 	return /* @__PURE__ */ R(e, {
 		tone: "warning",
@@ -535,7 +542,7 @@ function ge({ status: t, checking: n, onCheck: i }) {
 		})]
 	});
 }
-function _e({ app: t }) {
+function ve({ app: t }) {
 	return !t?.decided_at || Date.now() - Date.parse(t.decided_at) > 2592e6 ? null : t.status === "accepted" ? /* @__PURE__ */ L(e, {
 		tone: "success",
 		className: "mb-6",
@@ -556,7 +563,7 @@ function _e({ app: t }) {
 }
 //#endregion
 //#region src/forms.tsx
-var ve = [
+var ye = [
 	{
 		value: "text",
 		label: "Short answer"
@@ -573,7 +580,7 @@ var ve = [
 		value: "choice",
 		label: "Pick one"
 	}
-], $ = {
+], be = {
 	name: "",
 	description: "",
 	open: !0,
@@ -618,7 +625,7 @@ var ve = [
 		}
 	]
 };
-function ye() {
+function xe() {
 	let e = N(), { data: t, isLoading: o } = M({
 		queryKey: ["recruit", "forms"],
 		queryFn: () => w.get(`${Z}/forms`)
@@ -668,13 +675,12 @@ function ye() {
 			actions: /* @__PURE__ */ R(r, {
 				variant: "primary",
 				onClick: () => u({
-					...$,
-					questions: $.questions.map((e) => ({ ...e }))
+					...be,
+					questions: be.questions.map((e) => ({ ...e }))
 				}),
 				children: [/* @__PURE__ */ L(K, {}), " New form"]
 			})
 		}),
-		t && /* @__PURE__ */ L(be, { settings: t.settings }),
 		o || !t ? /* @__PURE__ */ L(g, { className: "h-40" }) : t.forms.length === 0 ? /* @__PURE__ */ L(i, { children: /* @__PURE__ */ L(l, {
 			icon: /* @__PURE__ */ L(J, {}),
 			title: "No forms yet",
@@ -740,7 +746,7 @@ function ye() {
 				]
 			}) }, e.id))
 		}),
-		c && t && /* @__PURE__ */ L(xe, {
+		c && t && /* @__PURE__ */ L(Se, {
 			draft: c,
 			setDraft: u,
 			groups: t.groups,
@@ -757,51 +763,7 @@ function ye() {
 		})
 	] });
 }
-function be({ settings: t }) {
-	let n = N(), r = j({
-		mutationFn: (e) => w.put(`${Z}/settings`, { require_discord: e }),
-		onSuccess: (e) => {
-			n.setQueryData(["recruit", "forms"], (t) => t && {
-				...t,
-				settings: e
-			}), A.success(e.require_discord ? "Applicants now need Discord" : "Discord is no longer needed to apply");
-		},
-		onError: (e) => A.error(e.message)
-	}), { installed: o, enabled: s, configured: c } = t.discord_plugin, l = o ? s ? c ? "" : "The Discord plugin isn't set up yet, so this isn't checked. Finish its setup on the Discord page." : "The Discord plugin is installed but switched off, so this isn't checked. Switch it on under Administration → Plugins." : "The Discord plugin isn't installed. Install it under Administration → Plugins to use this.";
-	return /* @__PURE__ */ L(i, {
-		className: "mb-6",
-		children: /* @__PURE__ */ R(a, {
-			className: "space-y-3",
-			children: [/* @__PURE__ */ R("label", {
-				className: "flex items-start gap-3 text-sm",
-				children: [/* @__PURE__ */ L(_, {
-					checked: t.require_discord,
-					disabled: r.isPending || !o && !t.require_discord,
-					onCheckedChange: (e) => r.mutate(e),
-					"aria-label": "Require Discord"
-				}), /* @__PURE__ */ R("span", { children: [
-					/* @__PURE__ */ L("span", {
-						className: "font-medium",
-						children: "Require Discord"
-					}),
-					/* @__PURE__ */ L("span", {
-						className: "block text-muted",
-						children: "Applicants must link their Discord account and be on your Discord server before they can send an application."
-					}),
-					/* @__PURE__ */ L("span", {
-						className: "mt-1 block text-xs text-subtle",
-						children: "Needs the Discord plugin installed, switched on and set up. Give your Guest state the \"Can link a Discord account\" permission so applicants can link."
-					})
-				] })]
-			}), l && /* @__PURE__ */ L(e, {
-				tone: "warning",
-				title: t.require_discord ? "Not being checked" : "Discord plugin needed",
-				children: l
-			})]
-		})
-	});
-}
-function xe({ draft: e, setDraft: t, groups: n, saving: i, onSave: a }) {
+function Se({ draft: e, setDraft: t, groups: n, saving: i, onSave: a }) {
 	let o = (n) => t({
 		...e,
 		...n
@@ -899,7 +861,7 @@ function xe({ draft: e, setDraft: t, groups: n, saving: i, onSave: a }) {
 										/* @__PURE__ */ L(h, {
 											value: t.kind,
 											onChange: (e) => s(n, { kind: e.target.value }),
-											options: ve,
+											options: ye,
 											className: "w-40",
 											"aria-label": "Answer type"
 										}),
@@ -972,7 +934,7 @@ function xe({ draft: e, setDraft: t, groups: n, saving: i, onSave: a }) {
 }
 //#endregion
 //#region src/review.tsx
-var Se = [
+var Ce = [
 	{
 		value: "open",
 		label: "Open",
@@ -999,7 +961,7 @@ var Se = [
 		count: "withdrawn"
 	}
 ];
-function Ce() {
+function we() {
 	let e = re(), n = ne("recruit.manage_forms"), [a, o] = F("open"), [s, c] = F(""), [u, d] = F("");
 	ae(() => {
 		let e = setTimeout(() => d(s.trim()), 300);
@@ -1020,15 +982,21 @@ function Ce() {
 		title: "Applications",
 		icon: /* @__PURE__ */ L(B, {}),
 		description: "People who want to join. Open one to see their answers and characters, talk to them, and accept or reject.",
-		actions: n ? /* @__PURE__ */ L(P, {
+		actions: n ? /* @__PURE__ */ R(I, { children: [/* @__PURE__ */ L(P, {
+			to: "/p/recruit/settings",
+			children: /* @__PURE__ */ R(r, {
+				variant: "ghost",
+				children: [/* @__PURE__ */ L(le, {}), " Settings"]
+			})
+		}), /* @__PURE__ */ L(P, {
 			to: "/p/recruit/forms",
 			children: /* @__PURE__ */ R(r, { children: [/* @__PURE__ */ L(J, {}), " Forms"] })
-		}) : void 0
+		})] }) : void 0
 	}), /* @__PURE__ */ R(i, { children: [/* @__PURE__ */ R("div", {
 		className: "flex flex-wrap items-center gap-3 border-b border-border px-card py-3",
 		children: [/* @__PURE__ */ L("div", {
 			className: "flex flex-wrap gap-1",
-			children: Se.map((e) => /* @__PURE__ */ R("button", {
+			children: Ce.map((e) => /* @__PURE__ */ R("button", {
 				type: "button",
 				onClick: () => o(e.value),
 				className: `inline-flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${a === e.value ? "bg-accent-soft text-text" : "text-muted hover:bg-hover hover:text-text"}`,
@@ -1092,12 +1060,12 @@ function Ce() {
 		]
 	}, n.id)) })] })] })] });
 }
-function we(e) {
+function Te(e) {
 	if (!e) return "—";
 	let t = (Date.now() - Date.parse(e)) / 315576e5;
 	return t >= 1 ? `${t.toFixed(1)} years` : `${Math.round(t * 12)} months`;
 }
-function Te({ c: e }) {
+function Ee({ c: e }) {
 	return /* @__PURE__ */ R("li", {
 		className: "space-y-2 px-card py-3",
 		children: [/* @__PURE__ */ R("div", {
@@ -1161,7 +1129,7 @@ function Te({ c: e }) {
 					children: "Age"
 				}), /* @__PURE__ */ L("dd", {
 					className: "font-mono",
-					children: we(e.birthday)
+					children: Te(e.birthday)
 				})] }),
 				/* @__PURE__ */ R("div", { children: [/* @__PURE__ */ L("dt", {
 					className: "text-subtle",
@@ -1185,7 +1153,7 @@ function Te({ c: e }) {
 		})]
 	});
 }
-function Ee() {
+function De() {
 	let { id: e } = ie(), t = N(), s = te(), d = [
 		"recruit",
 		"application",
@@ -1264,7 +1232,7 @@ function Ee() {
 			children: [/* @__PURE__ */ R("div", {
 				className: "space-y-6",
 				children: [
-					/* @__PURE__ */ L(i, { children: /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(le, { app: p }) }) }),
+					/* @__PURE__ */ L(i, { children: /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(ue, { app: p }) }) }),
 					/* @__PURE__ */ R(i, { children: [/* @__PURE__ */ L(o, { title: "Answers" }), /* @__PURE__ */ R(a, {
 						className: "space-y-5 text-sm",
 						children: [(p.questions ?? []).length === 0 && /* @__PURE__ */ L("p", {
@@ -1275,13 +1243,13 @@ function Ee() {
 							children: e.label
 						}), /* @__PURE__ */ L("div", {
 							className: "mt-1",
-							children: /* @__PURE__ */ L(de, { value: e.answer })
+							children: /* @__PURE__ */ L(fe, { value: e.answer })
 						})] }, e.id))]
 					})] }),
 					/* @__PURE__ */ R(i, { children: [/* @__PURE__ */ L(o, {
 						title: "Notes and messages",
 						description: "Internal notes are only for recruiters; messages go to the applicant."
-					}), /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(pe, {
+					}), /* @__PURE__ */ L(a, { children: /* @__PURE__ */ L(me, {
 						comments: p.comments ?? [],
 						recruiter: !0,
 						onSend: (t, n) => w.post(`${Z}/applications/${e}/comments`, {
@@ -1298,7 +1266,7 @@ function Ee() {
 						description: D ? "Their full character sheets are open to recruiters while the application is open." : "Character sheets closed with the application."
 					}), /* @__PURE__ */ L("ul", {
 						className: "divide-y divide-border",
-						children: (p.characters ?? []).map((e) => /* @__PURE__ */ L(Te, { c: e }, e.id))
+						children: (p.characters ?? []).map((e) => /* @__PURE__ */ L(Ee, { c: e }, e.id))
 					})] }),
 					(p.accept_groups ?? []).length > 0 && /* @__PURE__ */ R(i, { children: [/* @__PURE__ */ L(o, { title: "Accepting adds them to" }), /* @__PURE__ */ L(a, {
 						className: "flex flex-wrap gap-1.5",
@@ -1351,11 +1319,75 @@ function Ee() {
 	] });
 }
 //#endregion
-//#region src/index.tsx
-function De() {
-	return ne("recruit.review_applications") ? /* @__PURE__ */ L(Ce, {}) : /* @__PURE__ */ L(he, {});
-}
+//#region src/settings.tsx
+var $ = ["recruit", "settings"];
 function Oe() {
+	let { data: e, isLoading: t } = M({
+		queryKey: $,
+		queryFn: () => w.get(`${Z}/settings`)
+	});
+	return /* @__PURE__ */ R(I, { children: [
+		/* @__PURE__ */ R(P, {
+			to: "/p/recruit",
+			className: "mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text",
+			children: [/* @__PURE__ */ L(Y, {}), " Applications"]
+		}),
+		/* @__PURE__ */ L(f, {
+			eyebrow: "Recruitment",
+			title: "Settings",
+			icon: /* @__PURE__ */ L(le, {}),
+			description: "Rules for everyone who applies, whichever form they use."
+		}),
+		/* @__PURE__ */ L("div", {
+			className: "max-w-3xl",
+			children: t || !e ? /* @__PURE__ */ L(g, { className: "h-32" }) : /* @__PURE__ */ L(ke, { settings: e })
+		})
+	] });
+}
+function ke({ settings: t }) {
+	let n = N(), r = j({
+		mutationFn: (e) => w.put(`${Z}/settings`, { require_discord: e }),
+		onSuccess: (e) => {
+			n.setQueryData($, e), A.success(e.require_discord ? "Applicants now need Discord" : "Discord is no longer needed to apply");
+		},
+		onError: (e) => A.error(e.message)
+	}), { installed: o, enabled: s, configured: c } = t.discord_plugin, l = o ? s ? c ? "" : "The Discord plugin isn't set up yet, so this isn't checked. Finish its setup on the Discord page." : "The Discord plugin is installed but switched off, so this isn't checked. Switch it on under Administration → Plugins." : "The Discord plugin isn't installed. Install it under Administration → Plugins to use this.";
+	return /* @__PURE__ */ L(i, { children: /* @__PURE__ */ R(a, {
+		className: "space-y-3",
+		children: [/* @__PURE__ */ R("label", {
+			className: "flex items-start gap-3 text-sm",
+			children: [/* @__PURE__ */ L(_, {
+				checked: t.require_discord,
+				disabled: r.isPending || !o && !t.require_discord,
+				onCheckedChange: (e) => r.mutate(e),
+				"aria-label": "Require Discord"
+			}), /* @__PURE__ */ R("span", { children: [
+				/* @__PURE__ */ L("span", {
+					className: "font-medium",
+					children: "Require Discord"
+				}),
+				/* @__PURE__ */ L("span", {
+					className: "block text-muted",
+					children: "Applicants must link their Discord account and be on your Discord server before they can send an application."
+				}),
+				/* @__PURE__ */ L("span", {
+					className: "mt-1 block text-xs text-subtle",
+					children: "Needs the Discord plugin installed, switched on and set up. Give your Guest state the \"Can link a Discord account\" permission so applicants can link."
+				})
+			] })]
+		}), l && /* @__PURE__ */ L(e, {
+			tone: "warning",
+			title: t.require_discord ? "Not being checked" : "Discord plugin needed",
+			children: l
+		})]
+	}) });
+}
+//#endregion
+//#region src/index.tsx
+function Ae() {
+	return ne("recruit.review_applications") ? /* @__PURE__ */ L(we, {}) : /* @__PURE__ */ L(ge, {});
+}
+function je() {
 	let { data: e, isLoading: t } = M({
 		queryKey: [
 			"recruit",
@@ -1396,35 +1428,39 @@ function Oe() {
 		})
 	});
 }
-var ke = D({
+var Me = D({
 	routes: [
 		{
 			path: "",
-			Component: De
+			Component: Ae
 		},
 		{
 			path: "apply",
-			Component: he
+			Component: ge
 		},
 		{
 			path: "applications/:id",
-			Component: Ee
+			Component: De
 		},
 		{
 			path: "forms",
-			Component: ye
+			Component: xe
+		},
+		{
+			path: "settings",
+			Component: Oe
 		}
 	],
 	widgets: [{
 		id: "queue",
 		title: "Recruitment",
-		Component: Oe,
+		Component: je,
 		size: "sm",
 		order: 30,
 		permission: "recruit.review_applications"
 	}]
 });
 //#endregion
-export { ke as default };
+export { Me as default };
 
-export const classes = ["!configured","!data","!enabled","!form","!installed","!o","@conduit/sdk","@tanstack/react-query","a","aboard!","about","above","accent","accept","accept_groups","accepted","account","action","actions","add","added","adds","after","again","align","alliance","also","alt","an","and","answer","answers","app","applicant","applicants","application","applications","apply","are","aria-label","aria-pressed","as","ask","async","author","author_id","await","back","be","been","before","being","bg-accent-soft","bg-border","bg-danger-soft","bg-success-soft","bg-surface-2/40","bg-surface-2/60","bg-warning-soft/60","birthday","block","body","boolean","border","border-accent","border-b","border-border","border-border-strong","border-danger/35","border-success/35","border-t","border-warning/30","both","but","button","by","c","can","canManage","catch","character","characters","check","checked","checking","children","choice","choices","choicesText","claim","claimed","className","closed","come","comments","configured","confirmLabel","const","control","conversation","corporation","couldn","count","counts","created_at","ctrlKey","current","currentColor","cx","cy","d","danger","data","decide","decided","decided_at","deciding","decision_message","default","description","detail","did","disabled","discord","discordBlocked","discord_plugin","divide-border","divide-y","do","doing","done","down","draft","edit","else","enabled","enjoy","error","event","everyone","example","experienced","expired","export","eyebrow","false","few","field","fill","finally","first","flex","flex-1","flex-wrap","follow","font-medium","font-mono","font-semibold","footer","for","form","form_id","forms","found","from","full","function","gap-1","gap-1.5","gap-2","gap-3","gap-4","gap-6","gap-x-3","gap-y-1","get","ghost","go","grid","grid-cols-3","groups","h-16","h-40","h-64","h-96","h-px","happens","has","have","hear","height","help","here","hi","hint","history","hover:bg-hover","hover:border-accent/60","hover:text-text","i","icon","icon-sm","icons","id","if","import","in","info","inline","inline-flex","installed","instanceof","interactive","interface","internal","is","isLoading","isPending","is_recruiter","isn","it","italic","items","items-center","items-end","items-start","its","just","justify-between","key","keyof","kills","kind","label","land","latest","length","let","like","line","line-clamp-2","line-clamp-3","link","linked","loading","login","login_ok","long","longer","looking","losses","m12","m18","m21.854","m6","main","manage_forms","max-w-3xl","max-w-xs","may","mb-1","mb-4","mb-6","md","md:grid-cols-2","md:grid-cols-[1fr_auto]","me","message","messages","min-w-0","mine","missing","ml-0.5","ml-auto","months","more","mostly","move","mt-1","mt-2","mt-3","mt-6","must","mutationFn","n","name","navigate","need","needed","needs","neutral","never","new","no","none","not","note","notes","notification","now","null","number","object-cover","of","ok","on","onChange","onCheck","onCheckedChange","onClick","onConfirm","onError","onKeyDown","onOpenChange","onSave","onSend","onSuccess","on_server","once","one","only","open","options","or","order","other","our","outline","over","p-3","p-card","past","patch","path","pb-2","people","per","permission","pick","picked","pilot","pilots","place-items-center","placeholder","play","plugin","points","portrait","post","primary","problem","pt-5","put","px-3","px-card","py-1.5","py-2.5","py-3","q","qc","qs","queryFn","queryKey","question","questions","queue","re","react","react-router","recruit","recruiter","recruiters","recruiting","refetch","refetchInterval","refresh","reject","rejected","require_discord","required","requires","rest","return","review","review_applications","reviewer","reviewer_id","right","round","routes","row","rows","rx","ry","s","save","saved","saving","say","search","secondary","security_status","see","sees","self-end","send","sends","server","set","setAnswers","setBusy","setDeciding","setDeleting","setDraft","setForm","setInternal","setMessage","setQ","setQueryData","setSearch","setStatus","setText","setWithdrawing","settings","setup","sheet","sheets","show","shown","shrink-0","side","site","size","size-10","size-3","size-4","size-5","size-full","sm","so","solidDanger","someone","space-y-1.5","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","src","starts","state","status","steps","straight","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","submit","success","switched","t","tabular-nums","talk","target","text","text-3xl","text-[11px]","text-[13px]","text-accent-ink","text-center","text-danger-fg","text-left","text-muted","text-sm","text-subtle","text-text","text-xs","that","the","their","them","then","they","this","time","title","to","toast","toggle","told","tone","took","total_sp","tracking-wider","transition-colors","true","truncate","try","type","undefined","under","up","updated_at","uppercase","us","use","useHasPerm","useParams","useQuery","useQueryClient","useState","used","user","username","v","value","variant","viewBox","voice","void","w-40","w-64","w-full","waiting","wallet","want","warning","was","wasn","weeks","welcome","what","when","while","whitespace-pre-line","who","widgets","width","will","with","withdrawn","withdrew","write","x","xl","xl:grid-cols-[1fr_380px]","xl:grid-cols-[1fr_420px]","years","yes","yesno","yet","you","your","zone"];
+export const classes = ["!configured","!data","!enabled","!form","!installed","!o","@conduit/sdk","@tanstack/react-query","a","aboard!","about","above","accent","accept","accept_groups","accepted","account","action","actions","add","added","adds","after","again","align","alliance","also","alt","an","and","answer","answers","app","applicant","applicants","application","applications","apply","are","aria-label","aria-pressed","as","ask","async","author","author_id","await","back","be","been","before","being","bg-accent-soft","bg-border","bg-danger-soft","bg-success-soft","bg-surface-2/40","bg-surface-2/60","bg-warning-soft/60","birthday","block","body","boolean","border","border-accent","border-b","border-border","border-border-strong","border-danger/35","border-success/35","border-t","border-warning/30","both","but","button","by","c","can","canManage","catch","character","characters","check","checked","checking","children","choice","choices","choicesText","claim","claimed","className","closed","come","comments","configured","confirmLabel","const","control","conversation","corporation","couldn","count","counts","created_at","ctrlKey","current","currentColor","cx","cy","d","danger","data","decide","decided","decided_at","deciding","decision_message","default","description","detail","did","disabled","discord","discordBlocked","discord_plugin","divide-border","divide-y","do","doing","done","down","draft","edit","else","enabled","enjoy","error","event","everyone","example","experienced","expired","export","eyebrow","false","few","field","fill","finally","first","flex","flex-1","flex-wrap","follow","font-medium","font-mono","font-semibold","footer","for","form","form_id","forms","found","from","full","function","gap-1","gap-1.5","gap-2","gap-3","gap-4","gap-6","gap-x-3","gap-y-1","get","ghost","go","grid","grid-cols-3","groups","h-16","h-32","h-40","h-64","h-96","h-px","happens","has","have","hear","height","help","here","hi","hint","history","hover:bg-hover","hover:border-accent/60","hover:text-text","i","icon","icon-sm","icons","id","if","import","in","info","inline","inline-flex","installed","instanceof","interactive","interface","internal","is","isLoading","isPending","is_recruiter","isn","it","italic","items","items-center","items-end","items-start","its","just","justify-between","key","keyof","kills","kind","label","land","latest","length","let","like","line","line-clamp-2","line-clamp-3","link","linked","loading","login","login_ok","long","longer","looking","losses","m12","m18","m21.854","m6","main","manage_forms","max-w-3xl","max-w-xs","may","mb-1","mb-4","mb-6","md","md:grid-cols-2","md:grid-cols-[1fr_auto]","me","message","messages","min-w-0","mine","missing","ml-0.5","ml-auto","months","more","mostly","move","mt-1","mt-2","mt-3","mt-6","must","mutationFn","n","name","navigate","need","needed","needs","neutral","never","new","no","none","not","note","notes","notification","now","null","number","object-cover","of","ok","on","onChange","onCheck","onCheckedChange","onClick","onConfirm","onError","onKeyDown","onOpenChange","onSave","onSend","onSuccess","on_server","once","one","only","open","options","or","order","other","our","outline","over","p-3","p-card","past","patch","path","pb-2","people","per","permission","pick","picked","pilot","pilots","place-items-center","placeholder","play","plugin","points","portrait","post","primary","problem","pt-5","put","px-3","px-card","py-1.5","py-2.5","py-3","q","qc","qs","queryFn","queryKey","question","questions","queue","re","react","react-router","recruit","recruiter","recruiters","recruiting","refetch","refetchInterval","refresh","reject","rejected","require_discord","required","requires","rest","return","review","review_applications","reviewer","reviewer_id","right","round","routes","row","rows","rx","ry","s","save","saved","saving","say","search","secondary","security_status","see","sees","self-end","send","sends","server","set","setAnswers","setBusy","setDeciding","setDeleting","setDraft","setForm","setInternal","setMessage","setQ","setSearch","setStatus","setText","setWithdrawing","settings","setup","sheet","sheets","show","shown","shrink-0","side","site","size","size-10","size-3","size-4","size-5","size-full","sm","so","solidDanger","someone","space-y-1.5","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","src","starts","state","status","steps","straight","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","submit","success","switched","t","tabular-nums","talk","target","text","text-3xl","text-[11px]","text-[13px]","text-accent-ink","text-center","text-danger-fg","text-left","text-muted","text-sm","text-subtle","text-text","text-xs","that","the","their","them","then","they","this","time","title","to","toast","toggle","told","tone","took","total_sp","tracking-wider","transition-colors","true","truncate","try","type","undefined","under","up","updated_at","uppercase","us","use","useHasPerm","useParams","useQuery","useQueryClient","useState","used","user","username","v","value","variant","viewBox","voice","void","w-40","w-64","w-full","waiting","wallet","want","warning","was","wasn","weeks","welcome","what","when","whichever","while","whitespace-pre-line","who","widgets","width","will","with","withdrawn","withdrew","write","x","xl","xl:grid-cols-[1fr_380px]","xl:grid-cols-[1fr_420px]","years","yes","yesno","yet","you","your","zone"];
