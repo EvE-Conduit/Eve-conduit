@@ -92,6 +92,9 @@ function Get-ConduitPath {
         Tmp      = Join-Path $Root 'tmp'
         EnvFile  = Join-Path (Join-Path $Root 'config') 'conduit.env'
         Plugins  = Join-Path (Join-Path $Root 'config') 'plugins.txt'
+        # Plugins installed from Administration -> Plugins (written only by apply-update) and the newest catalog used.
+        PluginsSite  = Join-Path (Join-Path $Root 'config') 'plugins-site.txt'
+        PluginSerial = Join-Path (Join-Path $Root 'config') 'plugin-catalog.serial'
     }
 }
 
@@ -687,7 +690,7 @@ function Invoke-ConduitPython {
 }
 
 function Install-ConduitPythonPackage {
-    <# Installs the backend, waitress and every module from a release folder into the venv. #>
+    <# Installs the backend, waitress and every plugin (plugins.txt and plugins-site.txt) into the venv. #>
     param(
         [Parameter(Mandatory)][string]$Root,
         [Parameter(Mandatory)][string]$ReleaseDir,
@@ -709,6 +712,10 @@ function Install-ConduitPythonPackage {
         if ((Test-Path -LiteralPath $p.Plugins) -and (Get-PluginRequirement $p.Plugins)) {
             Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-r', $p.Plugins) `
                 -FailMessage 'Installing plugins failed' | Out-Host
+        }
+        if ((Test-Path -LiteralPath $p.PluginsSite) -and (Get-PluginRequirement $p.PluginsSite)) {
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-r', $p.PluginsSite) `
+                -FailMessage 'Installing plugins from Administration -> Plugins failed' | Out-Host
         }
     }
     finally { Pop-Location }

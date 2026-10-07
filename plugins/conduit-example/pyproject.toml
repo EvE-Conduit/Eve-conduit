@@ -1,12 +1,20 @@
 [project]
 name = "conduit-example"
 version = "0.1.0"
-description = "Example EvE Conduit plugin: Tranquility server status. Copy it to start your own plugin."
+description = "Live Tranquility status on the dashboard. Also the starting point for new plugins."
+authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
 dependencies = ["conduit>=0.1"]
 
 [project.entry-points."conduit.plugins"]
 example = "conduit_example.plugin:ExamplePlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See scripts/build_catalog.py.
+[tool.conduit]
+name = "Server Status"
+icon = "activity"
+category = "Dashboard"
+min_conduit = "0.5.0"
 
 [build-system]
 requires = ["setuptools>=75"]

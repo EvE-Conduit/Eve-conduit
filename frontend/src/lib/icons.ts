@@ -1,7 +1,7 @@
 import {
   Activity, Anchor, Award, BarChart3, Bell, BookOpen, Box, Boxes, Briefcase, Building2, Calendar, Clock, Coins,
   Compass, Crosshair, Factory, FileText, Flag, FlaskConical, Gauge, Gem, Globe, GraduationCap, Hammer, Heart,
-  Landmark, LayoutDashboard, LifeBuoy, Map, MessageSquare, Mic, Moon, Package, Pickaxe, Radar, Rocket, Satellite,
+  Landmark, LayoutDashboard, LifeBuoy, Map, MessageSquare, Mic, Moon, Package, Pickaxe, Puzzle, Radar, Rocket, Satellite,
   ScrollText, Shield, ShieldCheck, ShoppingCart, Sparkles, Star, Swords, Target, Timer, Trophy, Truck, Users,
   Wallet, Wrench, Zap, type LucideIcon,
 } from "lucide-react";
@@ -13,7 +13,7 @@ const ICONS: Record<string, LucideIcon> = {
   compass: Compass, crosshair: Crosshair, factory: Factory, "file-text": FileText, flag: Flag,
   "flask-conical": FlaskConical, gauge: Gauge, gem: Gem, globe: Globe, "graduation-cap": GraduationCap,
   hammer: Hammer, heart: Heart, landmark: Landmark, "layout-dashboard": LayoutDashboard, "life-buoy": LifeBuoy,
-  map: Map, "message-square": MessageSquare, mic: Mic, moon: Moon, package: Package, pickaxe: Pickaxe, radar: Radar,
+  map: Map, "message-square": MessageSquare, mic: Mic, moon: Moon, package: Package, pickaxe: Pickaxe, puzzle: Puzzle, radar: Radar,
   rocket: Rocket, satellite: Satellite, scroll: ScrollText, shield: Shield, "shield-check": ShieldCheck,
   "shopping-cart": ShoppingCart, sparkles: Sparkles, star: Star, swords: Swords, target: Target, timer: Timer,
   trophy: Trophy, truck: Truck, users: Users, wallet: Wallet, wrench: Wrench, zap: Zap,

@@ -199,6 +199,8 @@ CELERY_BEAT_SCHEDULE = {
     "core:sde": {"task": "conduit.sde.tasks.update_sde", "schedule": crontab(hour=12, minute=5)},
     "core:update-check": {"task": "conduit.updates.tasks.check_for_updates", "schedule": crontab(hour=12, minute=23)},
     "core:update-result": {"task": "conduit.updates.tasks.collect_install_result", "schedule": 120.0},
+    "core:plugin-updates": {"task": "conduit.plugins.tasks.check_plugin_updates", "schedule": crontab(hour=12, minute=41)},
+    "core:plugin-result": {"task": "conduit.plugins.tasks.collect_plugin_result", "schedule": 120.0},
     "core:heartbeat": {"task": "conduit.site.tasks.heartbeat", "schedule": 60.0},
     "core:purge-logs": {"task": "conduit.audit.tasks.purge_logs", "schedule": crontab(hour=3, minute=40)},
     "core:smart-groups": {"task": "conduit.access.tasks.update_smart_groups", "schedule": crontab(minute="*/15")},
@@ -240,6 +242,15 @@ CONDUIT_UPDATES_DIR = env("CONDUIT_UPDATES_DIR", str(BASE_DIR / "updates"))
 CONDUIT_UPDATE_REPO = env("CONDUIT_UPDATE_REPO", "EvE-Conduit/Eve-conduit")
 CONDUIT_UPDATE_CHECK = env_bool("CONDUIT_UPDATE_CHECK", True)
 CONDUIT_UPDATE_PRERELEASES = env_bool("CONDUIT_UPDATE_PRERELEASES")
+# Signed catalog of official plugins (github.com/EvE-Conduit/plugins), offered under Administration > Plugins.
+CONDUIT_PLUGIN_CATALOG_URL = env(
+    "CONDUIT_PLUGIN_CATALOG_URL", "https://github.com/EvE-Conduit/plugins/releases/download/catalog/catalog.json")
+# Let administrators install plugins from any git URL over HTTPS. A plugin runs with the site's access to the
+# server and database, so only the server owner can turn this on (the updater reads it from the config file).
+CONDUIT_PLUGIN_URLS = env_bool("CONDUIT_PLUGIN_URLS")
+# The updater's list of plugins installed from Administration (read-only for the site).
+CONDUIT_PLUGIN_SITE_FILE = env(
+    "CONDUIT_PLUGIN_SITE_FILE", "/etc/conduit/plugins-site.txt" if CONDUIT_INSTALL_KIND == "baremetal" else "")
 
 # Per-IP limits on EVE login, the setup code and failed API-key attempts (see conduit/site/ratelimit.py).
 CONDUIT_RATE_LIMITS = env_bool("CONDUIT_RATE_LIMITS", True)

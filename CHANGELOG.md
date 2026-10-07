@@ -3,6 +3,23 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.0
+
+### New
+- **Install plugins from the website.** Administration → Plugins → Browse lists the official plugins from
+  [github.com/EvE-Conduit/plugins](https://github.com/EvE-Conduit/plugins). Tick the ones you want and install them
+  together, switched on straight away if you like. Windows and Linux installs do this through their updater, which
+  takes a backup first and puts the previous plugins back if anything fails. Docker installs get the lines to add
+  to `requirements-plugins.txt`.
+- **Plugin updates.** Each plugin installed this way can update itself when a new version is published, or wait
+  for you; administrators are told about new versions once a day either way. Plugins can also be removed again.
+- **Plugins from any git repository**, for installs whose server owner allows it with `CONDUIT_PLUGIN_URLS=true`.
+- The plugin catalog is signed with the release key, and every plugin in it is pinned to an exact commit.
+
+### Fixed
+- **Linux updates from the website:** if a step of the upgrade failed, the updater could still report success and
+  skip putting the previous version back. Failures are now caught and rolled back.
+
 ## 0.4.3
 
 ### Fixed

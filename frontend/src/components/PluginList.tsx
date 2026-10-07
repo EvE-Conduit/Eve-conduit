@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ExternalLink, KeyRound, Link2, Puzzle } from "lucide-react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,8 @@ export interface AdminModule {
   } | null;
 }
 
-export function PluginList({ compact = false }: { compact?: boolean }) {
+/** Installed plugins with their on/off switches. `extra` adds per-plugin details and actions (Administration → Plugins). */
+export function PluginList({ compact = false, extra }: { compact?: boolean; extra?: (m: AdminModule) => ReactNode }) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["admin", "plugins"], queryFn: () => api.get<AdminModule[]>("/api/admin/plugins") });
   const toggle = useMutation({
@@ -56,7 +58,7 @@ export function PluginList({ compact = false }: { compact?: boolean }) {
       <EmptyState
         icon={<Puzzle />}
         title="No plugins installed yet"
-        description="Plugins are Python packages. Install one into the server image (pip install conduit-…), restart, and it shows up here."
+        description={compact ? "Plugins are Python packages. Install them later under Administration → Plugins → Browse." : "Pick some from the Browse tab, or install a Python package on the server and restart."}
         className={compact ? "py-8" : undefined}
       />
     );
@@ -84,6 +86,7 @@ export function PluginList({ compact = false }: { compact?: boolean }) {
               </div>
               {m.manifest?.description && <p className="mt-0.5 text-sm text-muted">{m.manifest.description}</p>}
               {broken && <p className="mt-1 text-sm text-warning-fg">{m.problems.join("; ")}</p>}
+              {extra?.(m)}
               {!compact && m.manifest && (m.manifest.requires.length > 0 || m.manifest.esi_scopes.length > 0) && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {m.manifest.requires.map((r) => (
