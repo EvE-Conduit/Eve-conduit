@@ -10,6 +10,7 @@ results, group rules and ESI scopes.
 - [`conduit-srp`](conduit-srp): Ship Replacement: members claim losses from their killmails, reviewers approve and pay.
 - [`conduit-discord`](conduit-discord): Discord: link accounts and join the server, with roles and nicknames from groups and states.
 - [`conduit-announcements`](conduit-announcements): Announcements: news for everyone or chosen states and groups, pinned, scheduled and notified.
+- [`conduit-fleets`](conduit-fleets): Fleets & FATs: attendance from the FC's in-game fleet or a FAT link, stats, and a FAT group rule.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
