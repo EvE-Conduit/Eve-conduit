@@ -2,7 +2,8 @@
 
 Losses come from the killmails the character sheet syncs (``conduit.sheet.killmails``). A loss that hasn't synced
 (the character never granted the killmail scope, or it's older than ESI's recent list) can be added from the
-in-game "Copy external kill link", which holds the killmail's id and hash.
+in-game "Copy external kill link", which holds the killmail's id and hash, or from its zKillboard page, whose hash
+zKillboard's API tells us.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ from .models import ShipRule, SrpRequest, SrpSettings
 SHIP_CATEGORY = 6
 CAPSULE_GROUP = 29
 KILL_LINK_RE = re.compile(r"killmails/(\d+)/([0-9a-fA-F]{40})")
+ZKILL_LINK_RE = re.compile(r"zkillboard\.com/kill/(\d+)")
+ZKILL_API = "https://zkillboard.com/api/killID/{}/"
 
 
 class SrpError(Exception):
@@ -133,9 +136,17 @@ def killmail_from_link(link: str) -> Killmail:
     from conduit.esi.exceptions import EsiError
 
     m = KILL_LINK_RE.search(link or "")
-    if not m:
-        raise SrpError("Paste the link from the killmail's \"Copy external kill link\" (it looks like https://esi.evetech.net/killmails/123/abc…/)")
-    km_id, km_hash = int(m.group(1)), m.group(2).lower()
+    if m:
+        km_id, km_hash = int(m.group(1)), m.group(2).lower()
+    else:
+        z = ZKILL_LINK_RE.search(link or "")
+        if not z:
+            raise SrpError("Paste a zKillboard link (https://zkillboard.com/kill/123/) or the killmail's \"Copy external kill link\"")
+        km_id = int(z.group(1))
+        known = Killmail.objects.filter(pk=km_id).first()
+        if known is not None:
+            return known
+        km_hash = zkill_hash(km_id)
     km = Killmail.objects.filter(pk=km_id).first()
     if km is not None:
         if km.hash != km_hash:
@@ -163,6 +174,26 @@ def killmail_from_link(link: str) -> Killmail:
     ))
     ensure_eve_names({victim.get("character_id"), victim.get("corporation_id"), victim.get("alliance_id"), final.get("character_id")})
     return km
+
+
+def zkill_hash(killmail_id: int) -> str:
+    """The hash ESI needs for a killmail, from zKillboard (a zKillboard link only has the id)."""
+    import httpx
+
+    from conduit.esi.client import user_agent
+
+    try:
+        resp = httpx.get(ZKILL_API.format(killmail_id), headers={"User-Agent": user_agent(), "Accept-Encoding": "gzip"},
+                         timeout=15, follow_redirects=False)
+        resp.raise_for_status()
+        rows = resp.json()
+    except (httpx.HTTPError, ValueError):
+        raise SrpError("zKillboard didn't answer; try again in a moment, or use the in-game \"Copy external kill link\"") from None
+    row = next((r for r in rows if isinstance(r, dict) and r.get("killmail_id") == killmail_id), None) if isinstance(rows, list) else None
+    km_hash = str((row or {}).get("zkb", {}).get("hash", ""))
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", km_hash):
+        raise SrpError("zKillboard doesn't know that killmail")
+    return km_hash.lower()
 
 
 # --- requests ------------------------------------------------------------------------------------------------------

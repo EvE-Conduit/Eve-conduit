@@ -154,10 +154,52 @@ def test_claim_from_kill_link(pilot, monkeypatch):
     monkeypatch.setattr("conduit.esi.client.esi", lambda: FakeEsi())
     monkeypatch.setattr(services, "ensure_eve_names", lambda ids: None)
     monkeypatch.setattr(services.timezone, "now", lambda: timezone.datetime(2026, 10, 2, tzinfo=timezone.UTC))
-    with pytest.raises(services.SrpError, match="Copy external kill link"):
-        services.submit(pilot, link="https://zkillboard.com/kill/555/", fleet="CTA")
+    with pytest.raises(services.SrpError, match="zKillboard link"):
+        services.submit(pilot, link="https://example.com/kill/555/", fleet="CTA")
     req = services.submit(pilot, link=f"https://esi.evetech.net/latest/killmails/555/{'b' * 40}/", fleet="CTA")
     assert req.character_name == "Pilot Alt" and req.killmail.victim_ship_type_id == SCYTHE
+
+
+def test_claim_from_zkillboard_link(pilot, monkeypatch):
+    import httpx
+
+    seen = []
+
+    def fake_get(url, **kw):
+        seen.append(url)
+        assert kw["headers"]["User-Agent"]
+        return httpx.Response(200, json=[{"killmail_id": 556, "zkb": {"hash": "C" * 40}}], request=httpx.Request("GET", url))
+
+    class Resp:
+        data = {"killmail_time": "2026-10-01T12:00:00Z", "solar_system_id": 30000142, "attackers": [],
+                "victim": {"character_id": pilot.main_character.pk, "corporation_id": pilot.main_character.corporation_id, "ship_type_id": RIFTER, "items": []}}
+
+    class FakeEsi:
+        def get(self, path, **kw):
+            assert path == f"/killmails/556/{'c' * 40}"
+            return Resp()
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr("conduit.esi.client.esi", lambda: FakeEsi())
+    monkeypatch.setattr(services, "ensure_eve_names", lambda ids: None)
+    monkeypatch.setattr(services.timezone, "now", lambda: timezone.datetime(2026, 10, 2, tzinfo=timezone.UTC))
+    req = services.submit(pilot, link="https://zkillboard.com/kill/556/", fleet="CTA")
+    assert req.killmail_id == 556 and seen == ["https://zkillboard.com/api/killID/556/"]
+    # A loss that already synced doesn't ask zKillboard at all.
+    km = lose(pilot.main_character, km_id=557)
+    seen.clear()
+    assert services.killmail_from_link("https://zkillboard.com/kill/557/") == km and seen == []
+
+
+def test_zkillboard_without_the_killmail(pilot, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(200, json=[], request=httpx.Request("GET", url)))
+    with pytest.raises(services.SrpError, match="doesn't know"):
+        services.killmail_from_link("https://zkillboard.com/kill/999/")
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: (_ for _ in ()).throw(httpx.ConnectError("down")))
+    with pytest.raises(services.SrpError, match="didn't answer"):
+        services.killmail_from_link("https://zkillboard.com/kill/999/")
 
 
 def test_rules_api(pilot, api_client, admin_user):
