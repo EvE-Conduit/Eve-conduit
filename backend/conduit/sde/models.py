@@ -13,6 +13,9 @@ class SdeVersion(models.Model):
     build_number = models.PositiveIntegerField(unique=True)
     release_date = models.DateTimeField(null=True, blank=True)
     imported_at = models.DateTimeField(auto_now_add=True)
+    #: What the importer read from that build (``importer.SCHEMA``). An older value means a newer EvE Conduit
+    #: imports more from the SDE, so the build is imported again.
+    schema = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
         ordering = ["-build_number"]
@@ -85,6 +88,14 @@ class ItemType(models.Model):
     icon_id = models.IntegerField(null=True)
     race_id = models.IntegerField(null=True)
     tech_level = models.IntegerField(null=True)
+    #: Skills needed to use it: [[skill_type_id, level], ...] (direct requirements only).
+    required_skills = models.JSONField(default=list)
+    #: Fitting data from dogma, for ships, modules and subsystems (None for everything else):
+    #: ships ``{"hi", "med", "low", "rig", "sub", "service", "turrets", "launchers", "drone_bay", "drone_bandwidth",
+    #: "cpu", "power", "calibration", "rig_size"}``; modules ``{"slot": "hi"|"med"|"low"|"rig"|"sub"|"service",
+    #: "turret", "launcher", "cpu", "power", "calibration", "rig_size"}``; subsystems also have ``"adds"`` with the slots
+    #: and hardpoints they give the ship.
+    fitting = models.JSONField(null=True, default=None)
 
     def __str__(self):
         return self.name

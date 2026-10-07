@@ -29,10 +29,17 @@ FILES = {
     "types": [
         {"_key": 587, "groupID": 25, "name": en("Rifter"), "published": True, "portionSize": 1, "volume": 27289.0, "marketGroupID": 2, "metaGroupID": 1},
         {"_key": 3300, "groupID": 255, "name": en("Gunnery"), "published": True, "portionSize": 1},
+        {"_key": 484, "groupID": 74, "name": en("125mm Gatling AutoCannon I"), "published": True, "portionSize": 1},
     ],
     "typeDogma": [
         {"_key": 3300, "dogmaAttributes": [{"attributeID": 180, "value": 167.0}, {"attributeID": 181, "value": 168.0}, {"attributeID": 275, "value": 1.0}]},
-        {"_key": 587, "dogmaAttributes": [{"attributeID": 182, "value": 3300.0}, {"attributeID": 277, "value": 1.0}]},
+        {"_key": 587, "dogmaAttributes": [{"attributeID": 182, "value": 3300.0}, {"attributeID": 277, "value": 1.0},
+                                          {"attributeID": 14, "value": 4.0}, {"attributeID": 13, "value": 3.0}, {"attributeID": 12, "value": 4.0},
+                                          {"attributeID": 1137, "value": 3.0}, {"attributeID": 102, "value": 3.0}, {"attributeID": 101, "value": 1.0},
+                                          {"attributeID": 48, "value": 130.0}, {"attributeID": 11, "value": 41.5}, {"attributeID": 1547, "value": 1.0}]},
+        {"_key": 484, "dogmaAttributes": [{"attributeID": 182, "value": 3300.0}, {"attributeID": 277, "value": 2.0}, {"attributeID": 50, "value": 4.0}],
+         "dogmaEffects": [{"effectID": 12, "isDefault": False}, {"effectID": 42, "isDefault": False}]},
+        {"_key": 999999, "dogmaAttributes": [{"attributeID": 182, "value": 3300.0}]},  # no such type: skipped
     ],
     "mapRegions": [{"_key": 10000002, "name": en("The Forge")}],
     "mapConstellations": [{"_key": 20000020, "regionID": 10000002, "name": en("Kimotoro")}],
@@ -53,6 +60,14 @@ def test_import_archive(tmp_path):
     skill = SkillInfo.objects.get(type_id=3300)
     assert (skill.primary_attribute, skill.secondary_attribute, skill.rank) == ("perception", "willpower", 1)
     assert not SkillInfo.objects.filter(type_id=587).exists()  # only skills get SkillInfo
+    # Every type's required skills, and fitting data for ships and modules.
+    assert rifter.required_skills == [[3300, 1]]
+    assert rifter.fitting["hi"] == 4 and rifter.fitting["low"] == 4 and rifter.fitting["turrets"] == 3 and rifter.fitting["power"] == 41.5
+    gun = ItemType.objects.get(pk=484)
+    assert gun.fitting == {"slot": "hi", "turret": True, "launcher": False, "cpu": 4} and gun.required_skills == [[3300, 2]]
+    assert ItemType.objects.get(pk=3300).fitting is None
+    assert not ItemType.objects.filter(pk=999999).exists()
+    assert SdeVersion.current().schema == importer.SCHEMA
     assert SolarSystem.objects.get(pk=30000142).display_security == 0.9
 
     # Re-importing updates rows in place and keeps station names fetched from ESI.
@@ -68,9 +83,20 @@ def test_import_archive(tmp_path):
 
 @pytest.mark.django_db
 def test_update_skips_when_current(monkeypatch):
-    SdeVersion.objects.create(build_number=100)
+    SdeVersion.objects.create(build_number=100, schema=importer.SCHEMA)
     monkeypatch.setattr(importer, "latest_build", lambda: {"buildNumber": 100})
     monkeypatch.setattr(importer, "download", lambda *a: pytest.fail("should not download"))
+    assert importer.update(progress=lambda m: None) is None
+
+
+@pytest.mark.django_db
+def test_update_reimports_when_the_importer_reads_more(monkeypatch, tmp_path):
+    """An install whose build was imported by an older EvE Conduit imports it again to get the new data."""
+    SdeVersion.objects.create(build_number=100, schema=1)
+    write_zip(tmp_path / "sde.zip", FILES)
+    monkeypatch.setattr(importer, "latest_build", lambda: {"buildNumber": 100})
+    monkeypatch.setattr(importer, "download", lambda build, dest: tmp_path / "sde.zip")
+    assert importer.update(progress=lambda m: None).schema == importer.SCHEMA
     assert importer.update(progress=lambda m: None) is None
 
 
@@ -79,3 +105,17 @@ def test_missing_file_is_skipped(tmp_path):
     files = {k: v for k, v in FILES.items() if k != "planetSchematics"}
     write_zip(tmp_path / "sde.zip", files)
     assert importer.update(archive=tmp_path / "sde.zip", progress=lambda m: None) is not None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("schema,queued", [(1, True), (importer.SCHEMA, False)])
+def test_init_reimports_static_data_from_an_older_version(monkeypatch, schema, queued):
+    from django.core.management import call_command
+
+    from conduit.sde import tasks
+
+    calls = []
+    monkeypatch.setattr(tasks.update_sde, "delay", lambda *a, **k: calls.append(1))
+    SdeVersion.objects.create(build_number=100, schema=schema)
+    call_command("conduit_init", stdout=open("/dev/null", "w"))
+    assert bool(calls) is queued

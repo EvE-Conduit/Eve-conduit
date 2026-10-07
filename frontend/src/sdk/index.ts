@@ -44,5 +44,8 @@ export { Table, TableToolbar, Td, Th, THead, Tr } from "@/components/ui/table";
 export { DataTable, PagedTable } from "@/components/DataTable";
 export type { Column } from "@/components/DataTable";
 export { AreaChart } from "@/components/AreaChart";
+/** The group rule editor. It reads the rule types from the admin API, so only people with `site.manage_access` can use it. */
+export { RuleSetEditor } from "@/features/groups/RuleBuilder";
+export type { Rule, RuleSet } from "@/features/groups/types";
 export { BarChart } from "@/components/BarChart";
 export { toast } from "sonner";

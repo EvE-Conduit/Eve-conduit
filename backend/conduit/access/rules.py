@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -41,11 +41,15 @@ class Param:
     type: str
     label: str
     multiple: bool = False
-    choices: tuple[tuple[str, str], ...] = ()
+    #: ``((value, label), ...)``, or a function returning them, for choices that change (e.g. a plugin's skill plans).
+    choices: tuple[tuple[str, str], ...] | Callable[[], Iterable[tuple[str, str]]] = ()
     default: object = None
     min: int | None = None
     max: int | None = None
     help: str = ""
+
+    def options(self) -> list[tuple[str, str]]:
+        return [(str(v), lbl) for v, lbl in (self.choices() if callable(self.choices) else self.choices)]
 
     def spec(self) -> dict:
         return {
@@ -53,7 +57,7 @@ class Param:
             "type": self.type,
             "label": self.label,
             "multiple": self.multiple,
-            "choices": [{"value": v, "label": lbl} for v, lbl in self.choices],
+            "choices": [{"value": v, "label": lbl} for v, lbl in self.options()],
             "default": self.default,
             "min": self.min,
             "max": self.max,
@@ -129,9 +133,10 @@ def _clean_one(rule: str, p: Param, value):
     if p.type == "bool":
         return bool(value)
     if p.type == "choice":
-        if value not in {c for c, _ in p.choices}:
-            raise RuleError(f"{rule}: {p.label} must be one of {', '.join(c for c, _ in p.choices)}")
-        return value
+        options = p.options()
+        if str(value) not in {c for c, _ in options}:
+            raise RuleError(f"{rule}: {p.label} must be one of {', '.join(lbl for _, lbl in options) or 'nothing yet'}")
+        return str(value)
     return str(value)[:200]
 
 
