@@ -3,6 +3,15 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.4.3
+
+### Fixed
+- **Windows installer:** 0.4.2 stopped while downloading components ("The term ' param($Cab, $OutDir) ...' is not
+  recognized"). Unpacking the Visual C++ runtime works again.
+- **Uninstalling an install that failed part-way:** the uninstaller now recognises a half-finished install folder
+  and removes it.
+- Every change is now tested with a complete Windows install on a real Windows machine before it's released.
+
 ## 0.4.2
 
 ### Fixed
