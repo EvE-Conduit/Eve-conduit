@@ -3,6 +3,12 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.1
+
+### Fixed
+- **Plugin catalog:** Administration → Plugins → Browse couldn't load the catalog. It's now published by the
+  main repository (on its `plugin-catalog` release), which holds the signing key.
+
 ## 0.5.0
 
 ### New

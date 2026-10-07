@@ -30,5 +30,7 @@ repository is where installs get the catalog from.
 2. Describe it for the catalog in `[tool.conduit]` (name, icon, category, `min_conduit`, ESI scopes); see
    [`scripts/build_catalog.py`](scripts/build_catalog.py). `catalog = false` keeps a plugin out.
 3. Commit, then run `scripts/publish-plugins.sh` from the main repository. It pushes this folder to the plugins
-   repository, whose [workflow](.github/workflows/catalog.yml) builds `catalog.json`, pins every plugin to that
-   commit, signs it with the release key and publishes it on the `catalog` release.
+   repository and starts the main repository's
+   [Plugin catalog workflow](https://github.com/EvE-Conduit/Eve-conduit/actions/workflows/plugin-catalog.yml),
+   which builds `catalog.json` with every plugin pinned to that commit, signs it with the release key and
+   publishes it on the `plugin-catalog` release. (It also runs hourly, so a missed start catches up.)

@@ -15,7 +15,8 @@ optional ``[tool.conduit]`` table::
     requires = ["other_plugin_id"]
     catalog = false                   # leave it out of the catalog
 
-Installs check the catalog's signature (catalog.json.sig, see sign_catalog.py), so only the workflow publishes it.
+Installs check the catalog's signature, so only the "Plugin catalog" workflow of github.com/EvE-Conduit/Eve-conduit
+publishes it (that repository holds the signing key).
 Needs Python 3.11+ and nothing else.
 """
 

@@ -1,8 +1,8 @@
 """The official plugin catalog, and which plugin sources an install will accept.
 
-The catalog is ``catalog.json`` from the plugins repository (github.com/EvE-Conduit/plugins), published by
-its workflow as an asset of the release tagged ``catalog`` together with ``catalog.json.sig``, an Ed25519
-signature by the same key that signs EvE Conduit releases. Every entry pins its package to a commit::
+The catalog is ``catalog.json``, built from the plugins repository (github.com/EvE-Conduit/plugins) by the main
+repository's "Plugin catalog" workflow and published on its release tagged ``plugin-catalog`` together with
+``catalog.json.sig``, an Ed25519 signature by the key that signs EvE Conduit releases. Every entry pins its package to a commit::
 
     conduit-discord @ https://github.com/EvE-Conduit/plugins/archive/<40-hex commit>.tar.gz#subdirectory=conduit-discord
 
