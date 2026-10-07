@@ -41,12 +41,20 @@ Set-StrictMode -Version Latest
 
 # --- find the install ---------------------------------------------------------------------------------
 $uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\EveConduit'
+function Test-InstallFolder([string]$Path) {
+    <# A complete install has config\conduit.env; one that failed part-way may only have some of these. #>
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $false }
+    foreach ($marker in @('config\conduit.env', 'services', 'releases', 'Conduit.psm1')) {
+        if (Test-Path -LiteralPath (Join-Path $Path $marker)) { return $true }
+    }
+    return $false
+}
 if (-not $Root) {
-    if (Test-Path (Join-Path $PSScriptRoot 'config\conduit.env')) { $Root = $PSScriptRoot }
+    if (Test-InstallFolder $PSScriptRoot) { $Root = $PSScriptRoot }
     elseif ($env:CONDUIT_ROOT) { $Root = $env:CONDUIT_ROOT }
     elseif (Test-Path $uninstallKey) { $Root = (Get-ItemProperty $uninstallKey).InstallLocation }
 }
-if (-not $Root -or -not (Test-Path -LiteralPath (Join-Path $Root 'config\conduit.env'))) {
+if (-not (Test-InstallFolder $Root)) {
     throw 'Could not find an EvE Conduit installation. Pass -Root <install folder>.'
 }
 $Root = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
@@ -64,8 +72,11 @@ if (-not ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Pri
 }
 
 # The module lives next to us in the install folder, or in windows\scripts in a release folder.
-$module = @((Join-Path $PSScriptRoot 'Conduit.psm1'), (Join-Path $PSScriptRoot 'scripts\Conduit.psm1'), (Join-Path $Root 'Conduit.psm1')) |
-    Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+# An install that failed early may only have it inside a release folder.
+$candidates = @((Join-Path $PSScriptRoot 'Conduit.psm1'), (Join-Path $PSScriptRoot 'scripts\Conduit.psm1'), (Join-Path $Root 'Conduit.psm1'))
+$candidates += @(Get-ChildItem -LiteralPath (Join-Path $Root 'releases') -Directory -ErrorAction SilentlyContinue |
+    ForEach-Object { Join-Path $_.FullName 'windows\scripts\Conduit.psm1' })
+$module = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $module) { throw 'Conduit.psm1 not found next to this script or in the install folder.' }
 Import-Module $module -Force
 $p = Get-ConduitPath $Root
