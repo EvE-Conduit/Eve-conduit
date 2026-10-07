@@ -31,7 +31,7 @@ def area_out(area: areas.Area) -> dict:
         "description": area.description,
         "enabled": area.key in areas.enabled_keys(),
         "available": areas.is_available(area),
-        "module": area.module,
+        "plugin": area.plugin,
         "base_path": area.base_path,
         "scopes": [{"scope": s.scope, "label": s.label, "description": s.description, "write": s.write} for s in area.scopes],
     }

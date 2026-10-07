@@ -1,0 +1,19 @@
+[project]
+name = "conduit-example"
+version = "0.1.0"
+description = "Example EvE Conduit plugin: Tranquility server status. Copy it to start your own plugin."
+requires-python = ">=3.12"
+dependencies = ["conduit>=0.1"]
+
+[project.entry-points."conduit.plugins"]
+example = "conduit_example.plugin:ExamplePlugin"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_example*"]
+
+[tool.setuptools.package-data]
+conduit_example = ["static/**/*"]

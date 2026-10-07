@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export function tokenProblem(c: MyCharacter): string | null {
   if (!c.token || !c.token.valid) return "Login expired. Re-authorise this character.";
-  if (c.token.missing_scopes.length) return `Missing ${c.token.missing_scopes.length} permission${c.token.missing_scopes.length === 1 ? "" : "s"} that enabled modules need.`;
+  if (c.token.missing_scopes.length) return `Missing ${c.token.missing_scopes.length} permission${c.token.missing_scopes.length === 1 ? "" : "s"} that enabled plugins need.`;
   return null;
 }
 

@@ -1,4 +1,4 @@
-"""Root of the JSON API: core routers plus one router per installed module."""
+"""Root of the JSON API: core routers plus one router per installed plugin."""
 
 import importlib
 import logging
@@ -15,8 +15,8 @@ from conduit.corp.api import router as corp_router
 from conduit.esi.api import router as admin_esi_router
 from conduit.events.api import router as admin_events_router
 from conduit.external.admin_api import router as admin_external_router
-from conduit.modules import registry
-from conduit.modules.api import router as admin_modules_router
+from conduit.plugins import registry
+from conduit.plugins.api import router as admin_modules_router
 from conduit.notify.api import router as notify_router
 from conduit.search.api import router as search_router
 from conduit.site.api import admin_router as admin_site_router
@@ -48,11 +48,11 @@ api.add_router("/admin", admin_external_router, auth=django_auth)
 api.add_router("/admin", admin_events_router, auth=django_auth)
 api.add_router("/admin", admin_health_router, auth=django_auth)
 
-for module_id, module in registry.installed().items():
-    if not module.api:
+for plugin_id, plugin in registry.installed().items():
+    if not plugin.api:
         continue
     try:
-        path, _, attr = module.api.partition(":")
-        api.add_router(f"/m/{module_id}", getattr(importlib.import_module(path), attr), auth=django_auth)
+        path, _, attr = plugin.api.partition(":")
+        api.add_router(f"/p/{plugin_id}", getattr(importlib.import_module(path), attr), auth=django_auth)
     except Exception:
-        log.exception("Could not mount the API of module %s", module_id)
+        log.exception("Could not mount the API of plugin %s", plugin_id)

@@ -84,7 +84,7 @@ export interface NavItem {
   permission: string | null;
 }
 
-export interface ModuleEntry {
+export interface PluginEntry {
   id: string;
   name: string;
   version: string;
@@ -105,7 +105,7 @@ export interface Bootstrap {
   };
   setup: { completed: boolean; sso_configured: boolean; callback_url: string; admin_claimed: boolean };
   user: CurrentUser | null;
-  modules: ModuleEntry[];
+  plugins: PluginEntry[];
 }
 
 export interface MyCharacter extends CharacterBrief {

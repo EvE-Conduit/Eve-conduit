@@ -67,7 +67,7 @@ class MetaGroup(models.Model):
 
 
 class ItemType(models.Model):
-    """Anything that exists in EVE: ships, modules, skills, ores, blueprints..."""
+    """Anything that exists in EVE: ships, plugins, skills, ores, blueprints..."""
 
     id = models.IntegerField(primary_key=True)
     group = models.ForeignKey(ItemGroup, on_delete=models.DO_NOTHING, db_constraint=False, related_name="types")

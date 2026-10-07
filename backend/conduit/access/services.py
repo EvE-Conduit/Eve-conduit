@@ -43,7 +43,7 @@ def recompute_all_states():
 ADMIN_PERMISSIONS = frozenset({
     "site.manage_site",
     "site.manage_access",
-    "site.manage_modules",
+    "site.manage_plugins",
     "site.manage_api",
     "site.impersonate_users",
 })

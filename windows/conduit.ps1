@@ -16,8 +16,8 @@
       conduit upgrade <eve-conduit-X.Y.Z-windows.zip>
       conduit rollback                       back to the previous release
       conduit repair                         redo the last steps of an upgrade that stopped half-way
-      conduit module install <package>       PyPI name, git URL or path
-      conduit module list
+      conduit plugin install <package>       PyPI name, git URL or path
+      conduit plugin list
       conduit tray [on|off]                  open the tray control panel, or start it at sign-in (on/off)
       conduit uninstall                      remove EvE Conduit (asks what to keep)
 #>
@@ -117,7 +117,7 @@ function Invoke-Backup {
             Remove-Item Env:MYSQL_PWD
         }
         if ($LASTEXITCODE -ne 0) { throw 'Database dump failed' }
-        Copy-Item $p.EnvFile, $p.Modules -Destination $work
+        Copy-Item $p.EnvFile, $p.Plugins -Destination $work
         (Get-Item $p.App).Target | Set-Content (Join-Path $work 'release.txt')
         $zip = "$work.zip"
         Compress-Archive -Path (Join-Path $work '*') -DestinationPath $zip
@@ -276,13 +276,13 @@ switch ($Command) {
             default { Start-ConduitTray -Root $Root }
         }
     }
-    'module' {
+    'plugin' {
         Assert-Admin
         switch ($Rest | Select-Object -First 1) {
             'install' {
-                if ($Rest.Count -lt 2) { throw 'usage: conduit module install <package|git URL|path>' }
-                $existing = @(Get-ModuleRequirement $p.Modules)
-                if ($existing -notcontains $Rest[1]) { Add-Content -LiteralPath $p.Modules -Value $Rest[1] }
+                if ($Rest.Count -lt 2) { throw 'usage: conduit plugin install <package|git URL|path>' }
+                $existing = @(Get-PluginRequirement $p.Plugins)
+                if ($existing -notcontains $Rest[1]) { Add-Content -LiteralPath $p.Plugins -Value $Rest[1] }
                 $current = (Get-Item $p.App).Target
                 if ($current -is [array]) { $current = $current[0] }
                 Stop-AppService
@@ -290,13 +290,13 @@ switch ($Command) {
                 catch { Restart-All; throw }
                 Invoke-Finish $current
                 Restart-All
-                Write-Host 'Installed. Switch it on under Administration -> Modules.'
+                Write-Host 'Installed. Switch it on under Administration -> Plugins.'
             }
             'list' {
                 Invoke-ConduitPython -Root $Root -Arguments @('manage', 'shell', '-c',
-                    "from conduit.modules import registry`nfor mid, e in sorted(registry.discover().items()):`n    print(f'{mid:20} {e.module.version:10} ' + ('OK' if e.ok else 'BROKEN: ' + '; '.join(e.problems)))")
+                    "from conduit.plugins import registry`nfor mid, e in sorted(registry.discover().items()):`n    print(f'{mid:20} {e.plugin.version:10} ' + ('OK' if e.ok else 'BROKEN: ' + '; '.join(e.problems)))")
             }
-            default { throw 'usage: conduit module install <package> | conduit module list' }
+            default { throw 'usage: conduit plugin install <package> | conduit plugin list' }
         }
     }
     default { Get-Help $PSCommandPath -Detailed | Out-String | Write-Host }

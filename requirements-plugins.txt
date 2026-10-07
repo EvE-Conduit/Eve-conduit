@@ -1,0 +1,5 @@
+# Plugins installed alongside EvE Conduit, one per line: PyPI names, git URLs or paths.
+# Paths are relative to the release directory.
+#   Docker:              edit this file, then: docker compose up -d --build
+#   Bare metal, Windows: the installer copies it to the config folder as plugins.txt; use "conduit plugin install <name>"
+./plugins/conduit-example

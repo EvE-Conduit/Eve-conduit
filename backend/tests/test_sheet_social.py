@@ -68,7 +68,7 @@ def test_fittings_eft_export(pilot, fake, client):
     assert run("fittings") == SyncStatus.Result.OK
     client.force_login(pilot)
     fits = client.get(f"/api/characters/{CID}/fittings").json()
-    assert fits[0]["ship"]["name"] == "Rifter" and fits[0]["modules"] == 3
+    assert fits[0]["ship"]["name"] == "Rifter" and fits[0]["plugins"] == 3
     fit = client.get(f"/api/characters/{CID}/fittings/1").json()
     assert [s["label"] for s in fit["slots"]] == ["Low slots", "High slots", "Cargo"]
     assert fit["eft"] == "[Rifter, Kite]\nLimited Ocular Filter - Beta\n\nSmall Hybrid Turret\n\nTritanium x100"

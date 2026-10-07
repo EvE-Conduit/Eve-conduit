@@ -12,7 +12,7 @@ from ninja.errors import HttpError
 from conduit.access import groups
 from conduit.access.models import GroupProfile, GroupRequest
 from conduit.audit.services import record
-from conduit.modules.services import required_scopes
+from conduit.plugins.services import required_scopes
 from conduit.schemas import CharacterBrief, character_brief
 
 from conduit.events import bus
@@ -295,25 +295,25 @@ def notification_categories(request):
     return [{"key": k, "label": v} for k, v in CATEGORIES.items()]
 
 
-@router.get("/preferences/modules/{module_id}")
-def get_module_preferences(request, module_id: str):
-    """A module's own per-user settings (any JSON value; ``null`` until first saved)."""
-    return {"value": UserPreferences.for_user(request.user).modules.get(module_id)}
+@router.get("/preferences/plugins/{plugin_id}")
+def get_module_preferences(request, plugin_id: str):
+    """A plugin's own per-user settings (any JSON value; ``null`` until first saved)."""
+    return {"value": UserPreferences.for_user(request.user).plugins.get(plugin_id)}
 
 
 class ModulePrefsIn(Schema):
     value: Any = None
 
 
-@router.put("/preferences/modules/{module_id}")
-def put_module_preferences(request, module_id: str, payload: ModulePrefsIn):
-    from conduit.modules import registry
+@router.put("/preferences/plugins/{plugin_id}")
+def put_module_preferences(request, plugin_id: str, payload: ModulePrefsIn):
+    from conduit.plugins import registry
 
-    if module_id not in registry.installed():
-        raise HttpError(404, "Module not installed")
+    if plugin_id not in registry.installed():
+        raise HttpError(404, "Plugin not installed")
     if _too_big(payload.value):
-        raise HttpError(400, f"Module settings are limited to {MAX_SETTINGS_BYTES // 1024} KB")
+        raise HttpError(400, f"Plugin settings are limited to {MAX_SETTINGS_BYTES // 1024} KB")
     prefs = UserPreferences.for_user(request.user)
-    prefs.modules[module_id] = payload.value
-    prefs.save(update_fields=["modules", "updated_at"])
-    return {"value": prefs.modules[module_id]}
+    prefs.plugins[plugin_id] = payload.value
+    prefs.save(update_fields=["plugins", "updated_at"])
+    return {"value": prefs.plugins[plugin_id]}

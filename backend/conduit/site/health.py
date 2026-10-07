@@ -145,7 +145,7 @@ def _problems() -> dict:
 @require_perm("site.view_health")
 def health(request):
     from conduit.accounts.models import User
-    from conduit.modules.services import enabled_ids
+    from conduit.plugins.services import enabled_ids
 
     checks = {
         "database": _timed(_database),

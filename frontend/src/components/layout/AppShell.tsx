@@ -26,7 +26,7 @@ import { ThemeToggle, useToggleTheme } from "./ThemeToggle";
 import { ThreatStrip } from "./ThreatStrip";
 
 export function AppShell() {
-  const { user, modules, setup, site } = useBootstrap();
+  const { user, plugins, setup, site } = useBootstrap();
   const location = useLocation();
   const navigate = useNavigate();
   const canManageSite = useHasPerm("site.manage_site");
@@ -34,7 +34,7 @@ export function AppShell() {
   const [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [maintenance, setMaintenance] = useState<string | null>(null);
-  const sections = useMemo(() => (user ? buildNav(user, modules) : []), [user, modules]);
+  const sections = useMemo(() => (user ? buildNav(user, plugins) : []), [user, plugins]);
   const theme = useToggleTheme();
 
   useEffect(() => {

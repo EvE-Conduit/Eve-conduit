@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from conduit.sheet.util import parse_dt  # noqa: F401  (re-exported for the section modules)
+from conduit.sheet.util import parse_dt  # noqa: F401  (re-exported for the section plugins)
 
 
 def dec(value):

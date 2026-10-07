@@ -2,7 +2,7 @@ import { Building2, Crown, HeartPulse, ShieldAlert, Webhook } from "lucide-react
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { iconFor } from "@/lib/icons";
-import type { CurrentUser, ModuleEntry } from "@/lib/types";
+import type { CurrentUser, PluginEntry } from "@/lib/types";
 
 export interface NavLinkItem {
   label: string;
@@ -22,7 +22,7 @@ function can(user: CurrentUser, perm: string) {
   return user.is_admin || user.permissions.includes(perm);
 }
 
-export function buildNav(user: CurrentUser, modules: ModuleEntry[]): NavSection[] {
+export function buildNav(user: CurrentUser, plugins: PluginEntry[]): NavSection[] {
   const sections: NavSection[] = [
     {
       title: "Overview",
@@ -42,16 +42,16 @@ export function buildNav(user: CurrentUser, modules: ModuleEntry[]): NavSection[
     sections[0]!.items.splice(2, 0, { label: "Corporations", to: "/corporations", icon: Building2 });
   }
 
-  const moduleItems = modules.flatMap((m) =>
-    m.nav.map((n) => ({ label: n.label, to: `/m/${m.id}${n.path ? `/${n.path.replace(/^\//, "")}` : ""}`, icon: iconFor(n.icon) })),
+  const moduleItems = plugins.flatMap((m) =>
+    m.nav.map((n) => ({ label: n.label, to: `/p/${m.id}${n.path ? `/${n.path.replace(/^\//, "")}` : ""}`, icon: iconFor(n.icon) })),
   );
-  if (moduleItems.length) sections.push({ title: "Modules", items: moduleItems });
+  if (moduleItems.length) sections.push({ title: "Plugins", items: moduleItems });
 
   const admin: NavLinkItem[] = [];
   if (can(user, "site.view_members")) admin.push({ label: "Members", to: "/admin/members", icon: Users });
   if (can(user, "site.manage_access")) admin.push({ label: "Access", to: "/admin/access", icon: ShieldCheck });
   if (can(user, "access.view_compliance")) admin.push({ label: "Compliance", to: "/admin/compliance", icon: ShieldAlert });
-  if (can(user, "site.manage_modules")) admin.push({ label: "Modules", to: "/admin/modules", icon: Puzzle });
+  if (can(user, "site.manage_plugins")) admin.push({ label: "Plugins", to: "/admin/plugins", icon: Puzzle });
   if (can(user, "site.manage_api")) admin.push({ label: "API", to: "/admin/api", icon: KeyRound });
   if (can(user, "site.manage_api")) admin.push({ label: "Integrations", to: "/admin/integrations", icon: Webhook });
   if (can(user, "site.view_logs")) admin.push({ label: "Logs", to: "/admin/logs", icon: ScrollText });

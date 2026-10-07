@@ -213,9 +213,9 @@ def test_preferences_round_trip_and_bootstrap(user, api_client):
 @pytest.mark.django_db
 def test_module_preferences(user, api_client):
     api_client.force_login(user)
-    assert api_client.call("get", "/api/me/preferences/modules/sample").json() == {"value": None}
-    assert api_client.call("put", "/api/me/preferences/modules/sample", {"value": {"compact": True}}).json() == {"value": {"compact": True}}
-    assert api_client.call("put", "/api/me/preferences/modules/nope", {"value": 1}).status_code == 404
+    assert api_client.call("get", "/api/me/preferences/plugins/sample").json() == {"value": None}
+    assert api_client.call("put", "/api/me/preferences/plugins/sample", {"value": {"compact": True}}).json() == {"value": {"compact": True}}
+    assert api_client.call("put", "/api/me/preferences/plugins/nope", {"value": 1}).status_code == 404
 
 
 # --- maintenance ------------------------------------------------------------------
@@ -296,7 +296,7 @@ def test_search_respects_visibility(user, corp, api_client):
 
 @pytest.mark.django_db
 def test_module_search_provider(user, api_client):
-    from conduit.modules.services import set_enabled
+    from conduit.plugins.services import set_enabled
 
     set_enabled("sample", True)
     api_client.force_login(user)
@@ -332,7 +332,7 @@ def test_external_notifications(client, user):
     other.groups.add(group)
     key, secret = ApiKey.issue(name="Bot", scopes=["notify:write"])
     headers = {"HTTP_AUTHORIZATION": f"Bearer {secret}", "content_type": "application/json"}
-    body = {"character_ids": [user.main_character_id], "group_ids": [group.pk], "title": "Form up", "link": "/m/fleets"}
+    body = {"character_ids": [user.main_character_id], "group_ids": [group.pk], "title": "Form up", "link": "/p/fleets"}
     assert client.post("/api/v1/notifications", body, **headers).status_code == 403  # API switched off
     areas.set_enabled("notify", True)
     resp = client.post("/api/v1/notifications", body, **headers)

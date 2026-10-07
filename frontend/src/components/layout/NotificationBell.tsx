@@ -67,7 +67,7 @@ export function NotificationBell() {
               <Bell className="size-4" />
             </div>
             <div className="text-sm font-medium">Nothing here yet</div>
-            <div className="mt-1 text-xs text-muted">Group decisions, expired logins and module alerts show up here.</div>
+            <div className="mt-1 text-xs text-muted">Group decisions, expired logins and plugin alerts show up here.</div>
           </div>
         ) : (
           data.items.map((n) => (

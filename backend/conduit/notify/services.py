@@ -1,4 +1,4 @@
-"""Sending notifications. Modules call ``notify`` (also exported as ``conduit.notify.notify``)."""
+"""Sending notifications. Plugins call ``notify`` (also exported as ``conduit.notify.notify``)."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ CATEGORIES = {
 
 
 def register_category(key: str, label: str):
-    """Modules add their own categories (use ``m.<module id>`` or ``m.<module id>.<name>``)."""
+    """Plugins add their own categories (use ``p.<plugin id>`` or ``p.<plugin id>.<name>``)."""
     CATEGORIES[key] = label
 
 

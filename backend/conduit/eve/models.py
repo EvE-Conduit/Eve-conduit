@@ -1,4 +1,4 @@
-"""Public EVE entities shared by every module."""
+"""Public EVE entities shared by every plugin."""
 
 from django.db import models
 

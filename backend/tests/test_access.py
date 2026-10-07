@@ -102,4 +102,4 @@ def test_permission_list_hides_automatic_core_permissions(admin_user, api_client
     names = {p["name"] for p in api_client.call("get", "/api/admin/permissions").json()}
     assert {"site.manage_access", "sheet.view_all_characters", "sheet.view_corporation_characters"} <= names
     assert not any(n.split(".")[1].startswith(("add_", "change_", "delete_", "view_wallet")) for n in names if n.split(".")[0] in {"wallet", "site", "sheet"})
-    assert "sample.add_thing" not in names  # (sample module has no models; module permissions would be kept)
+    assert "sample.add_thing" not in names  # (sample plugin has no models; plugin permissions would be kept)

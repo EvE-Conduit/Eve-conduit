@@ -5,7 +5,7 @@ import {
 import type { ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
-import { ModuleBoundary } from "@/components/ModuleBoundary";
+import { PluginBoundary } from "@/components/PluginBoundary";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Select } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
-import { useLoadedModules } from "@/lib/moduleContext";
+import { useLoadedPlugins } from "@/lib/pluginContext";
 import type { Entity } from "@/lib/types";
 
 import { AssetsView } from "@/features/assets/AssetsView";
@@ -66,8 +66,8 @@ export function CharacterSheet() {
   const [params, setParams] = useSearchParams();
   const { data: header, isLoading, error } = useCharacterHeader(characterId);
   const refresh = useRefreshCharacter(characterId);
-  const modules = useLoadedModules();
-  const moduleTabs = modules
+  const plugins = useLoadedPlugins();
+  const moduleTabs = plugins
     .flatMap((m) => (m.frontend.characterTabs ?? []).map((t) => ({ ...t, key: `${m.info.id}:${t.id}`, moduleName: m.info.name })))
     .sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
 
@@ -133,7 +133,7 @@ export function CharacterSheet() {
               title: "Other",
               items: sections.filter((x) => !GROUPS.some((g) => g.items.some(([k]) => k === x.key))).map((x) => ({ key: x.key, label: x.label, icon: LayoutGrid, dim: !x.available })),
             },
-            { title: "Modules", items: moduleTabs.map((t) => ({ key: t.key, label: t.label, icon: Puzzle, dim: false })) },
+            { title: "Plugins", items: moduleTabs.map((t) => ({ key: t.key, label: t.label, icon: Puzzle, dim: false })) },
           ].filter((g) => g.items.length)}
           value={tab}
           onChange={(v) => setParams(v === "overview" ? {} : { tab: v }, { replace: true })}
@@ -147,9 +147,9 @@ export function CharacterSheet() {
               })()}
             </SectionGate>
           ) : currentModule ? (
-            <ModuleBoundary name={currentModule.moduleName}>
+            <PluginBoundary name={currentModule.moduleName}>
               <currentModule.Component characterId={header.id} />
-            </ModuleBoundary>
+            </PluginBoundary>
           ) : null}
         </div>
       </div>

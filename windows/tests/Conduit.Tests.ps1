@@ -137,14 +137,14 @@ Describe 'Assert-FileHash' {
 }
 
 Describe 'Release helpers' {
-    It 'reads the VERSION file and module list' {
+    It 'reads the VERSION file and plugin list' {
         $dir = Join-Path ([IO.Path]::GetTempPath()) "conduit-rel-$([guid]::NewGuid())"
         New-Item -ItemType Directory $dir | Out-Null
         try {
             Set-Content (Join-Path $dir 'VERSION') '1.2.3'
-            Set-Content (Join-Path $dir 'requirements-modules.txt') @('# comment', '', './modules/conduit-example', '  conduit-skills==1.0  ')
+            Set-Content (Join-Path $dir 'requirements-plugins.txt') @('# comment', '', './plugins/conduit-example', '  conduit-skills==1.0  ')
             Get-ReleaseVersion $dir | Should -Be '1.2.3'
-            Get-ModuleRequirement (Join-Path $dir 'requirements-modules.txt') | Should -Be @('./modules/conduit-example', 'conduit-skills==1.0')
+            Get-PluginRequirement (Join-Path $dir 'requirements-plugins.txt') | Should -Be @('./plugins/conduit-example', 'conduit-skills==1.0')
             Set-Content (Join-Path $dir 'VERSION') '1.0; rm -rf'
             { Get-ReleaseVersion $dir } | Should -Throw
         }

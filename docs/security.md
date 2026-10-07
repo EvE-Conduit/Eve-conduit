@@ -31,7 +31,7 @@ to re-encrypt everything with it. Then the old key can be removed from `CONDUIT_
 - **Rate limits** (per IP, shared across processes via Redis): EVE login and callback 40 per 5 minutes, the setup
   code 5 attempts per 15 minutes, and after 30 failed API-key attempts in 10 minutes that address gets `429`.
   `CONDUIT_RATE_LIMITS=false` switches them off when the proxy already limits these paths.
-- **Administrator permissions stay with administrators.** `site.manage_site`, `manage_access`, `manage_modules`,
+- **Administrator permissions stay with administrators.** `site.manage_site`, `manage_access`, `manage_plugins`,
   `manage_api` and `impersonate_users` can't be put on a group that has leaders, is open to join, or is a smart
   group. Nobody but an access manager can add members to a group carrying them (not leaders, not self-service,
   not rules), and API keys can't change membership of groups or states carrying them.
@@ -41,7 +41,7 @@ to re-encrypt everything with it. Then the old key can be removed from `CONDUIT_
   and replies aren't stored.
 - **Notification links** must be site paths or `https://` URLs; bots need the extra `notify:links` scope for
   outside links, and people confirm before leaving the site.
-- **Stored settings** (dashboard layout, module settings) are limited to 64 KB each.
+- **Stored settings** (dashboard layout, plugin settings) are limited to 64 KB each.
 - **Headers:** `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and a strict referrer policy from both
   Django and the bundled proxies.
 - **Audit log** for every login, impersonation, membership, permission, key and webhook change.

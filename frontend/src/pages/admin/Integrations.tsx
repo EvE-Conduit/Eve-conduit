@@ -34,7 +34,7 @@ interface EventType {
   name: string;
   label: string;
   description: string;
-  module: string | null;
+  plugin: string | null;
 }
 
 interface Delivery {
@@ -94,7 +94,7 @@ export function AdminIntegrations() {
       <PageHeader
         eyebrow="Administration"
         title="Integrations"
-        description="Send what happens on the site to Discord, Slack or your own services: new members, lost logins, group requests and anything modules announce."
+        description="Send what happens on the site to Discord, Slack or your own services: new members, lost logins, group requests and anything plugins announce."
         actions={
           <Button variant="primary" onClick={() => setEditing("new")}>
             <Plus /> New webhook
@@ -225,7 +225,7 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
 
   const grouped = useMemo(() => {
     const out: Record<string, EventType[]> = {};
-    for (const e of events) (out[e.module ? `Module: ${e.module}` : e.name.split(".")[0]!] ??= []).push(e);
+    for (const e of events) (out[e.plugin ? `Plugin: ${e.plugin}` : e.name.split(".")[0]!] ??= []).push(e);
     return Object.entries(out);
   }, [events]);
 

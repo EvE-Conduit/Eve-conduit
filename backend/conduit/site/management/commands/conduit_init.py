@@ -5,13 +5,13 @@ from django.core.management.base import BaseCommand
 
 from conduit.access.models import State
 from conduit.esi.tokens import sso_configured
-from conduit.modules.services import sync_installed
+from conduit.plugins.services import sync_installed
 from conduit.sde.models import SdeVersion
 from conduit.site.models import SiteSettings
 
 
 class Command(BaseCommand):
-    help = "Create default data, register installed modules and print the setup code on first run"
+    help = "Create default data, register installed plugins and print the setup code on first run"
 
     def handle(self, *args, **options):
         site = SiteSettings.load()

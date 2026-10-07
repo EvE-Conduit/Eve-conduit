@@ -1,7 +1,7 @@
 """Compliance: does every character of a user have a working login with every scope the site needs?
 
 A user is compliant when each of their characters has a valid token holding every required scope
-(the character sheet's plus enabled modules'). Failing or stale character-sheet syncs are reported
+(the character sheet's plus enabled plugins'). Failing or stale character-sheet syncs are reported
 as warnings; they are often ESI's fault, so they don't make anyone non-compliant.
 """
 
@@ -20,7 +20,7 @@ STALE_AFTER = timedelta(days=2)
 
 
 def _required() -> list[str]:
-    from conduit.modules.services import required_scopes
+    from conduit.plugins.services import required_scopes
 
     return required_scopes()
 

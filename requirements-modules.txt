@@ -1,5 +1,0 @@
-# Modules installed alongside EvE Conduit, one per line: PyPI names, git URLs or paths.
-# Paths are relative to the release directory.
-#   Docker:     edit this file, then: docker compose up -d --build
-#   Bare metal: the installer copies it to /etc/conduit/modules.txt; use "sudo conduit module install <name>"
-./modules/conduit-example

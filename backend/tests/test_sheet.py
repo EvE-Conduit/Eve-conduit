@@ -42,7 +42,7 @@ def test_core_sections_are_registered_with_scopes():
 
 @pytest.mark.django_db
 def test_required_scopes_include_sheet_scopes():
-    from conduit.modules.services import required_scopes
+    from conduit.plugins.services import required_scopes
 
     assert "esi-wallet.read_character_wallet.v1" in required_scopes()
 

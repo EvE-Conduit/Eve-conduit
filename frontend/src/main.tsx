@@ -7,13 +7,13 @@ import { createBrowserRouter, RouterProvider, type RouteObject } from "react-rou
 import { Toaster } from "sonner";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { ModuleBoundary } from "@/components/ModuleBoundary";
+import { PluginBoundary } from "@/components/PluginBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api";
 import { applyBranding, BOOTSTRAP_KEY, BootstrapProvider, fetchBootstrap } from "@/lib/bootstrap";
-import { ModulesProvider } from "@/lib/moduleContext";
-import { loadModules, type LoadedModule } from "@/lib/modules";
-import { applyModuleStyles } from "@/lib/moduleStyles";
+import { PluginsProvider } from "@/lib/pluginContext";
+import { loadPlugins, type LoadedPlugin } from "@/lib/plugins";
+import { applyPluginStyles } from "@/lib/pluginStyles";
 import { applyPreferences, applyStoredTheme } from "@/lib/preferences";
 import { AdminAccess } from "@/pages/admin/Access";
 import { AdminCompliance } from "@/pages/admin/Compliance";
@@ -22,7 +22,7 @@ import { AdminHealth } from "@/pages/admin/Health";
 import { AdminIntegrations } from "@/pages/admin/Integrations";
 import { AdminLogs } from "@/pages/admin/Logs";
 import { AdminMembers } from "@/pages/admin/Members";
-import { AdminModules } from "@/pages/admin/Modules";
+import { AdminPlugins } from "@/pages/admin/Plugins";
 import { AdminSettings } from "@/pages/admin/Settings";
 import { AssetsPage } from "@/pages/AssetsPage";
 import { WalletPage } from "@/pages/WalletPage";
@@ -49,14 +49,14 @@ const queryClient = new QueryClient({
   },
 });
 
-function moduleRoutes(modules: LoadedModule[]): RouteObject[] {
-  return modules.flatMap(({ info, frontend }) =>
+function pluginRoutes(plugins: LoadedPlugin[]): RouteObject[] {
+  return plugins.flatMap(({ info, frontend }) =>
     (frontend.routes ?? []).map((r) => ({
-      path: `m/${info.id}${r.path ? `/${r.path.replace(/^\//, "")}` : ""}`,
+      path: `p/${info.id}${r.path ? `/${r.path.replace(/^\//, "")}` : ""}`,
       element: (
-        <ModuleBoundary name={info.name}>
+        <PluginBoundary name={info.name}>
           <r.Component />
-        </ModuleBoundary>
+        </PluginBoundary>
       ),
     })),
   );
@@ -75,8 +75,8 @@ async function start() {
   applyBranding(bootstrap.site);
   if (bootstrap.user) applyPreferences(bootstrap.user.preferences);
   queryClient.setQueryData(BOOTSTRAP_KEY, bootstrap);
-  const modules = await loadModules(bootstrap.modules);
-  await applyModuleStyles(modules).catch((err) => console.error("Could not build module styles", err));
+  const plugins = await loadPlugins(bootstrap.plugins);
+  await applyPluginStyles(plugins).catch((err) => console.error("Could not build plugin styles", err));
 
   const router = createBrowserRouter([
     { path: "/login", element: <Login /> },
@@ -99,13 +99,13 @@ async function start() {
         { path: "admin/members", element: <AdminMembers /> },
         { path: "admin/access", element: <AdminAccess /> },
         { path: "admin/compliance", element: <AdminCompliance /> },
-        { path: "admin/modules", element: <AdminModules /> },
+        { path: "admin/plugins", element: <AdminPlugins /> },
         { path: "admin/api", element: <AdminApi /> },
         { path: "admin/logs", element: <AdminLogs /> },
         { path: "admin/health", element: <AdminHealth /> },
         { path: "admin/integrations", element: <AdminIntegrations /> },
         { path: "admin/settings", element: <AdminSettings /> },
-        ...moduleRoutes(modules),
+        ...pluginRoutes(plugins),
         { path: "*", element: <NotFound /> },
       ],
     },
@@ -115,7 +115,7 @@ async function start() {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <BootstrapProvider initial={bootstrap}>
-          <ModulesProvider modules={modules}>
+          <PluginsProvider plugins={plugins}>
             <TooltipProvider delayDuration={200}>
               <RouterProvider router={router} />
               <Toaster
@@ -125,7 +125,7 @@ async function start() {
                 toastOptions={{ className: "!bg-surface-raised !border-border-strong !text-text !rounded-none !shadow-e3 !font-sans [&_[data-description]]:!text-muted" }}
               />
             </TooltipProvider>
-          </ModulesProvider>
+          </PluginsProvider>
         </BootstrapProvider>
       </QueryClientProvider>
     </StrictMode>,

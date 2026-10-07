@@ -24,7 +24,7 @@ class ApiRequestLogMiddleware:
         key = getattr(request, "api_key", None)
         area = getattr(request, "api_area", "")
         if not area and request.path.startswith(PREFIX + "m/"):
-            area = "m." + request.path[len(PREFIX) + 2 :].split("/", 1)[0]
+            area = "p." + request.path[len(PREFIX) + 2 :].split("/", 1)[0]
         try:
             ApiRequest.objects.create(
                 key=key,

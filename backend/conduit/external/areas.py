@@ -1,5 +1,5 @@
 """The catalogue of external APIs. Each one is switched on or off separately (all start off),
-and each offers scopes that keys are granted. Module APIs come from ``Module.external_api``."""
+and each offers scopes that keys are granted. Plugin APIs come from ``Plugin.external_api``."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class Area:
     description: str
     base_path: str
     scopes: tuple[Scope, ...]
-    module: str | None = None
+    plugin: str | None = None
 
 
 def _sheet_scopes() -> tuple[Scope, ...]:
@@ -108,7 +108,7 @@ def core_areas() -> list[Area]:
             "Supports incremental polling with after_id.",
             "/api/v1/logs/audit, /logs/requests, /logs/service, /logs/esi",
             (
-                Scope("logs:audit", "Read the audit log", "Who changed what: logins, characters, groups, states, modules, API keys"),
+                Scope("logs:audit", "Read the audit log", "Who changed what: logins, characters, groups, states, plugins, API keys"),
                 Scope("logs:requests", "Read the API request log", "Every call made to this API, by any key"),
                 Scope("logs:service", "Read the service log", "Warnings and errors the server logged"),
                 Scope("logs:esi", "Read the ESI call log", "Every request the server sent to ESI and how it went"),
@@ -118,16 +118,16 @@ def core_areas() -> list[Area]:
 
 
 def module_areas() -> list[Area]:
-    from conduit.modules import registry
+    from conduit.plugins import registry
 
     out = []
     for mid, mod in sorted(registry.installed().items()):
         if not mod.external_api:
             continue
         scopes = tuple(
-            Scope(f"m.{mid}:{name}", name, str(desc), write="write" in name) for name, desc in mod.external_scopes.items()
+            Scope(f"p.{mid}:{name}", name, str(desc), write="write" in name) for name, desc in mod.external_scopes.items()
         )
-        out.append(Area(f"m.{mid}", mod.name, mod.description or f"API of the {mod.name} module", f"/api/v1/m/{mid}/", scopes, module=mid))
+        out.append(Area(f"p.{mid}", mod.name, mod.description or f"API of the {mod.name} plugin", f"/api/v1/p/{mid}/", scopes, plugin=mid))
     return out
 
 
@@ -154,12 +154,12 @@ def enabled_keys() -> set[str]:
 
 
 def is_available(area: Area) -> bool:
-    """A module's API only works while the module itself is enabled."""
-    if area.module is None:
+    """A plugin's API only works while the plugin itself is enabled."""
+    if area.plugin is None:
         return True
-    from conduit.modules.services import is_enabled
+    from conduit.plugins.services import is_enabled
 
-    return is_enabled(area.module)
+    return is_enabled(area.plugin)
 
 
 def is_on(key: str) -> bool:

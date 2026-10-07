@@ -82,7 +82,7 @@ install -d -o root   -g root   -m 0755 /var/www/conduit/web
 | `/opt/conduit/releases/<version>` | unpacked releases; `/opt/conduit/app` points at the current one |
 | `/opt/conduit/venv` | Python virtualenv (owned by root, so the service can't change its own code) |
 | `/etc/conduit/conduit.env` | configuration and secrets |
-| `/etc/conduit/modules.txt` | installed modules |
+| `/etc/conduit/plugins.txt` | installed plugins |
 | `/var/www/conduit/web`, `/static` | files nginx serves directly |
 | `/var/log/conduit` | service logs |
 | `/var/lib/conduit` | scheduler state |
@@ -156,10 +156,10 @@ Set at least:
 - `ESI_USER_AGENT_CONTACT`: your email. CCP asks every ESI application to identify itself.
 - `ESI_CLIENT_ID` / `ESI_SECRET_KEY`: can wait until [step 9](#9-register-the-eve-application)
 
-Then list the modules to install:
+Then list the plugins to install:
 
 ```bash
-grep -v '^\s*#' /opt/conduit/app/requirements-modules.txt | sed '/^\s*$/d' > /etc/conduit/modules.txt
+grep -v '^\s*#' /opt/conduit/app/requirements-plugins.txt | sed '/^\s*$/d' > /etc/conduit/plugins.txt
 ```
 
 ### 8. Install the application and prepare the database
@@ -167,7 +167,7 @@ grep -v '^\s*#' /opt/conduit/app/requirements-modules.txt | sed '/^\s*$/d' > /et
 ```bash
 cd /opt/conduit/app
 /opt/conduit/venv/bin/pip install ./backend            # MariaDB: ./backend[mysql]
-/opt/conduit/venv/bin/pip install -r /etc/conduit/modules.txt
+/opt/conduit/venv/bin/pip install -r /etc/conduit/plugins.txt
 
 conduit manage migrate
 conduit manage collectstatic --noinput
@@ -223,7 +223,7 @@ firewall-cmd --permanent --add-service=http --add-service=https && firewall-cmd 
 
 Open your site, sign in with your main character, and enter the setup code from step 8. Lost it?
 `sudo conduit setup-code` prints it again until setup is complete. The wizard then walks you through
-branding and modules.
+branding and plugins.
 
 ## Running EvE Conduit
 
@@ -234,8 +234,8 @@ branding and modules.
 | Follow logs | `sudo conduit logs web` (or `worker`, `beat`) |
 | Any Django command | `sudo conduit manage <command>` |
 | Back up database and config | `sudo conduit backup` (writes to `/var/backups/conduit`) |
-| Install a module | `sudo conduit module install conduit-something` |
-| List modules | `sudo conduit module list` |
+| Install a plugin | `sudo conduit plugin install conduit-something` |
+| List plugins | `sudo conduit plugin list` |
 
 ## Updating
 

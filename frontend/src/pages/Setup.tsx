@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { BrandingForm, type BrandingValues } from "@/components/BrandingForm";
 import { BrandMark } from "@/components/layout/Brand";
-import { ModuleList } from "@/components/ModuleList";
+import { PluginList } from "@/components/PluginList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
@@ -19,14 +19,14 @@ const STEPS = [
   { id: "login", label: "Sign in", icon: LogIn },
   { id: "claim", label: "Become admin", icon: ShieldCheck },
   { id: "brand", label: "Branding", icon: Palette },
-  { id: "modules", label: "Modules", icon: Puzzle },
+  { id: "plugins", label: "Plugins", icon: Puzzle },
 ] as const;
 
 export function Setup() {
   const { setup, user, site } = useBootstrap();
   const refresh = useRefreshBootstrap();
   const navigate = useNavigate();
-  const [brandStep, setBrandStep] = useState<"brand" | "modules">("brand");
+  const [brandStep, setBrandStep] = useState<"brand" | "plugins">("brand");
   const [branding, setBranding] = useState<BrandingValues>({ name: site.name, tagline: site.tagline, accent: site.accent, logo_url: site.logo_url });
 
   if (setup.completed) return <Navigate to="/" replace />;
@@ -77,11 +77,11 @@ export function Setup() {
               onSaved={(saved) => {
                 applyBranding(saved);
                 refresh();
-                setBrandStep("modules");
+                setBrandStep("plugins");
               }}
             />
           )}
-          {current === "modules" && (
+          {current === "plugins" && (
             <FinishStep
               onBack={() => setBrandStep("brand")}
               onDone={async () => {
@@ -221,8 +221,8 @@ function FinishStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
   const finish = useMutation({ mutationFn: () => api.post("/api/setup/complete"), onSuccess: onDone, onError: (e) => toast.error(e.message) });
   return (
     <Step
-      title="Choose your modules"
-      description="Everything beyond sign-in and access control is a module. Switch on what you need now; more can be installed later."
+      title="Choose your plugins"
+      description="Everything beyond sign-in and access control is a plugin. Switch on what you need now; more can be installed later."
       footer={
         <>
           <Button variant="ghost" onClick={onBack}>
@@ -234,7 +234,7 @@ function FinishStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
         </>
       }
     >
-      <ModuleList compact />
+      <PluginList compact />
     </Step>
   );
 }

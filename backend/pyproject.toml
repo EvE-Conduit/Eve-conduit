@@ -23,7 +23,7 @@ dependencies = [
 mysql = ["mysqlclient>=2.2"]
 dev = ["pytest>=8", "pytest-django>=4.9"]
 
-[project.entry-points."conduit.modules"]
+[project.entry-points."conduit.plugins"]
 # First-party modules register here exactly like third-party ones, e.g.:
 # skills = "conduit_skills.module:SkillsModule"
 

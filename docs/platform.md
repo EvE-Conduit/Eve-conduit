@@ -1,24 +1,24 @@
 # Platform services
 
-What the core offers every page and module besides login and access control. All of it is available to
-modules; the module contract (`conduit.modules.Module`) lists the hooks.
+What the core offers every page and plugin besides login and access control. All of it is available to
+plugins; the plugin contract (`conduit.plugins.Plugin`) lists the hooks.
 
 ## Events and webhooks
 
-`conduit.events.bus` is an in-process event bus. Core code and modules announce what happened; anything can
+`conduit.events.bus` is an in-process event bus. Core code and plugins announce what happened; anything can
 listen. Handlers run after the database transaction commits, and a failing handler is logged without
 affecting the code that emitted the event.
 
 ```python
 from conduit.events import bus
 
-bus.register("fleets.created", "Fleet created", "A fleet was scheduled", module="fleets")  # shows in the webhook editor
+bus.register("fleets.created", "Fleet created", "A fleet was scheduled", plugin="fleets")  # shows in the webhook editor
 
 @bus.on("group.joined")
 def give_discord_role(event):
     event.payload["user_id"], event.payload["group"]
 
-bus.emit("fleets.created", title="Sunday roam", summary="FC Pilot One, 19:00 ET", link="/m/fleets/12", level="info")
+bus.emit("fleets.created", title="Sunday roam", summary="FC Pilot One, 19:00 ET", link="/p/fleets/12", level="info")
 ```
 
 Payload values must be JSON. `title`, `summary`, `level` (`info`/`success`/`warning`/`danger`) and `link` are used
@@ -27,7 +27,7 @@ when an event is shown to people, e.g. in a Discord embed.
 Core events: `user.created`, `user.state_changed`, `character.added`, `character.removed`,
 `character.main_changed`, `token.invalid`, `group.joined`, `group.left` (both with `via`: `self`, `request`,
 `admin`, `auto` or `state`), `group.request_created`, `group.request_decided`, `sync.failed`,
-`compliance.changed`, `notification.created`. Modules add their own.
+`compliance.changed`, `notification.created`. Plugins add their own.
 
 **Administration → Integrations** sends chosen events (or all) to a URL:
 
@@ -50,9 +50,9 @@ deliberately post to internal services.
 from conduit.notify import notify
 from conduit.notify.services import notify_permission, register_category
 
-register_category("m.fleets", "Fleet pings")
-notify(user, "Fleet in 15 minutes", "Form up in Jita", link="/m/fleets/12", level="warning", category="m.fleets")
-notify_permission("fleets.command", "New fleet scheduled", category="m.fleets")
+register_category("p.fleets", "Fleet pings")
+notify(user, "Fleet in 15 minutes", "Form up in Jita", link="/p/fleets/12", level="warning", category="p.fleets")
+notify_permission("fleets.command", "New fleet scheduled", category="p.fleets")
 ```
 
 `notify` takes a user, a user id, or a list of either. `link` must be a path on the site or an `https://` URL;
@@ -69,27 +69,27 @@ Each user's theme (dark, light or system), density, text size, high contrast, re
 12/24-hour clock, muted notification categories and dashboard layout live in `accounts.UserPreferences`,
 come down with `/api/core/bootstrap` and are applied as attributes on `<html>`.
 
-Modules get their own per-user settings slot, any JSON value:
+Plugins get their own per-user settings slot, any JSON value:
 
 ```
-GET /api/me/preferences/modules/<module id>   -> {"value": ... | null}
-PUT /api/me/preferences/modules/<module id>   {"value": ...}
+GET /api/me/preferences/plugins/<plugin id>   -> {"value": ... | null}
+PUT /api/me/preferences/plugins/<plugin id>   {"value": ...}
 ```
 
 ## Search
 
 The Ctrl+K palette asks `GET /api/search?q=` and shows groups of results: characters the user may view,
-members (with `site.view_members`), groups, corporations, alliances, solar systems and items. A module adds
-providers by listing dotted paths in `Module.search`:
+members (with `site.view_members`), groups, corporations, alliances, solar systems and items. A plugin adds
+providers by listing dotted paths in `Plugin.search`:
 
 ```python
-class FleetsModule(Module):
+class FleetsModule(Plugin):
     search = ("conduit_fleets.search:find",)
 
 def find(request, q, limit):
     rows = Fleet.objects.visible_to(request.user).filter(name__icontains=q)[:limit]
     return {"key": "fleets", "label": "Fleets",
-            "hits": [{"id": f"fleet:{f.pk}", "title": f.name, "subtitle": f.when, "icon": "rocket", "url": f"/m/fleets/{f.pk}"}
+            "hits": [{"id": f"fleet:{f.pk}", "title": f.name, "subtitle": f.when, "icon": "rocket", "url": f"/p/fleets/{f.pk}"}
                      for f in rows]}
 ```
 

@@ -8,7 +8,7 @@ from conduit.access.models import GroupProfile, State
 from conduit.audit.models import AuditEvent, ServiceLog
 from conduit.external import areas
 from conduit.external.models import ApiKey, ApiRequest
-from conduit.modules.services import set_enabled as set_module_enabled
+from conduit.plugins.services import set_enabled as set_module_enabled
 
 
 def make_key(scopes=(), **fields):
@@ -149,11 +149,11 @@ def test_sheet_needs_section_scope(client, user):
 
 @pytest.mark.django_db
 def test_module_api_needs_module_and_api_on(client):
-    _, secret = make_key(["m.sample:read"])
-    on("m.sample")
-    assert call(client, "get", "/api/v1/m/sample/ping", secret).status_code == 404  # module itself is off
+    _, secret = make_key(["p.sample:read"])
+    on("p.sample")
+    assert call(client, "get", "/api/v1/p/sample/ping", secret).status_code == 404  # plugin itself is off
     set_module_enabled("sample", True)
-    resp = call(client, "get", "/api/v1/m/sample/ping", secret)
+    resp = call(client, "get", "/api/v1/p/sample/ping", secret)
     assert resp.status_code == 200 and resp.json() == {"pong": "Discord bot"}
 
 
@@ -221,7 +221,7 @@ def test_admin_creates_key_and_toggles_api(api_client, admin_user):
     actions = [e["action"] for e in api_client.call("get", "/api/admin/audit").json()["items"]]
     assert actions == ["api.key_revoked", "api.area_enabled", "api.key_created"]
     areas_out = {a["key"]: a for a in api_client.call("get", "/api/admin/api/areas").json()}
-    assert areas_out["m.sample"]["available"] is False and "sheet:skills" in [s["scope"] for s in areas_out["sheet"]["scopes"]]
+    assert areas_out["p.sample"]["available"] is False and "sheet:skills" in [s["scope"] for s in areas_out["sheet"]["scopes"]]
 
 
 @pytest.mark.django_db

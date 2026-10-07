@@ -6,7 +6,7 @@ from pathlib import Path
 import dj_database_url
 from celery.schedules import crontab
 
-from conduit.modules import registry
+from conduit.plugins import registry
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     "conduit.accounts",
     "conduit.access",
     "conduit.esi",
-    "conduit.modules",
+    "conduit.plugins",
     "conduit.site",
     "conduit.audit",
     "conduit.external",
@@ -88,7 +88,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "conduit.site.middleware.ImpersonationGuardMiddleware",
     "conduit.site.middleware.MaintenanceMiddleware",
-    "conduit.modules.middleware.DisabledModuleMiddleware",
+    "conduit.plugins.middleware.DisabledModuleMiddleware",
     "conduit.external.middleware.ApiRequestLogMiddleware",
 ]
 

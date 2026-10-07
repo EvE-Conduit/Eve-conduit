@@ -12,10 +12,10 @@ COPY backend/pyproject.toml backend/manage.py backend/README.md ./
 COPY backend/conduit ./conduit
 RUN pip install .
 
-# Modules: anything listed in requirements-modules.txt (PyPI names, git URLs or paths relative to /app).
-COPY modules ./modules
-COPY requirements-modules.txt ./
-RUN pip install -r requirements-modules.txt
+# Plugins: anything listed in requirements-plugins.txt (PyPI names, git URLs or paths relative to /app).
+COPY plugins ./plugins
+COPY requirements-plugins.txt ./
+RUN pip install -r requirements-plugins.txt
 
 RUN CONDUIT_SECRET_KEY=build python manage.py collectstatic --noinput -v0
 

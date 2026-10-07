@@ -382,7 +382,7 @@ interface FitRow {
   id: number;
   name: string;
   ship: EveType;
-  modules: number;
+  plugins: number;
 }
 
 interface FitDetail {
@@ -417,7 +417,7 @@ export function FittingsTab({ header }: { header: CharacterHeader }) {
             <div className="min-w-0">
               <div className="truncate font-medium">{f.name}</div>
               <div className="truncate text-xs text-muted">{f.ship.name} · {f.ship.group}</div>
-              <div className="text-xs text-subtle">{f.modules} items</div>
+              <div className="text-xs text-subtle">{f.plugins} items</div>
             </div>
           </button>
         ))}
