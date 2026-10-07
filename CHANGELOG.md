@@ -3,6 +3,24 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.10
+
+### New
+- **A landing page.** Members now land on **Home** after signing in: a welcome banner with their main character,
+  their characters, groups, unread notifications and the EVE clock, tiles linking to the main pages, and a few
+  panels of text. Administration → Settings → Landing page lets you change all of it: texts, background image,
+  buttons, tiles (icon, title, text, link) and Markdown sections, with a live preview and a reset to the default.
+  Texts can use `{name}`, `{corporation}`, `{alliance}` and `{site}`. Home is also first in the sidebar.
+- **Snooper log.** Administration → Logs → Snooper lists every time someone opens a character sheet that isn't
+  theirs (HR, recruiters, directors, or anyone a plugin lets in): who looked, at which character and whose it is,
+  which section, and from where. Looking at your own characters is never recorded, repeat views are listed once per
+  10 minutes, and an admin signed in as someone else is named as the viewer. Also available to API keys with the new
+  `logs:snooper` scope at `/api/v1/logs/snooper`. Kept for 365 days (`CONDUIT_SNOOP_LOG_DAYS`).
+
+### Changed
+- Sites whose start page was the dashboard (the old default) now start on the landing page. To go back, choose
+  Dashboard under Administration → Settings → Start page.
+
 ## 0.5.9
 
 ### New
