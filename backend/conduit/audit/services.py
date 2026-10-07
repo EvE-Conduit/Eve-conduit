@@ -3,7 +3,9 @@
 import ipaddress
 import logging
 
-from .models import AuditEvent
+from django.core.cache import cache
+
+from .models import AuditEvent, SnoopEvent
 
 log = logging.getLogger(__name__)
 LOOPBACK = (ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128"))
@@ -60,4 +62,39 @@ def record(action: str, summary: str, *, request=None, target=None, target_type:
         )
     except Exception:  # an audit hiccup must never break the action itself
         log.exception("Could not record audit event %s", action)
+        return None
+
+
+SNOOP_DEDUPE_SECONDS = 600  # the same viewer, character and section is recorded once per 10 minutes
+
+
+def record_snoop(request, character, section: str = "sheet") -> SnoopEvent | None:
+    """Note that someone looked at a character that isn't theirs. Their own characters are
+    skipped; while an admin is signed in as someone else, the admin is the viewer."""
+    from conduit.site.impersonation import impersonator
+
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated or getattr(request, "api_key", None) is not None:
+        return None  # API keys reading sheets are in the API request log already
+    try:
+        real = impersonator(request)
+        viewer = real or user
+        if character.user_id == viewer.pk:
+            return None
+        if not cache.add(f"snoop:{viewer.pk}:{character.pk}:{section}", 1, SNOOP_DEDUPE_SECONDS):
+            return None
+        owner = character.user
+        return SnoopEvent.objects.create(
+            viewer_id=viewer.pk,
+            viewer_name=viewer.display_name[:150],
+            impersonating=user.display_name[:150] if real else "",
+            character_id=character.pk,
+            character_name=character.name[:200],
+            owner_id=owner.pk if owner else None,
+            owner_name=owner.display_name[:150] if owner else "",
+            section=section[:40],
+            ip=client_ip(request),
+        )
+    except Exception:  # like record(): never break the page being looked at
+        log.exception("Could not record snoop on character %s", getattr(character, "pk", None))
         return None

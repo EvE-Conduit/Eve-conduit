@@ -45,3 +45,27 @@ class ServiceLog(models.Model):
 
     def __str__(self):
         return f"{self.level} {self.logger}: {self.message[:80]}"
+
+
+class SnoopEvent(models.Model):
+    """Someone opened another member's character sheet (HR, recruiters, directors...).
+    Looking at your own characters is never recorded. Names are copied in, like AuditEvent."""
+
+    at = models.DateTimeField(default=timezone.now, db_index=True)
+    viewer_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    viewer_name = models.CharField(max_length=150)
+    # Set while an admin is signed in as someone else: who they were signed in as.
+    impersonating = models.CharField(max_length=150, blank=True)
+    character_id = models.BigIntegerField(db_index=True)
+    character_name = models.CharField(max_length=200)
+    owner_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    owner_name = models.CharField(max_length=150, blank=True)
+    section = models.CharField(max_length=40)  # "sheet" for the header, otherwise e.g. "wallet"
+    ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["viewer_id", "character_id", "section", "at"])]
+
+    def __str__(self):
+        return f"{self.viewer_name} viewed {self.character_name} ({self.section})"

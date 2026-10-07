@@ -11,12 +11,13 @@ def purge_logs():
     from conduit.esi.models import EsiCall
     from conduit.external.models import ApiRequest
 
-    from .models import AuditEvent, ServiceLog
+    from .models import AuditEvent, ServiceLog, SnoopEvent
 
     now = timezone.now()
     removed = {}
     for model, days in (
         (AuditEvent, settings.CONDUIT_AUDIT_LOG_DAYS),
+        (SnoopEvent, settings.CONDUIT_SNOOP_LOG_DAYS),
         (ServiceLog, settings.CONDUIT_SERVICE_LOG_DAYS),
         (ApiRequest, settings.CONDUIT_API_LOG_DAYS),
         (EsiCall, settings.CONDUIT_ESI_LOG_DAYS),

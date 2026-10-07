@@ -1,6 +1,6 @@
 import * as Tabs from "@radix-ui/react-tabs";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Bot, Cpu, FileText, Gauge, RadioTower, RefreshCw, ScrollText, Search, Server, ShieldAlert, Timer, User } from "lucide-react";
+import { Activity, Bot, Cpu, Eye, FileText, Gauge, RadioTower, RefreshCw, ScrollText, Search, Server, ShieldAlert, Timer, User } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 
 import { BarChart } from "@/components/BarChart";
@@ -26,6 +26,17 @@ interface AuditEvent {
   actor: { type: "user" | "api_key" | "system"; id: number | null; name: string };
   target: { type: string; id: string; name: string } | null;
   details: Record<string, unknown>;
+  ip: string | null;
+}
+
+interface SnoopEvent {
+  id: number;
+  at: string;
+  viewer: { id: number | null; name: string };
+  impersonating: string | null;
+  character: { id: number; name: string };
+  owner: { id: number; name: string } | null;
+  section: string;
   ip: string | null;
 }
 
@@ -58,12 +69,13 @@ export function AdminLogs() {
         eyebrow="Administration"
         title="Logs"
         icon={<ScrollText />}
-        description="What happened on this site and who did it, plus warnings and errors from the server itself."
+        description="What happened on this site and who did it, who looked at whose characters, plus warnings and errors from the server itself."
       />
       <Tabs.Root defaultValue="audit">
         <Tabs.List className="mb-6 inline-flex rounded-xl border border-border bg-surface/70 p-1">
           {[
             { v: "audit", label: "Audit", icon: ScrollText },
+            { v: "snooper", label: "Snooper", icon: Eye },
             { v: "service", label: "Service", icon: Server },
             { v: "esi", label: "ESI", icon: RadioTower },
           ].map((t) => (
@@ -74,6 +86,9 @@ export function AdminLogs() {
         </Tabs.List>
         <Tabs.Content value="audit">
           <Audit />
+        </Tabs.Content>
+        <Tabs.Content value="snooper">
+          <Snooper />
         </Tabs.Content>
         <Tabs.Content value="service" className="space-y-6">
           <Service />
@@ -183,6 +198,93 @@ function Audit() {
           {Object.keys(open.details ?? {}).length > 0 && (
             <pre className="mt-4 max-h-80 overflow-auto rounded-lg border border-border bg-bg/70 p-3 font-mono text-xs text-text">{JSON.stringify(open.details, null, 2)}</pre>
           )}
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+// --- Snooper ---------------------------------------------------------------------
+
+function Snooper() {
+  const sections = useQuery({ queryKey: ["admin", "snooper", "sections"], queryFn: () => api.get<string[]>("/api/admin/logs/snooper/sections") });
+  const [viewer, setViewer] = useState("");
+  const [target, setTarget] = useState("");
+  const [section, setSection] = useState("");
+  const viewerQ = useDeferredValue(viewer);
+  const targetQ = useDeferredValue(target);
+  const [open, setOpen] = useState<SnoopEvent | null>(null);
+
+  const params = new URLSearchParams();
+  if (viewerQ.trim()) params.set("viewer", viewerQ.trim());
+  if (targetQ.trim()) params.set("target", targetQ.trim());
+  if (section) params.set("section", section);
+
+  const columns: Column<SnoopEvent>[] = [
+    { header: "Time", cell: (e) => <span className="whitespace-nowrap text-muted" title={dateTime(e.at)}>{timeAgo(e.at)}</span> },
+    {
+      header: "Viewer",
+      cell: (e) => (
+        <span className="inline-flex items-center gap-2 whitespace-nowrap">
+          <User className="size-3.5 text-subtle" />
+          {e.viewer.name}
+          {e.impersonating && <span className="text-xs text-subtle">as {e.impersonating}</span>}
+        </span>
+      ),
+    },
+    { header: "Character", cell: (e) => <span className="whitespace-nowrap">{e.character.name}</span> },
+    { header: "Owner", cell: (e) => <span className="whitespace-nowrap text-muted">{e.owner?.name ?? "—"}</span> },
+    { header: "Section", cell: (e) => <code className="whitespace-nowrap font-mono text-[11px] text-subtle">{e.section}</code> },
+  ];
+
+  return (
+    <>
+      <p className="mb-4 text-sm text-muted">
+        Every time someone opens a character sheet that isn't theirs. Looking at your own characters is never recorded; repeat views of the same section are listed once
+        per 10 minutes.
+      </p>
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <SearchInput value={viewer} onChange={setViewer} placeholder="Viewer name…" />
+        <SearchInput value={target} onChange={setTarget} placeholder="Character or owner…" />
+        <Select value={section} onChange={setSection} label="Section">
+          <option value="">All sections</option>
+          {sections.data?.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <Card className="overflow-hidden">
+        <PagedTable<SnoopEvent>
+          key={params.toString()}
+          url="/api/admin/logs/snooper"
+          params={params.toString()}
+          columns={columns}
+          rowKey={(e) => e.id}
+          onRowClick={setOpen}
+          empty={{ icon: <Eye />, title: "No lookups", description: params.toString() ? "Nothing matches these filters." : "Views of other members' character sheets show up here." }}
+        />
+      </Card>
+      {open && (
+        <Dialog open onOpenChange={(o) => !o && setOpen(null)} title={`${open.viewer.name} viewed ${open.character.name}`} className="max-w-2xl">
+          <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2 text-sm">
+            <Detail label="Time">{dateTime(open.at)}</Detail>
+            <Detail label="Viewer">
+              {open.viewer.name}
+              {open.impersonating && <span className="text-subtle"> (signed in as {open.impersonating})</span>}
+            </Detail>
+            <Detail label="Character">
+              {open.character.name} <span className="text-subtle">({open.character.id})</span>
+            </Detail>
+            <Detail label="Owner">{open.owner?.name ?? "—"}</Detail>
+            <Detail label="Section">
+              <code className="font-mono text-xs">{open.section}</code>
+            </Detail>
+            <Detail label="IP address">
+              <code className="font-mono text-xs">{open.ip ?? "—"}</code>
+            </Detail>
+          </dl>
         </Dialog>
       )}
     </>

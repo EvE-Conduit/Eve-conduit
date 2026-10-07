@@ -18,8 +18,8 @@ from conduit import __version__
 from conduit.access.models import State
 from conduit.access.services import admin_permissions_in, recompute_all_states
 from conduit.accounts.models import Character, User
-from conduit.audit.api import audit_out, filter_audit, filter_service, service_out
-from conduit.audit.models import AuditEvent, ServiceLog
+from conduit.audit.api import audit_out, filter_audit, filter_service, filter_snoop, service_out, snoop_out
+from conduit.audit.models import AuditEvent, ServiceLog, SnoopEvent
 from conduit.audit.services import record
 from conduit.eve.models import EveAlliance, EveCorporation
 from conduit.plugins import registry as plugin_registry
@@ -371,6 +371,13 @@ def request_out(r: ApiRequest) -> dict:
 def logs_audit(request, after_id: int = 0, limit: int = 100, action: str = "", since: datetime | None = None):
     """Audit events, oldest first after ``after_id``. Poll again with the returned ``next_after_id``."""
     return _incremental(filter_audit(AuditEvent.objects.all(), action=action, since=since), audit_out, after_id, limit)
+
+
+@router.get("/logs/snooper", tags=["logs"])
+@require_scope("logs:snooper")
+def logs_snooper(request, after_id: int = 0, limit: int = 100, since: datetime | None = None):
+    """Who looked at other members' character sheets, oldest first after ``after_id``."""
+    return _incremental(filter_snoop(SnoopEvent.objects.all(), since=since), snoop_out, after_id, limit)
 
 
 @router.get("/logs/requests", tags=["logs"])
