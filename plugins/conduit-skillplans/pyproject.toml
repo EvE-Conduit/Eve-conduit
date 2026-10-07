@@ -1,0 +1,28 @@
+[project]
+name = "conduit-skillplans"
+version = "1.0.0"
+description = "Skill plans: shared and personal plans with every character's progress and training time, copied straight into the game, and a group rule for finished plans."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+skillplans = "conduit_skillplans.plugin:SkillPlansPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Skill Plans"
+icon = "graduation-cap"
+category = "Character"
+min_conduit = "0.5.14"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_skillplans*"]
+
+[tool.setuptools.package-data]
+conduit_skillplans = ["static/**/*"]

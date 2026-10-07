@@ -11,6 +11,9 @@ results, group rules and ESI scopes.
 - [`conduit-discord`](conduit-discord): Discord: link accounts and join the server, with roles and nicknames from groups and states.
 - [`conduit-announcements`](conduit-announcements): Announcements: news for everyone or chosen states and groups, pinned, scheduled and notified.
 - [`conduit-fleets`](conduit-fleets): Fleets & FATs: attendance from the FC's in-game fleet or a FAT link, stats, and a FAT group rule.
+- [`conduit-skillplans`](conduit-skillplans): Skill Plans: shared and personal skill plans with each character's progress and training time, copied into the game.
+- [`conduit-doctrines`](conduit-doctrines): Doctrines: doctrine fits shown like the in-game fitting window, copied into the game or saved to a character's fittings, and who can fly them.
+- [`conduit-mentors`](conduit-mentors): Mentoring: new members get a mentor, with goals that tick themselves from group rules, a thread and graduation.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
