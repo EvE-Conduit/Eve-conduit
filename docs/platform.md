@@ -96,6 +96,20 @@ def find(request, q, limit):
 Only return what the user may see. A hit has an `image` URL or an `icon` (a Lucide icon name); `url` is a path
 on the site or an `https://` URL.
 
+## Character sheet access
+
+The core decides who may read a character's sheet (the owner, and holders of the `sheet.view_*` permissions). A
+plugin can let more people in by listing functions in `Plugin.sheet_access`; they're asked only when the core says
+no, and only while the plugin is enabled:
+
+```python
+class RecruitmentPlugin(Plugin):
+    sheet_access = ("conduit_recruitment.services:recruiter_can_view",)
+
+def recruiter_can_view(user, character) -> bool:
+    return user.has_perm("recruit.review_applications") and has_open_application(character.user_id)
+```
+
 ## Health
 
 **Administration → Health** (`site.view_health`) checks the database and cache, asks the Celery workers to
