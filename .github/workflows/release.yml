@@ -18,11 +18,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install -e "backend[dev]" -e plugins/conduit-example -e plugins/conduit-moons -e plugins/conduit-recruitment -e plugins/conduit-srp -e plugins/conduit-discord -e plugins/conduit-announcements
+      - run: pip install -e "backend[dev]" -e plugins/conduit-example -e plugins/conduit-moons -e plugins/conduit-recruitment -e plugins/conduit-srp -e plugins/conduit-discord -e plugins/conduit-announcements -e plugins/conduit-fleets
       - run: python -m pytest -q
         working-directory: backend
       - name: Plugin tests
-        run: python -m pytest -q -c pyproject.toml --rootdir . ../plugins/conduit-moons/tests ../plugins/conduit-recruitment/tests ../plugins/conduit-srp/tests ../plugins/conduit-discord/tests ../plugins/conduit-announcements/tests
+        run: python -m pytest -q -c pyproject.toml --rootdir . ../plugins/conduit-moons/tests ../plugins/conduit-recruitment/tests ../plugins/conduit-srp/tests ../plugins/conduit-discord/tests ../plugins/conduit-announcements/tests ../plugins/conduit-fleets/tests
         working-directory: backend
       - name: Tag matches the version and has release notes
         run: |
