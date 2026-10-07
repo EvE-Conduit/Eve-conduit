@@ -344,8 +344,9 @@ begin
       Text := 'EvE Conduit ' + ResultVersion + ' is installed in ' + WizardDirValue() + '.';
     Text := Text + #13#10#13#10 + 'Site: ' + GetSiteUrl('');
     if ResultSetupCode <> '' then
-      Text := Text + #13#10#13#10 + 'Sign in with your main character, then enter this one-time setup code to become the administrator:' +
-        #13#10#13#10 + '    ' + ResultSetupCode
+      // (No line may start with "#": the preprocessor would read it as a directive.)
+      Text := Text + #13#10#13#10 + 'Sign in with your main character, then enter this one-time setup code to become the administrator:' + #13#10#13#10 +
+        '    ' + ResultSetupCode
     else if not Upgrading then
       Text := Text + #13#10#13#10 + 'To show the one-time setup code, run in an Administrator terminal: conduit setup-code';
     Text := Text + #13#10#13#10 + 'Day to day: conduit status | logs | backup | upgrade. The installer log is in ' + KeptLogPath + '.';
