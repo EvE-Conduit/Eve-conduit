@@ -4,7 +4,8 @@ version = "1.0.0"
 description = "Moon mining ledger: who mined what from your moons each month, what it's worth, and moon tax with payments."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
-dependencies = ["conduit>=0.5.5"]
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
 
 [project.entry-points."conduit.plugins"]
 moons = "conduit_moons.plugin:MoonsPlugin"
