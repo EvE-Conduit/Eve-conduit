@@ -1,0 +1,43 @@
+# Every push to main publishes a new plugin catalog: catalog.json (each plugin pinned to this commit) and its
+# signature, as assets of the release tagged "catalog". EvE Conduit installs read it under Administration -> Plugins.
+# Needs the repository secret RELEASE_SIGNING_KEY (the same key that signs EvE Conduit releases).
+name: Catalog
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install cryptography
+      - name: Build the catalog
+        run: |
+          python scripts/build_catalog.py --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" \
+            --serial "$(git log -1 --format=%ct)" > catalog.json
+          cat catalog.json
+      - name: Sign it
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python scripts/sign_catalog.py catalog.json
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view catalog >/dev/null 2>&1 || \
+            gh release create catalog --title "Plugin catalog" --latest=false \
+              --notes "The signed list of plugins EvE Conduit offers under Administration -> Plugins. Updated on every push to main."
+          gh release upload catalog catalog.json catalog.json.sig --clobber
