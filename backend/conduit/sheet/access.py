@@ -30,13 +30,12 @@ def _provider(path: str):
 
 
 def plugin_grants(user, character: Character) -> bool:
-    """Enabled plugins can let more people in (``Plugin.sheet_access``), e.g. recruiters seeing applicants."""
+    """Enabled plugins the user may use can let more people in (``Plugin.sheet_access``), e.g. recruiters seeing applicants."""
     from conduit.plugins import registry
-    from conduit.plugins.services import enabled_ids
+    from conduit.plugins.services import can_use
 
-    on = enabled_ids()
     for mid, plugin in registry.installed().items():
-        if mid not in on:
+        if not can_use(user, mid):
             continue
         for path in plugin.sheet_access:
             try:

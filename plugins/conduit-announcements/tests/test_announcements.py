@@ -19,13 +19,17 @@ def people(db, corp):
     sync_installed()
     set_enabled("announcements", True)
     member = State.objects.create(name="Member", priority=10)
+    public = State.objects.create(name="Guest", priority=0, public=True)  # before the users: saving a state re-sorts everyone
     pilot = make_user(90000001, "Pilot One", corporation=corp)
     pilot.state = member
     pilot.save()
-    guest = make_user(90000002, "Guest Pilot")
+    guest = make_user(90000002, "Guest Pilot", member=False)
+    guest.state = public
+    guest.save()
+    officer = make_user(90000004, "Officer")
     writer = make_user(90000003, "Writer")
     writer.user_permissions.add(Permission.objects.get(codename="post_announcements"))
-    return {"member": member, "pilot": pilot, "guest": guest, "writer": writer}
+    return {"member": member, "pilot": pilot, "guest": guest, "officer": officer, "writer": writer}
 
 
 def post(api_client, writer, **body):
@@ -39,12 +43,20 @@ def test_everyone_sees_an_announcement_for_everyone(people, api_client, django_c
     with django_capture_on_commit_callbacks(execute=True):
         a = post(api_client, people["writer"])
     assert a["status"] == "live"
-    for who in ("pilot", "guest"):
+    for who in ("pilot", "officer"):
         api_client.force_login(people[who])
         feed = api_client.call("get", "/api/p/announcements").json()
         assert [x["title"] for x in feed["announcements"]] == ["Hello"] and feed["unread"] == 1
         assert "states" not in feed["announcements"][0]  # audience details are for writers
-    assert Notification.objects.filter(user=people["guest"], title="Hello", category="p.announcements").exists()
+    assert Notification.objects.filter(user=people["officer"], title="Hello", category="p.announcements").exists()
+
+
+def test_guests_get_neither_the_page_nor_notifications(people, api_client, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=True):
+        post(api_client, people["writer"])
+    api_client.force_login(people["guest"])
+    assert api_client.call("get", "/api/p/announcements").status_code == 403
+    assert not Notification.objects.filter(user=people["guest"]).exists()
 
 
 def test_limited_to_a_state_or_group(people, api_client):
@@ -53,8 +65,8 @@ def test_limited_to_a_state_or_group(people, api_client):
     post(api_client, people["writer"], title="Leaders only", groups=[leaders.pk])
     api_client.force_login(people["pilot"])
     assert [x["title"] for x in api_client.call("get", "/api/p/announcements").json()["announcements"]] == ["Members only"]
-    people["guest"].groups.add(leaders)
-    api_client.force_login(people["guest"])
+    people["officer"].groups.add(leaders)
+    api_client.force_login(people["officer"])
     assert [x["title"] for x in api_client.call("get", "/api/p/announcements").json()["announcements"]] == ["Leaders only"]
     assert not Notification.objects.filter(user=people["pilot"], title="Leaders only").exists()
 

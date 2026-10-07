@@ -69,6 +69,9 @@ class Plugin:
     #: Dotted paths to ``fn(user, character) -> bool`` that let more people read a character's sheet, e.g.
     #: recruiters looking at an applicant. Asked only when the core rules say no, and only while enabled.
     sheet_access: tuple[str, ...] = ()
+    #: Only members may use it: people whose state isn't the public (Guest) fallback, and administrators.
+    #: Others don't get its pages, API or search results. Set False for plugins guests need, e.g. applying.
+    members_only: bool = True
     #: Whether a fresh install enables this plugin automatically.
     default_enabled: bool = False
 
@@ -91,6 +94,7 @@ class Plugin:
             "author": self.author,
             "url": self.url,
             "requires": list(self.requires),
+            "members_only": self.members_only,
             "esi_scopes": list(self.esi_scopes),
             "nav": [vars(n) for n in self.nav],
             "has_api": bool(self.api),

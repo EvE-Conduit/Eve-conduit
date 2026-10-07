@@ -8,7 +8,6 @@ from django.db.models import Q
 from django.utils import timezone
 
 from conduit.access.models import State
-from conduit.accounts.models import User
 from conduit.eve.models import portrait_url
 
 from .models import Announcement, AnnouncementRead
@@ -43,8 +42,10 @@ def visible_to(user, qs=None):
 
 
 def audience_users(a: Announcement):
-    """Everyone who can read the announcement."""
-    users = User.objects.filter(is_active=True)
+    """Everyone who can read the announcement (only members can open Announcements)."""
+    from conduit.access.services import site_members
+
+    users = site_members()
     state_ids = list(a.states.values_list("pk", flat=True))
     group_ids = list(a.groups.values_list("pk", flat=True))
     if not state_ids and not group_ids:

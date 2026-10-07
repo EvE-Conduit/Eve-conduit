@@ -1,6 +1,22 @@
 from django.db import transaction
+from django.db.models import Q
 
 from .models import GroupProfile, State
+
+
+def is_site_member(user) -> bool:
+    """Members are people in a state other than the public fallback (Guest); administrators always count."""
+    if not user.is_authenticated or not user.is_active:
+        return False
+    return user.is_superuser or bool(user.state_id and not user.state.public)
+
+
+def site_members(users=None):
+    """``users`` (default: every active user) narrowed to members, as ``is_site_member`` decides."""
+    from conduit.accounts.models import User
+
+    users = User.objects.filter(is_active=True) if users is None else users
+    return users.filter(Q(is_superuser=True) | Q(state__public=False))
 
 
 def resolve_state(user) -> State | None:
