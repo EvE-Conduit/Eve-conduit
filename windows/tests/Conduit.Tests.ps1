@@ -513,3 +513,25 @@ Describe 'External programs under Windows PowerShell 5.1 with captured output' -
         $r.Output | Should -Not -Match 'AFTER'
     }
 }
+
+Describe 'Updater watcher' {
+    It 'sees install and plugin requests, and nothing else' {
+        $dir = Join-Path $TestDrive 'updates'
+        New-Item -ItemType Directory -Path $dir | Out-Null
+        Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeFalse
+        # Requests are written as .tmp and renamed, results aren't requests.
+        Set-Content -LiteralPath (Join-Path $dir 'install-request.json.tmp') -Value '{}'
+        Set-Content -LiteralPath (Join-Path $dir 'install-result.json') -Value '{}'
+        Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeFalse
+        Set-Content -LiteralPath (Join-Path $dir 'plugins-request.json') -Value '{}'
+        Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeTrue
+        Remove-Item -LiteralPath (Join-Path $dir 'plugins-request.json')
+        Set-Content -LiteralPath (Join-Path $dir 'install-request.json') -Value '{}'
+        Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeTrue
+    }
+    It 'runs the watcher from the install folder' {
+        $arguments = Get-ConduitUpdaterArgument -Root 'C:\EvE Conduit'
+        $arguments | Should -BeLike '*-File "C:\EvE Conduit*conduit.ps1" watch-updates'
+        $arguments | Should -Match '-NonInteractive'
+    }
+}

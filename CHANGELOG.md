@@ -3,6 +3,21 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.8
+
+### New
+- **Super admin.** Whoever claimed the site with the setup code is its super admin: always an administrator, and
+  nobody (themselves included) can remove them. They're marked "Super admin" in the sidebar and under Settings →
+  Administrators. Existing sites pick the person who claimed the setup code from the audit log, or else the first
+  administrator.
+
+### Changed
+- **Updates and plugin installs start within seconds** instead of waiting up to two minutes for the updater. On
+  Linux a systemd path unit starts it as soon as you click Install (the cron job stays as a backup, and is all
+  there is without systemd); on Windows the updater task now watches for requests every few seconds. This update
+  itself still starts the old way: the faster updater is switched on by its first run afterwards.
+- Character sheet → Overview: corporation roles and employment history show the first 4, with a button for the rest.
+
 ## 0.5.7
 
 ### New

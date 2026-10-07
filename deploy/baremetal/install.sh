@@ -206,14 +206,16 @@ supervisorctl update
 sleep 3
 supervisorctl status 'conduit:*' || true
 
-# Installs updates an administrator approved on the website (Administration -> Updates). It does nothing
-# until then; see "conduit apply-update".
+# Installs updates an administrator approved on the website (Administration -> Updates) every two minutes. It does
+# nothing until then; see "conduit apply-update".
 cat > /etc/cron.d/conduit-update <<'CRON'
 # EvE Conduit: install updates approved on the website (Administration -> Updates).
 */2 * * * * root /usr/local/bin/conduit apply-update >/dev/null 2>&1
 CRON
 chmod 0644 /etc/cron.d/conduit-update
 systemctl enable --now cron 2>/dev/null || systemctl enable --now crond 2>/dev/null || true
+# ...and starts it within seconds of the request, where systemd is available (cron above is the backup).
+/usr/local/bin/conduit setup-updater
 
 step "Configuring nginx"
 sed "s/auth\.example\.com/$DOMAIN/g" "$RELEASE_DIR/deploy/baremetal/nginx/conduit.conf" > "$NGINX_CONF"

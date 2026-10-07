@@ -274,7 +274,7 @@ function InstallStatus({ data, onCancel, cancelling, onRetry }: { data: UpdateSt
           </Button>
         }
       >
-        {install.message || `Asked by ${install.requested_by ?? "an administrator"} ${timeAgo(install.requested_at)}. The updater checks every two minutes.`}
+        {install.message || `Asked by ${install.requested_by ?? "an administrator"} ${timeAgo(install.requested_at)}. The updater usually starts within a few seconds.`}
       </Alert>
     );
   }

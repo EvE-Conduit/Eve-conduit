@@ -59,6 +59,8 @@ class UserOut(Schema):
     main: CharacterBrief | None
     state: StateBrief | None
     is_admin: bool
+    #: The super admin, who claimed the site; always an administrator.
+    is_owner: bool = False
     permissions: list[str]
     unread_notifications: int
     preferences: dict
@@ -134,6 +136,7 @@ def user_out(user, request=None) -> dict | None:
         "main": character_brief(main),
         "state": {"id": user.state.pk, "name": user.state.name, "color": user.state.color} if user.state else None,
         "is_admin": user.is_superuser,
+        "is_owner": user.pk == SiteSettings.load().owner_id,
         "permissions": sorted(user.get_all_permissions()),
     }
 
@@ -210,6 +213,9 @@ def claim_admin(request, payload: ClaimIn):
     request.user.is_superuser = True
     request.user.is_staff = True
     request.user.save(update_fields=["is_superuser", "is_staff"])
+    if site.owner_id is None:
+        site.owner = request.user
+        site.save(update_fields=["owner"])
     record("setup.admin_claimed", "claimed the administrator role with the setup code", request=request)
     sync_installed()
     return {"ok": True}
@@ -308,6 +314,7 @@ def _admin_out(u, request) -> dict:
         "name": u.display_name,
         "main": character_brief(u.main_character),
         "is_you": u.pk == request.user.pk,
+        "is_owner": u.pk == SiteSettings.load().owner_id,
         "last_login": u.last_login.isoformat() if u.last_login else None,
     }
 
@@ -349,6 +356,8 @@ def remove_admin(request, user_id: int):
     user = User.objects.filter(pk=user_id, is_superuser=True).select_related("main_character").first()
     if user is None:
         raise HttpError(404, "That user isn't an administrator")
+    if user.pk == SiteSettings.load().owner_id:
+        raise HttpError(400, f"{user.display_name} is the super admin, who claimed the site, and always stays an administrator")
     if not User.objects.filter(is_superuser=True, is_active=True).exclude(pk=user.pk).exists():
         raise HttpError(400, "The site needs at least one administrator")
     user.is_superuser = False

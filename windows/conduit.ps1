@@ -16,7 +16,8 @@
       conduit upgrade <eve-conduit-X.Y.Z-windows.zip>
       conduit rollback                       back to the previous release
       conduit repair                         redo the last steps of an upgrade that stopped half-way
-      conduit apply-update                   install an update or plugins approved on the website (run by the updater task)
+      conduit apply-update                   install an update or plugins approved on the website, if there is one
+      conduit watch-updates                  wait for such requests and install them (run by the updater task)
       conduit plugin install <package>       PyPI name, git URL or path
       conduit plugin list
       conduit tray [on|off]                  open the tray control panel, or start it at sign-in (on/off)
@@ -255,6 +256,25 @@ function Invoke-ApplyUpdate {
     finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Invoke-WatchUpdates {
+    <#
+      Run by the "EvE Conduit updater" scheduled task as SYSTEM. Looks for a request from the website every five
+      seconds and installs it straight away. Returns after an install, because the install may have replaced these
+      scripts, and after 12 hours; the task's two-minute trigger then starts a fresh watcher.
+    #>
+    Assert-Admin
+    $updates = Get-ConduitUpdatesDir -Root $Root
+    $until = (Get-Date).AddHours(12)
+    while ((Get-Date) -lt $until) {
+        if (Test-ConduitUpdateRequest -UpdatesDir $updates) {
+            Invoke-ApplyUpdate
+            Invoke-ApplyPluginRequest
+            return
+        }
+        Start-Sleep -Seconds 5
+    }
+}
+
 function Invoke-ApplyPluginRequest {
     <#
       Plugins installed or removed under Administration -> Plugins. conduit.plugins.installer checks the request
@@ -394,7 +414,14 @@ switch ($Command) {
     'backup' { Invoke-Backup }
     'upgrade' { Invoke-Upgrade ($Rest | Select-Object -First 1) }
     'rollback' { Invoke-Rollback }
-    'apply-update' { Invoke-ApplyUpdate; Invoke-ApplyPluginRequest }
+    'apply-update' {
+        # Installs from before 0.5.8 run this every two minutes; switch their task over to the watcher.
+        Assert-Admin
+        if (-not (Test-ConduitUpdaterCurrent -Root $Root)) { Register-ConduitUpdater -Root $Root }
+        Invoke-ApplyUpdate
+        Invoke-ApplyPluginRequest
+    }
+    'watch-updates' { Invoke-WatchUpdates }
     'repair' {
         # Migrations, static files, web front end and admin scripts for the release that's linked now.
         Assert-Admin

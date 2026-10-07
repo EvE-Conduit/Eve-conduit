@@ -1,5 +1,5 @@
-import { Brain, Building2, Cake, Clock, Crown, Dna, MapPin, Rocket, ShieldAlert, Sparkles, Zap } from "lucide-react";
-import type { ReactNode } from "react";
+import { Brain, Building2, Cake, ChevronDown, Clock, Crown, Dna, MapPin, Rocket, ShieldAlert, Sparkles, Zap } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -169,13 +169,17 @@ export function OverviewTab({ header }: { header: CharacterHeader }) {
               {(data.roles?.length ?? 0) > 0 && (
                 <div>
                   <div className="mb-1.5 pt-2 text-xs text-muted">Corporation roles</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {data.roles!.map((r) => (
-                      <Badge key={r} color="#818cf8" variant="outline">
-                        {humanize(r)}
-                      </Badge>
-                    ))}
-                  </div>
+                  <ShowMore items={data.roles!} noun="role">
+                    {(roles) => (
+                      <div className="flex flex-wrap gap-1.5">
+                        {roles.map((r) => (
+                          <Badge key={r} color="#818cf8" variant="outline">
+                            {humanize(r)}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </ShowMore>
                 </div>
               )}
             </CardBody>
@@ -184,23 +188,27 @@ export function OverviewTab({ header }: { header: CharacterHeader }) {
           <Card>
             <CardHeader title="Employment history" icon={<Building2 />} />
             <CardBody>
-              <ol className="relative space-y-4 border-l border-border pl-5">
-                {data.corporation_history.map((h, i) => (
-                  <li key={i} className="relative">
-                    <span className={`absolute -left-[25px] top-2 size-2.5 rounded-none ring-4 ring-surface ${i === 0 ? "bg-accent" : "bg-surface-3"}`} />
-                    <div className="flex items-center gap-2.5">
-                      <img src={h.corporation.logo} alt="" className="size-7 rounded" />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{h.corporation.name}</div>
-                        <div className="flex items-center gap-1 text-xs text-subtle">
-                          <Clock className="size-3" /> {date(h.start_date)}
+              <ShowMore items={data.corporation_history} noun="corporation">
+                {(history) => (
+                  <ol className="relative space-y-4 border-l border-border pl-5">
+                    {history.map((h, i) => (
+                      <li key={i} className="relative">
+                        <span className={`absolute -left-[25px] top-2 size-2.5 rounded-none ring-4 ring-surface ${i === 0 ? "bg-accent" : "bg-surface-3"}`} />
+                        <div className="flex items-center gap-2.5">
+                          <img src={h.corporation.logo} alt="" className="size-7 rounded" />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{h.corporation.name}</div>
+                            <div className="flex items-center gap-1 text-xs text-subtle">
+                              <Clock className="size-3" /> {date(h.start_date)}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-                {data.corporation_history.length === 0 && <li className="text-sm text-subtle">Not loaded yet.</li>}
-              </ol>
+                      </li>
+                    ))}
+                    {data.corporation_history.length === 0 && <li className="text-sm text-subtle">Not loaded yet.</li>}
+                  </ol>
+                )}
+              </ShowMore>
             </CardBody>
           </Card>
         </div>
@@ -242,5 +250,27 @@ function ImplantList({ implants, small }: { implants: EveType[]; small?: boolean
         </Tooltip>
       ))}
     </div>
+  );
+}
+
+/** The first few of a list, with a button that shows the rest. */
+function ShowMore<T>({ items, limit = 4, noun, children }: { items: T[]; limit?: number; noun: string; children: (visible: T[]) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const hidden = items.length - limit;
+  return (
+    <>
+      {children(open || hidden <= 0 ? items : items.slice(0, limit))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent-ink transition-colors hover:text-text"
+        >
+          <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+          {open ? "Show less" : `Show ${hidden} more ${noun}${hidden === 1 ? "" : "s"}`}
+        </button>
+      )}
+    </>
   );
 }
