@@ -96,6 +96,17 @@ function Get-SetupProblem {
     return , $problems.ToArray()
 }
 
+function ConvertTo-ProblemLine {
+    <#
+      "PROBLEM: ..." lines for the wizard, one per problem. Accepts problems however PowerShell handed them over
+      (single strings, arrays, an array wrapped in an array) and skips empty ones, so no answers that are fine
+      ever show up as a blank problem.
+    #>
+    param([AllowNull()][object[]]$Problems)
+    # Written to the pipeline one line at a time (no array wrapping): callers collect them with @(...).
+    $Problems | ForEach-Object { $_ } | ForEach-Object { [string]$_ } | Where-Object { $_.Trim() } | ForEach-Object { "PROBLEM: $_" }
+}
+
 function Get-SetupCode {
     <# The first-run setup code from conduit_init's output, or ''. #>
     param([AllowEmptyString()][AllowNull()][string]$Text)

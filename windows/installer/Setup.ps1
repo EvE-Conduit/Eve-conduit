@@ -66,8 +66,9 @@ switch ($Mode) {
         if (Get-Service -Name 'conduit-web' -ErrorAction SilentlyContinue) {
             $problems += "EvE Conduit is already installed on this machine (service conduit-web exists)."
         }
-        foreach ($problem in $problems) { Write-Output "PROBLEM: $problem" }
-        if ($problems.Count) { exit 2 }
+        $lines = @(ConvertTo-ProblemLine $problems)
+        foreach ($line in $lines) { Write-Output $line }
+        if ($lines.Count) { exit 2 }
         exit 0
     }
     'Install' {

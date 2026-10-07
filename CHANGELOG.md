@@ -3,6 +3,12 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.4.1
+
+### Fixed
+- **Windows installer:** pressing Next on the EVE login page always said "Please fix these before installing" with an
+  empty list, even when every answer was fine. Real problems are now listed one per line.
+
 ## 0.4.0
 
 The first release under the EvE Conduit name, with a new look, a Windows installer and in-app updates.
