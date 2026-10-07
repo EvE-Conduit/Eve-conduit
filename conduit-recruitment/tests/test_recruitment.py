@@ -145,13 +145,30 @@ def discord_on(db, monkeypatch):
     return on_server
 
 
+def require_discord(api_client, recruiter, on=True):
+    recruiter.user_permissions.add(Permission.objects.get(codename="manage_forms"))
+    api_client.force_login(recruiter)
+    resp = api_client.call("put", "/api/p/recruit/settings", {"require_discord": on})
+    assert resp.status_code == 200, resp.content
+    return resp.json()
+
+
+def test_require_discord_is_off_by_default(setup, discord_on, api_client):
+    form, _, applicant, _ = setup
+    api_client.force_login(applicant)
+    assert api_client.call("get", "/api/p/recruit/me").json()["discord"] is None
+    assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
+
+
 def test_applying_needs_discord_linked_and_on_the_server(setup, discord_on, api_client):
     from conduit_discord.models import DiscordAccount
 
-    form, _, applicant, _ = setup
+    form, recruiter, applicant, _ = setup
+    out = require_discord(api_client, recruiter)
+    assert out == {"require_discord": True, "discord_plugin": {"installed": True, "enabled": True, "configured": True}}
     api_client.force_login(applicant)
     me = api_client.call("get", "/api/p/recruit/me").json()
-    assert me["forms"][0]["require_discord"] and me["discord"] == {"linked": False, "username": None, "on_server": False, "error": "", "ok": False}
+    assert me["discord"] == {"linked": False, "username": None, "on_server": False, "error": "", "ok": False}
     resp = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()})
     assert resp.status_code == 403 and "Link your Discord" in resp.json()["detail"]
 
@@ -164,20 +181,33 @@ def test_applying_needs_discord_linked_and_on_the_server(setup, discord_on, api_
     assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
 
 
-def test_discord_not_required_when_the_form_says_so_or_discord_is_off(setup, discord_on, api_client):
-    form, _, applicant, _ = setup
-    form.require_discord = False
-    form.save()
+def test_not_checked_while_the_discord_plugin_is_off(setup, discord_on, api_client):
+    form, recruiter, applicant, _ = setup
+    require_discord(api_client, recruiter)
+    set_enabled("discord", False)
+    api_client.force_login(recruiter)
+    plugin = api_client.call("get", "/api/p/recruit/forms").json()["settings"]["discord_plugin"]
+    assert plugin == {"installed": True, "enabled": False, "configured": False}
     api_client.force_login(applicant)
-    assert api_client.call("get", "/api/p/recruit/me").json()["discord"] is None
     assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
 
-    other = make_user(90000081, "Second Hopeful", member=False)
-    form.require_discord = True
-    form.save()
-    set_enabled("discord", False)
-    api_client.force_login(other)
-    assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
+
+def test_cant_turn_on_without_the_discord_plugin_installed(setup, api_client, monkeypatch):
+    from conduit.plugins import registry
+
+    _, recruiter, _, _ = setup
+    installed = {k: v for k, v in registry.installed().items() if k != "discord"}
+    monkeypatch.setattr(registry, "installed", lambda: installed)
+    recruiter.user_permissions.add(Permission.objects.get(codename="manage_forms"))
+    api_client.force_login(recruiter)
+    resp = api_client.call("put", "/api/p/recruit/settings", {"require_discord": True})
+    assert resp.status_code == 400 and "Install the Discord plugin" in resp.json()["detail"]
+
+
+def test_only_form_managers_change_settings(setup, api_client):
+    _, _, applicant, _ = setup
+    api_client.force_login(applicant)
+    assert api_client.call("put", "/api/p/recruit/settings", {"require_discord": True}).status_code == 403
 
 
 def test_discord_outage_blocks_with_a_retry_message(setup, discord_on, api_client, monkeypatch):
@@ -187,7 +217,8 @@ def test_discord_outage_blocks_with_a_retry_message(setup, discord_on, api_clien
     def down(*a):
         raise discord_api.DiscordError(502, "Bad gateway")
 
-    form, _, applicant, _ = setup
+    form, recruiter, applicant, _ = setup
+    require_discord(api_client, recruiter)
     DiscordAccount.objects.create(user=applicant, discord_id="555", username="hopeful")
     monkeypatch.setattr(discord_api, "member", down)
     api_client.force_login(applicant)
