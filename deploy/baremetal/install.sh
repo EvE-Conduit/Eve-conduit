@@ -34,11 +34,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 RELEASE_SRC=$(cd "$(dirname "$0")/../.." && pwd)
-EVECSM_HOME=/opt/evecsm
-EVECSM_ETC=/etc/evecsm
-EVECSM_WWW=/var/www/evecsm
-EVECSM_LOG=/var/log/evecsm
-SERVICE_USER=evecsm
+CONDUIT_HOME=/opt/conduit
+CONDUIT_ETC=/etc/conduit
+CONDUIT_WWW=/var/www/conduit
+CONDUIT_LOG=/var/log/conduit
+SERVICE_USER=conduit
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -49,7 +49,7 @@ die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 [[ "$DB" == postgres || "$DB" == mariadb ]] || die "--db must be postgres or mariadb"
 [[ -f "$RELEASE_SRC/VERSION" && -d "$RELEASE_SRC/web" ]] || die "run this from an unpacked release (see docs/install-baremetal.md)"
 VERSION=$(cat "$RELEASE_SRC/VERSION")
-[[ -e "$EVECSM_ETC/evecsm.env" ]] && die "EvE Conduit is already installed; use 'sudo evecsm upgrade <release.tar.gz>'"
+[[ -e "$CONDUIT_ETC/conduit.env" ]] && die "EvE Conduit is already installed; use 'sudo conduit upgrade <release.tar.gz>'"
 
 # --- detect the OS ------------------------------------------------------------
 . /etc/os-release
@@ -82,8 +82,8 @@ if [[ $FAMILY == debian ]]; then
   apt-get install -y -q "${pkgs[@]}"
   REDIS_SERVICE=redis-server
   SUPERVISOR_SERVICE=supervisor
-  SUPERVISOR_CONF=/etc/supervisor/conf.d/evecsm.conf
-  NGINX_CONF=/etc/nginx/sites-available/evecsm.conf
+  SUPERVISOR_CONF=/etc/supervisor/conf.d/conduit.conf
+  NGINX_CONF=/etc/nginx/sites-available/conduit.conf
 else
   dnf install -y -q epel-release 2>/dev/null || dnf install -y -q "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$MAJOR.noarch.rpm"
   pkgs=(curl gcc make pkgconf python3 nginx supervisor certbot python3-certbot-nginx policycoreutils-python-utils)
@@ -92,37 +92,37 @@ else
   if dnf info -q redis >/dev/null 2>&1; then pkgs+=(redis); REDIS_SERVICE=redis; else pkgs+=(valkey); REDIS_SERVICE=valkey; fi
   dnf install -y -q "${pkgs[@]}"
   SUPERVISOR_SERVICE=supervisord
-  SUPERVISOR_CONF=/etc/supervisord.d/evecsm.ini
-  NGINX_CONF=/etc/nginx/conf.d/evecsm.conf
+  SUPERVISOR_CONF=/etc/supervisord.d/conduit.ini
+  NGINX_CONF=/etc/nginx/conf.d/conduit.conf
 fi
 systemctl enable --now "$REDIS_SERVICE"
 
 # --- 2. service user and directories ---------------------------------------------
 step "Creating the $SERVICE_USER user and directories"
-id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$EVECSM_HOME" --shell /usr/sbin/nologin "$SERVICE_USER"
-install -d -o root -g "$SERVICE_USER" -m 0755 "$EVECSM_HOME" "$EVECSM_HOME/releases"
-install -d -o root -g "$SERVICE_USER" -m 0750 "$EVECSM_ETC"
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$EVECSM_LOG"
-install -d -o root -g root -m 0755 "$EVECSM_WWW" "$EVECSM_WWW/web"
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$EVECSM_WWW/static"
+id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$CONDUIT_HOME" --shell /usr/sbin/nologin "$SERVICE_USER"
+install -d -o root -g "$SERVICE_USER" -m 0755 "$CONDUIT_HOME" "$CONDUIT_HOME/releases"
+install -d -o root -g "$SERVICE_USER" -m 0750 "$CONDUIT_ETC"
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_LOG"
+install -d -o root -g root -m 0755 "$CONDUIT_WWW" "$CONDUIT_WWW/web"
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_WWW/static"
 # Writable state (the scheduler's bookkeeping) lives outside the code.
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 /var/lib/evecsm
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 /var/lib/conduit
 
-RELEASE_DIR="$EVECSM_HOME/releases/$VERSION"
+RELEASE_DIR="$CONDUIT_HOME/releases/$VERSION"
 mkdir -p "$RELEASE_DIR"
 cp -a "$RELEASE_SRC/." "$RELEASE_DIR/"
 chown -R root:"$SERVICE_USER" "$RELEASE_DIR"
-ln -sfn "$RELEASE_DIR" "$EVECSM_HOME/app"
-install -m 0755 "$RELEASE_DIR/deploy/baremetal/evecsm" /usr/local/bin/evecsm
+ln -sfn "$RELEASE_DIR" "$CONDUIT_HOME/app"
+install -m 0755 "$RELEASE_DIR/deploy/baremetal/conduit" /usr/local/bin/conduit
 
 # --- 3. Python 3.12 and the virtualenv -----------------------------------------------
 step "Setting up Python"
 # uv gives every supported distro the same Python 3.12, without third-party repos.
-python3 -m venv "$EVECSM_HOME/tools"
-"$EVECSM_HOME/tools/bin/pip" install -q --upgrade pip uv
-UV="$EVECSM_HOME/tools/bin/uv"
-UV_PYTHON_INSTALL_DIR="$EVECSM_HOME/python" "$UV" python install 3.12
-UV_PYTHON_INSTALL_DIR="$EVECSM_HOME/python" "$UV" venv --seed --python 3.12 "$EVECSM_HOME/venv"
+python3 -m venv "$CONDUIT_HOME/tools"
+"$CONDUIT_HOME/tools/bin/pip" install -q --upgrade pip uv
+UV="$CONDUIT_HOME/tools/bin/uv"
+UV_PYTHON_INSTALL_DIR="$CONDUIT_HOME/python" "$UV" python install 3.12
+UV_PYTHON_INSTALL_DIR="$CONDUIT_HOME/python" "$UV" venv --seed --python 3.12 "$CONDUIT_HOME/venv"
 # The venv stays root-owned: the service can run the code but not change it.
 
 # --- 4. database --------------------------------------------------------------------
@@ -137,38 +137,38 @@ if [[ $DB == postgres ]]; then
   systemctl enable --now postgresql
   systemctl reload postgresql
   runuser -u postgres -- psql -v ON_ERROR_STOP=1 -q <<SQL
-CREATE USER evecsm WITH PASSWORD '$DB_PASSWORD';
-CREATE DATABASE evecsm OWNER evecsm ENCODING 'UTF8';
+CREATE USER conduit WITH PASSWORD '$DB_PASSWORD';
+CREATE DATABASE conduit OWNER conduit ENCODING 'UTF8';
 SQL
-  DATABASE_URL="postgres://evecsm:$DB_PASSWORD@127.0.0.1:5432/evecsm"
+  DATABASE_URL="postgres://conduit:$DB_PASSWORD@127.0.0.1:5432/conduit"
 else
   systemctl enable --now mariadb
   mariadb -u root <<SQL
-CREATE DATABASE evecsm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'evecsm'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
-CREATE USER 'evecsm'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
-GRANT ALL PRIVILEGES ON evecsm.* TO 'evecsm'@'localhost';
-GRANT ALL PRIVILEGES ON evecsm.* TO 'evecsm'@'127.0.0.1';
+CREATE DATABASE conduit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'conduit'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+CREATE USER 'conduit'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
+GRANT ALL PRIVILEGES ON conduit.* TO 'conduit'@'localhost';
+GRANT ALL PRIVILEGES ON conduit.* TO 'conduit'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
-  DATABASE_URL="mysql://evecsm:$DB_PASSWORD@127.0.0.1:3306/evecsm"
+  DATABASE_URL="mysql://conduit:$DB_PASSWORD@127.0.0.1:3306/conduit"
   echo "Tip: run mariadb-secure-installation afterwards to remove test users and databases."
 fi
 
 # --- 5. configuration -------------------------------------------------------------------
-step "Writing $EVECSM_ETC/evecsm.env"
+step "Writing $CONDUIT_ETC/conduit.env"
 SECRET_KEY=$(head -c 64 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 60)
 TOKEN_KEY=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_')
 SCHEME=https
 [[ $TLS -eq 1 ]] || SCHEME=http
 umask 027
-cat > "$EVECSM_ETC/evecsm.env" <<ENV
-# Written by install.sh on $(date -u +%Y-%m-%d). Apply changes with: sudo evecsm restart
-EVECSM_SECRET_KEY=$SECRET_KEY
-EVECSM_TOKEN_KEY=$TOKEN_KEY
-EVECSM_SITE_URL=$SCHEME://$DOMAIN
-EVECSM_ALLOWED_HOSTS=$DOMAIN
-EVECSM_STATIC_ROOT=$EVECSM_WWW/static
+cat > "$CONDUIT_ETC/conduit.env" <<ENV
+# Written by install.sh on $(date -u +%Y-%m-%d). Apply changes with: sudo conduit restart
+CONDUIT_SECRET_KEY=$SECRET_KEY
+CONDUIT_TOKEN_KEY=$TOKEN_KEY
+CONDUIT_SITE_URL=$SCHEME://$DOMAIN
+CONDUIT_ALLOWED_HOSTS=$DOMAIN
+CONDUIT_STATIC_ROOT=$CONDUIT_WWW/static
 DATABASE_URL=$DATABASE_URL
 REDIS_URL=redis://127.0.0.1:6379/0
 # From https://developers.eveonline.com/applications (callback: $SCHEME://$DOMAIN/sso/callback)
@@ -177,41 +177,41 @@ ESI_SECRET_KEY=$ESI_SECRET
 ESI_USER_AGENT_CONTACT=$EMAIL
 ENV
 umask 022
-chown root:"$SERVICE_USER" "$EVECSM_ETC/evecsm.env"
-chmod 0640 "$EVECSM_ETC/evecsm.env"
-grep -v '^\s*#' "$RELEASE_DIR/requirements-modules.txt" | sed '/^\s*$/d' > "$EVECSM_ETC/modules.txt"
-chown root:"$SERVICE_USER" "$EVECSM_ETC/modules.txt"
+chown root:"$SERVICE_USER" "$CONDUIT_ETC/conduit.env"
+chmod 0640 "$CONDUIT_ETC/conduit.env"
+grep -v '^\s*#' "$RELEASE_DIR/requirements-modules.txt" | sed '/^\s*$/d' > "$CONDUIT_ETC/modules.txt"
+chown root:"$SERVICE_USER" "$CONDUIT_ETC/modules.txt"
 
 # --- 6. application ---------------------------------------------------------------------
 step "Installing EvE Conduit $VERSION"
 EXTRAS=""
 [[ $DB == mariadb ]] && EXTRAS="[mysql]"
-(cd "$RELEASE_DIR" && "$EVECSM_HOME/venv/bin/python" -m pip install -q "./backend$EXTRAS")
-(cd "$RELEASE_DIR" && "$EVECSM_HOME/venv/bin/python" -m pip install -q -r "$EVECSM_ETC/modules.txt")
-cp -a "$RELEASE_DIR/web/." "$EVECSM_WWW/web/"
-evecsm manage migrate --noinput
-evecsm manage collectstatic --noinput -v0
-SETUP_OUTPUT=$(evecsm manage evecsm_init)
+(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q "./backend$EXTRAS")
+(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q -r "$CONDUIT_ETC/modules.txt")
+cp -a "$RELEASE_DIR/web/." "$CONDUIT_WWW/web/"
+conduit manage migrate --noinput
+conduit manage collectstatic --noinput -v0
+SETUP_OUTPUT=$(conduit manage conduit_init)
 
 # --- 7. services ---------------------------------------------------------------------------
 step "Configuring Supervisor"
-install -m 0644 "$RELEASE_DIR/deploy/baremetal/supervisor/evecsm.conf" "$SUPERVISOR_CONF"
+install -m 0644 "$RELEASE_DIR/deploy/baremetal/supervisor/conduit.conf" "$SUPERVISOR_CONF"
 systemctl enable --now "$SUPERVISOR_SERVICE"
 supervisorctl reread >/dev/null
 supervisorctl update
 sleep 3
-supervisorctl status 'evecsm:*' || true
+supervisorctl status 'conduit:*' || true
 
 step "Configuring nginx"
-sed "s/auth\.example\.com/$DOMAIN/g" "$RELEASE_DIR/deploy/baremetal/nginx/evecsm.conf" > "$NGINX_CONF"
+sed "s/auth\.example\.com/$DOMAIN/g" "$RELEASE_DIR/deploy/baremetal/nginx/conduit.conf" > "$NGINX_CONF"
 if [[ $FAMILY == debian ]]; then
-  ln -sfn "$NGINX_CONF" /etc/nginx/sites-enabled/evecsm.conf
+  ln -sfn "$NGINX_CONF" /etc/nginx/sites-enabled/conduit.conf
   rm -f /etc/nginx/sites-enabled/default
 fi
 if command -v getenforce >/dev/null && [[ "$(getenforce)" == Enforcing ]]; then
-  # Let nginx reach the app on 127.0.0.1:8000 and serve /var/www/evecsm.
+  # Let nginx reach the app on 127.0.0.1:8000 and serve /var/www/conduit.
   setsebool -P httpd_can_network_connect 1
-  restorecon -R "$EVECSM_WWW"
+  restorecon -R "$CONDUIT_WWW"
 fi
 if command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
   firewall-cmd -q --permanent --add-service=http --add-service=https && firewall-cmd -q --reload
@@ -236,8 +236,8 @@ cat <<DONE
 Next steps:
   1. Create an EVE application at https://developers.eveonline.com/applications
      with callback URL: $SCHEME://$DOMAIN/sso/callback
-  2. Put its Client ID and Secret Key in $EVECSM_ETC/evecsm.env, then: sudo evecsm restart
+  2. Put its Client ID and Secret Key in $CONDUIT_ETC/conduit.env, then: sudo conduit restart
   3. Open $SCHEME://$DOMAIN, sign in, and enter the setup code above.
 
-Day to day: sudo evecsm status | logs | backup | upgrade <release.tar.gz>
+Day to day: sudo conduit status | logs | backup | upgrade <release.tar.gz>
 DONE

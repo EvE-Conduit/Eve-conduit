@@ -15,7 +15,7 @@
     (Redis-compatible cache/queue) with its own .NET runtime, Caddy (web server + HTTPS) and the WinSW
     service wrappers. Nothing goes to Program Files; winget isn't used. Every download is checked
     against a pinned SHA-256. Outside the folder only Windows' own registrations change: the services,
-    one firewall rule and the PATH entry for the evecsm command.
+    one firewall rule and the PATH entry for the conduit command.
 
     See windows\README.md for what each step does and how to do it by hand.
 
@@ -26,7 +26,7 @@
 .PARAMETER Database
     Postgres (default, recommended) or MariaDB, installed portably into the install folder.
 .PARAMETER DatabaseUrl
-    Use an existing database server instead, e.g. postgres://evecsm:PASSWORD@127.0.0.1:5432/evecsm
+    Use an existing database server instead, e.g. postgres://conduit:PASSWORD@127.0.0.1:5432/conduit
 .PARAMETER NoTls
     Serve plain HTTP (for a LAN, or when another proxy terminates HTTPS).
 .PARAMETER InstallRoot
@@ -46,7 +46,7 @@
     to them, so the site stays at https://domain. 'AsChosen': people use the chosen ports directly
     (https://domain:port). Asked if omitted.
 .PARAMETER NoTray
-    Don't start the tray control panel at sign-in (start it any time with "evecsm tray").
+    Don't start the tray control panel at sign-in (start it any time with "conduit tray").
 .PARAMETER Yes
     Don't ask any questions (needs -InstallRoot; ports not given use the defaults).
 #>
@@ -72,7 +72,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-Import-Module (Join-Path $PSScriptRoot 'scripts\Evecsm.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'scripts\Conduit.psm1') -Force
 
 $script:StepNumber = 0
 $script:StepTotal = 0
@@ -86,10 +86,10 @@ function Write-Step([string]$Message) {
 }
 
 function Save-Component([string]$Name, [string]$Destination) {
-    <# Invoke-EvecsmDownload with a line per file, so long downloads don't look like a hang. #>
+    <# Invoke-ConduitDownload with a line per file, so long downloads don't look like a hang. #>
     Write-Host "  $Name ... " -NoNewline
     $started = Get-Date
-    Invoke-EvecsmDownload -Name $Name -Destination $Destination
+    Invoke-ConduitDownload -Name $Name -Destination $Destination
     $mb = (Get-Item -LiteralPath $Destination).Length / 1MB
     Write-Host ("{0:N0} MB in {1:N0}s" -f $mb, ((Get-Date) - $started).TotalSeconds)
 }
@@ -107,7 +107,7 @@ function Get-InstallRootDriveProblem([string]$Path) {
     if ($drive.DriveType -ne [System.IO.DriveType]::Fixed) { return "Drive $($drive.Name) is a $($drive.DriveType.ToString().ToLower()) drive; use a fixed local disk." }
     $freeGb = [math]::Round($drive.AvailableFreeSpace / 1GB, 1)
     if ($freeGb -lt 5) { return "Drive $($drive.Name) has only $freeGb GB free; EvE Conduit needs at least 5 GB." }
-    if (Test-Path -LiteralPath (Join-Path $Path 'config\evecsm.env')) { return "EvE Conduit is already installed in $Path. Use 'evecsm upgrade <zip>' instead." }
+    if (Test-Path -LiteralPath (Join-Path $Path 'config\conduit.env')) { return "EvE Conduit is already installed in $Path. Use 'conduit upgrade <zip>' instead." }
     if ((Test-Path -LiteralPath $Path) -and (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) {
         return "$Path already contains files. Choose an empty or new folder; the installer locks down its permissions."
     }
@@ -154,8 +154,8 @@ if (-not [Environment]::Is64BitOperatingSystem) { throw 'EvE Conduit needs 64-bi
 if ([Environment]::OSVersion.Version.Build -lt 17763) { throw 'EvE Conduit needs Windows 10 1809 / Windows Server 2019 or newer.' }
 $Domain = $Domain.Trim() -replace '^[A-Za-z]+://', '' -replace '/+$', ''   # accept a pasted URL
 if ($Domain -notmatch '^[A-Za-z0-9.-]+$') { throw "'$Domain' doesn't look like a hostname. Pass just the name, e.g. -Domain auth.example.com (no https://, port or path)." }
-if (Get-Service -Name 'evecsm-web' -ErrorAction SilentlyContinue) {
-    throw "EvE Conduit is already installed on this machine (service evecsm-web exists). Use 'evecsm upgrade <zip>' instead."
+if (Get-Service -Name 'conduit-web' -ErrorAction SilentlyContinue) {
+    throw "EvE Conduit is already installed on this machine (service conduit-web exists). Use 'conduit upgrade <zip>' instead."
 }
 $installDb = -not $DatabaseUrl
 
@@ -172,7 +172,7 @@ elseif ($Yes) {
 else {
     $InstallRoot = Read-InstallRoot
 }
-$p = Get-EvecsmPath $InstallRoot
+$p = Get-ConduitPath $InstallRoot
 
 # --- 2. ports ---------------------------------------------------------------------------------------
 $defaults = Get-DefaultPort
@@ -312,8 +312,8 @@ $dbDepend = ''
 $isMariaDb = $DatabaseUrl.StartsWith('mysql')
 $adminNote = Join-Path $p.Config 'database-admin.txt'
 if ($installDb) {
-    $superPassword = New-EvecsmSecret 32
-    $appPassword = New-EvecsmSecret 32
+    $superPassword = New-ConduitSecret 32
+    $appPassword = New-ConduitSecret 32
     $dbPort = $ports.Database
     if ($Database -eq 'Postgres') {
         Write-Step "Setting up PostgreSQL in $InstallRoot"
@@ -333,7 +333,7 @@ if ($installDb) {
             if ($LASTEXITCODE -ne 0) { throw 'initdb failed' }
         }
         finally { Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue }
-        $dbService = 'evecsm-postgres'
+        $dbService = 'conduit-postgres'
         $isMariaDb = $false
     }
     else {
@@ -349,13 +349,13 @@ if ($installDb) {
         Add-Content -LiteralPath (Join-Path $mdbData 'my.ini') -Value @('', '[mysqld]', 'bind-address=127.0.0.1', 'character-set-server=utf8mb4', 'collation-server=utf8mb4_unicode_ci')
         # Credentials for the service's clean shutdown (readable by Administrators and the services only).
         Set-Content -LiteralPath (Join-Path $p.Config 'mariadb-admin.cnf') -Value @('[client]', 'user=root', "password=$superPassword", 'host=127.0.0.1', "port=$dbPort", 'protocol=TCP')
-        $dbService = 'evecsm-mariadb'
+        $dbService = 'conduit-mariadb'
         $isMariaDb = $true
     }
     Set-Content -LiteralPath $adminNote -Value @(
         "Database administrator password (user: $(if ($isMariaDb) { 'root' } else { 'postgres' }), port $dbPort)",
         $superPassword,
-        'Keep this safe; EvE Conduit itself uses the evecsm user from evecsm.env.'
+        'Keep this safe; EvE Conduit itself uses the conduit user from conduit.env.'
     )
     $dbDepend = "`r`n  <depend>$dbService</depend>"
 }
@@ -365,36 +365,36 @@ Write-Step "Installing EvE Conduit $version"
 $target = Join-Path $p.Releases $version
 if (Test-Path $target) { Remove-Item -LiteralPath $target -Recurse -Force }
 Copy-Item -LiteralPath $releaseDir -Destination $target -Recurse
-Set-EvecsmAppLink -Root $InstallRoot -ReleaseDir $target
+Set-ConduitAppLink -Root $InstallRoot -ReleaseDir $target
 
 if ($installDb) {
-    $DatabaseUrl = if ($isMariaDb) { "mysql://evecsm:$appPassword@127.0.0.1:$($ports.Database)/evecsm" } else { "postgres://evecsm:$appPassword@127.0.0.1:$($ports.Database)/evecsm" }
+    $DatabaseUrl = if ($isMariaDb) { "mysql://conduit:$appPassword@127.0.0.1:$($ports.Database)/conduit" } else { "postgres://conduit:$appPassword@127.0.0.1:$($ports.Database)/conduit" }
 }
-Write-EnvFile -Path $p.EnvFile -Header "Written by install.ps1 on $(Get-Date -Format yyyy-MM-dd). Apply changes with: evecsm restart" -Values ([ordered]@{
-        EVECSM_SECRET_KEY      = New-EvecsmSecret 60
-        EVECSM_TOKEN_KEY       = New-FernetKey
-        EVECSM_SITE_URL        = $siteUrl
-        EVECSM_ALLOWED_HOSTS   = "$Domain,localhost,127.0.0.1"
-        EVECSM_STATIC_ROOT     = $p.Static
-        EVECSM_BIND            = "127.0.0.1:$($ports.App)"
+Write-EnvFile -Path $p.EnvFile -Header "Written by install.ps1 on $(Get-Date -Format yyyy-MM-dd). Apply changes with: conduit restart" -Values ([ordered]@{
+        CONDUIT_SECRET_KEY      = New-ConduitSecret 60
+        CONDUIT_TOKEN_KEY       = New-FernetKey
+        CONDUIT_SITE_URL        = $siteUrl
+        CONDUIT_ALLOWED_HOSTS   = "$Domain,localhost,127.0.0.1"
+        CONDUIT_STATIC_ROOT     = $p.Static
+        CONDUIT_BIND            = "127.0.0.1:$($ports.App)"
         DATABASE_URL           = $DatabaseUrl
         REDIS_URL              = "redis://127.0.0.1:$($ports.Cache)/0"
         ESI_CLIENT_ID          = $EsiClientId
         ESI_SECRET_KEY         = $EsiSecret
         ESI_USER_AGENT_CONTACT = $Email
-        # Read by "evecsm status"; changing them here doesn't move the web server (see README).
-        EVECSM_HTTP_PORT       = $ports.Http
-        EVECSM_HTTPS_PORT      = $(if ($NoTls) { '' } else { $ports.Https })
+        # Read by "conduit status"; changing them here doesn't move the web server (see README).
+        CONDUIT_HTTP_PORT       = $ports.Http
+        CONDUIT_HTTPS_PORT      = $(if ($NoTls) { '' } else { $ports.Https })
     })
 Set-Content -LiteralPath $p.Modules -Value (Get-ModuleRequirement (Join-Path $target 'requirements-modules.txt'))
-$caddyfile = New-EvecsmCaddyfile -Template (Get-Content -LiteralPath (Join-Path $target 'windows\caddy\Caddyfile.template') -Raw) `
+$caddyfile = New-ConduitCaddyfile -Template (Get-Content -LiteralPath (Join-Path $target 'windows\caddy\Caddyfile.template') -Raw) `
     -Domain $Domain -Email $Email -Root $InstallRoot -HttpPort $ports.Http -HttpsPort $ports.Https -AppPort $ports.App `
     -NoTls:$NoTls -StandardPublicPorts:$standardPublic
 [IO.File]::WriteAllText((Join-Path $p.Config 'Caddyfile'), $caddyfile, (New-Object Text.UTF8Encoding $false))
 
 Write-Host 'Installing the Python packages (a few minutes; pip lists each one as it goes).'
-Install-EvecsmPythonPackage -Root $InstallRoot -ReleaseDir $target -MariaDb:$isMariaDb
-Publish-EvecsmWeb -Root $InstallRoot -ReleaseDir $target
+Install-ConduitPythonPackage -Root $InstallRoot -ReleaseDir $target -MariaDb:$isMariaDb
+Publish-ConduitWeb -Root $InstallRoot -ReleaseDir $target
 
 Write-Step 'Installing the tray control panel and uninstaller'
 $dbKind = if (-not $installDb) { 'None' } elseif ($isMariaDb) { 'MariaDB' } else { 'Postgres' }
@@ -404,7 +404,7 @@ Write-TraySetting -Root $InstallRoot -Database $dbKind
 Copy-Item -LiteralPath (Join-Path $target 'windows\uninstall.ps1') -Destination (Join-Path $InstallRoot 'uninstall.ps1') -Force
 
 Write-Step 'Locking down folder permissions'
-Set-EvecsmAcl -Root $InstallRoot
+Set-ConduitAcl -Root $InstallRoot
 
 # --- 8. services ------------------------------------------------------------------------------------------------
 Write-Step 'Registering Windows services'
@@ -414,48 +414,48 @@ $templateValues = [ordered]@{
     CACHE_PORT = $ports.Cache
     DB_DEPEND  = $dbDepend
 }
-foreach ($id in Get-EvecsmServiceId -Database $dbKind) {
-    Install-EvecsmService -Root $InstallRoot -Id $id -Values $templateValues
+foreach ($id in Get-ConduitServiceId -Database $dbKind) {
+    Install-ConduitService -Root $InstallRoot -Id $id -Values $templateValues
 }
 
 if ($installDb) {
     Write-Step 'Creating the EvE Conduit database'
     Start-Service $dbService
-    Wait-EvecsmDatabase -Root $InstallRoot
+    Wait-ConduitDatabase -Root $InstallRoot
     if ($isMariaDb) {
-        $sql = "CREATE DATABASE evecsm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; " +
-        "CREATE USER 'evecsm'@'localhost' IDENTIFIED BY '$appPassword'; CREATE USER 'evecsm'@'127.0.0.1' IDENTIFIED BY '$appPassword'; " +
-        "GRANT ALL PRIVILEGES ON evecsm.* TO 'evecsm'@'localhost'; GRANT ALL PRIVILEGES ON evecsm.* TO 'evecsm'@'127.0.0.1'; FLUSH PRIVILEGES;"
+        $sql = "CREATE DATABASE conduit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; " +
+        "CREATE USER 'conduit'@'localhost' IDENTIFIED BY '$appPassword'; CREATE USER 'conduit'@'127.0.0.1' IDENTIFIED BY '$appPassword'; " +
+        "GRANT ALL PRIVILEGES ON conduit.* TO 'conduit'@'localhost'; GRANT ALL PRIVILEGES ON conduit.* TO 'conduit'@'127.0.0.1'; FLUSH PRIVILEGES;"
         & (Join-Path $p.Bin 'mariadb\bin\mariadb.exe') "--defaults-extra-file=$(Join-Path $p.Config 'mariadb-admin.cnf')" -e $sql
     }
     else {
         $env:PGPASSWORD = $superPassword
         & (Join-Path $p.Bin 'postgres\bin\psql.exe') -h 127.0.0.1 -p $ports.Database -U postgres -v ON_ERROR_STOP=1 -q `
-            -c "CREATE USER evecsm WITH PASSWORD '$appPassword';" -c "CREATE DATABASE evecsm OWNER evecsm ENCODING 'UTF8';"
+            -c "CREATE USER conduit WITH PASSWORD '$appPassword';" -c "CREATE DATABASE conduit OWNER conduit ENCODING 'UTF8';"
         Remove-Item Env:PGPASSWORD
     }
     if ($LASTEXITCODE -ne 0) { throw 'Creating the EvE Conduit database failed' }
 }
 
 Write-Step 'Preparing the database'
-Invoke-EvecsmPython -Root $InstallRoot -Arguments @('manage', 'migrate', '--noinput')
-Invoke-EvecsmPython -Root $InstallRoot -Arguments @('manage', 'collectstatic', '--noinput', '-v0')
+Invoke-ConduitPython -Root $InstallRoot -Arguments @('manage', 'migrate', '--noinput')
+Invoke-ConduitPython -Root $InstallRoot -Arguments @('manage', 'collectstatic', '--noinput', '-v0')
 # The init step queues the static data import, so run it once Garnet is up.
-Start-Service evecsm-garnet
-$setupOutput = Invoke-EvecsmPython -Root $InstallRoot -Arguments @('manage', 'evecsm_init') 2>&1 | Out-String
-foreach ($id in Get-EvecsmServiceId -Database $dbKind) { Start-Service $id }
+Start-Service conduit-garnet
+$setupOutput = Invoke-ConduitPython -Root $InstallRoot -Arguments @('manage', 'conduit_init') 2>&1 | Out-String
+foreach ($id in Get-ConduitServiceId -Database $dbKind) { Start-Service $id }
 
 Write-Step 'Opening the firewall for the web ports'
 $webPorts = @($ports.Http)
 if (-not $NoTls) { $webPorts += $ports.Https }
-Get-NetFirewallRule -DisplayName 'EVECSM web' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -DisplayName 'EVECSM web' -Direction Inbound -Protocol TCP -LocalPort $webPorts -Action Allow | Out-Null
+Get-NetFirewallRule -DisplayName 'EvE Conduit web' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+New-NetFirewallRule -DisplayName 'EvE Conduit web' -Direction Inbound -Protocol TCP -LocalPort $webPorts -Action Allow | Out-Null
 
-Write-Step 'Installing the evecsm admin command'
-Copy-Item -LiteralPath (Join-Path $target 'windows\evecsm.ps1') -Destination (Join-Path $InstallRoot 'evecsm.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $target 'windows\scripts\Evecsm.psm1') -Destination (Join-Path $InstallRoot 'Evecsm.psm1') -Force
-# "& exit /b" on the same line: cmd never re-reads this file, so "evecsm uninstall" can delete it.
-Set-Content -LiteralPath (Join-Path $InstallRoot 'evecsm.cmd') -Value "@powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0evecsm.ps1`" %* & exit /b"
+Write-Step 'Installing the conduit admin command'
+Copy-Item -LiteralPath (Join-Path $target 'windows\conduit.ps1') -Destination (Join-Path $InstallRoot 'conduit.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $target 'windows\scripts\Conduit.psm1') -Destination (Join-Path $InstallRoot 'Conduit.psm1') -Force
+# "& exit /b" on the same line: cmd never re-reads this file, so "conduit uninstall" can delete it.
+Set-Content -LiteralPath (Join-Path $InstallRoot 'conduit.cmd') -Value "@powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0conduit.ps1`" %* & exit /b"
 $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 if (($machinePath -split ';') -notcontains $InstallRoot) {
     [Environment]::SetEnvironmentVariable('Path', "$machinePath;$InstallRoot", 'Machine')
@@ -463,31 +463,31 @@ if (($machinePath -split ';') -notcontains $InstallRoot) {
 Remove-Item -LiteralPath $downloads -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Step 'Registering with Apps & features'
-Set-EvecsmUninstallEntry -Root $InstallRoot -Version $version
+Set-ConduitUninstallEntry -Root $InstallRoot -Version $version
 
 if ($NoTray) {
-    Write-Host 'Tray control panel not started at sign-in (-NoTray); open it any time with: evecsm tray'
+    Write-Host 'Tray control panel not started at sign-in (-NoTray); open it any time with: conduit tray'
 }
 elseif (-not $hasDesktop) {
-    Write-Host 'No desktop on this machine (Server Core?), so the tray control panel is skipped. Use "evecsm status".'
+    Write-Host 'No desktop on this machine (Server Core?), so the tray control panel is skipped. Use "conduit status".'
 }
 else {
     Write-Step 'Starting the tray control panel'
-    Set-EvecsmTrayAutostart -Root $InstallRoot -Enabled $true
-    Start-EvecsmTray -Root $InstallRoot
+    Set-ConduitTrayAutostart -Root $InstallRoot -Enabled $true
+    Start-ConduitTray -Root $InstallRoot
 }
 
 # --- done ---------------------------------------------------------------------------------------------------------------
 $elapsed = (Get-Date) - $script:InstallStart
 Write-Host ("`n==> EvE Conduit $version is installed in $InstallRoot ({0}:{1:00})" -f [int][math]::Floor($elapsed.TotalMinutes), $elapsed.Seconds) -ForegroundColor Cyan
 ($setupOutput -split "`n") | Where-Object { $_ -match 'setup code|ESI_' } | ForEach-Object { Write-Host $_.Trim() -ForegroundColor Yellow }
-Get-Service evecsm-* | Format-Table -AutoSize Name, Status, DisplayName
+Get-Service conduit-* | Format-Table -AutoSize Name, Status, DisplayName
 Write-Host @"
 Next steps:
   1. Create an EVE application at https://developers.eveonline.com/applications
      with callback URL: $siteUrl/sso/callback
-  2. Put its Client ID and Secret Key in $($p.EnvFile), then run: evecsm restart
+  2. Put its Client ID and Secret Key in $($p.EnvFile), then run: conduit restart
   3. Open $siteUrl, sign in, and enter the setup code above.
 
-Day to day (in an Administrator terminal): evecsm status | logs | backup | upgrade <zip>
+Day to day (in an Administrator terminal): conduit status | logs | backup | upgrade <zip>
 "@

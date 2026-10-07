@@ -1,8 +1,8 @@
 import pytest
 
-from evecsm.sheet.contracts.models import Contract
-from evecsm.sheet.market.models import MarketOrder
-from evecsm.sheet.models import SyncStatus
+from conduit.sheet.contracts.models import Contract
+from conduit.sheet.market.models import MarketOrder
+from conduit.sheet.models import SyncStatus
 
 from .fake_esi import CID
 from .test_sheet import fake, pilot, run  # noqa: F401  (fixtures)
@@ -47,7 +47,7 @@ def test_research(pilot, fake, client):
 def test_mining(pilot, fake, client, monkeypatch):
     from datetime import datetime, timezone
 
-    from evecsm.eve.tasks import update_market_prices
+    from conduit.eve.tasks import update_market_prices
 
     update_market_prices.run()
     assert run("mining") == SyncStatus.Result.OK
@@ -86,7 +86,7 @@ def test_market_orders_and_filled_detection(pilot, fake, client):
 
 @pytest.mark.django_db
 def test_contracts(pilot, fake, client):
-    from evecsm.eve.tasks import update_market_prices
+    from conduit.eve.tasks import update_market_prices
 
     update_market_prices.run()
     assert run("contracts") == SyncStatus.Result.OK

@@ -4,10 +4,10 @@ import pytest
 from django.contrib.auth.models import Group
 from django.utils import timezone
 
-from evecsm.access import groups, rules
-from evecsm.access.models import AutoGroupGrace, GroupProfile, GroupRequest, State
-from evecsm.events import bus
-from evecsm.notify.models import Notification
+from conduit.access import groups, rules
+from conduit.access.models import AutoGroupGrace, GroupProfile, GroupRequest, State
+from conduit.events import bus
+from conduit.notify.models import Notification
 
 from .conftest import make_user
 
@@ -235,9 +235,9 @@ def check(user, rtype, negate=False, **params):
 
 @pytest.mark.django_db
 def test_builtin_rules(corp):
-    from evecsm.accounts.models import Character
-    from evecsm.sheet.overview.models import CharacterInfo
-    from evecsm.sheet.skills.models import CharacterSkill, SkillSummary
+    from conduit.accounts.models import Character
+    from conduit.sheet.overview.models import CharacterInfo
+    from conduit.sheet.skills.models import CharacterSkill, SkillSummary
 
     member = State.objects.create(name="Member", priority=10)
     u = make_user(90000020, "Main", corporation=corp)

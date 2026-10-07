@@ -6,14 +6,14 @@ import httpx
 import pytest
 from django.contrib.auth.models import Group, Permission
 
-from evecsm.accounts.models import UserPreferences
-from evecsm.audit.models import AuditEvent
-from evecsm.events import bus
-from evecsm.events.models import Webhook, WebhookDelivery
-from evecsm.events.webhooks import render, sign
-from evecsm.notify.models import Notification
-from evecsm.notify.services import notify
-from evecsm.site.models import SiteSettings
+from conduit.accounts.models import UserPreferences
+from conduit.audit.models import AuditEvent
+from conduit.events import bus
+from conduit.events.models import Webhook, WebhookDelivery
+from conduit.events.webhooks import render, sign
+from conduit.notify.models import Notification
+from conduit.notify.services import notify
+from conduit.site.models import SiteSettings
 
 from .conftest import make_user
 
@@ -45,7 +45,7 @@ def test_handlers_run_after_commit_and_failures_are_isolated(django_capture_on_c
 
 @pytest.mark.django_db
 def test_group_join_emits_event(user, api_client, django_capture_on_commit_callbacks):
-    from evecsm.access.models import GroupProfile
+    from conduit.access.models import GroupProfile
 
     group = Group.objects.create(name="Industry")
     GroupProfile.objects.create(group=group, joinable=True)
@@ -82,13 +82,13 @@ def test_webhook_delivery_signs_and_logs(monkeypatch, django_capture_on_commit_c
         sent.append((url, content, headers))
         return httpx.Response(204)
 
-    monkeypatch.setattr("evecsm.events.webhooks.httpx.post", fake_post)
+    monkeypatch.setattr("conduit.events.webhooks.httpx.post", fake_post)
     with django_capture_on_commit_callbacks(execute=True):
         bus.emit("user.created", user_id=1, user="Pilot")
     assert len(sent) == 1
     url, body, headers = sent[0]
     assert url == "https://example.com/hook"
-    assert headers["X-EVECSM-Signature"] == sign(hook.secret, body)
+    assert headers["X-Conduit-Signature"] == sign(hook.secret, body)
     assert json.loads(body)["data"]["user"] == "Pilot"
     delivery = WebhookDelivery.objects.get()
     assert delivery.ok and delivery.status == 204
@@ -96,10 +96,10 @@ def test_webhook_delivery_signs_and_logs(monkeypatch, django_capture_on_commit_c
 
 @pytest.mark.django_db
 def test_failed_delivery_is_recorded(monkeypatch):
-    from evecsm.events.webhooks import deliver
+    from conduit.events.webhooks import deliver
 
     hook = Webhook.objects.create(name="Discord", kind="discord", url="https://discord.example/x")
-    monkeypatch.setattr("evecsm.events.webhooks.httpx.post", lambda *a, **k: httpx.Response(400, text="bad"))
+    monkeypatch.setattr("conduit.events.webhooks.httpx.post", lambda *a, **k: httpx.Response(400, text="bad"))
     assert deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, False]).get() == "failed"
     hook.refresh_from_db()
     assert hook.failures == 1 and hook.last_status == 400
@@ -117,7 +117,7 @@ def test_webhook_admin_api(admin_user, user, api_client, monkeypatch):
     resp = api_client.call("post", "/api/admin/webhooks", {"name": "Ops", "url": "https://discord.example/x", "kind": "discord", "events": ["token.invalid"]})
     assert resp.status_code == 200, resp.content
     hook = resp.json()
-    monkeypatch.setattr("evecsm.events.webhooks.httpx.post", lambda *a, **k: httpx.Response(204))
+    monkeypatch.setattr("conduit.events.webhooks.httpx.post", lambda *a, **k: httpx.Response(204))
     test = api_client.call("post", f"/api/admin/webhooks/{hook['id']}/test").json()
     assert test["result"] == "ok"
     assert api_client.call("get", f"/api/admin/webhooks/{hook['id']}/deliveries").json()["count"] == 1
@@ -170,8 +170,8 @@ def test_lost_token_notifies_owner(user, monkeypatch, django_capture_on_commit_c
 
     from django.utils import timezone
 
-    from evecsm.esi import tokens
-    from evecsm.esi.exceptions import TokenInvalid
+    from conduit.esi import tokens
+    from conduit.esi.exceptions import TokenInvalid
 
     token = user.main_character.token
     token.expires_at = timezone.now() - timedelta(minutes=1)
@@ -273,7 +273,7 @@ def test_impersonation_rules(user, admin_user, api_client):
 def test_search_respects_visibility(user, corp, api_client):
     from django.contrib.auth.models import Permission
 
-    from evecsm.access.models import GroupProfile
+    from conduit.access.models import GroupProfile
 
     stranger = make_user(90000002, "Pilot Two", corporation=corp)
     hidden = Group.objects.create(name="Pilot Secret")
@@ -296,7 +296,7 @@ def test_search_respects_visibility(user, corp, api_client):
 
 @pytest.mark.django_db
 def test_module_search_provider(user, api_client):
-    from evecsm.modules.services import set_enabled
+    from conduit.modules.services import set_enabled
 
     set_enabled("sample", True)
     api_client.force_login(user)
@@ -324,8 +324,8 @@ def test_health(admin_user, user, api_client):
 
 @pytest.mark.django_db
 def test_external_notifications(client, user):
-    from evecsm.external import areas
-    from evecsm.external.models import ApiKey
+    from conduit.external import areas
+    from conduit.external.models import ApiKey
 
     other = make_user(90000002, "Pilot Two")
     group = Group.objects.create(name="Fleet")
@@ -344,8 +344,8 @@ def test_external_notifications(client, user):
 
 @pytest.mark.django_db
 def test_sync_failed_event_after_repeated_errors(django_capture_on_commit_callbacks):
-    from evecsm.sheet.models import SyncStatus
-    from evecsm.sheet.tasks import SYNC_FAILED_AFTER, _finish
+    from conduit.sheet.models import SyncStatus
+    from conduit.sheet.tasks import SYNC_FAILED_AFTER, _finish
 
     pilot = make_user(90000003, "Flaky")
     status = SyncStatus.objects.create(character=pilot.main_character, section="skills")

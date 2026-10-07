@@ -2,8 +2,8 @@
 
 import re
 
-from evecsm.esi.client import EsiResponse
-from evecsm.esi.exceptions import EsiError
+from conduit.esi.client import EsiResponse
+from conduit.esi.exceptions import EsiError
 
 CID = 90000001
 SDE_TYPES = {
@@ -196,7 +196,7 @@ class FakeEsi:
 
 
 def load_sde_fixture():
-    from evecsm.sde.models import ItemCategory, ItemGroup, ItemType, Region, SkillInfo, SolarSystem, Constellation, Station
+    from conduit.sde.models import ItemCategory, ItemGroup, ItemType, Region, SkillInfo, SolarSystem, Constellation, Station
 
     for cat, name in {6: "Ship", 16: "Skill", 4: "Material", 2: "Celestial", 20: "Implant", 9: "Blueprint"}.items():
         ItemCategory.objects.create(id=cat, name=name, published=True)
@@ -210,7 +210,7 @@ def load_sde_fixture():
     SolarSystem.objects.create(id=30000142, name="Jita", constellation_id=20000020, region_id=10000002, security_status=0.9459)
     SolarSystem.objects.create(id=30000144, name="Perimeter", constellation_id=20000020, region_id=10000002, security_status=0.9)
     Station.objects.create(id=60003760, solar_system_id=30000142, type_id=1531, owner_id=1000035)
-    from evecsm.sde.models import PlanetSchematic
+    from conduit.sde.models import PlanetSchematic
 
     PlanetSchematic.objects.create(id=65, name="Superconductors", cycle_time=3600)
     ItemType.objects.filter(pk=34).update(volume=0.01)

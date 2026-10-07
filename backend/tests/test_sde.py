@@ -3,8 +3,8 @@ import zipfile
 
 import pytest
 
-from evecsm.sde import importer
-from evecsm.sde.models import ItemType, SdeVersion, SkillInfo, SolarSystem, Station
+from conduit.sde import importer
+from conduit.sde.models import ItemType, SdeVersion, SkillInfo, SolarSystem, Station
 
 
 def write_zip(path, files):

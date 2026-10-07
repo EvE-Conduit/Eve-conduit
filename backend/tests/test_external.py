@@ -4,11 +4,11 @@ import pytest
 from django.contrib.auth.models import Group
 from django.utils import timezone
 
-from evecsm.access.models import GroupProfile, State
-from evecsm.audit.models import AuditEvent, ServiceLog
-from evecsm.external import areas
-from evecsm.external.models import ApiKey, ApiRequest
-from evecsm.modules.services import set_enabled as set_module_enabled
+from conduit.access.models import GroupProfile, State
+from conduit.audit.models import AuditEvent, ServiceLog
+from conduit.external import areas
+from conduit.external.models import ApiKey, ApiRequest
+from conduit.modules.services import set_enabled as set_module_enabled
 
 
 def make_key(scopes=(), **fields):
@@ -174,7 +174,7 @@ def test_every_call_is_logged(client):
 def test_logs_api_polls_incrementally(client, admin_user):
     on("logs")
     _, secret = make_key(["logs:audit"])
-    from evecsm.audit.services import record
+    from conduit.audit.services import record
 
     for i in range(3):
         record("test.event", f"did thing {i}", actor=admin_user)
@@ -188,16 +188,16 @@ def test_logs_api_polls_incrementally(client, admin_user):
 def test_warnings_land_in_service_log():
     import logging
 
-    logging.getLogger("evecsm.test").warning("disk is %s", "full")
+    logging.getLogger("conduit.test").warning("disk is %s", "full")
     logging.getLogger("django.request").warning("Not Found: /x")  # 4xx noise is skipped
-    assert list(ServiceLog.objects.values_list("logger", "message")) == [("evecsm.test", "disk is full")]
+    assert list(ServiceLog.objects.values_list("logger", "message")) == [("conduit.test", "disk is full")]
 
 
 @pytest.mark.django_db
 def test_purge_respects_retention(settings):
-    from evecsm.audit.tasks import purge_logs
+    from conduit.audit.tasks import purge_logs
 
-    settings.EVECSM_AUDIT_LOG_DAYS = 30
+    settings.CONDUIT_AUDIT_LOG_DAYS = 30
     old = AuditEvent.objects.create(action="x", summary="old", at=timezone.now() - timedelta(days=31))
     new = AuditEvent.objects.create(action="x", summary="new")
     purge_logs()
@@ -235,11 +235,11 @@ def test_admin_endpoints_need_permissions(api_client, user):
 def test_log_files_only_from_log_dir(api_client, admin_user, settings, tmp_path):
     api_client.force_login(admin_user)
     assert api_client.call("get", "/api/admin/logs/files").json()["configured"] is False
-    (tmp_path / "evecsm-web.out.log").write_text("\n".join(f"line {i}" for i in range(1000)))
+    (tmp_path / "conduit-web.out.log").write_text("\n".join(f"line {i}" for i in range(1000)))
     (tmp_path.parent / "secret.txt").write_text("nope")
-    settings.EVECSM_LOG_DIR = str(tmp_path)
-    assert [f["name"] for f in api_client.call("get", "/api/admin/logs/files").json()["files"]] == ["evecsm-web.out.log"]
-    data = api_client.call("get", "/api/admin/logs/files/evecsm-web.out.log?lines=3").json()
+    settings.CONDUIT_LOG_DIR = str(tmp_path)
+    assert [f["name"] for f in api_client.call("get", "/api/admin/logs/files").json()["files"]] == ["conduit-web.out.log"]
+    data = api_client.call("get", "/api/admin/logs/files/conduit-web.out.log?lines=3").json()
     assert data["lines"] == ["line 997", "line 998", "line 999"] and data["truncated"] is True
     assert api_client.call("get", "/api/admin/logs/files/..%2Fsecret.txt").status_code == 404
 

@@ -8,7 +8,7 @@
     removes the firewall rule, the PATH entry, the sign-in entry for the tray panel and the
     "Apps & features" entry, then deletes the install folder.
 
-    Start it from "Apps & features", with "evecsm uninstall", or directly:
+    Start it from "Apps & features", with "conduit uninstall", or directly:
         powershell -ExecutionPolicy Bypass -File <install folder>\uninstall.ps1
 
     It asks what to do:
@@ -40,13 +40,13 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # --- find the install ---------------------------------------------------------------------------------
-$uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\EVECSM'
+$uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\EveConduit'
 if (-not $Root) {
-    if (Test-Path (Join-Path $PSScriptRoot 'config\evecsm.env')) { $Root = $PSScriptRoot }
-    elseif ($env:EVECSM_ROOT) { $Root = $env:EVECSM_ROOT }
+    if (Test-Path (Join-Path $PSScriptRoot 'config\conduit.env')) { $Root = $PSScriptRoot }
+    elseif ($env:CONDUIT_ROOT) { $Root = $env:CONDUIT_ROOT }
     elseif (Test-Path $uninstallKey) { $Root = (Get-ItemProperty $uninstallKey).InstallLocation }
 }
-if (-not $Root -or -not (Test-Path -LiteralPath (Join-Path $Root 'config\evecsm.env'))) {
+if (-not $Root -or -not (Test-Path -LiteralPath (Join-Path $Root 'config\conduit.env'))) {
     throw 'Could not find an EvE Conduit installation. Pass -Root <install folder>.'
 }
 $Root = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
@@ -64,13 +64,13 @@ if (-not ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Pri
 }
 
 # The module lives next to us in the install folder, or in windows\scripts in a release folder.
-$module = @((Join-Path $PSScriptRoot 'Evecsm.psm1'), (Join-Path $PSScriptRoot 'scripts\Evecsm.psm1'), (Join-Path $Root 'Evecsm.psm1')) |
+$module = @((Join-Path $PSScriptRoot 'Conduit.psm1'), (Join-Path $PSScriptRoot 'scripts\Conduit.psm1'), (Join-Path $Root 'Conduit.psm1')) |
     Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-if (-not $module) { throw 'Evecsm.psm1 not found next to this script or in the install folder.' }
+if (-not $module) { throw 'Conduit.psm1 not found next to this script or in the install folder.' }
 Import-Module $module -Force
-$p = Get-EvecsmPath $Root
+$p = Get-ConduitPath $Root
 
-$services = @(Get-EvecsmServiceId | Where-Object { Get-Service -Name $_ -ErrorAction SilentlyContinue })
+$services = @(Get-ConduitServiceId | Where-Object { Get-Service -Name $_ -ErrorAction SilentlyContinue })
 $version = if (Test-Path (Join-Path $p.App 'VERSION')) { (Get-Content (Join-Path $p.App 'VERSION') -TotalCount 1).Trim() } else { '?' }
 
 Write-Host ''
@@ -111,7 +111,7 @@ if ($Mode -eq 'All' -and -not $NoBackup) {
         New-Item -ItemType Directory -Force -Path $fullBackup | Out-Null
         Write-Host 'Making a backup (the database must still be running)...'
         $before = @(Get-ChildItem -LiteralPath $p.Backups -Filter *.zip -ErrorAction SilentlyContinue | ForEach-Object FullName)
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'evecsm.ps1') backup
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'conduit.ps1') backup
         $new = @(Get-ChildItem -LiteralPath $p.Backups -Filter *.zip | Where-Object { $before -notcontains $_.FullName } | Sort-Object LastWriteTime -Descending)
         if (-not $new) { throw 'The backup failed, so nothing was removed. Fix the problem above, or run again with -NoBackup.' }
         $backupFile = Join-Path $fullBackup $new[0].Name
@@ -137,13 +137,13 @@ $problems = New-Object System.Collections.Generic.List[string]
 
 # --- 1. tray panels (one per signed-in user) -------------------------------------------------------------------
 Write-Step 'Closing the tray panel'
-$trayScript = Join-Path $p.Root 'tray\EvecsmTray.ps1'
+$trayScript = Join-Path $p.Root 'tray\ConduitTray.ps1'
 foreach ($proc in Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'") {
     if ($proc.CommandLine -and $proc.CommandLine.IndexOf($trayScript, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
         Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
     }
 }
-Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name 'EVECSM Tray' -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name 'EvE Conduit Tray' -ErrorAction SilentlyContinue
 
 # --- 2. services, last-started first ----------------------------------------------------------------------------
 Write-Step 'Stopping and removing services'
@@ -162,7 +162,7 @@ foreach ($id in $reverse) {
 
 # --- 3. Windows registrations ----------------------------------------------------------------------------------
 Write-Step 'Removing the firewall rule, PATH entry and Apps & features entry'
-foreach ($name in @('EVECSM web', 'EVECSM HTTP/HTTPS')) {
+foreach ($name in @('EvE Conduit web', 'EvE Conduit HTTP/HTTPS')) {
     Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 }
 $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')

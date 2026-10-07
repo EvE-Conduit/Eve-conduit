@@ -3,8 +3,8 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from evecsm.accounts.models import Character, Token, User
-from evecsm.eve.models import EveAlliance, EveCorporation
+from conduit.accounts.models import Character, Token, User
+from conduit.eve.models import EveAlliance, EveCorporation
 
 
 @pytest.fixture(autouse=True)
@@ -19,10 +19,10 @@ def _clear_cache():
 @pytest.fixture(autouse=True)
 def _no_affiliation_calls(monkeypatch):
     """Linking a character queues an ESI affiliation update; keep tests offline."""
-    from evecsm.eve import tasks
+    from conduit.eve import tasks
 
     monkeypatch.setattr(tasks.update_affiliations, "delay", lambda *a, **k: None)
-    from evecsm.sheet import tasks as sheet_tasks
+    from conduit.sheet import tasks as sheet_tasks
 
     monkeypatch.setattr(sheet_tasks.sync_section, "delay", lambda *a, **k: None)
 
@@ -99,4 +99,4 @@ def _public_dns(monkeypatch):
             return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))]
         return real(host, port, *args, **kwargs)
 
-    monkeypatch.setattr("evecsm.events.safety.socket.getaddrinfo", fake)
+    monkeypatch.setattr("conduit.events.safety.socket.getaddrinfo", fake)

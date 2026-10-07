@@ -1,16 +1,16 @@
 # Platform services
 
 What the core offers every page and module besides login and access control. All of it is available to
-modules; the module contract (`evecsm.modules.Module`) lists the hooks.
+modules; the module contract (`conduit.modules.Module`) lists the hooks.
 
 ## Events and webhooks
 
-`evecsm.events.bus` is an in-process event bus. Core code and modules announce what happened; anything can
+`conduit.events.bus` is an in-process event bus. Core code and modules announce what happened; anything can
 listen. Handlers run after the database transaction commits, and a failing handler is logged without
 affecting the code that emitted the event.
 
 ```python
-from evecsm.events import bus
+from conduit.events import bus
 
 bus.register("fleets.created", "Fleet created", "A fleet was scheduled", module="fleets")  # shows in the webhook editor
 
@@ -33,7 +33,7 @@ Core events: `user.created`, `user.state_changed`, `character.added`, `character
 
 - **Discord**: an embed per event, coloured by level.
 - **Slack**: a text message.
-- **JSON**: `{"event", "at", "data"}` with `X-EVECSM-Event` and `X-EVECSM-Signature: sha256=<hex>`, the
+- **JSON**: `{"event", "at", "data"}` with `X-Conduit-Event` and `X-Conduit-Signature: sha256=<hex>`, the
   HMAC-SHA256 of the raw body keyed with the webhook's secret. Verify it before trusting the body.
 
 Failed deliveries (network errors, 429 and 5xx) are retried four times with growing delays. Every attempt is
@@ -41,14 +41,14 @@ listed under the webhook's history, with the status code only: replies are never
 
 Webhook URLs must be `https://` addresses on the public internet. Hosts that resolve to private, loopback,
 link-local (cloud metadata) or reserved addresses are refused when the webhook is saved and again before every
-delivery, and redirects are not followed. `EVECSM_WEBHOOK_ALLOW_PRIVATE=true` lifts this for installs that
+delivery, and redirects are not followed. `CONDUIT_WEBHOOK_ALLOW_PRIVATE=true` lifts this for installs that
 deliberately post to internal services.
 
 ## Notifications
 
 ```python
-from evecsm.notify import notify
-from evecsm.notify.services import notify_permission, register_category
+from conduit.notify import notify
+from conduit.notify.services import notify_permission, register_category
 
 register_category("m.fleets", "Fleet pings")
 notify(user, "Fleet in 15 minutes", "Form up in Jita", link="/m/fleets/12", level="warning", category="m.fleets")
@@ -84,7 +84,7 @@ providers by listing dotted paths in `Module.search`:
 
 ```python
 class FleetsModule(Module):
-    search = ("evecsm_fleets.search:find",)
+    search = ("conduit_fleets.search:find",)
 
 def find(request, q, limit):
     rows = Fleet.objects.visible_to(request.user).filter(name__icontains=q)[:limit]

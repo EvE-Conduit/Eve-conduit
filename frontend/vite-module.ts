@@ -2,7 +2,7 @@
  * Build preset for module front ends.
  *
  * Produces one self-contained ES module (module.js) that imports React, the
- * router, React Query and @evecsm/sdk from the host at runtime.
+ * router, React Query and @conduit/sdk from the host at runtime.
  *
  * Styling: modules use the same Tailwind classes as the site. Instead of
  * shipping CSS (which would fight the site's stylesheet over rule order), the
@@ -18,7 +18,7 @@ import { SHARED } from "./vite-shared-modules.ts";
 
 function exportClasses(srcDir: string): Plugin {
   return {
-    name: "evecsm-module-classes",
+    name: "conduit-module-classes",
     apply: "build",
     generateBundle(_, bundle) {
       const classes = scanCandidates(srcDir);

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Brand, BrandMark } from "./Brand";
 import type { NavSection } from "./nav";
 
-const COLLAPSE_KEY = "evecsm:sidebar-collapsed";
+const COLLAPSE_KEY = "conduit:sidebar-collapsed";
 
 export function readCollapsed() {
   try {

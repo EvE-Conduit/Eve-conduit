@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+# conduit: day-to-day administration of a bare-metal EvE Conduit install.
+#
+#   conduit status | start | stop | restart [web|worker|beat]
+#   conduit logs [web|worker|beat]        follow a service log
+#   conduit manage <command> [args]       run a Django management command
+#   conduit setup-code                    show the first-run setup code
+#   conduit upgrade <release.tar.gz>      install a new release (keeps the old one for rollback)
+#   conduit rollback                      switch back to the previous release
+#   conduit backup                        dump the database and config to /var/backups/conduit
+#   conduit module install <package>      install a module (PyPI name, git URL or path)
+#   conduit module list                   list installed modules
+#   conduit run web|worker|beat           used by Supervisor to start the services
+set -euo pipefail
+
+CONDUIT_HOME=${CONDUIT_HOME:-/opt/conduit}
+CONDUIT_ETC=${CONDUIT_ETC:-/etc/conduit}
+CONDUIT_WWW=${CONDUIT_WWW:-/var/www/conduit}
+CONDUIT_LOG=${CONDUIT_LOG:-/var/log/conduit}
+CONDUIT_BACKUPS=${CONDUIT_BACKUPS:-/var/backups/conduit}
+CONDUIT_STATE=${CONDUIT_STATE:-/var/lib/conduit}
+CONDUIT_USER=${CONDUIT_USER:-conduit}
+APP="$CONDUIT_HOME/app"
+VENV="$CONDUIT_HOME/venv"
+ENV_FILE="$CONDUIT_ETC/conduit.env"
+MODULES_FILE="$CONDUIT_ETC/modules.txt"
+SUPERVISOR_GROUP=conduit
+
+die() { echo "conduit: $*" >&2; exit 1; }
+
+# CONDUIT_TESTING=1 lets the test suite drive a sandboxed install without root.
+require_root() { [[ $EUID -eq 0 || "${CONDUIT_TESTING:-}" == 1 ]] || die "run as root (sudo conduit ...)"; }
+
+load_env() {
+  [[ -r "$ENV_FILE" ]] || die "cannot read $ENV_FILE (run as root or the $CONDUIT_USER user)"
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+  export DJANGO_SETTINGS_MODULE=conduit.settings
+}
+
+# Run a command as the service user (we may already be it).
+as_service() {
+  if [[ "$(id -un)" == "$CONDUIT_USER" ]]; then
+    "$@"
+  else
+    require_root
+    runuser -u "$CONDUIT_USER" -- "$@"
+  fi
+}
+
+manage() {
+  load_env
+  as_service env "PATH=$VENV/bin:$PATH" "$VENV/bin/python" "$APP/backend/manage.py" "$@"
+}
+
+supervisor() { command -v supervisorctl >/dev/null || die "supervisorctl not found"; supervisorctl "$@"; }
+
+publish_web() {
+  # nginx serves the prebuilt front end from /var/www (SELinux-friendly on RHEL family).
+  local src="$1/web"
+  [[ -d "$src" ]] || die "release has no web/ directory"
+  mkdir -p "$CONDUIT_WWW/web.new"
+  cp -a "$src/." "$CONDUIT_WWW/web.new/"
+  rm -rf "$CONDUIT_WWW/web.old"
+  [[ -d "$CONDUIT_WWW/web" ]] && mv "$CONDUIT_WWW/web" "$CONDUIT_WWW/web.old"
+  mv "$CONDUIT_WWW/web.new" "$CONDUIT_WWW/web"
+  rm -rf "$CONDUIT_WWW/web.old"
+}
+
+install_python() {
+  # Backend plus every module listed in modules.txt (paths are relative to the release).
+  # Runs as root: the venv is root-owned so the service can't modify its own code.
+  local release="$1" extras=""
+  require_root
+  load_env
+  [[ "${DATABASE_URL:-}" == mysql* ]] && extras="[mysql]"
+  (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade "./backend$extras")
+  if [[ -s "$MODULES_FILE" ]]; then
+    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$MODULES_FILE")
+  fi
+}
+
+finish_deploy() {
+  manage migrate --noinput
+  manage collectstatic --noinput -v0
+  manage conduit_init
+}
+
+cmd_upgrade() {
+  local tarball="${1:-}"
+  require_root
+  [[ -f "$tarball" ]] || die "usage: conduit upgrade <eve-conduit-X.Y.Z.tar.gz>"
+  local version
+  version=$(tar -xzOf "$tarball" --wildcards '*/VERSION' | head -1)
+  [[ -n "$version" ]] || die "not an EvE Conduit release (no VERSION file)"
+  local target="$CONDUIT_HOME/releases/$version"
+  [[ "$(readlink -f "$APP")" == "$target" ]] && die "release $version is already the running release"
+  echo "Backing up before upgrading..."
+  cmd_backup
+  # Unpack and install from a staging directory; it only becomes a release once everything worked,
+  # so a failed upgrade can simply be retried.
+  local staging="$target.partial"
+  rm -rf "$staging" "$target"
+  mkdir -p "$staging"
+  # shellcheck disable=SC2064  # expand now: $staging is local and gone when the trap fires
+  trap "rm -rf '$staging'" EXIT
+  tar -xzf "$tarball" -C "$staging" --strip-components=1
+  [[ "${CONDUIT_TESTING:-}" == 1 ]] || chown -R root:"$CONDUIT_USER" "$staging"
+  echo "Installing $version..."
+  install_python "$staging"
+  mv "$staging" "$target"
+  trap - EXIT
+  local previous
+  previous=$(readlink -f "$APP" || true)
+  ln -sfn "$target" "$APP"
+  [[ -n "$previous" ]] && ln -sfn "$previous" "$CONDUIT_HOME/previous"
+  finish_deploy
+  publish_web "$target"
+  supervisor restart "$SUPERVISOR_GROUP:*"
+  echo "EvE Conduit $version is running. 'conduit rollback' returns to the previous release."
+}
+
+cmd_rollback() {
+  require_root
+  local previous
+  previous=$(readlink -f "$CONDUIT_HOME/previous" 2>/dev/null || true)
+  [[ -d "$previous" ]] || die "no previous release recorded"
+  local current
+  current=$(readlink -f "$APP")
+  echo "Rolling back to $(basename "$previous"). Database changes made by newer migrations are NOT undone;"
+  echo "restore the backup taken before the upgrade if the old version refuses to start."
+  install_python "$previous"
+  ln -sfn "$previous" "$APP"
+  ln -sfn "$current" "$CONDUIT_HOME/previous"
+  manage collectstatic --noinput -v0
+  publish_web "$previous"
+  supervisor restart "$SUPERVISOR_GROUP:*"
+}
+
+cmd_backup() {
+  require_root
+  load_env
+  local stamp dir
+  stamp=$(date +%Y%m%d-%H%M%S)
+  dir=$(mktemp -d)
+  mkdir -p "$CONDUIT_BACKUPS"
+  chmod 700 "$CONDUIT_BACKUPS"
+  "$VENV/bin/python" - "$DATABASE_URL" "$dir" <<'PY'
+import os, subprocess, sys
+from urllib.parse import unquote, urlparse
+url, out = urlparse(sys.argv[1]), sys.argv[2]
+env = dict(os.environ)
+if url.scheme.startswith("postgres"):
+    env["PGPASSWORD"] = unquote(url.password or "")
+    cmd = ["pg_dump", "-h", url.hostname or "localhost", "-p", str(url.port or 5432), "-U", unquote(url.username or ""), "-Fc", "-f", f"{out}/database.dump", url.path.lstrip("/")]
+elif url.scheme.startswith("mysql"):
+    env["MYSQL_PWD"] = unquote(url.password or "")
+    dump = "mariadb-dump" if subprocess.run(["which", "mariadb-dump"], capture_output=True).returncode == 0 else "mysqldump"
+    cmd = [dump, "-h", url.hostname or "localhost", "-P", str(url.port or 3306), "-u", unquote(url.username or ""), "--single-transaction", "--routines", f"--result-file={out}/database.sql", url.path.lstrip("/")]
+else:
+    sys.exit(f"don't know how to back up {url.scheme}")
+subprocess.run(cmd, env=env, check=True)
+PY
+  cp "$ENV_FILE" "$dir/conduit.env"
+  [[ -f "$MODULES_FILE" ]] && cp "$MODULES_FILE" "$dir/modules.txt"
+  readlink -f "$APP" > "$dir/release.txt" || true
+  tar -czf "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz" -C "$dir" .
+  chmod 600 "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz"
+  rm -rf "$dir"
+  echo "Backup written to $CONDUIT_BACKUPS/conduit-$stamp.tar.gz (contains secrets; keep it safe)"
+}
+
+cmd_module() {
+  case "${1:-}" in
+    install)
+      local pkg="${2:-}"
+      [[ -n "$pkg" ]] || die "usage: conduit module install <package|git URL|path>"
+      require_root
+      grep -qxF "$pkg" "$MODULES_FILE" 2>/dev/null || echo "$pkg" >> "$MODULES_FILE"
+      install_python "$(readlink -f "$APP")"
+      finish_deploy
+      supervisor restart "$SUPERVISOR_GROUP:*"
+      echo "Installed. Switch it on under Administration -> Modules."
+      ;;
+    list)
+      manage shell -c "from conduit.modules import registry
+for mid, e in sorted(registry.discover().items()):
+    print(f\"{mid:20} {e.module.version:10} {'OK' if e.ok else 'BROKEN: ' + '; '.join(e.problems)}\")"
+      ;;
+    *) die "usage: conduit module install <package> | conduit module list" ;;
+  esac
+}
+
+cmd_run() {
+  load_env
+  cd "$APP/backend"
+  export PATH="$VENV/bin:$PATH"
+  case "${1:-}" in
+    web) exec gunicorn conduit.wsgi --bind "${CONDUIT_BIND:-127.0.0.1:8000}" --workers "${WEB_WORKERS:-3}" --access-logfile - --forwarded-allow-ips 127.0.0.1 --no-control-socket ;;
+    worker) exec celery -A conduit worker --loglevel INFO --concurrency "${WORKER_CONCURRENCY:-4}" ;;
+    beat) exec celery -A conduit beat --loglevel INFO --schedule "$CONDUIT_STATE/celerybeat-schedule" ;;
+    *) die "usage: conduit run web|worker|beat" ;;
+  esac
+}
+
+case "${1:-}" in
+  status) supervisor status "$SUPERVISOR_GROUP:*" ;;
+  start | stop | restart) supervisor "$1" "$SUPERVISOR_GROUP:${2:-*}" ;;
+  logs) tail -n 100 -F "$CONDUIT_LOG/${2:-web}.log" ;;
+  manage) shift; manage "$@" ;;
+  setup-code) manage conduit_init ;;
+  upgrade) shift; cmd_upgrade "$@" ;;
+  rollback) cmd_rollback ;;
+  backup) cmd_backup ;;
+  module) shift; cmd_module "$@" ;;
+  run) shift; cmd_run "$@" ;;
+  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

@@ -20,7 +20,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dashboard: {},
 };
 
-const THEME_KEY = "evecsm:theme";
+const THEME_KEY = "conduit:theme";
 const media = typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: light)") : null;
 let current: Preferences = DEFAULT_PREFERENCES;
 

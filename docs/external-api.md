@@ -59,36 +59,36 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
 - **API request log:** every call to `/api/v1/`, refused ones included: key, method, path, status,
   duration, IP and user agent.
 - **Service log:** warnings and errors the web server and worker log (turn this off with
-  `EVECSM_SERVICE_LOG_DB=false`). The Windows install also shows its log files there.
-  Elsewhere, set `EVECSM_LOG_DIR` to the folder holding the log files.
+  `CONDUIT_SERVICE_LOG_DB=false`). The Windows install also shows its log files there.
+  Elsewhere, set `CONDUIT_LOG_DIR` to the folder holding the log files.
 
 - **ESI call log:** every request the server sends to ESI: route, character, what made the call (e.g.
   `sheet:wallet` or `eve.update_affiliations`), status, duration, and the error-limit and rate-limit
   headers. Calls held back during an error-limit pause are listed too. Answers still fresh in the local
   cache never reach ESI and aren't listed. The ESI tab adds totals, calls per hour, the busiest routes
-  and callers, and the current error limit. `EVECSM_ESI_LOG=errors` records only failures; `off` records
+  and callers, and the current error limit. `CONDUIT_ESI_LOG=errors` records only failures; `off` records
   nothing.
 
 Admins see all four under **Administration > Logs** (permission `site.view_logs`). Managing keys and
 switching APIs on and off needs `site.manage_api`.
 
 Old entries are deleted every night. The defaults are 365 days for the audit log, 90 for the request log,
-30 for the service log and 7 for the ESI call log (`EVECSM_AUDIT_LOG_DAYS`, `EVECSM_API_LOG_DAYS`,
-`EVECSM_SERVICE_LOG_DAYS`, `EVECSM_ESI_LOG_DAYS`; `0` keeps entries forever).
+30 for the service log and 7 for the ESI call log (`CONDUIT_AUDIT_LOG_DAYS`, `CONDUIT_API_LOG_DAYS`,
+`CONDUIT_SERVICE_LOG_DAYS`, `CONDUIT_ESI_LOG_DAYS`; `0` keeps entries forever).
 
 ## Adding an external API to a module
 
 ```python
 class FleetsModule(Module):
     id = "fleets"
-    external_api = "evecsm_fleets.external:router"
+    external_api = "conduit_fleets.external:router"
     external_scopes = {"read": "Read fleet schedules", "write": "Create fleets"}
 ```
 
 ```python
-# evecsm_fleets/external.py
+# conduit_fleets/external.py
 from ninja import Router
-from evecsm.external.auth import require_scope
+from conduit.external.auth import require_scope
 
 router = Router()
 

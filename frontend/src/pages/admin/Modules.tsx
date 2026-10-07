@@ -20,7 +20,7 @@ export function AdminModules() {
           <CardBody className="space-y-3 text-sm text-muted">
             <p>Modules are Python packages. Add them to your server image, then restart:</p>
             <pre className="overflow-x-auto rounded-lg border border-border bg-bg/70 p-3 font-mono text-xs text-text">
-              {"# requirements-modules.txt\nevecsm-skills==1.2.0\n\ndocker compose up -d --build"}
+              {"# requirements-modules.txt\nconduit-skills==1.2.0\n\ndocker compose up -d --build"}
             </pre>
             <p>After restarting, the module appears in this list, switched off. Modules that need new ESI scopes ask members to re-authorise their characters.</p>
           </CardBody>

@@ -222,7 +222,7 @@ function Service() {
     <div>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <SearchInput value={q} onChange={setQ} placeholder="Search messages…" />
-        <SearchInput value={logger} onChange={setLogger} placeholder="Logger, e.g. evecsm.esi" />
+        <SearchInput value={logger} onChange={setLogger} placeholder="Logger, e.g. conduit.esi" />
         <div className="flex gap-1.5">
           {["", "WARNING", "ERROR", "CRITICAL"].map((l) => (
             <FilterChip key={l} active={level === l} onClick={() => setLevel(l)}>
@@ -298,7 +298,7 @@ function Files() {
         <EmptyState
           icon={<FileText />}
           title="No log folder configured"
-          description="With Docker or Supervisor the services log to standard output (docker compose logs, journalctl). Set EVECSM_LOG_DIR to browse log files here; the Windows install does this for you."
+          description="With Docker or Supervisor the services log to standard output (docker compose logs, journalctl). Set CONDUIT_LOG_DIR to browse log files here; the Windows install does this for you."
           className="py-10"
         />
       ) : !files.data.files.length ? (
@@ -418,7 +418,7 @@ function Esi() {
         <p className="text-sm text-muted">
           Every request this server sent to ESI. Answers still fresh in the local cache are reused without asking ESI, so they aren't listed.
           {s && s.mode !== "all" && (
-            <span className="text-warning-fg"> Recording: {s.mode === "off" ? "off" : "errors only"} (EVECSM_ESI_LOG).</span>
+            <span className="text-warning-fg"> Recording: {s.mode === "off" ? "off" : "errors only"} (CONDUIT_ESI_LOG).</span>
           )}
         </p>
         <div className="flex gap-1.5">

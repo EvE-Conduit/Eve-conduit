@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 
 import { sharedModules } from "./vite-shared-modules.ts";
 
-const backend = process.env.EVECSM_BACKEND ?? "http://127.0.0.1:8000";
+const backend = process.env.CONDUIT_BACKEND ?? "http://127.0.0.1:8000";
 const proxy = Object.fromEntries(["/api", "/sso", "/static", "/django-admin"].map((p) => [p, backend]));
 
 export default defineConfig({

@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY backend/pyproject.toml backend/manage.py backend/README.md ./
-COPY backend/evecsm ./evecsm
+COPY backend/conduit ./conduit
 RUN pip install .
 
 # Modules: anything listed in requirements-modules.txt (PyPI names, git URLs or paths relative to /app).
@@ -17,12 +17,12 @@ COPY modules ./modules
 COPY requirements-modules.txt ./
 RUN pip install -r requirements-modules.txt
 
-RUN EVECSM_SECRET_KEY=build python manage.py collectstatic --noinput -v0
+RUN CONDUIT_SECRET_KEY=build python manage.py collectstatic --noinput -v0
 
-COPY backend/docker-entrypoint.sh /usr/local/bin/evecsm
-RUN chmod +x /usr/local/bin/evecsm && useradd --system --uid 1000 evecsm
-USER evecsm
+COPY backend/docker-entrypoint.sh /usr/local/bin/conduit
+RUN chmod +x /usr/local/bin/conduit && useradd --system --uid 1000 conduit
+USER conduit
 
 EXPOSE 8000
-ENTRYPOINT ["evecsm"]
+ENTRYPOINT ["conduit"]
 CMD ["web"]

@@ -91,7 +91,7 @@ sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example
 ```
 
 From here everything is exactly as in the [bare-metal guide](install-baremetal.md): the setup code,
-registering the EVE application, `sudo evecsm status`, upgrades and backups.
+registering the EVE application, `sudo conduit status`, upgrades and backups.
 
 ## 5. Check it
 

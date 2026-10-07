@@ -8,11 +8,11 @@ import pytest
 from django.contrib.auth.models import Group, Permission
 from django.test import override_settings
 
-from evecsm.access.models import GroupProfile, State
-from evecsm.events.models import Webhook
-from evecsm.events.safety import UnsafeUrl, check_url
-from evecsm.notify.models import Notification
-from evecsm.notify.services import notify
+from conduit.access.models import GroupProfile, State
+from conduit.events.models import Webhook
+from conduit.events.safety import UnsafeUrl, check_url
+from conduit.notify.models import Notification
+from conduit.notify.services import notify
 
 from .conftest import make_user
 
@@ -69,7 +69,7 @@ def test_unsafe_webhook_urls_are_refused(url):
 
 
 def test_hostname_resolving_to_private_address_is_refused(monkeypatch):
-    monkeypatch.setattr("evecsm.events.safety.socket.getaddrinfo",
+    monkeypatch.setattr("conduit.events.safety.socket.getaddrinfo",
                         lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.1.2.3", 443))])
     with pytest.raises(UnsafeUrl):
         check_url("https://sneaky.example/x")
@@ -79,7 +79,7 @@ def test_public_webhook_url_is_fine():
     check_url("https://discord.example/api/webhooks/1/abc")
 
 
-@override_settings(EVECSM_WEBHOOK_ALLOW_PRIVATE=True)
+@override_settings(CONDUIT_WEBHOOK_ALLOW_PRIVATE=True)
 def test_private_addresses_can_be_allowed_explicitly():
     check_url("https://10.0.0.5/x")
 
@@ -93,7 +93,7 @@ def test_api_refuses_internal_webhook(admin_user, api_client):
 
 @pytest.mark.django_db
 def test_delivery_rechecks_dns_and_never_stores_reply_bodies(monkeypatch):
-    from evecsm.events.webhooks import deliver
+    from conduit.events.webhooks import deliver
 
     hook = Webhook.objects.create(name="H", kind="json", url="https://hooks.example/x")
     calls = []
@@ -102,14 +102,14 @@ def test_delivery_rechecks_dns_and_never_stores_reply_bodies(monkeypatch):
         calls.append(kwargs)
         return httpx.Response(500, text="root:x:0:0:secret-internal-data")
 
-    monkeypatch.setattr("evecsm.events.webhooks.httpx.post", fake_post)
+    monkeypatch.setattr("conduit.events.webhooks.httpx.post", fake_post)
     deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, False])
     hook.refresh_from_db()
     assert calls[0]["follow_redirects"] is False
     assert hook.last_error == "HTTP 500" and "secret" not in hook.last_error
 
     # DNS now points inside: refused before any request is made.
-    monkeypatch.setattr("evecsm.events.safety.socket.getaddrinfo",
+    monkeypatch.setattr("conduit.events.safety.socket.getaddrinfo",
                         lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.0.10", 443))])
     deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, True])
     hook.refresh_from_db()
@@ -154,8 +154,8 @@ def test_legacy_admin_group_cannot_be_joined_or_filled_by_leaders(legacy_admin_g
 
 @pytest.mark.django_db
 def test_api_keys_cannot_fill_admin_groups_or_states(client, user, legacy_admin_group):
-    from evecsm.external import areas
-    from evecsm.external.models import ApiKey
+    from conduit.external import areas
+    from conduit.external.models import ApiKey
 
     group, _ = legacy_admin_group
     state = State.objects.create(name="Officers", priority=50)
@@ -183,8 +183,8 @@ def test_notify_drops_unsafe_links(user, link, kept):
 
 @pytest.mark.django_db
 def test_external_links_need_their_own_scope(client, user):
-    from evecsm.external import areas
-    from evecsm.external.models import ApiKey
+    from conduit.external import areas
+    from conduit.external.models import ApiKey
 
     areas.set_enabled("notify", True)
     _, plain = ApiKey.issue(name="Bot", scopes=["notify:write"])
@@ -235,13 +235,13 @@ def test_setting_a_token_key_keeps_old_tokens_readable_and_rotation_moves_them(u
     from django.core.management import call_command
     from django.db import connection
 
-    from evecsm.accounts import crypto
-    from evecsm.accounts.models import Token
+    from conduit.accounts import crypto
+    from conduit.accounts.models import Token
 
     new_key = Fernet.generate_key().decode()
     crypto._fernet.cache_clear()
     try:
-        with override_settings(EVECSM_TOKEN_KEY=new_key):
+        with override_settings(CONDUIT_TOKEN_KEY=new_key):
             crypto._fernet.cache_clear()
             assert Token.objects.get(character=user.main_character).access_token == "access"  # old key still works
             call_command("rotate_token_key", stdout=open("/dev/null", "w"))
@@ -270,7 +270,7 @@ def test_failed_api_keys_are_rate_limited(client):
     assert client.get("/api/v1/me", HTTP_AUTHORIZATION="Bearer evk_bad_x").status_code == 429
 
 
-@override_settings(EVECSM_RATE_LIMITS=False)
+@override_settings(CONDUIT_RATE_LIMITS=False)
 @pytest.mark.django_db
 def test_rate_limits_can_be_switched_off(client):
     for _ in range(35):
@@ -280,12 +280,12 @@ def test_rate_limits_can_be_switched_off(client):
 # --- security checks ------------------------------------------------------------------------------
 
 
-@override_settings(DEBUG=False, EVECSM_TOKEN_KEY="", EVECSM_DJANGO_ADMIN=True)
+@override_settings(DEBUG=False, CONDUIT_TOKEN_KEY="", CONDUIT_DJANGO_ADMIN=True)
 def test_security_checks_flag_risky_settings():
-    from evecsm.site.checks import security_warnings
+    from conduit.site.checks import security_warnings
 
     ids = {w["id"] for w in security_warnings()}
-    assert {"evecsm.W001", "evecsm.W006"} <= ids
+    assert {"conduit.W001", "conduit.W006"} <= ids
 
 
 @pytest.mark.django_db

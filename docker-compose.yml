@@ -3,10 +3,10 @@ x-backend: &backend
   build:
     context: .
     dockerfile: backend/Dockerfile
-  image: evecsm-backend
+  image: conduit-backend
   env_file: .env
   environment:
-    DATABASE_URL: postgres://evecsm:${POSTGRES_PASSWORD}@db:5432/evecsm
+    DATABASE_URL: postgres://conduit:${POSTGRES_PASSWORD}@db:5432/conduit
     REDIS_URL: redis://redis:6379/0
   depends_on:
     db:
@@ -32,7 +32,7 @@ services:
 
   caddy:
     build: ./frontend
-    image: evecsm-frontend
+    image: conduit-frontend
     env_file: .env
     ports:
       - "80:80"
@@ -45,13 +45,13 @@ services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: evecsm
-      POSTGRES_USER: evecsm
+      POSTGRES_DB: conduit
+      POSTGRES_USER: conduit
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evecsm"]
+      test: ["CMD-SHELL", "pg_isready -U conduit"]
       interval: 5s
       retries: 10
     restart: unless-stopped

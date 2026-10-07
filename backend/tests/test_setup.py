@@ -1,6 +1,6 @@
 import pytest
 
-from evecsm.site.models import SiteSettings
+from conduit.site.models import SiteSettings
 
 
 @pytest.mark.django_db

@@ -12,7 +12,7 @@ export class ApiError extends Error {
 }
 
 /** Fired on window when any API call finds the site in maintenance mode; the shell then shows the maintenance screen. */
-export const MAINTENANCE_EVENT = "evecsm:maintenance";
+export const MAINTENANCE_EVENT = "conduit:maintenance";
 
 function csrfToken() {
   return document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] ?? "";

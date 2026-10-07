@@ -5,8 +5,8 @@ from email.utils import formatdate
 import httpx
 import pytest
 
-from evecsm.esi.client import EsiClient
-from evecsm.esi.exceptions import EsiBackoff, EsiError, EsiRateLimited
+from conduit.esi.client import EsiClient
+from conduit.esi.exceptions import EsiBackoff, EsiError, EsiRateLimited
 
 
 def client_with(handler):

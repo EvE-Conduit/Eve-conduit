@@ -1,5 +1,5 @@
-# EVECSM_DOMAIN=auth.example.com gives automatic HTTPS; the default ":80" serves plain HTTP.
-{$EVECSM_DOMAIN::80} {
+# CONDUIT_DOMAIN=auth.example.com gives automatic HTTPS; the default ":80" serves plain HTTP.
+{$CONDUIT_DOMAIN::80} {
 	encode zstd gzip
 
 	@backend path /api/* /sso/* /django-admin* /static/*

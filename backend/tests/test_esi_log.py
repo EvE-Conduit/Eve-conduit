@@ -1,12 +1,12 @@
 import httpx
 import pytest
 
-from evecsm.esi.calllog import esi_source
-from evecsm.esi.client import EsiClient
-from evecsm.esi.exceptions import EsiBackoff, EsiError
-from evecsm.esi.models import EsiCall
-from evecsm.external import areas
-from evecsm.external.models import ApiKey
+from conduit.esi.calllog import esi_source
+from conduit.esi.client import EsiClient
+from conduit.esi.exceptions import EsiBackoff, EsiError
+from conduit.esi.models import EsiCall
+from conduit.external import areas
+from conduit.external.models import ApiKey
 
 
 def client_with(handler):
@@ -43,7 +43,7 @@ def test_paused_calls_are_recorded_but_not_sent(settings):
 
 @pytest.mark.django_db
 def test_errors_only_mode(settings):
-    settings.EVECSM_ESI_LOG = "errors"
+    settings.CONDUIT_ESI_LOG = "errors"
     esi = client_with(lambda r: httpx.Response(200, json={}))
     esi.get("/status")
     assert EsiCall.objects.count() == 0

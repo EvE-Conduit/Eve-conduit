@@ -1,7 +1,7 @@
 import pytest
 
-from evecsm.accounts.models import Character, Token, User
-from evecsm.accounts.services import CharacterOwnedElsewhere, link_character
+from conduit.accounts.models import Character, Token, User
+from conduit.accounts.services import CharacterOwnedElsewhere, link_character
 
 TOKEN = {"access_token": "a", "refresh_token": "r", "expires_in": 1199}
 
@@ -74,15 +74,15 @@ def test_sso_login_redirects_with_pkce(client):
     url = resp["Location"]
     assert url.startswith("https://login.eveonline.com/v2/oauth/authorize?")
     assert "code_challenge_method=S256" in url and "client_id=test-client" in url
-    assert client.session["evecsm_sso"]["next"] == "/characters"
+    assert client.session["conduit_sso"]["next"] == "/characters"
 
 
 @pytest.mark.django_db
 def test_sso_login_requests_every_scope(client):
     from urllib.parse import parse_qs, urlsplit
 
-    from evecsm.esi.scopes import ALL_SCOPES
-    from evecsm.modules.services import required_scopes
+    from conduit.esi.scopes import ALL_SCOPES
+    from conduit.modules.services import required_scopes
 
     url = client.get("/sso/login")["Location"]
     scopes = parse_qs(urlsplit(url).query)["scope"][0].split()
@@ -103,15 +103,15 @@ def test_esi_scopes_setting_narrows_the_request(client, settings):
 @pytest.mark.django_db
 def test_sso_rejects_open_redirect(client):
     client.get("/sso/login?next=https://evil.example")
-    assert client.session["evecsm_sso"]["next"] == "/"
+    assert client.session["conduit_sso"]["next"] == "/"
 
 
 @pytest.mark.django_db
 def test_sso_callback_logs_in(client, monkeypatch):
-    from evecsm.sso import views
+    from conduit.sso import views
 
     client.get("/sso/login")
-    state = client.session["evecsm_sso"]["state"]
+    state = client.session["conduit_sso"]["state"]
     monkeypatch.setattr(views, "exchange_code", lambda code, verifier: TOKEN)
     monkeypatch.setattr(
         views,

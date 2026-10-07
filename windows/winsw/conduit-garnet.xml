@@ -1,0 +1,32 @@
+<!--
+  EvE Conduit Garnet - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  The installer copies this next to a copy of WinSW named conduit-garnet.exe and fills in {{...}}.
+-->
+<service>
+  <id>conduit-garnet</id>
+  <name>EvE Conduit Garnet</name>
+  <description>Redis-compatible cache and task queue for EvE Conduit (Microsoft Garnet). Lua is required by Celery.</description>
+  <executable>{{ROOT}}\bin\garnet\net10.0\GarnetServer.exe</executable>
+  <arguments>--port {{CACHE_PORT}} --bind 127.0.0.1 --lua --memory 512m --index 64m</arguments>
+  <workingdirectory>{{ROOT}}</workingdirectory>
+  <env name="CONDUIT_ROOT" value="{{ROOT}}" />
+  <env name="DOTNET_gcServer" value="0" />
+  <!-- Garnet runs on the private .NET runtime in the install folder, not a system-wide one. -->
+  <env name="DOTNET_ROOT" value="{{ROOT}}\bin\dotnet" />
+  <startmode>Automatic</startmode>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="2 min" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>{{ROOT}}\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>
