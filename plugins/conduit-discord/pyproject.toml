@@ -1,0 +1,28 @@
+[project]
+name = "conduit-discord"
+version = "1.0.0"
+description = "Discord: members link their Discord account and join your server, with roles and nicknames kept in step with their groups and state."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+discord = "conduit_discord.plugin:DiscordPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Discord"
+icon = "message-square"
+category = "Communication"
+min_conduit = "0.5.6"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_discord*"]
+
+[tool.setuptools.package-data]
+conduit_discord = ["static/**/*"]
