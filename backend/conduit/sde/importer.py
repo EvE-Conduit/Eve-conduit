@@ -43,10 +43,23 @@ BASE_URL = "https://developers.eveonline.com/static-data/tranquility"
 LATEST_URL = f"{BASE_URL}/latest.jsonl"
 SKILL_CATEGORY = 16
 BATCH = 2000
+#: Bump when the importer starts reading more from the SDE, so existing installs import their build again.
+#: 2: required skills of every type, and fitting data (slots, hardpoints, which slot a module goes in).
+SCHEMA = 2
 
 # dogma attribute ids
 PRIMARY_ATTRIBUTE, SECONDARY_ATTRIBUTE, SKILL_RANK = 180, 181, 275
 REQUIRED_SKILLS = [(182, 277), (183, 278), (184, 279), (1285, 1286), (1289, 1287), (1290, 1288)]
+# Ships: slots, hardpoints, drones and fitting resources. Modules use cpu/power/calibration as their cost.
+SHIP_ATTRIBUTES = {14: "hi", 13: "med", 12: "low", 1137: "rig", 1367: "sub", 2056: "service", 102: "turrets",
+                   101: "launchers", 283: "drone_bay", 1271: "drone_bandwidth", 48: "cpu", 11: "power", 1132: "calibration"}
+MODULE_COST = {50: "cpu", 30: "power", 1153: "calibration"}
+RIG_SIZE = 1547
+# Subsystems add slots and hardpoints to a Strategic Cruiser.
+SUBSYSTEM_ADDS = {1374: "hi", 1375: "med", 1376: "low", 1368: "turrets", 1369: "launchers"}
+# dogma effects that say which slot a module goes in
+SLOT_EFFECTS = {12: "hi", 13: "med", 11: "low", 2663: "rig", 3772: "sub", 6306: "service"}
+TURRET_EFFECT, LAUNCHER_EFFECT = 42, 40
 
 
 def latest_build() -> dict:
@@ -154,12 +167,15 @@ TYPE_FIELDS = {
 }
 
 
-def _types(zf, skill_ids: set[int], skill_groups: set[int]):
+def _types(zf, skill_ids: set[int], skill_groups: set[int], dogma: dict):
     def rows():
         for r in _records(zf, "types"):
             if r["groupID"] in skill_groups:
                 skill_ids.add(r["_key"])
+            required, fitting, _ = dogma.get(r["_key"], ([], None, None))
             yield ItemType(
+                required_skills=required,
+                fitting=fitting,
                 id=r["_key"],
                 group_id=r["groupID"],
                 name=_en(r.get("name")),
@@ -175,27 +191,55 @@ def _types(zf, skill_ids: set[int], skill_groups: set[int]):
         "description",
         "published",
         "portion_size",
+        "required_skills",
+        "fitting",
         *(f.removesuffix("_id") if f.endswith("_group_id") else f for f in TYPE_FIELDS),
     ]
     return _upsert(ItemType, rows(), fields)
 
 
-def _skills(zf, skill_ids: set[int]):
-    def rows():
-        for r in _records(zf, "typeDogma"):
-            if r["_key"] not in skill_ids:
-                continue
-            attrs = {a["attributeID"]: a["value"] for a in r.get("dogmaAttributes", [])}
-            required = [[int(attrs[skill]), int(attrs.get(level, 1))] for skill, level in REQUIRED_SKILLS if attrs.get(skill)]
-            yield SkillInfo(
-                type_id=r["_key"],
-                rank=attrs.get(SKILL_RANK, 1),
-                primary_attribute=SkillInfo.ATTRIBUTES.get(int(attrs.get(PRIMARY_ATTRIBUTE, 0)), ""),
-                secondary_attribute=SkillInfo.ATTRIBUTES.get(int(attrs.get(SECONDARY_ATTRIBUTE, 0)), ""),
-                required_skills=required,
-            )
+def _number(value):
+    return int(value) if float(value).is_integer() else round(value, 2)
 
-    return _upsert(SkillInfo, rows(), ["rank", "primary_attribute", "secondary_attribute", "required_skills"], unique_field="type")
+
+def _fitting(attrs: dict, effects: set[int]) -> dict | None:
+    slot = next((name for effect, name in SLOT_EFFECTS.items() if effect in effects), None)
+    if slot:
+        out = {"slot": slot, "turret": TURRET_EFFECT in effects, "launcher": LAUNCHER_EFFECT in effects,
+               **{name: _number(attrs[a]) for a, name in MODULE_COST.items() if attrs.get(a)}}
+        if attrs.get(RIG_SIZE):
+            out["rig_size"] = int(attrs[RIG_SIZE])
+        adds = {name: int(attrs[a]) for a, name in SUBSYSTEM_ADDS.items() if attrs.get(a)}
+        if slot == "sub":
+            out["adds"] = adds
+        return out
+    if any(attrs.get(a) for a in (14, 13, 12, 1137, 1367, 2056)):
+        out = {name: _number(attrs.get(a) or 0) for a, name in SHIP_ATTRIBUTES.items()}
+        if attrs.get(RIG_SIZE):
+            out["rig_size"] = int(attrs[RIG_SIZE])
+        return out
+    return None
+
+
+def _dogma(zf) -> dict[int, tuple[list, dict | None, dict]]:
+    """``{type_id: (required_skills, fitting, skill_training)}`` from ``typeDogma``, for types that have any of it."""
+    out = {}
+    for r in _records(zf, "typeDogma"):
+        attrs = {a["attributeID"]: a["value"] for a in r.get("dogmaAttributes", [])}
+        effects = {e["effectID"] for e in r.get("dogmaEffects", [])}
+        required = [[int(attrs[skill]), int(attrs.get(level, 1))] for skill, level in REQUIRED_SKILLS if attrs.get(skill)]
+        training = {
+            "rank": attrs.get(SKILL_RANK, 1),
+            "primary_attribute": SkillInfo.ATTRIBUTES.get(int(attrs.get(PRIMARY_ATTRIBUTE, 0)), ""),
+            "secondary_attribute": SkillInfo.ATTRIBUTES.get(int(attrs.get(SECONDARY_ATTRIBUTE, 0)), ""),
+        }
+        out[r["_key"]] = (required, _fitting(attrs, effects), training)
+    return out
+
+
+def _skills(skill_ids: set[int], dogma: dict):
+    rows = (SkillInfo(type_id=tid, required_skills=dogma[tid][0], **dogma[tid][2]) for tid in skill_ids if tid in dogma)
+    return _upsert(SkillInfo, rows, ["rank", "primary_attribute", "secondary_attribute", "required_skills"], unique_field="type")
 
 
 def _races(zf):
@@ -261,8 +305,10 @@ def import_archive(path: Path, build: dict, progress: Callable[[str], None] = lo
 
         skill_groups = set(ItemGroup.objects.filter(category_id=SKILL_CATEGORY).values_list("id", flat=True))
         skill_ids: set[int] = set()
-        progress(f"types: {_types(zf, skill_ids, skill_groups)}")
-        progress(f"skills: {_skills(zf, skill_ids)}")
+        dogma = _dogma(zf)
+        progress(f"types: {_types(zf, skill_ids, skill_groups, dogma)}")
+        progress(f"skills: {_skills(skill_ids, dogma)}")
+        del dogma
 
         for label, step in [
             ("regions", _regions),
@@ -275,7 +321,7 @@ def import_archive(path: Path, build: dict, progress: Callable[[str], None] = lo
         release = build.get("releaseDate")
         version, _ = SdeVersion.objects.update_or_create(
             build_number=build["buildNumber"],
-            defaults={"release_date": datetime.fromisoformat(release.replace("Z", "+00:00")) if release else None},
+            defaults={"release_date": datetime.fromisoformat(release.replace("Z", "+00:00")) if release else None, "schema": SCHEMA},
         )
     progress(f"SDE build {version.build_number} imported in {time.monotonic() - started:.0f}s")
     return version
@@ -290,7 +336,7 @@ def update(force: bool = False, archive: Path | None = None, progress: Callable[
 
     build = latest_build()
     current = SdeVersion.current()
-    if current and current.build_number >= build["buildNumber"] and not force:
+    if current and current.build_number >= build["buildNumber"] and current.schema >= SCHEMA and not force:
         progress(f"SDE is up to date (build {current.build_number})")
         return None
     with tempfile.TemporaryDirectory(prefix="conduit-sde-") as tmp:

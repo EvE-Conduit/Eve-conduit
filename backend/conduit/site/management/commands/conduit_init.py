@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand
 from conduit.access.models import State
 from conduit.esi.tokens import sso_configured
 from conduit.plugins.services import sync_installed
+from conduit.sde import importer as sde_importer
 from conduit.sde.models import SdeVersion
 from conduit.site.models import SiteSettings
 
@@ -20,13 +21,20 @@ class Command(BaseCommand):
             self.stdout.write("Created the default Guest state")
         sync_installed()
 
-        if not SdeVersion.objects.exists():
+        current = SdeVersion.current()
+        if current is None:
             from conduit.eve.tasks import update_market_prices
             from conduit.sde.tasks import update_sde
 
             self.stdout.write("No EVE static data yet; importing it (about a minute)...")
             update_sde.delay()
             update_market_prices.delay()
+        elif current.schema < sde_importer.SCHEMA:
+            from conduit.sde.tasks import update_sde
+
+            # This version reads more from the static data than the one that imported it.
+            self.stdout.write("Importing the EVE static data again for this version (about a minute)...")
+            update_sde.delay()
 
         if not settings.ESI_USER_AGENT_CONTACT:
             self.stdout.write(

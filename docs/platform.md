@@ -96,6 +96,38 @@ def find(request, q, limit):
 Only return what the user may see. A hit has an `image` URL or an `icon` (a Lucide icon name); `url` is a path
 on the site or an `https://` URL.
 
+## Group rules with changing choices
+
+A rule parameter of type `choice` takes fixed `choices`, or a function returning them, for lists that change
+(a plugin's skill plans or doctrine fits). It's called whenever the rule editor or validation needs the list:
+
+```python
+register_rule("skillplan_complete", "Completed skill plan", done, plugin="skillplans",
+              params=(Param("plan", "choice", "Skill plan", choices=lambda: [(str(p.pk), p.name) for p in SkillPlan.objects.filter(shared=True)]),))
+```
+
+Plugin front ends can embed the rule editor (`RuleSetEditor` from `@conduit/sdk`). It reads rule types from the
+admin API, so show it only to people with `site.manage_access`, and check that permission again in the plugin's API.
+
+## Skills, ships and fittings
+
+The static data import keeps, for every item, the skills it needs (`ItemType.required_skills`, direct requirements
+as `[[skill_id, level], ...]`), and for ships, modules and subsystems their fitting data (`ItemType.fitting`: slots,
+hardpoints, CPU, powergrid and calibration, and which slot a module goes in). See `conduit/sde/models.py`.
+
+`conduit.sheet.skills.training` does the skill maths for everyone:
+
+```python
+from conduit.sheet.skills import training
+
+need = training.requirements_of_types([ship_id, *module_ids])     # {skill_id: level}
+steps = training.plan(need.items())                                # [(skill_id, level), ...], prerequisites first
+state = training.character_state([character.pk])[character.pk]   # trained levels, SP, attributes, skill queue
+training.progress(steps, state, training.skill_info(s for s, _ in steps))  # done/queued/missing, SP and time left
+training.format_text(steps)                                        # "Gunnery 1\nGunnery 2", for the in-game import
+training.parse_text(pasted)                                        # back to steps, plus lines it couldn't read
+```
+
 ## Members-only plugins
 
 Plugins are for members unless they say otherwise. A member is anyone whose state isn't public (the Guest
