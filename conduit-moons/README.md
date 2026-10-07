@@ -13,4 +13,4 @@ Who mined what from your corporations' moon drills each month, what it's worth, 
 The data comes from the corporation sheet's mining section, which needs a director's or accountant's login for
 the corporation (moon drill observers). Values use CCP's average market prices.
 
-Give the two permissions to a state or group under Administration → Access.
+Give the two permissions to a state (Administration → States) or a group (Administration → Groups).
