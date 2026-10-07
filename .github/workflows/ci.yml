@@ -13,8 +13,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install -e "backend[dev]" -e plugins/conduit-example
+      - run: pip install -e "backend[dev]" -e plugins/conduit-example -e plugins/conduit-moons
       - run: python -m pytest -q
+        working-directory: backend
+      - name: Plugin tests
+        run: python -m pytest -q -c pyproject.toml --rootdir . ../plugins/conduit-moons/tests
         working-directory: backend
       - name: No missing migrations
         run: CONDUIT_DEBUG=1 python manage.py makemigrations --check --dry-run

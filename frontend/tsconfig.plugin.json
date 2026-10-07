@@ -16,7 +16,7 @@
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
       "@tanstack/react-query": ["./node_modules/@tanstack/react-query"],
-      "react-router": ["./node_modules/react-router"]
+      "react-router": ["./node_modules/react-router/dist/production/index.d.ts"]
     },
     "typeRoots": ["./node_modules/@types"]
   }

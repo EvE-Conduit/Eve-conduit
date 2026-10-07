@@ -1,0 +1,27 @@
+[project]
+name = "conduit-moons"
+version = "1.0.0"
+description = "Moon mining ledger: who mined what from your moons each month, what it's worth, and moon tax with payments."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+dependencies = ["conduit>=0.5.5"]
+
+[project.entry-points."conduit.plugins"]
+moons = "conduit_moons.plugin:MoonsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Moon Mining Ledger"
+icon = "pickaxe"
+category = "Industry"
+min_conduit = "0.5.5"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_moons*"]
+
+[tool.setuptools.package-data]
+conduit_moons = ["static/**/*"]
