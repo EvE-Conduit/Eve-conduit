@@ -376,10 +376,14 @@ def preview_rules(request, payload: PreviewIn):
     return {**groups.preview(ruleset, payload.allowed_states), "text": rules.describe_ruleset(ruleset)}
 
 
+SHIP_CATEGORY = 6
+
+
 @router.get("/rules/options")
 @require_perm("site.manage_access")
 def rule_options(request, type: str, q: str = "", ids: str = ""):
-    """Choices for rule parameters: ``type`` is skill, corporation or alliance. Search by ``q`` or look up ``ids``."""
+    """Choices for rule parameters: ``type`` is skill, corporation, alliance, ship, ship_group (a ship class) or item.
+    Search by ``q`` or look up ``ids``."""
     from conduit.sde.models import ItemType
 
     wanted = [int(i) for i in ids.split(",") if i.strip().isdigit()]
@@ -391,7 +395,19 @@ def rule_options(request, type: str, q: str = "", ids: str = ""):
         model = EveCorporation if type == "corporation" else EveAlliance
         qs = model.objects.filter(pk__in=wanted) if wanted else model.objects.filter(Q(name__icontains=q.strip()) | Q(ticker__iexact=q.strip())) if q.strip() else model.objects.none()
         return [{"id": e.pk, "name": e.name, "hint": e.ticker} for e in qs.order_by("name")[:25]]
-    raise HttpError(400, "type must be skill, corporation or alliance")
+    if type in ("ship", "item"):
+        qs = ItemType.objects.filter(published=True)
+        if type == "ship":
+            qs = qs.filter(group__category_id=SHIP_CATEGORY)
+        qs = qs.filter(pk__in=wanted) if wanted else qs.filter(name__icontains=q.strip()) if len(q.strip()) >= 2 else qs.none()
+        return [{"id": t.pk, "name": t.name, "hint": t.group.name} for t in qs.select_related("group").order_by("name")[:25]]
+    if type == "ship_group":
+        from conduit.sde.models import ItemGroup
+
+        qs = ItemGroup.objects.filter(category_id=SHIP_CATEGORY, published=True)
+        qs = qs.filter(pk__in=wanted) if wanted else qs.filter(name__icontains=q.strip()) if q.strip() else qs.none()
+        return [{"id": g.pk, "name": g.name, "hint": "ship class"} for g in qs.order_by("name")[:25]]
+    raise HttpError(400, "type must be skill, corporation, alliance, ship, ship_group or item")
 
 
 @router.get("/users/lookup")

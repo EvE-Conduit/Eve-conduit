@@ -370,3 +370,45 @@ def test_external_api_refuses_smart_groups(client, user):
     _, secret = make_key(["groups:write"])
     g = make_group("Smart", auto=True, rules={"rules": [{"type": "account_age", "params": {"days": 0}}]})
     assert call(client, "put", f"/api/v1/groups/{g.pk}/members/{user.pk}", secret).status_code == 400
+
+
+def test_asset_rules(corp, admin_user, api_client):
+    from conduit.accounts.models import Character
+    from conduit.sde.models import ItemCategory, ItemGroup, ItemType
+    from conduit.sheet.assets.models import Asset
+
+    ItemCategory.objects.create(id=6, name="Ship", published=True)
+    ItemGroup.objects.create(id=485, category_id=6, name="Dreadnought", published=True)
+    ItemGroup.objects.create(id=1, category_id=4, name="Misc", published=True)
+    ItemType.objects.create(id=19720, group_id=485, name="Revelation", published=True)
+    ItemType.objects.create(id=19724, group_id=485, name="Moros", published=True)
+    ItemType.objects.create(id=44992, group_id=1, name="PLEX", published=True)
+    u = make_user(90000030, "Main", corporation=corp)
+    alt = Character.objects.create(id=90000031, name="Alt", owner_hash="h", user=u)
+
+    def own(char, type_id, qty=1):
+        Asset.objects.create(character=char, item_id=Asset.objects.count() + 1, type_id=type_id, quantity=qty, location_id=60003760,
+                             location_type="station", location_flag="Hangar", is_singleton=qty == 1, root_location_id=60003760)
+
+    own(alt, 19720)
+    own(u.main_character, 44992, 300)
+    own(alt, 44992, 250)
+    assert check(u, "has_ship", ships=[19720], count=1, scope="any")
+    assert not check(u, "has_ship", ships=[19720], count=1, scope="main")
+    assert not check(u, "has_ship", ships=[19720, 19724], count=2, scope="any")
+    assert check(u, "has_ship_class", classes=[485], count=1, scope="any")
+    assert check(u, "has_item", items=[44992], count=500, scope="any")  # added up across characters
+    assert not check(u, "has_item", items=[44992], count=500, scope="main")
+    own(u.main_character, 19724)
+    assert check(u, "has_ship", ships=[19720, 19724], count=2, scope="any")
+
+    assert rules.explain_rule({"type": "has_ship_class", "params": {"classes": [485], "count": 2, "scope": "any"}}) == "Owns 2 × Dreadnought on any character"
+    assert rules.explain_rule({"type": "has_ship", "params": {"ships": [19720, 19724], "count": 1, "scope": "main"}}) == "Owns Revelation or Moros on their main"
+
+    api_client.force_login(admin_user)
+    assert [o["name"] for o in api_client.call("get", "/api/admin/rules/options?type=ship&q=rev").json()] == ["Revelation"]
+    assert [o["name"] for o in api_client.call("get", "/api/admin/rules/options?type=ship&q=plex").json()] == []
+    assert [o["name"] for o in api_client.call("get", "/api/admin/rules/options?type=item&q=plex").json()] == ["PLEX"]
+    assert [o["name"] for o in api_client.call("get", "/api/admin/rules/options?type=ship_group&q=dread").json()] == ["Dreadnought"]
+    keys = {t["key"] for t in api_client.call("get", "/api/admin/rules/types").json()}
+    assert {"has_ship", "has_ship_class", "has_item"} <= keys

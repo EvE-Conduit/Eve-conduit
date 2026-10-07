@@ -31,13 +31,13 @@ from django.utils import timezone
 
 log = logging.getLogger(__name__)
 
-PARAM_TYPES = {"int", "str", "bool", "choice", "state", "group", "skill", "corporation", "alliance"}
+PARAM_TYPES = {"int", "str", "bool", "choice", "state", "group", "skill", "corporation", "alliance", "ship", "ship_group", "item"}
 
 
 @dataclass(frozen=True)
 class Param:
     name: str
-    #: int | str | bool | choice | state | group | skill | corporation | alliance
+    #: int | str | bool | choice | state | group | skill | corporation | alliance | ship | ship_group | item
     type: str
     label: str
     multiple: bool = False
@@ -116,7 +116,7 @@ def _clean_param(rule: str, p: Param, value):
 
 
 def _clean_one(rule: str, p: Param, value):
-    if p.type in {"int", "state", "group", "skill", "corporation", "alliance"}:
+    if p.type in {"int", "state", "group", "skill", "corporation", "alliance", "ship", "ship_group", "item"}:
         try:
             value = int(value)
         except (TypeError, ValueError):
@@ -326,6 +326,60 @@ def _account_age(user, p):
     return user.date_joined <= timezone.now() - timedelta(days=p["days"])
 
 
+def _either(model, ids) -> str:
+    """'Rifter or Slasher'."""
+    ids = list(ids or [])
+    found = dict(model.objects.filter(pk__in=ids).values_list("pk", "name"))
+    return " or ".join(str(found.get(i) or i) for i in ids)
+
+
+def _type_names(ids) -> str:
+    from conduit.sde.models import ItemType
+
+    return _either(ItemType, ids)
+
+
+def _type_group_names(ids) -> str:
+    from conduit.sde.models import ItemGroup
+
+    return _either(ItemGroup, ids)
+
+
+def _owned(user, p, **filters) -> int:
+    """How many of the matching items the user's characters (main, or any) have in their synced assets."""
+    from django.db.models import Sum
+
+    from conduit.sheet.assets.models import Asset
+
+    chars = _characters(user, p["scope"])
+    if not chars:
+        return 0
+    return Asset.objects.filter(character__in=chars, **filters).aggregate(n=Sum("quantity"))["n"] or 0
+
+
+def _has_ship(user, p):
+    return _owned(user, p, type_id__in=p["ships"]) >= p["count"]
+
+
+def _has_ship_class(user, p):
+    from conduit.sde.models import ItemType
+
+    type_ids = ItemType.objects.filter(group_id__in=p["classes"]).values_list("pk", flat=True)
+    return _owned(user, p, type_id__in=type_ids) >= p["count"]
+
+
+def _has_item(user, p):
+    return _owned(user, p, type_id__in=p["items"]) >= p["count"]
+
+
+def _count_words(n: int, things: str) -> str:
+    return things if n == 1 else f"{n:,} × {things}"
+
+
+OWNED_SCOPE = SCOPE_CHOICES[:2]
+ASSET_HELP = "Uses the synced assets of the character sheet; characters without the assets scope count as owning nothing."
+
+
 def _register_builtins():
     register_rule(
         "state", "Membership state", _state_in, category="Membership",
@@ -383,6 +437,33 @@ def _register_builtins():
             Param("scope", "choice", "On", choices=SCOPE_CHOICES, default="any"),
         ),
         explain=lambda p: f"Holds the title “{p['title']}” {SCOPE_WORDS[p['scope']]}",
+    )
+    register_rule(
+        "has_ship", "Owns ship", _has_ship, category="Assets", description=ASSET_HELP,
+        params=(
+            Param("ships", "ship", "Any of these ships", multiple=True),
+            Param("count", "int", "At least", default=1, min=1),
+            Param("scope", "choice", "On", choices=OWNED_SCOPE, default="any"),
+        ),
+        explain=lambda p: f"Owns {_count_words(p['count'], _type_names(p['ships']))} {SCOPE_WORDS[p['scope']]}",
+    )
+    register_rule(
+        "has_ship_class", "Owns ship class", _has_ship_class, category="Assets", description=ASSET_HELP,
+        params=(
+            Param("classes", "ship_group", "Any ship of these classes", multiple=True, help="e.g. Dreadnought, Force Auxiliary, Logistics"),
+            Param("count", "int", "At least", default=1, min=1),
+            Param("scope", "choice", "On", choices=OWNED_SCOPE, default="any"),
+        ),
+        explain=lambda p: f"Owns {_count_words(p['count'], _type_group_names(p['classes']))} {SCOPE_WORDS[p['scope']]}",
+    )
+    register_rule(
+        "has_item", "Has item", _has_item, category="Assets", description=ASSET_HELP,
+        params=(
+            Param("items", "item", "Any of these items", multiple=True, help="Quantities of all of them are added up."),
+            Param("count", "int", "At least (units)", default=1, min=1),
+            Param("scope", "choice", "On", choices=OWNED_SCOPE, default="any"),
+        ),
+        explain=lambda p: f"Has {_count_words(p['count'], _type_names(p['items']))} {SCOPE_WORDS[p['scope']]}",
     )
     register_rule(
         "compliant", "Compliant", _compliant, category="Account",
