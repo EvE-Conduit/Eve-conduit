@@ -56,7 +56,7 @@ export function ClaimDialog({ loss, requireFleet, onClose }: { loss: Loss | null
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title={loss ? `Claim ${loss.character.name}'s ${loss.ship.name}` : "Claim a loss from a kill link"}
+      title={loss ? `Claim ${loss.character.name}'s ${loss.ship.name}` : "Claim a loss from a link"}
       description={loss ? `Rules suggest ${isk(loss.suggested, { full: true })} for this loss.` : "For losses that haven't shown up on their own."}
       footer={
         <>
@@ -71,8 +71,8 @@ export function ClaimDialog({ loss, requireFleet, onClose }: { loss: Loss | null
             <ShipCell ship={loss.ship} sub={<SystemText system={loss.system} />} />
           </div>
         ) : (
-          <Field label="Kill link" hint={'In game, open the killmail, then right-click → "Copy external kill link". It starts with https://esi.evetech.net/.'} required>
-            <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://esi.evetech.net/latest/killmails/…/…/" className="font-mono text-xs" autoFocus />
+          <Field label="Kill link" hint={'A zKillboard link, or in game: open the killmail, right-click → "Copy external kill link".'} required>
+            <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://zkillboard.com/kill/123456789/" className="font-mono text-xs" autoFocus />
           </Field>
         )}
         <div className="grid gap-4 sm:grid-cols-[1fr_200px]">

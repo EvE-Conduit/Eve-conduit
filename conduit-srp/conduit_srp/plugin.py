@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class SrpPlugin(Plugin):
     id = "srp"
     name = "Ship Replacement"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Members claim their losses from synced killmails; reviewers approve a payout and mark it paid."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-srp"
