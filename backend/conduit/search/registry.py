@@ -42,14 +42,13 @@ def register(key: str, order: int = 100, plugin: str | None = None):
     return decorator
 
 
-def _module_providers() -> list[Provider]:
+def _module_providers(user) -> list[Provider]:
     from conduit.plugins import registry as plugins
-    from conduit.plugins.services import enabled_ids
+    from conduit.plugins.services import can_use
 
     out = []
-    on = enabled_ids()
     for mid, mod in plugins.installed().items():
-        if mid not in on:
+        if not can_use(user, mid):
             continue
         for i, target in enumerate(getattr(mod, "search", ()) or ()):
             path, _, attr = target.partition(":")
@@ -67,7 +66,7 @@ def search(request, q: str, limit: int = 8) -> list[dict]:
     if len(q) < 2:
         return []
     groups = []
-    for provider in sorted([*PROVIDERS.values(), *_module_providers()], key=lambda p: p.order):
+    for provider in sorted([*PROVIDERS.values(), *_module_providers(request.user)], key=lambda p: p.order):
         try:
             result = provider.fn(request, q, limit)
         except Exception:  # one broken provider must not break search

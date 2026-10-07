@@ -3,6 +3,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from conduit.access.models import State
 from conduit.accounts.models import Character, Token, User
 from conduit.eve.models import EveAlliance, EveCorporation
 
@@ -33,8 +34,14 @@ def corp(db):
     return EveCorporation.objects.create(id=98000001, name="Test Corp", ticker="TCORP", alliance=alliance)
 
 
-def make_user(char_id=90000001, name="Pilot One", corporation=None, scopes="publicData"):
-    user = User.objects.create(username=f"char_{char_id}")
+def member_state():
+    """A members' state (not public) for test users; the lowest priority so it never outranks a test's own."""
+    return State.objects.get_or_create(name="Test Member", defaults={"priority": -1000})[0]
+
+
+def make_user(char_id=90000001, name="Pilot One", corporation=None, scopes="publicData", member=True):
+    """A user with a main character. ``member`` puts them in a members' state, so members-only plugins let them in."""
+    user = User.objects.create(username=f"char_{char_id}", state=member_state() if member else None)
     char = Character.objects.create(
         id=char_id,
         name=name,

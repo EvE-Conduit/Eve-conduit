@@ -14,7 +14,7 @@ from conduit import __version__
 from conduit.audit.services import record
 from conduit.esi.tokens import sso_configured
 from conduit.plugins import registry
-from conduit.plugins.services import enabled_ids, sync_installed
+from conduit.plugins.services import can_use, sync_installed
 from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
 from conduit.updates.services import progress as update_progress
@@ -147,11 +147,10 @@ def bootstrap(request):
     """Everything the web UI needs on first load. Also sets the CSRF cookie."""
     get_token(request)
     site = SiteSettings.load()
-    on = enabled_ids()
     plugins = []
     if request.user.is_authenticated:
         for mid, mod in registry.installed().items():
-            if mid in on:
+            if can_use(request.user, mid):
                 plugins.append(
                     {
                         "id": mid,

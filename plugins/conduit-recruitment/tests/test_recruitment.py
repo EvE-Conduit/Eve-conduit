@@ -27,7 +27,7 @@ def setup(db):
     form.accept_groups.add(members)
     recruiter = make_user(90000050, "Recruiter Rae")
     recruiter.user_permissions.add(*Permission.objects.filter(content_type__app_label="recruit"))
-    applicant = make_user(90000060, "Hopeful Pilot")
+    applicant = make_user(90000060, "Hopeful Pilot", member=False)  # applicants are guests; Recruitment is open to them
     return form, recruiter, applicant, members
 
 

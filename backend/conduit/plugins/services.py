@@ -26,6 +26,18 @@ def is_enabled(plugin_id: str) -> bool:
     return plugin_id in enabled_ids()
 
 
+def can_use(user, plugin_id: str) -> bool:
+    """Enabled, and either open to everyone or the user is a member (``Plugin.members_only``)."""
+    if not is_enabled(plugin_id):
+        return False
+    plugin = registry.installed().get(plugin_id)
+    if plugin is None or not plugin.members_only:
+        return plugin is not None
+    from conduit.access.services import is_site_member
+
+    return is_site_member(user)
+
+
 def sync_installed():
     """Record newly installed plugins, enabling those that ask to be on by default."""
     for mid, mod in registry.installed().items():

@@ -96,11 +96,28 @@ def find(request, q, limit):
 Only return what the user may see. A hit has an `image` URL or an `icon` (a Lucide icon name); `url` is a path
 on the site or an `https://` URL.
 
+## Members-only plugins
+
+Plugins are for members unless they say otherwise. A member is anyone whose state isn't public (the Guest
+fallback), plus administrators. Everyone else doesn't get the plugin's pages or bundle (it's left out of
+`/api/core/bootstrap`), its web API answers `403`, its search results and `sheet_access` grants are skipped.
+Helpers: `conduit.access.services.is_site_member(user)`, `site_members()` for querysets (e.g. who to notify), and
+`conduit.plugins.services.can_use(user, plugin_id)`.
+
+Plugins guests need, like Recruitment (applying) and Discord (gated by its own permission), opt out:
+
+```python
+class RecruitmentPlugin(Plugin):
+    members_only = False
+```
+
+The external API (`/api/v1/p/<id>/`) isn't affected; API keys have their own scopes.
+
 ## Character sheet access
 
 The core decides who may read a character's sheet (the owner, and holders of the `sheet.view_*` permissions). A
 plugin can let more people in by listing functions in `Plugin.sheet_access`; they're asked only when the core says
-no, and only while the plugin is enabled:
+no, and only while the plugin is enabled and the user may use it:
 
 ```python
 class RecruitmentPlugin(Plugin):

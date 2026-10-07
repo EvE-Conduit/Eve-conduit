@@ -65,3 +65,36 @@ def test_plugins_can_grant_sheet_access(client):
     client.force_login(viewer)
     assert client.get(f"/api/characters/{book.pk}").status_code == 200
     assert client.get(f"/api/characters/{other.pk}").status_code == 403
+
+
+@pytest.mark.django_db
+def test_members_only_plugins_are_hidden_from_guests(client, monkeypatch):
+    from conduit.access.models import State
+
+    from .conftest import make_user
+
+    set_enabled("sample", True)
+    guest = make_user(90000020, "Guest Pilot", member=False)
+    guest.state = State.objects.create(name="Guest", priority=0, public=True)
+    guest.save()
+    client.force_login(guest)
+    assert client.get("/api/p/sample/hello").status_code == 403
+    assert client.get("/api/core/bootstrap").json()["plugins"] == []
+    assert "sample" not in [g["key"] for g in client.get("/api/search?q=widget").json()["groups"]]
+
+    # Plugins guests need (applying, linking Discord) opt out with members_only = False.
+    monkeypatch.setattr(registry.installed()["sample"], "members_only", False)
+    assert client.get("/api/p/sample/hello").status_code == 200
+    assert client.get("/api/core/bootstrap").json()["plugins"][0]["id"] == "sample"
+
+
+@pytest.mark.django_db
+def test_admins_use_members_only_plugins_whatever_their_state(client):
+    from .conftest import make_user
+
+    set_enabled("sample", True)
+    admin = make_user(90000021, "Admin Pilot", member=False)
+    admin.is_superuser = True
+    admin.save()
+    client.force_login(admin)
+    assert client.get("/api/p/sample/hello").status_code == 200
