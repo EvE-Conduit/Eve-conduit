@@ -3,6 +3,20 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.12
+
+### Fixed
+- **Updated plugins show up straight away.** A plugin's page was always loaded from the same address, and browsers
+  could keep the old one for up to 7 days after the plugin updated. The address now includes the plugin's version.
+  (Already stuck on an old page? Press Ctrl+F5 once.)
+
+### Plugins
+- **Recruitment 1.1.0:** a **Require Discord** option under Recruitment → Settings (off by default). When it's on,
+  applicants must link their Discord account and be on your Discord server before they can apply; the apply page
+  tells them what's missing. Needs the Discord plugin installed, switched on and set up, and your Guest state needs
+  "Can link a Discord account" so applicants can link.
+- **Recruitment 1.1.1:** a "Recruitment settings" entry in the sidebar for people who manage forms.
+
 ## 0.5.11
 
 ### Changed
