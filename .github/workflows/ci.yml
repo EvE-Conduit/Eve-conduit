@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e "backend[dev]" -e plugins/conduit-example
+      - run: python -m pytest -q
+        working-directory: backend
+      - name: No missing migrations
+        run: CONDUIT_DEBUG=1 python manage.py makemigrations --check --dry-run
+        working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
+  release-files:
+    # Builds the release zip so the Windows jobs below can test the installer against it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: bash windows/build-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: dist/eve-conduit-*
+
+  windows:
+    needs: release-files
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PowerShell tests
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser -SkipPublisherCheck
+          ./windows/tests/run-tests.ps1
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist/eve-conduit-*-windows.zip | Select-Object -First 1
+          ./windows/installer/build.ps1 -Zip $zip.FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/EvE-Conduit-Setup-*.exe

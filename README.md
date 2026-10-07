@@ -44,6 +44,19 @@ Caddy obtains the HTTPS certificate for `CONDUIT_DOMAIN` automatically. On first
 
 Add the package to `requirements-plugins.txt` (a PyPI name, git URL or local path), then run `docker compose up -d --build`. New plugins appear switched off under **Administration → Plugins**.
 
+## Updating
+
+New versions are published as [GitHub releases](https://github.com/EvE-Conduit/Eve-conduit/releases), with
+what changed in [CHANGELOG.md](CHANGELOG.md). Each install checks once a day and tells its administrators;
+**Administration → Updates** shows the changelog and asks before downloading and again before installing.
+
+- **Windows and Linux installs** install the update themselves: a small updater (a SYSTEM scheduled task on
+  Windows, a root cron job on Linux) checks the release's signature, backs up, upgrades and rolls back if
+  anything fails. Nothing happens until an administrator clicks Install.
+- **Docker installs** show the commands to run (`git pull` and `docker compose up -d --build`).
+- Releases are signed: `SHA256SUMS` is signed with the project's Ed25519 key, whose public half is built into
+  EvE Conduit (`backend/conduit/updates/keys.py`). A release that doesn't match is refused.
+
 ## Development
 
 Backend (Python 3.12+):

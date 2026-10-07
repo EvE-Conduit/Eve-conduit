@@ -1,4 +1,4 @@
-import { Building2, Crown, HeartPulse, ShieldAlert, Webhook } from "lucide-react";
+import { Building2, Crown, Download, HeartPulse, ShieldAlert, Webhook } from "lucide-react";
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { iconFor } from "@/lib/icons";
@@ -22,7 +22,7 @@ function can(user: CurrentUser, perm: string) {
   return user.is_admin || user.permissions.includes(perm);
 }
 
-export function buildNav(user: CurrentUser, plugins: PluginEntry[]): NavSection[] {
+export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvailable?: string | null): NavSection[] {
   const sections: NavSection[] = [
     {
       title: "Overview",
@@ -42,10 +42,10 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[]): NavSection[
     sections[0]!.items.splice(2, 0, { label: "Corporations", to: "/corporations", icon: Building2 });
   }
 
-  const moduleItems = plugins.flatMap((m) =>
+  const pluginItems = plugins.flatMap((m) =>
     m.nav.map((n) => ({ label: n.label, to: `/p/${m.id}${n.path ? `/${n.path.replace(/^\//, "")}` : ""}`, icon: iconFor(n.icon) })),
   );
-  if (moduleItems.length) sections.push({ title: "Plugins", items: moduleItems });
+  if (pluginItems.length) sections.push({ title: "Plugins", items: pluginItems });
 
   const admin: NavLinkItem[] = [];
   if (can(user, "site.view_members")) admin.push({ label: "Members", to: "/admin/members", icon: Users });
@@ -56,6 +56,7 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[]): NavSection[
   if (can(user, "site.manage_api")) admin.push({ label: "Integrations", to: "/admin/integrations", icon: Webhook });
   if (can(user, "site.view_logs")) admin.push({ label: "Logs", to: "/admin/logs", icon: ScrollText });
   if (can(user, "site.view_health")) admin.push({ label: "Health", to: "/admin/health", icon: HeartPulse });
+  if (can(user, "site.manage_site")) admin.push({ label: "Updates", to: "/admin/updates", icon: Download, badge: updateAvailable ? 1 : undefined });
   if (can(user, "site.manage_site")) admin.push({ label: "Settings", to: "/admin/settings", icon: Settings2 });
   if (admin.length) sections.push({ title: "Administration", items: admin });
 

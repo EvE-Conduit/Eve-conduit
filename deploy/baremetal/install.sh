@@ -77,7 +77,7 @@ step "Installing system packages"
 if [[ $FAMILY == debian ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -q
-  pkgs=(curl ca-certificates build-essential pkg-config python3 python3-venv nginx redis-server supervisor certbot python3-certbot-nginx)
+  pkgs=(curl ca-certificates build-essential pkg-config python3 python3-venv nginx redis-server supervisor certbot python3-certbot-nginx cron)
   if [[ $DB == postgres ]]; then pkgs+=(postgresql postgresql-client); else pkgs+=(mariadb-server mariadb-client libmariadb-dev); fi
   apt-get install -y -q "${pkgs[@]}"
   REDIS_SERVICE=redis-server
@@ -86,7 +86,7 @@ if [[ $FAMILY == debian ]]; then
   NGINX_CONF=/etc/nginx/sites-available/conduit.conf
 else
   dnf install -y -q epel-release 2>/dev/null || dnf install -y -q "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$MAJOR.noarch.rpm"
-  pkgs=(curl gcc make pkgconf python3 nginx supervisor certbot python3-certbot-nginx policycoreutils-python-utils)
+  pkgs=(curl gcc make pkgconf python3 nginx supervisor certbot python3-certbot-nginx policycoreutils-python-utils cronie)
   if [[ $DB == postgres ]]; then pkgs+=(postgresql-server postgresql); else pkgs+=(mariadb-server mariadb mariadb-connector-c-devel); fi
   # RHEL 10 ships Valkey (a Redis fork, same protocol) instead of Redis.
   if dnf info -q redis >/dev/null 2>&1; then pkgs+=(redis); REDIS_SERVICE=redis; else pkgs+=(valkey); REDIS_SERVICE=valkey; fi
@@ -107,6 +107,7 @@ install -d -o root -g root -m 0755 "$CONDUIT_WWW" "$CONDUIT_WWW/web"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_WWW/static"
 # Writable state (the scheduler's bookkeeping) lives outside the code.
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 /var/lib/conduit
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 /var/lib/conduit/updates
 
 RELEASE_DIR="$CONDUIT_HOME/releases/$VERSION"
 mkdir -p "$RELEASE_DIR"
@@ -171,6 +172,9 @@ CONDUIT_ALLOWED_HOSTS=$DOMAIN
 CONDUIT_STATIC_ROOT=$CONDUIT_WWW/static
 DATABASE_URL=$DATABASE_URL
 REDIS_URL=redis://127.0.0.1:6379/0
+# Updates: downloaded here by the website, installed by root's cron job (/etc/cron.d/conduit-update).
+CONDUIT_INSTALL_KIND=baremetal
+CONDUIT_UPDATES_DIR=/var/lib/conduit/updates
 # From https://developers.eveonline.com/applications (callback: $SCHEME://$DOMAIN/sso/callback)
 ESI_CLIENT_ID=$ESI_ID
 ESI_SECRET_KEY=$ESI_SECRET
@@ -201,6 +205,15 @@ supervisorctl reread >/dev/null
 supervisorctl update
 sleep 3
 supervisorctl status 'conduit:*' || true
+
+# Installs updates an administrator approved on the website (Administration -> Updates). It does nothing
+# until then; see "conduit apply-update".
+cat > /etc/cron.d/conduit-update <<'CRON'
+# EvE Conduit: install updates approved on the website (Administration -> Updates).
+*/2 * * * * root /usr/local/bin/conduit apply-update >/dev/null 2>&1
+CRON
+chmod 0644 /etc/cron.d/conduit-update
+systemctl enable --now cron 2>/dev/null || systemctl enable --now crond 2>/dev/null || true
 
 step "Configuring nginx"
 sed "s/auth\.example\.com/$DOMAIN/g" "$RELEASE_DIR/deploy/baremetal/nginx/conduit.conf" > "$NGINX_CONF"

@@ -21,6 +21,7 @@ from conduit.notify.api import router as notify_router
 from conduit.search.api import router as search_router
 from conduit.site.api import admin_router as admin_site_router
 from conduit.site.health import router as admin_health_router
+from conduit.updates.api import router as admin_updates_router
 from conduit.site.api import router as core_router
 from conduit.site.api import setup_router
 from conduit.sheet.api import me_router as sheet_me_router
@@ -47,6 +48,7 @@ api.add_router("/admin", admin_esi_router, auth=django_auth)
 api.add_router("/admin", admin_external_router, auth=django_auth)
 api.add_router("/admin", admin_events_router, auth=django_auth)
 api.add_router("/admin", admin_health_router, auth=django_auth)
+api.add_router("/admin", admin_updates_router, auth=django_auth)
 
 for plugin_id, plugin in registry.installed().items():
     if not plugin.api:

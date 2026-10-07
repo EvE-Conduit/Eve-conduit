@@ -144,6 +144,7 @@ foreach ($proc in Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'
     }
 }
 Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name 'EvE Conduit Tray' -ErrorAction SilentlyContinue
+Unregister-ConduitUpdater
 
 # --- 2. services, last-started first ----------------------------------------------------------------------------
 Write-Step 'Stopping and removing services'

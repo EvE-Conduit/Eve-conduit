@@ -424,3 +424,30 @@ Describe 'Health verdict' {
         (Get-ConduitHealth -Settings $settings -ServiceStatus ([ordered]@{}) -Probe $allUp).Overall | Should -Be 'NotInstalled'
     }
 }
+
+Describe 'Update requests' {
+    It 'accepts a plain version and its release file' {
+        $r = Get-ConduitUpdateRequest -Json '{"version":"0.5.1","file":"eve-conduit-0.5.1-windows.zip","requested_by":"Pilot"}'
+        $r.Version | Should -Be '0.5.1'
+        $r.File | Should -Be 'eve-conduit-0.5.1-windows.zip'
+    }
+    It 'rejects <Why>' -ForEach @(
+        @{ Json = '{"version":"0.5.1;calc","file":"eve-conduit-0.5.1-windows.zip"}'; Why = 'a version with extra text' }
+        @{ Json = '{"version":"..\\..\\x","file":"eve-conduit-0.5.1-windows.zip"}'; Why = 'a path as version' }
+        @{ Json = '{"version":"0.5.1","file":"..\\..\\Windows\\evil.zip"}'; Why = 'a file outside the release name' }
+        @{ Json = '{"version":"0.5.1","file":"eve-conduit-0.5.2-windows.zip"}'; Why = 'a file for another version' }
+    ) {
+        { Get-ConduitUpdateRequest -Json $Json } | Should -Throw
+    }
+    It 'writes a result the website can read' {
+        $path = Join-Path ([IO.Path]::GetTempPath()) "result-$([guid]::NewGuid()).json"
+        try {
+            Write-ConduitUpdateResult -Path $path -Version '0.5.1' -Status failed -Message 'pip broke'
+            $r = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+            $r.version | Should -Be '0.5.1'
+            $r.status | Should -Be 'failed'
+            $r.message | Should -Be 'pip broke'
+        }
+        finally { Remove-Item -LiteralPath $path -ErrorAction SilentlyContinue }
+    }
+}

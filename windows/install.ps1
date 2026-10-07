@@ -389,6 +389,9 @@ Write-EnvFile -Path $p.EnvFile -Header "Written by install.ps1 on $(Get-Date -Fo
         # Read by "conduit status"; changing them here doesn't move the web server (see README).
         CONDUIT_HTTP_PORT       = $ports.Http
         CONDUIT_HTTPS_PORT      = $(if ($NoTls) { '' } else { $ports.Https })
+        # Updates: downloaded here by the website, installed by the "EvE Conduit updater" scheduled task.
+        CONDUIT_INSTALL_KIND    = 'windows'
+        CONDUIT_UPDATES_DIR     = Join-Path $p.Data 'updates'
     })
 Set-Content -LiteralPath $p.Plugins -Value (Get-PluginRequirement (Join-Path $target 'requirements-plugins.txt'))
 $caddyfile = New-ConduitCaddyfile -Template (Get-Content -LiteralPath (Join-Path $target 'windows\caddy\Caddyfile.template') -Raw) `
@@ -468,6 +471,8 @@ Remove-Item -LiteralPath $downloads -Recurse -Force -ErrorAction SilentlyContinu
 
 Write-Step 'Registering with Apps & features'
 Set-ConduitUninstallEntry -Root $InstallRoot -Version $version
+Write-Host 'Registering the updater (installs updates an administrator approves on the website).'
+Register-ConduitUpdater -Root $InstallRoot
 
 if ($NoTray) {
     Write-Host 'Tray control panel not started at sign-in (-NoTray); open it any time with: conduit tray'
