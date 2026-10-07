@@ -313,7 +313,7 @@ function Expand-VcRuntime {
         try { $stream.Write($bytes, $best.Offset, [int]$best.Size) } finally { $stream.Dispose() }
         $payloads = Join-Path $work 'payloads'
         New-Item -ItemType Directory -Path $payloads | Out-Null
-        & $Extractor $outer $payloads
+        Invoke-NativeCommand -FilePath $Extractor -ArgumentList @($outer, $payloads) | Out-Null
         $found = @{}
         foreach ($payload in Get-ChildItem -LiteralPath $payloads -File) {
             $head = New-Object byte[] 4
@@ -322,7 +322,7 @@ function Expand-VcRuntime {
             if ([Text.Encoding]::ASCII.GetString($head) -ne 'MSCF') { continue }
             $inner = Join-Path $work $payload.Name
             New-Item -ItemType Directory -Path $inner | Out-Null
-            & $Extractor $payload.FullName $inner
+            Invoke-NativeCommand -FilePath $Extractor -ArgumentList @($payload.FullName, $inner) | Out-Null
             foreach ($dll in $script:VcRuntimeDlls) {
                 $file = Join-Path $inner "${dll}_amd64"
                 if (-not $found.ContainsKey($dll) -and (Test-Path -LiteralPath $file)) { $found[$dll] = $file }
@@ -611,11 +611,10 @@ function Install-ConduitService {
     Copy-Item -LiteralPath (Join-Path $p.Bin 'winsw\WinSW-x64.exe') -Destination $exe -Force
     [System.IO.File]::WriteAllText((Join-Path $p.Services "$Id.xml"), $xml, [System.Text.UTF8Encoding]::new($false))
     if (Get-Service -Name $Id -ErrorAction SilentlyContinue) {
-        & $exe stop | Out-Null
-        & $exe uninstall | Out-Null
+        Invoke-NativeCommand -FilePath $exe -ArgumentList @('stop') | Out-Null
+        Invoke-NativeCommand -FilePath $exe -ArgumentList @('uninstall') | Out-Null
     }
-    & $exe install
-    if ($LASTEXITCODE -ne 0) { throw "Installing service $Id failed" }
+    Invoke-NativeCommand -FilePath $exe -ArgumentList @('install') -FailMessage "Installing service $Id failed" | Out-Host
 }
 
 function Get-ConduitTrayCommand {
@@ -655,6 +654,25 @@ function Set-ConduitUninstallEntry {
     New-ItemProperty -Path $key -Name NoRepair -Value 1 -PropertyType DWord -Force | Out-Null
 }
 
+function Invoke-NativeCommand {
+    <#
+      Runs an external program and passes its output on, stderr included, as plain text. Success is judged by the
+      exit code only. Windows PowerShell 5.1 otherwise turns any stderr line into an error when its output is
+      captured (as under the setup wizard), and with ErrorActionPreference Stop that aborts on a mere warning.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [string]$FailMessage = ''
+    )
+    $ErrorActionPreference = 'Continue'
+    & $FilePath @ArgumentList 2>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { $_ }
+    }
+    $code = $LASTEXITCODE
+    if ($code -ne 0 -and $FailMessage) { throw "$FailMessage (exit code $code)" }
+}
+
 function Invoke-ConduitPython {
     <# Runs the service launcher (e.g. "manage migrate") with the install's Python. #>
     param(
@@ -665,8 +683,7 @@ function Invoke-ConduitPython {
     $python = Join-Path $p.Venv 'Scripts\python.exe'
     $launcher = Join-Path $p.App 'windows\service\conduit_service.py'
     $env:CONDUIT_ROOT = $Root
-    & $python $launcher @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "Command failed: $($Arguments -join ' ')" }
+    Invoke-NativeCommand -FilePath $python -ArgumentList (@($launcher) + $Arguments) -FailMessage "Command failed: $($Arguments -join ' ')"
 }
 
 function Install-ConduitPythonPackage {
@@ -687,11 +704,11 @@ function Install-ConduitPythonPackage {
     Push-Location $ReleaseDir
     try {
         # Not --quiet: pip's "Collecting ..." lines and download bars are the progress indicator.
-        & $python -m pip install --upgrade --disable-pip-version-check $backend 'waitress>=3'
-        if ($LASTEXITCODE -ne 0) { throw 'Installing the EvE Conduit backend failed' }
+        Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', $backend, 'waitress>=3') `
+            -FailMessage 'Installing the EvE Conduit backend failed' | Out-Host
         if ((Test-Path -LiteralPath $p.Plugins) -and (Get-PluginRequirement $p.Plugins)) {
-            & $python -m pip install --upgrade --disable-pip-version-check -r $p.Plugins
-            if ($LASTEXITCODE -ne 0) { throw 'Installing modules failed' }
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-r', $p.Plugins) `
+                -FailMessage 'Installing plugins failed' | Out-Host
         }
     }
     finally { Pop-Location }

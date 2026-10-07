@@ -12,8 +12,8 @@ What EvE Conduit does to protect an install, and what the operator should set.
 | `CONDUIT_SITE_URL` on `https://` | Session and CSRF cookies are only marked Secure on HTTPS. |
 | `CONDUIT_DJANGO_ADMIN=false`, or an IP allow-list in the proxy | The Django back-office is a second admin login surface. The nginx example has a commented allow-list. |
 
-The server prints a warning for each of these when it starts (`manage.py check`), and Administration → Health
-lists them too.
+Administration → Health lists a warning for each of these, and so does `manage.py check --deploy`
+(`conduit manage check --deploy` on Windows and Linux installs).
 
 ### Setting or changing the token key
 

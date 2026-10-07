@@ -1,5 +1,7 @@
-"""Warnings about risky production settings. Shown when the server starts (``manage.py check``) and on
-Administration > Health."""
+"""Warnings about risky production settings, on Administration > Health and from ``manage.py check --deploy``.
+
+They're deploy checks on purpose: as ordinary checks Django would print them before every management command
+(migrate, collectstatic ...), on stderr, where installers that watch for errors mistake them for failures."""
 
 from django.conf import settings
 from django.core.checks import Warning, register
@@ -36,6 +38,6 @@ def security_warnings() -> list[dict]:
     return out
 
 
-@register()
+@register(deploy=True)
 def check_security(app_configs, **kwargs):
     return [Warning(w["message"], hint=w["hint"], id=w["id"]) for w in security_warnings()]
