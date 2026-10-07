@@ -1,4 +1,4 @@
-import { Building2, Crown, Download, HeartPulse, ShieldAlert, Webhook } from "lucide-react";
+import { Building2, Crown, Download, HeartPulse, Layers, ShieldAlert, Webhook } from "lucide-react";
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { iconFor } from "@/lib/icons";
@@ -16,6 +16,8 @@ export interface NavLinkItem {
 export interface NavSection {
   title: string;
   items: NavLinkItem[];
+  /** The title folds the section away (remembered per browser). */
+  collapsible?: boolean;
 }
 
 function can(user: CurrentUser, perm: string) {
@@ -49,7 +51,8 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvaila
 
   const admin: NavLinkItem[] = [];
   if (can(user, "site.view_members")) admin.push({ label: "Members", to: "/admin/members", icon: Users });
-  if (can(user, "site.manage_access")) admin.push({ label: "Access", to: "/admin/access", icon: ShieldCheck });
+  if (can(user, "site.manage_access")) admin.push({ label: "States", to: "/admin/access", icon: ShieldCheck });
+  if (can(user, "site.manage_access")) admin.push({ label: "Groups", to: "/admin/groups", icon: Layers });
   if (can(user, "access.view_compliance")) admin.push({ label: "Compliance", to: "/admin/compliance", icon: ShieldAlert });
   if (can(user, "site.manage_plugins")) admin.push({ label: "Plugins", to: "/admin/plugins", icon: Puzzle });
   if (can(user, "site.manage_api")) admin.push({ label: "API", to: "/admin/api", icon: KeyRound });
@@ -58,7 +61,7 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvaila
   if (can(user, "site.view_health")) admin.push({ label: "Health", to: "/admin/health", icon: HeartPulse });
   if (can(user, "site.manage_site")) admin.push({ label: "Updates", to: "/admin/updates", icon: Download, badge: updateAvailable ? 1 : undefined });
   if (can(user, "site.manage_site")) admin.push({ label: "Settings", to: "/admin/settings", icon: Settings2 });
-  if (admin.length) sections.push({ title: "Administration", items: admin });
+  if (admin.length) sections.push({ title: "Administration", items: admin, collapsible: true });
 
   return sections;
 }

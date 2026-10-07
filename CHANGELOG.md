@@ -3,6 +3,21 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.7
+
+### New
+- **Choose a start page.** Administration → Settings → Start page picks where people land after signing in: the
+  dashboard, or a plugin's page such as the new Announcements plugin. Links to a specific page still go there.
+- **Manage administrators.** Administration → Settings → Administrators lists everyone with full access; administrators
+  can make other members administrators or remove them (the site always keeps at least one). New administrators are
+  told by notification, and both changes are in the audit log.
+- **Administration → Groups**, a page of its own: find and filter groups, create, edit and delete them, and look after
+  each group's members and join/leave requests in one place. States stay under Administration → States (formerly Access).
+- The Administration section of the sidebar can be folded away; it remembers, and still shows the page you're on.
+
+### Changed
+- Administrators show an "Admin" tag in the sidebar instead of their state.
+
 ## 0.5.6
 
 ### New

@@ -1,23 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Crown,
-  DoorOpen,
-  EyeOff,
   Globe,
-  KeyRound,
-  ListChecks,
   Loader2,
-  Lock,
-  MailQuestion,
   Pencil,
   Plus,
-  RefreshCw,
   Search,
-  Settings2,
   ShieldCheck,
-  Sparkles,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -27,22 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
-import { Alert } from "@/components/ui/feedback";
 import { Field, Input } from "@/components/ui/input";
 import { EmptyState, PageHeader } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { TabPanel, Tabs as UiTabs } from "@/components/ui/tabs";
-import { Tooltip } from "@/components/ui/tooltip";
-import { RuleSetEditor } from "@/features/groups/RuleBuilder";
-import type { AdminGroup, JoinMode, LeaveMode } from "@/features/groups/types";
-import { UserPicker } from "@/features/groups/UserPicker";
 import { api } from "@/lib/api";
 import { BOOTSTRAP_KEY } from "@/lib/bootstrap";
 import type { Entity } from "@/lib/types";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
-interface AdminState {
+export interface AdminState {
   id: number;
   name: string;
   priority: number;
@@ -64,32 +47,18 @@ interface PermissionOption {
 
 const APP_LABELS: Record<string, string> = { site: "Site administration", sheet: "Character sheet access" };
 
-const COLORS = ["#64748b", "#22d3ee", "#38bdf8", "#818cf8", "#a78bfa", "#f472b6", "#f43f5e", "#fb923c", "#fbbf24", "#34d399"];
+export const COLORS = ["#64748b", "#22d3ee", "#38bdf8", "#818cf8", "#a78bfa", "#f472b6", "#f43f5e", "#fb923c", "#fbbf24", "#34d399"];
 
 export function AdminAccess() {
   return (
     <>
       <PageHeader
         eyebrow="Administration"
-        title="Access control"
-        description="States decide who someone is (member, blue, guest) from their main character. Groups add roles on top."
+        title="States"
+        icon={<ShieldCheck />}
+        description="States decide who someone is (member, blue, guest) from their main character. Groups, under Administration → Groups, add roles on top."
       />
-      <UiTabs
-        defaultValue="states"
-        variant="pills"
-        listClassName="mb-6"
-        items={[
-          { value: "states", label: "States", icon: <ShieldCheck /> },
-          { value: "groups", label: "Groups", icon: <Users /> },
-        ]}
-      >
-        <TabPanel value="states">
-          <States />
-        </TabPanel>
-        <TabPanel value="groups">
-          <Groups />
-        </TabPanel>
-      </UiTabs>
+      <States />
     </>
   );
 }
@@ -340,381 +309,9 @@ function EntityPicker({ onPick }: { onPick: (hit: { kind: "alliance" | "corporat
   );
 }
 
-// --- Groups ------------------------------------------------------------------
-
-function Groups() {
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["admin", "groups"], queryFn: () => api.get<AdminGroup[]>("/api/admin/groups") });
-  const [editing, setEditing] = useState<AdminGroup | "new" | null>(null);
-  const [deleting, setDeleting] = useState<AdminGroup | null>(null);
-  const del = useMutation({
-    mutationFn: (id: number) => api.delete(`/api/admin/groups/${id}`),
-    onSuccess: () => {
-      toast.success("Group deleted");
-      qc.invalidateQueries({ queryKey: ["admin", "groups"] });
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const run = useMutation({
-    mutationFn: (id: number) => api.post<{ added: number; removed: number; grace: number }>(`/api/admin/groups/${id}/evaluate`),
-    onSuccess: (r) => {
-      toast.success(`Rules applied: ${r.added} added, ${r.removed} removed${r.grace ? `, ${r.grace} in grace period` : ""}`);
-      qc.invalidateQueries({ queryKey: ["admin", "groups"] });
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  return (
-    <>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted">Groups carry roles and permissions. Leaders handle requests; smart groups fill themselves from rules.</p>
-        <Button variant="primary" onClick={() => setEditing("new")}>
-          <Plus /> New group
-        </Button>
-      </div>
-      {isLoading ? (
-        <Skeleton className="h-40 rounded-xl" />
-      ) : !data?.length ? (
-        <Card>
-          <EmptyState icon={<Users />} title="No groups yet" description="Create groups like Fleet Commanders, Industry or Leadership." />
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.map((g) => (
-            <div key={g.id} className="panel flex gap-4 rounded-xl p-5">
-              <div className="mt-1.5 size-2.5 shrink-0 rounded-none" style={{ background: g.color, boxShadow: `0 0 10px ${g.color}` }} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="font-medium">{g.name}</span>
-                  <span className="text-xs text-muted">{g.member_count} members</span>
-                  {g.pending_requests > 0 && <Badge tone="warning" size="xs">{g.pending_requests} pending</Badge>}
-                </div>
-                {g.description && <p className="mt-0.5 text-sm text-muted">{g.description}</p>}
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {g.auto ? (
-                    <Badge tone="accent">
-                      <Sparkles className="size-3" /> Smart
-                    </Badge>
-                  ) : g.join_mode === "open" ? (
-                    <Badge tone="success">Open</Badge>
-                  ) : g.join_mode === "request" ? (
-                    <Badge tone="info">
-                      <MailQuestion className="size-3" /> On request
-                    </Badge>
-                  ) : (
-                    <Badge>
-                      <Lock className="size-3" /> Managed
-                    </Badge>
-                  )}
-                  {g.hidden && (
-                    <Badge>
-                      <EyeOff className="size-3" /> Hidden
-                    </Badge>
-                  )}
-                  {g.leaders.length + g.leader_groups.length > 0 && (
-                    <Badge>
-                      <Crown className="size-3" /> {[...g.leaders.map((l) => l.name), ...g.leader_groups.map((x) => x.name)].join(", ")}
-                    </Badge>
-                  )}
-                  {g.requirements_text.length > 0 && (
-                    <Tooltip content={g.requirements_text.join(" · ")}>
-                      <span>
-                        <Badge>
-                          <ListChecks className="size-3" /> {g.requirements_text.length} requirement{g.requirements_text.length === 1 ? "" : "s"}
-                        </Badge>
-                      </span>
-                    </Tooltip>
-                  )}
-                  {g.allowed_states.map((s) => (
-                    <Badge key={s.id} color={s.color} variant="outline">
-                      {s.name}
-                    </Badge>
-                  ))}
-                </div>
-                {g.auto && g.rules_text && (
-                  <p className="mt-2 text-xs text-muted">
-                    <span className="font-medium text-text">Rules:</span> {g.rules_text}
-                    {g.last_evaluated && <span className="text-subtle"> · applied {timeAgo(g.last_evaluated)}</span>}
-                  </p>
-                )}
-              </div>
-              <div className="flex shrink-0 flex-col gap-1">
-                <Button size="icon-sm" variant="ghost" aria-label={`Edit ${g.name}`} onClick={() => setEditing(g)}>
-                  <Pencil />
-                </Button>
-                {g.auto && (
-                  <Tooltip content="Apply the rules now">
-                    <Button size="icon-sm" variant="ghost" aria-label={`Apply the rules of ${g.name} now`} loading={run.isPending && run.variables === g.id} onClick={() => run.mutate(g.id)}>
-                      {!(run.isPending && run.variables === g.id) && <RefreshCw />}
-                    </Button>
-                  </Tooltip>
-                )}
-                <Button size="icon-sm" variant="ghost" aria-label={`Delete ${g.name}`} onClick={() => setDeleting(g)}>
-                  <Trash2 />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {editing && <GroupEditor group={editing === "new" ? null : editing} groups={data ?? []} onClose={() => setEditing(null)} />}
-      <ConfirmDialog
-        open={!!deleting}
-        onOpenChange={(o) => !o && setDeleting(null)}
-        danger
-        title={`Delete ${deleting?.name}?`}
-        description="Members lose the group and every permission it gives. Pending requests are dropped."
-        confirmLabel="Delete group"
-        onConfirm={() => deleting && del.mutateAsync(deleting.id)}
-      />
-    </>
-  );
-}
-
-const JOIN_OPTIONS: { value: JoinMode; title: string; description: string; icon: ReactNode }[] = [
-  { value: "open", title: "Open", description: "Anyone allowed can join straight away.", icon: <DoorOpen /> },
-  { value: "request", title: "On request", description: "People ask; a leader approves or declines.", icon: <MailQuestion /> },
-  { value: "closed", title: "Managed", description: "Only leaders and admins add members.", icon: <Lock /> },
-];
-
-const LEAVE_OPTIONS: { value: LeaveMode; title: string; description: string; icon: ReactNode }[] = [
-  { value: "open", title: "Free to leave", description: "Members can leave whenever they like.", icon: <DoorOpen /> },
-  { value: "request", title: "Ask to leave", description: "A leader confirms that someone leaves.", icon: <MailQuestion /> },
-  { value: "closed", title: "Managed", description: "Only leaders and admins remove members.", icon: <Lock /> },
-];
-
-function ModeCards<T extends string>({ value, onChange, options, disabled }: { value: T; onChange: (v: T) => void; options: { value: T; title: string; description: string; icon: ReactNode }[]; disabled?: boolean }) {
-  return (
-    <div role="radiogroup" className={cn("grid grid-cols-1 gap-2 sm:grid-cols-3", disabled && "pointer-events-none opacity-50")}>
-      {options.map((o) => {
-        const on = value === o.value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors",
-              on ? "border-accent/50 bg-accent-soft" : "border-border bg-surface-2 hover:border-border-strong hover:bg-hover",
-            )}
-          >
-            <span className={cn("flex items-center gap-2 text-sm font-medium [&_svg]:size-4", on ? "text-text" : "text-muted")}>
-              <span className={on ? "text-accent-ink" : "text-subtle"}>{o.icon}</span>
-              {o.title}
-            </span>
-            <span className="text-xs text-muted">{o.description}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function GroupEditor({ group, groups, onClose }: { group: AdminGroup | null; groups: AdminGroup[]; onClose: () => void }) {
-  const qc = useQueryClient();
-  const states = useQuery({ queryKey: ["admin", "states"], queryFn: () => api.get<AdminState[]>("/api/admin/states") });
-  const [tab, setTab] = useState("general");
-  const [form, setForm] = useState({
-    name: group?.name ?? "",
-    description: group?.description ?? "",
-    color: group?.color ?? "#38bdf8",
-    join_mode: group?.join_mode ?? ("closed" as JoinMode),
-    leave_mode: group?.leave_mode ?? ("open" as LeaveMode),
-    hidden: group?.hidden ?? false,
-    allowed_states: group?.allowed_states.map((s) => s.id) ?? [],
-    permissions: group?.permissions ?? [],
-    leaders: group?.leaders ?? [],
-    leader_groups: group?.leader_groups.map((g) => g.id) ?? [],
-    requirements: group?.requirements ?? {},
-    auto: group?.auto ?? false,
-    rules: group?.rules ?? {},
-    auto_remove: group?.auto_remove ?? true,
-    grace_hours: group?.grace_hours ?? 0,
-  });
-  const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch });
-  const save = useMutation({
-    mutationFn: () => {
-      const body = { ...form, leaders: form.leaders.map((l) => l.id) };
-      return group ? api.put(`/api/admin/groups/${group.id}`, body) : api.post("/api/admin/groups", body);
-    },
-    onSuccess: () => {
-      toast.success(group ? "Group updated" : "Group created");
-      qc.invalidateQueries({ queryKey: ["admin", "groups"] });
-      onClose();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const smartNeedsRules = form.auto && !(form.rules.rules?.length);
-
-  return (
-    <Dialog
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title={group ? `Edit ${group.name}` : "New group"}
-      size="xl"
-      footer={
-        <>
-          {smartNeedsRules && <span className="mr-auto self-center text-xs text-warning-fg">A smart group needs at least one rule.</span>}
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" loading={save.isPending} disabled={!form.name.trim() || smartNeedsRules} onClick={() => save.mutate()}>
-            {group ? "Save changes" : "Create group"}
-          </Button>
-        </>
-      }
-    >
-      <UiTabs
-        value={tab}
-        onValueChange={setTab}
-        listClassName="-mx-6 -mt-5 mb-5 px-4"
-        items={[
-          { value: "general", label: "General", icon: <Settings2 /> },
-          { value: "joining", label: "Joining", icon: <DoorOpen /> },
-          { value: "leaders", label: "Leaders", icon: <Crown />, count: form.leaders.length + form.leader_groups.length || undefined },
-          { value: "smart", label: "Smart group", icon: <Sparkles /> },
-          { value: "permissions", label: "Permissions", icon: <KeyRound />, count: form.permissions.length || undefined },
-        ]}
-      >
-        <TabPanel value="general" className="space-y-5">
-          <Field label="Name" required>
-            <Input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Fleet Commanders" autoFocus />
-          </Field>
-          <Field label="Description">
-            <Input value={form.description} onChange={(e) => set({ description: e.target.value })} placeholder="What this group is for" />
-          </Field>
-          <ColorPicker value={form.color} onChange={(color) => set({ color })} />
-          <ToggleRow title="Hidden" description="Only members (and leaders) can see this group exists." checked={form.hidden} onChange={(v) => set({ hidden: v })} />
-          <div className="space-y-2">
-            <span className="text-[13px] font-medium">Allowed states</span>
-            <div className="flex flex-wrap gap-1.5">
-              {states.data?.map((s) => {
-                const on = form.allowed_states.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => set({ allowed_states: on ? form.allowed_states.filter((x) => x !== s.id) : [...form.allowed_states, s.id] })}
-                    className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors", on ? "border-accent/45 bg-accent-soft text-text" : "border-border text-muted hover:bg-hover hover:text-text")}
-                  >
-                    <span className="size-1.5 rounded-none" style={{ background: s.color }} />
-                    {s.name}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted">None selected means any state. Users who lose an allowed state are removed automatically.</p>
-          </div>
-        </TabPanel>
-
-        <TabPanel value="joining" className="space-y-6">
-          {form.auto && (
-            <Alert tone="accent" title="This is a smart group">
-              Its rules decide who is in it, so nobody joins or leaves by hand. Turn it off under Smart group to use these settings.
-            </Alert>
-          )}
-          <div className="space-y-2">
-            <span className="text-[13px] font-medium">Joining</span>
-            <ModeCards value={form.join_mode} onChange={(join_mode) => set({ join_mode })} options={JOIN_OPTIONS} disabled={form.auto} />
-          </div>
-          <div className="space-y-2">
-            <span className="text-[13px] font-medium">Leaving</span>
-            <ModeCards value={form.leave_mode} onChange={(leave_mode) => set({ leave_mode })} options={LEAVE_OPTIONS} disabled={form.auto} />
-          </div>
-          <div className="space-y-2">
-            <div>
-              <span className="text-[13px] font-medium">Requirements</span>
-              <p className="text-xs text-muted">What someone needs before they can join or ask to. They see a checklist of what they're missing.</p>
-            </div>
-            <RuleSetEditor
-              value={form.requirements}
-              onChange={(requirements) => set({ requirements })}
-              allowedStates={form.allowed_states}
-              preview
-              emptyText="No requirements: anyone in an allowed state can join or ask."
-            />
-          </div>
-        </TabPanel>
-
-        <TabPanel value="leaders" className="space-y-6">
-          <p className="text-sm text-muted">
-            Leaders answer join and leave requests and add or remove members from <span className="font-medium text-text">Manage groups</span>. They can't change the group's settings.
-          </p>
-          <div className="space-y-2">
-            <span className="text-[13px] font-medium">Leaders</span>
-            <UserPicker value={form.leaders} onChange={(leaders) => set({ leaders })} />
-          </div>
-          <div className="space-y-2">
-            <span className="text-[13px] font-medium">Leader groups</span>
-            <p className="text-xs text-muted">Everyone in these groups leads this one too, e.g. Directors.</p>
-            <div className="flex flex-wrap gap-1.5">
-              {groups
-                .filter((g) => g.id !== group?.id)
-                .map((g) => {
-                  const on = form.leader_groups.includes(g.id);
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => set({ leader_groups: on ? form.leader_groups.filter((x) => x !== g.id) : [...form.leader_groups, g.id] })}
-                      className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors", on ? "border-accent/45 bg-accent-soft text-text" : "border-border text-muted hover:bg-hover hover:text-text")}
-                    >
-                      <span className="size-1.5 rounded-none" style={{ background: g.color }} />
-                      {g.name}
-                    </button>
-                  );
-                })}
-              {groups.filter((g) => g.id !== group?.id).length === 0 && <span className="text-xs text-subtle">No other groups yet.</span>}
-            </div>
-          </div>
-        </TabPanel>
-
-        <TabPanel value="smart" className="space-y-5">
-          <ToggleRow
-            title="Smart group"
-            description="Membership is managed entirely by rules, checked every 15 minutes and whenever someone's characters or state change."
-            checked={form.auto}
-            onChange={(v) => set({ auto: v })}
-          />
-          {form.auto && (
-            <>
-              <RuleSetEditor
-                value={form.rules}
-                onChange={(rules) => set({ rules })}
-                allowedStates={form.allowed_states}
-                preview
-                emptyText="Add a rule to decide who belongs here."
-              />
-              <ToggleRow
-                title="Remove people who stop matching"
-                description="Otherwise the group only ever adds members."
-                checked={form.auto_remove}
-                onChange={(v) => set({ auto_remove: v })}
-              />
-              {form.auto_remove && (
-                <Field label="Grace period (hours)" hint="How long someone may fail the rules before being removed, e.g. while a token is being fixed. 0 removes at once.">
-                  <Input type="number" min={0} max={2160} value={form.grace_hours} onChange={(e) => set({ grace_hours: Math.max(0, Number(e.target.value)) })} className="max-w-40" />
-                </Field>
-              )}
-            </>
-          )}
-        </TabPanel>
-
-        <TabPanel value="permissions">
-          <PermissionPicker value={form.permissions} onChange={(permissions) => set({ permissions })} />
-        </TabPanel>
-      </UiTabs>
-    </Dialog>
-  );
-}
-
 // --- shared bits -------------------------------------------------------------
 
-function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+export function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div className="space-y-2">
       <span className="text-[13px] font-medium">Colour</span>
@@ -734,7 +331,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );
 }
 
-function ToggleRow({ title, description, checked, onChange }: { title: ReactNode; description: ReactNode; checked: boolean; onChange: (v: boolean) => void }) {
+export function ToggleRow({ title, description, checked, onChange }: { title: ReactNode; description: ReactNode; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex cursor-pointer items-center gap-4 rounded-xl border border-border bg-surface-2 px-4 py-3">
       <div className="flex-1">
@@ -746,7 +343,7 @@ function ToggleRow({ title, description, checked, onChange }: { title: ReactNode
   );
 }
 
-function PermissionPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+export function PermissionPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const { data } = useQuery({ queryKey: ["admin", "permissions"], queryFn: () => api.get<PermissionOption[]>("/api/admin/permissions") });
   const byApp = Object.groupBy(data ?? [], (p) => p.app);
   return (

@@ -111,6 +111,8 @@ export interface Bootstrap {
     maintenance: { enabled: boolean; message: string };
     /** Whether the Django back-office at /django-admin/ is switched on. */
     django_admin: boolean;
+    /** Where people land after signing in ("" = the dashboard). */
+    start_page: string;
     /** Newest available EvE Conduit version; only sent to people who can manage the site. */
     update_available?: string | null;
     /** Set while the updater installs a release or plugins; the site restarts at the end. */
