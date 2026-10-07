@@ -103,3 +103,9 @@ def test_contracts(pilot, fake, client):
     detail = client.get(f"/api/characters/{CID}/contracts/7").json()
     assert {i["type"]["name"] for i in detail["items"]} == {"Rifter", "Tritanium"}
     assert sum(i["value"] for i in detail["items"]) == pytest.approx(400000 + 2000)
+
+    # Search by item (any part of the name, any case) or by title.
+    found = client.get(f"/api/characters/{CID}/contracts?q=tritan").json()
+    assert found["count"] == 1 and found["items"][0]["matches"] == [{"name": "Tritanium", "quantity": 500}]
+    assert client.get(f"/api/characters/{CID}/contracts?q=rifter kit").json()["items"][0]["contract_id"] == 7
+    assert client.get(f"/api/characters/{CID}/contracts?q=Avatar").json()["count"] == 0

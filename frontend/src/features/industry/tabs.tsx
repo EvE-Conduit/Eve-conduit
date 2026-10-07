@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { CircleCheck, Factory, FileStack, FlaskConical, Globe2, Pickaxe, ScrollText, Search, ShoppingCart, Timer } from "lucide-react";
-import { useDeferredValue, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 
 import { BarChart } from "@/components/BarChart";
 import { DataTable, PagedTable, SegmentTabs, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Input, SearchInput } from "@/components/ui/input";
 import { EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -456,6 +456,8 @@ interface ContractRow {
   end: Place | null;
   date_issued: string;
   date_expired: string;
+  /** When searching: the searched-for items in this contract. */
+  matches?: { name: string; quantity: number }[];
 }
 
 const TYPE_LABEL: Record<string, string> = { item_exchange: "Item exchange", auction: "Auction", courier: "Courier", loan: "Loan" };
@@ -463,6 +465,14 @@ const TYPE_LABEL: Record<string, string> = { item_exchange: "Item exchange", auc
 export function ContractsTab({ header }: { header: CharacterHeader }) {
   const [state, setState] = useState<"open" | "closed">("open");
   const [selected, setSelected] = useState<ContractRow | null>(null);
+  const [q, setQ] = useState("");
+  const [search, setSearch] = useState("");
+  // Search once typing pauses, not on every key.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(q.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [q]);
+  const params = `state=${state}${search ? `&q=${encodeURIComponent(search)}` : ""}`;
   const columns: Column<ContractRow>[] = [
     {
       header: "Contract",
@@ -472,6 +482,16 @@ export function ContractsTab({ header }: { header: CharacterHeader }) {
           <div className="truncate text-xs text-subtle">
             {TYPE_LABEL[c.type] ?? humanize(c.type)} · {c.direction === "issued" ? `to ${c.assignee ?? "public"}` : `from ${c.issuer}`}
           </div>
+          {c.matches && c.matches.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {c.matches.slice(0, 3).map((m, i) => (
+                <Badge key={i} tone="accent">
+                  {m.name} ×{num(m.quantity)}
+                </Badge>
+              ))}
+              {c.matches.length > 3 && <Badge>+{c.matches.length - 3} more</Badge>}
+            </div>
+          )}
         </div>
       ),
     },
@@ -483,13 +503,21 @@ export function ContractsTab({ header }: { header: CharacterHeader }) {
   return (
     <Card>
       <SegmentTabs value={state} onChange={setState} options={[{ value: "open", label: "Outstanding" }, { value: "closed", label: "Finished & expired" }]} />
+      <div className="border-b border-border px-card py-3">
+        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search for an item or contract title" aria-label="Search contracts" className="max-w-sm" />
+      </div>
       <PagedTable<ContractRow>
+        key={params}
         url={`${base(header)}/contracts`}
-        params={`state=${state}`}
+        params={params}
         columns={columns}
         rowKey={(c) => c.contract_id}
         onRowClick={setSelected}
-        empty={{ icon: <ScrollText />, title: state === "open" ? "No outstanding contracts" : "No past contracts" }}
+        empty={
+          search
+            ? { icon: <Search />, title: `No ${state === "open" ? "outstanding" : "past"} contracts with “${search}”`, description: "Searches item names and contract titles." }
+            : { icon: <ScrollText />, title: state === "open" ? "No outstanding contracts" : "No past contracts" }
+        }
       />
       {selected && <ContractDialog header={header} contract={selected} onClose={() => setSelected(null)} />}
     </Card>
