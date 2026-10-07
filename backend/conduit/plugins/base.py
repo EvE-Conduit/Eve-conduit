@@ -66,6 +66,9 @@ class Plugin:
     #: Dotted paths of files that call ``conduit.access.rules.register_rule`` when imported, adding
     #: rule types for group requirements and smart groups.
     group_rules: tuple[str, ...] = ()
+    #: Dotted paths to ``fn(user, character) -> bool`` that let more people read a character's sheet, e.g.
+    #: recruiters looking at an applicant. Asked only when the core rules say no, and only while enabled.
+    sheet_access: tuple[str, ...] = ()
     #: Whether a fresh install enables this plugin automatically.
     default_enabled: bool = False
 

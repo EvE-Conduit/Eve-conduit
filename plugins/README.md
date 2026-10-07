@@ -6,6 +6,7 @@ results, group rules and ESI scopes.
 
 - [`conduit-example`](conduit-example) is a complete working plugin. Copy it to start your own.
 - [`conduit-moons`](conduit-moons): the Moon Mining Ledger: monthly moon mining per member, moon tax and payments.
+- [`conduit-recruitment`](conduit-recruitment): Recruitment: application forms, a review queue and accepting into groups.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.

@@ -23,3 +23,8 @@ def ping(request):
 def search(request, q, limit):
     return {"key": "sample", "label": "Sample widgets",
             "hits": [{"id": "sample:1", "title": f"Widget {q}", "icon": "flask-conical", "url": "/p/sample"}]}
+
+
+def sheet_access(user, character):
+    """Lets anyone read a character called "Open Book" (tests the plugin hook)."""
+    return character.name == "Open Book"

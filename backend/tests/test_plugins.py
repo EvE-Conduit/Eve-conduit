@@ -45,3 +45,23 @@ def test_bootstrap_lists_enabled_module_for_signed_in_users(user, client):
     plugins = client.get("/api/core/bootstrap").json()["plugins"]
     assert plugins[0]["id"] == "sample"
     assert plugins[0]["entry"] == "/static/sample/plugin.js"
+
+
+@pytest.mark.django_db
+def test_plugins_can_grant_sheet_access(client):
+    from conduit.plugins.services import set_enabled, sync_installed
+    from conduit.sheet.access import can_view
+
+    from .conftest import make_user
+
+    viewer = make_user(90000010, "Viewer")
+    book = make_user(90000011, "Open Book").main_character
+    other = make_user(90000012, "Closed Book").main_character
+    sync_installed()
+    set_enabled("sample", False)
+    assert not can_view(viewer, book)
+    set_enabled("sample", True)
+    assert can_view(viewer, book) and not can_view(viewer, other)
+    client.force_login(viewer)
+    assert client.get(f"/api/characters/{book.pk}").status_code == 200
+    assert client.get(f"/api/characters/{other.pk}").status_code == 403

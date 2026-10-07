@@ -13,3 +13,4 @@ class SamplePlugin(Plugin):
     esi_scopes = ("esi-fleets.read_fleet.v1",)
     nav = (NavItem("Sample", "", "flask-conical"),)
     search = ("tests.sample_plugin.api:search",)
+    sheet_access = ("tests.sample_plugin.api:sheet_access",)

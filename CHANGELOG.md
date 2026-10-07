@@ -3,6 +3,14 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.6
+
+### New
+- **Plugins can open character sheets to more people** (`Plugin.sheet_access`), for example recruiters looking at an
+  applicant's characters while the application is open. Used by the new Recruitment plugin. See
+  [docs/platform.md](docs/platform.md#character-sheet-access).
+- Plugin front ends can import `react-router`'s types when type-checking.
+
 ## 0.5.5
 
 ### New
