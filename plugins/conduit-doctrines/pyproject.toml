@@ -1,0 +1,30 @@
+[project]
+name = "conduit-doctrines"
+version = "1.0.0"
+description = "Doctrines: your fleet doctrines and fits, shown like the in-game fitting window, copied into the game or saved to a character's fittings, and who can fly each fit."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+doctrines = "conduit_doctrines.plugin:DoctrinesPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Doctrines"
+icon = "swords"
+category = "Military"
+# Needs the fitting data and skill requirements the static data import reads since 0.5.14.
+min_conduit = "0.5.14"
+esi_scopes = ["esi-fittings.write_fittings.v1"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_doctrines*"]
+
+[tool.setuptools.package-data]
+conduit_doctrines = ["static/**/*"]
