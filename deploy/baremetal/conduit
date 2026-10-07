@@ -11,6 +11,7 @@
 #   conduit apply-update                  install an update or plugins approved on the website (run as root by
 #                                         the conduit-update.path watcher, with cron as a backup)
 #   conduit setup-updater                 (re)install that watcher
+#   conduit web-headers                   stop browsers caching the site (older nginx configs; upgrades do it)
 #   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
 #   conduit plugin list                   list installed plugins
 #   conduit run web|worker|beat           used by Supervisor to start the services
@@ -115,6 +116,29 @@ install_admin_script() {  # release dir
   install -m 0755 "$1/deploy/baremetal/conduit" "$CONDUIT_BIN"
 }
 
+cmd_web_headers() {
+  # Sites installed before 0.5.13 let browsers cache /static/ for 7 days and /assets/ for a year. Switch both to
+  # "check back every time" (expires -1 sends Cache-Control: no-cache), leaving the rest of the config alone.
+  require_root
+  [[ "${CONDUIT_TESTING:-}" == 1 ]] && return 0
+  local conf
+  for conf in /etc/nginx/sites-available/conduit.conf /etc/nginx/conf.d/conduit.conf; do
+    [[ -f "$conf" ]] || continue
+    grep -qE 'expires 7d;|max-age=31536000, immutable' "$conf" || { echo "nginx: $conf already sends no-cache"; continue; }
+    cp -a "$conf" "$conf.bak"
+    sed -i -E -e 's/expires 7d;/expires -1;/' \
+      -e 's/add_header Cache-Control "public, max-age=31536000, immutable" always;/expires -1;/' "$conf"
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || nginx -s reload
+      rm -f "$conf.bak"
+      echo "nginx: browsers no longer cache the site ($conf)"
+    else
+      mv "$conf.bak" "$conf"
+      echo "nginx: $conf didn't pass 'nginx -t' after the change, so it was left as it was" >&2
+    fi
+  done
+}
+
 finish_deploy() {
   manage migrate --noinput
   manage collectstatic --noinput -v0
@@ -156,6 +180,8 @@ cmd_upgrade() {
   finish_deploy
   publish_web "$target"
   install_admin_script "$target"
+  # The release's own admin script knows its web server settings (this one may be older).
+  [[ "${CONDUIT_TESTING:-}" == 1 ]] || "$CONDUIT_BIN" web-headers || true
   progress release "$version" restart
   supervisor restart "$SUPERVISOR_GROUP:*"
   progress clear
@@ -455,8 +481,9 @@ case "${1:-}" in
   backup) cmd_backup ;;
   apply-update) cmd_apply_update ;;
   setup-updater) cmd_setup_updater ;;
+  web-headers) cmd_web_headers ;;
   _apply-plugins) shift; cmd_apply_plugins "$@" ;;
   plugin) shift; cmd_plugin "$@" ;;
   run) shift; cmd_run "$@" ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

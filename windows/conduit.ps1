@@ -16,6 +16,7 @@
       conduit upgrade <eve-conduit-X.Y.Z-windows.zip>
       conduit rollback                       back to the previous release
       conduit repair                         redo the last steps of an upgrade that stopped half-way
+      conduit web-headers                    stop browsers caching the site (older Caddyfiles; upgrades do it)
       conduit apply-update                   install an update or plugins approved on the website, if there is one
       conduit watch-updates                  wait for such requests and install them (run by the updater task)
       conduit plugin install <package>       PyPI name, git URL or path
@@ -169,6 +170,20 @@ function Invoke-Uninstall([string[]]$Arguments) {
 
 function Test-MariaDb { (Read-EnvFile $p.EnvFile)['DATABASE_URL'].StartsWith('mysql') }
 
+function Invoke-WebHeader([switch]$NoRestart) {
+    # Sites installed before 0.5.13 let browsers cache /static/ for 7 days and /assets/ for a year. Switch both to
+    # "check back every time", leaving the rest of the Caddyfile alone.
+    Assert-Admin
+    $file = Join-Path $p.Config 'Caddyfile'
+    if (-not (Test-Path -LiteralPath $file)) { Write-Host 'No Caddyfile found.'; return }
+    $text = [IO.File]::ReadAllText($file)
+    $new = $text -replace 'header Cache-Control "public, max-age=(604800|31536000, immutable)"', 'header Cache-Control "no-cache"'
+    if ($new -eq $text) { Write-Host 'Caddy already sends no-cache.'; return }
+    [IO.File]::WriteAllText($file, $new, (New-Object Text.UTF8Encoding $false))
+    if (-not $NoRestart -and (Get-Service conduit-caddy -ErrorAction SilentlyContinue)) { Restart-Service conduit-caddy }
+    Write-Host 'Browsers no longer cache the site.'
+}
+
 function Invoke-Upgrade([string]$Zip) {
     Assert-Admin
     if (-not $Zip -or -not (Test-Path -LiteralPath $Zip)) { throw 'usage: conduit upgrade <eve-conduit-X.Y.Z-windows.zip>' }
@@ -206,6 +221,9 @@ function Invoke-Upgrade([string]$Zip) {
         Set-ConduitAcl -Root $Root
         Set-ConduitProgress -Root $Root -Kind release -Target $version -Step migrate
         Invoke-Finish $target
+        # The release's own admin script knows its web server settings (this one may be older); Restart-All
+        # below restarts Caddy.
+        try { & (Join-Path $Root 'conduit.ps1') web-headers -NoRestart } catch { Write-Warning "Couldn't update the Caddyfile: $_" }
         Set-ConduitProgress -Root $Root -Kind release -Target $version -Step restart
         Restart-All
         Set-ConduitProgress -Root $Root -Clear
@@ -414,6 +432,7 @@ switch ($Command) {
     'backup' { Invoke-Backup }
     'upgrade' { Invoke-Upgrade ($Rest | Select-Object -First 1) }
     'rollback' { Invoke-Rollback }
+    'web-headers' { Invoke-WebHeader -NoRestart:($Rest -contains '-NoRestart') }
     'apply-update' {
         # Installs from before 0.5.8 run this every two minutes; switch their task over to the watcher.
         Assert-Admin
