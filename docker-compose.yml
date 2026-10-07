@@ -8,6 +8,8 @@ x-backend: &backend
   environment:
     DATABASE_URL: postgres://conduit:${POSTGRES_PASSWORD}@db:5432/conduit
     REDIS_URL: redis://redis:6379/0
+    # Docker installs update with git pull + docker compose up -d --build; the site only shows the changelog.
+    CONDUIT_INSTALL_KIND: docker
   depends_on:
     db:
       condition: service_healthy

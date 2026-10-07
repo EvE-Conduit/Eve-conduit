@@ -729,4 +729,63 @@ function Set-ConduitAppLink {
     New-Item -ItemType Junction -Path $p.App -Target $ReleaseDir | Out-Null
 }
 
+# --- updates ---------------------------------------------------------------------------------------------------------
+# The website downloads and verifies releases into data\updates and leaves install-request.json there when an
+# administrator clicks Install. The website runs as Local Service and can't stop services or replace code, so a
+# scheduled task running as SYSTEM ("conduit apply-update") does the install. It trusts nothing in that folder:
+# it copies the files somewhere only administrators can write, checks the signature again and only then upgrades.
+$script:UpdaterTaskName = 'EvE Conduit updater'
+
+function Get-ConduitUpdatesDir {
+    param([Parameter(Mandatory)][string]$Root)
+    $p = Get-ConduitPath $Root
+    $configured = if (Test-Path -LiteralPath $p.EnvFile) { (Read-EnvFile $p.EnvFile)['CONDUIT_UPDATES_DIR'] } else { $null }
+    if ($configured) { return $configured }
+    return Join-Path $p.Data 'updates'
+}
+
+function Get-ConduitUpdateRequest {
+    <#
+      Reads and checks install-request.json. Returns @{ Version; File } or throws. Only a plain version number and
+      the matching release file name are accepted, so a request can't point the updater anywhere else.
+    #>
+    param([Parameter(Mandatory)][string]$Json)
+    $req = $Json | ConvertFrom-Json
+    $version = [string]$req.version
+    if ($version -notmatch '^\d{1,4}\.\d{1,4}\.\d{1,4}$') { throw "The update request has an invalid version: '$version'" }
+    $file = "eve-conduit-$version-windows.zip"
+    if ([string]$req.file -ne $file) { throw "The update request names an unexpected file: '$($req.file)'" }
+    return @{ Version = $version; File = $file }
+}
+
+function Write-ConduitUpdateResult {
+    <# install-result.json, read by the website to show how the install went. #>
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Version,
+        [Parameter(Mandatory)][ValidateSet('running', 'succeeded', 'failed')][string]$Status,
+        [string]$Message = ''
+    )
+    $json = [ordered]@{ version = $Version; status = $Status; message = $Message; at = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json
+    [IO.File]::WriteAllText($Path, $json, (New-Object Text.UTF8Encoding $false))
+}
+
+function Register-ConduitUpdater {
+    <# The SYSTEM task that installs updates an administrator asked for on the website. Checks every two minutes. #>
+    param([Parameter(Mandatory)][string]$Root)
+    $script = Join-Path $Root 'conduit.ps1'
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+        -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$script`" apply-update"
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 2)
+    $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
+        -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName $script:UpdaterTaskName -Action $action -Trigger $trigger -Principal $principal `
+        -Settings $settings -Description 'Installs EvE Conduit updates that an administrator approved on the website.' -Force | Out-Null
+}
+
+function Unregister-ConduitUpdater {
+    Unregister-ScheduledTask -TaskName $script:UpdaterTaskName -Confirm:$false -ErrorAction SilentlyContinue
+}
+
 Export-ModuleMember -Function *-*

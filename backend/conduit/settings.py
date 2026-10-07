@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "conduit.external",
     "conduit.events",
     "conduit.notify",
+    "conduit.updates",
     "conduit.sheet",
     "conduit.sheet.overview",
     "conduit.sheet.skills",
@@ -196,6 +197,8 @@ CELERY_BEAT_SCHEDULE = {
     "core:market-prices": {"task": "conduit.eve.tasks.update_market_prices", "schedule": crontab(minute=17)},
     # New game builds land around 11:00 UTC downtime; check a little after.
     "core:sde": {"task": "conduit.sde.tasks.update_sde", "schedule": crontab(hour=12, minute=5)},
+    "core:update-check": {"task": "conduit.updates.tasks.check_for_updates", "schedule": crontab(hour=12, minute=23)},
+    "core:update-result": {"task": "conduit.updates.tasks.collect_install_result", "schedule": 120.0},
     "core:heartbeat": {"task": "conduit.site.tasks.heartbeat", "schedule": 60.0},
     "core:purge-logs": {"task": "conduit.audit.tasks.purge_logs", "schedule": crontab(hour=3, minute=40)},
     "core:smart-groups": {"task": "conduit.access.tasks.update_smart_groups", "schedule": crontab(minute="*/15")},
@@ -227,6 +230,17 @@ CONDUIT_SERVICE_LOG_DAYS = int(env("CONDUIT_SERVICE_LOG_DAYS", "30"))
 CONDUIT_ESI_LOG_DAYS = int(env("CONDUIT_ESI_LOG_DAYS", "7"))
 # Which ESI calls to record: all, errors (anything but 200/304) or off.
 CONDUIT_ESI_LOG = env("CONDUIT_ESI_LOG", "all").strip().lower()
+# --- Updates ----------------------------------------------------------------------------------
+# How this copy was installed: windows, baremetal, docker or dev. Only windows and baremetal installs
+# can download and install releases (through their privileged updater); the others are told how to update.
+CONDUIT_INSTALL_KIND = env("CONDUIT_INSTALL_KIND", "dev").strip().lower()
+# Where downloaded releases and the updater's request/result files live (writable by the app).
+CONDUIT_UPDATES_DIR = env("CONDUIT_UPDATES_DIR", str(BASE_DIR / "updates"))
+# GitHub repository releases come from, and whether to look for them daily (notify only).
+CONDUIT_UPDATE_REPO = env("CONDUIT_UPDATE_REPO", "EvE-Conduit/Eve-conduit")
+CONDUIT_UPDATE_CHECK = env_bool("CONDUIT_UPDATE_CHECK", True)
+CONDUIT_UPDATE_PRERELEASES = env_bool("CONDUIT_UPDATE_PRERELEASES")
+
 # Per-IP limits on EVE login, the setup code and failed API-key attempts (see conduit/site/ratelimit.py).
 CONDUIT_RATE_LIMITS = env_bool("CONDUIT_RATE_LIMITS", True)
 # The Django back-office at /django-admin/ (superusers only). false removes it entirely.

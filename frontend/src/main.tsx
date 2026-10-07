@@ -24,6 +24,7 @@ import { AdminLogs } from "@/pages/admin/Logs";
 import { AdminMembers } from "@/pages/admin/Members";
 import { AdminPlugins } from "@/pages/admin/Plugins";
 import { AdminSettings } from "@/pages/admin/Settings";
+import { AdminUpdates } from "@/pages/admin/Updates";
 import { AssetsPage } from "@/pages/AssetsPage";
 import { WalletPage } from "@/pages/WalletPage";
 import { Characters } from "@/pages/Characters";
@@ -105,6 +106,7 @@ async function start() {
         { path: "admin/health", element: <AdminHealth /> },
         { path: "admin/integrations", element: <AdminIntegrations /> },
         { path: "admin/settings", element: <AdminSettings /> },
+        { path: "admin/updates", element: <AdminUpdates /> },
         ...pluginRoutes(plugins),
         { path: "*", element: <NotFound /> },
       ],

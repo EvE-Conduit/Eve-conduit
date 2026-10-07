@@ -8,6 +8,7 @@
 #   conduit upgrade <release.tar.gz>      install a new release (keeps the old one for rollback)
 #   conduit rollback                      switch back to the previous release
 #   conduit backup                        dump the database and config to /var/backups/conduit
+#   conduit apply-update                  install an update approved on the website (run by cron as root)
 #   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
 #   conduit plugin list                   list installed plugins
 #   conduit run web|worker|beat           used by Supervisor to start the services
@@ -193,6 +194,57 @@ for mid, e in sorted(registry.discover().items()):
   esac
 }
 
+# Run every two minutes by /etc/cron.d/conduit-update. The website (running as the conduit user) downloads and
+# verifies releases into the updates folder and leaves install-request.json there when an admin clicks Install.
+# Nothing in that folder is trusted: the release is copied to a root-only temp dir and its signature checked again
+# with the installed EvE Conduit before the normal upgrade runs.
+cmd_apply_update() {
+  require_root
+  load_env
+  local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
+  local request="$updates/install-request.json" result="$updates/install-result.json"
+  local log="$CONDUIT_LOG/updater.log"
+  [[ -f "$request" ]] || return 0
+  local version
+  version=$("$VENV/bin/python" -I -c '
+import json, re, sys
+r = json.load(open(sys.argv[1]))
+v = str(r.get("version", ""))
+ok = re.fullmatch(r"\d{1,4}\.\d{1,4}\.\d{1,4}", v) and r.get("file") == "eve-conduit-%s.tar.gz" % v
+print(v if ok else "")' "$request" 2>/dev/null || true)
+  rm -f "$request"   # one attempt per request
+  if [[ -z "$version" ]]; then
+    echo "$(date -Is) rejected an invalid update request" >>"$log"
+    return 0
+  fi
+  local file="eve-conduit-$version.tar.gz" work
+  work=$(mktemp -d)
+  write_result() {  # status message
+    "$VENV/bin/python" -I -c 'import json, sys, datetime; json.dump({"version": sys.argv[2], "status": sys.argv[3], "message": sys.argv[4], "at": datetime.datetime.now(datetime.UTC).isoformat()}, open(sys.argv[1], "w"))' \
+      "$result" "$version" "$1" "$2"
+    chown "$CONDUIT_USER:$CONDUIT_USER" "$result" 2>/dev/null || true
+  }
+  write_result running "Installing $version"
+  if ! cp "$updates/$file" "$updates/SHA256SUMS" "$updates/SHA256SUMS.sig" "$work/" 2>>"$log"; then
+    write_result failed "The downloaded release is missing (details in $log)"; rm -rf "$work"; return 0
+  fi
+  local check
+  if ! check=$("$VENV/bin/python" -I -m conduit.updates.verify "$work/$file" "$work/SHA256SUMS" "$work/SHA256SUMS.sig" 2>&1); then
+    echo "$(date -Is) $check" >>"$log"
+    write_result failed "The release failed its signature check: $check"; rm -rf "$work"; return 0
+  fi
+  echo "$(date -Is) installing $version: $check" >>"$log"
+  if ( cmd_upgrade "$work/$file" ) >>"$log" 2>&1; then
+    write_result succeeded "EvE Conduit $version is running."
+  else
+    echo "$(date -Is) upgrade to $version failed; putting the running release back" >>"$log"
+    install_python "$(readlink -f "$APP")" >>"$log" 2>&1 || true
+    supervisor restart "$SUPERVISOR_GROUP:*" >>"$log" 2>&1 || true
+    write_result failed "The upgrade to $version failed and the previous version was put back (details in $log)."
+  fi
+  rm -rf "$work"
+}
+
 cmd_run() {
   load_env
   cd "$APP/backend"
@@ -214,7 +266,8 @@ case "${1:-}" in
   upgrade) shift; cmd_upgrade "$@" ;;
   rollback) cmd_rollback ;;
   backup) cmd_backup ;;
+  apply-update) cmd_apply_update ;;
   plugin) shift; cmd_plugin "$@" ;;
   run) shift; cmd_run "$@" ;;
-  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

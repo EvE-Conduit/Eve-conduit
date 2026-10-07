@@ -35,6 +35,8 @@ class SiteOut(Schema):
     version: str
     maintenance: dict
     django_admin: bool
+    #: Newest available version, only for people who can install it.
+    update_available: str | None = None
 
 
 class SetupOut(Schema):
@@ -146,7 +148,12 @@ def bootstrap(request):
                         "entry": static(mod.frontend) if mod.frontend else None,
                     }
                 )
-    return {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
+    out = {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
+    if request.user.is_authenticated and request.user.has_perm("site.manage_site"):
+        from conduit.updates.services import newest_for_bootstrap
+
+        out["site"]["update_available"] = newest_for_bootstrap()
+    return out
 
 
 @router.post("/logout", auth=django_auth)

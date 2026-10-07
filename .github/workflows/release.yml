@@ -1,0 +1,96 @@
+# Push a tag like v0.4.1 (matching backend/pyproject.toml) to publish a release: the Linux tarball, the
+# Windows zip and setup.exe, SHA256SUMS signed with the project's key, and the CHANGELOG.md section as notes.
+# Installs find it under Administration -> Updates.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e "backend[dev]" -e plugins/conduit-example
+      - run: python -m pytest -q
+        working-directory: backend
+      - name: Tag matches the version and has release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -q "^version = \"$version\"" backend/pyproject.toml || { echo "pyproject.toml isn't $version"; exit 1; }
+          python scripts/changelog-section.py "$version" > /dev/null
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: bash windows/build-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: dist/eve-conduit-*
+
+  installer:
+    needs: build
+    runs-on: windows-latest
+    # The setup.exe is new; a problem building it shouldn't hold back the release (updates use the zip).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Build the installer
+        shell: pwsh
+        run: ./windows/installer/build.ps1 -Zip "dist/eve-conduit-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/EvE-Conduit-Setup-*.exe
+
+  publish:
+    needs: [build, installer]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install cryptography
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and signature
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          cd dist
+          sha256sum eve-conduit-* EvE-Conduit-Setup-*.exe 2>/dev/null > SHA256SUMS || true
+          cat SHA256SUMS
+          cd ..
+          python scripts/sign-release.py dist/SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python scripts/changelog-section.py "$version" > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "EvE Conduit $version" --notes-file notes.md

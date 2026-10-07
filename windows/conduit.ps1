@@ -16,6 +16,7 @@
       conduit upgrade <eve-conduit-X.Y.Z-windows.zip>
       conduit rollback                       back to the previous release
       conduit repair                         redo the last steps of an upgrade that stopped half-way
+      conduit apply-update                   install an update approved on the website (run by the updater task)
       conduit plugin install <package>       PyPI name, git URL or path
       conduit plugin list
       conduit tray [on|off]                  open the tray control panel, or start it at sign-in (on/off)
@@ -150,6 +151,7 @@ function Invoke-Finish([string]$ReleaseDir) {
     Copy-Item -Path (Join-Path $ReleaseDir 'windows\tray\*') -Destination (Join-Path $Root 'tray') -Force
     Write-TraySetting -Root $Root -Database (Get-DatabaseKind)
     Set-ConduitUninstallEntry -Root $Root -Version (Get-ReleaseVersion $ReleaseDir)
+    Register-ConduitUpdater -Root $Root
 }
 
 function Invoke-Uninstall([string[]]$Arguments) {
@@ -203,6 +205,44 @@ function Invoke-Upgrade([string]$Zip) {
         Write-Host "EvE Conduit $version is running. 'conduit rollback' returns to the previous release."
     }
     finally { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+function Invoke-ApplyUpdate {
+    <#
+      Run by the "EvE Conduit updater" scheduled task as SYSTEM. Does nothing unless an administrator asked for an
+      install on the website. Copies the release out of the website-writable updates folder first, checks its
+      signature with the installed EvE Conduit, then runs the normal upgrade (backup, install, migrate, rollback).
+    #>
+    Assert-Admin
+    $updates = Get-ConduitUpdatesDir -Root $Root
+    $request = Join-Path $updates 'install-request.json'
+    if (-not (Test-Path -LiteralPath $request)) { return }
+    $result = Join-Path $updates 'install-result.json'
+    $log = Join-Path $p.Logs 'updater.log'
+    $json = Get-Content -LiteralPath $request -Raw
+    Remove-Item -LiteralPath $request -Force   # one attempt per request, even if this fails
+    try { $req = Get-ConduitUpdateRequest -Json $json }
+    catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) rejected request: $_"; return }
+    $work = Join-Path $p.Tmp ('update-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    try {
+        Write-ConduitUpdateResult -Path $result -Version $req.Version -Status running -Message "Installing $($req.Version)"
+        foreach ($name in @($req.File, 'SHA256SUMS', 'SHA256SUMS.sig')) {
+            Copy-Item -LiteralPath (Join-Path $updates $name) -Destination $work -ErrorAction Stop
+        }
+        $python = Join-Path $p.Venv 'Scripts\python.exe'
+        $check = & $python -I -m conduit.updates.verify (Join-Path $work $req.File) (Join-Path $work 'SHA256SUMS') (Join-Path $work 'SHA256SUMS.sig') 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "The release failed its signature check: $check" }
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) installing $($req.Version): $check"
+        Invoke-Upgrade (Join-Path $work $req.File) *>&1 | ForEach-Object { "$_" } | Add-Content -LiteralPath $log
+        Write-ConduitUpdateResult -Path $result -Version $req.Version -Status succeeded -Message "EvE Conduit $($req.Version) is running."
+    }
+    catch {
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) failed: $_"
+        Write-ConduitUpdateResult -Path $result -Version $req.Version -Status failed -Message "$($_.Exception.Message) (details in logs\updater.log)"
+        Restart-All
+    }
+    finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 function Invoke-Rollback {
@@ -259,6 +299,7 @@ switch ($Command) {
     'backup' { Invoke-Backup }
     'upgrade' { Invoke-Upgrade ($Rest | Select-Object -First 1) }
     'rollback' { Invoke-Rollback }
+    'apply-update' { Invoke-ApplyUpdate }
     'repair' {
         # Migrations, static files, web front end and admin scripts for the release that's linked now.
         Assert-Admin

@@ -102,6 +102,8 @@ export interface Bootstrap {
     maintenance: { enabled: boolean; message: string };
     /** Whether the Django back-office at /django-admin/ is switched on. */
     django_admin: boolean;
+    /** Newest available EvE Conduit version; only sent to people who can manage the site. */
+    update_available?: string | null;
   };
   setup: { completed: boolean; sso_configured: boolean; callback_url: string; admin_claimed: boolean };
   user: CurrentUser | null;
