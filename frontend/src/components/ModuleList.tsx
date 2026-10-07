@@ -56,7 +56,7 @@ export function ModuleList({ compact = false }: { compact?: boolean }) {
       <EmptyState
         icon={<Puzzle />}
         title="No modules installed yet"
-        description="Modules are Python packages. Install one into the server image (pip install evecsm-…), restart, and it shows up here."
+        description="Modules are Python packages. Install one into the server image (pip install conduit-…), restart, and it shows up here."
         className={compact ? "py-8" : undefined}
       />
     );

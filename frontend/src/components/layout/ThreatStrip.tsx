@@ -4,7 +4,7 @@ import { Link } from "react-router";
 
 import { useNotifications, useUnreadCount } from "@/lib/notifications";
 
-const DISMISS_KEY = "evecsm:threats-dismissed";
+const DISMISS_KEY = "conduit:threats-dismissed";
 
 function readDismissed(): number[] {
   try {

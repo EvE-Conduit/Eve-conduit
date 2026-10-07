@@ -6,12 +6,12 @@ import pytest
 from django.contrib.auth.models import Permission
 from django.utils import timezone
 
-from evecsm.access.compliance import check_user, refresh_user, unregistered_members
-from evecsm.access.models import ComplianceStatus
-from evecsm.events import bus
-from evecsm.notify.models import Notification
-from evecsm.sheet import registry
-from evecsm.sheet.models import SyncStatus
+from conduit.access.compliance import check_user, refresh_user, unregistered_members
+from conduit.access.models import ComplianceStatus
+from conduit.events import bus
+from conduit.notify.models import Notification
+from conduit.sheet import registry
+from conduit.sheet.models import SyncStatus
 
 from .conftest import make_user
 
@@ -127,14 +127,14 @@ def test_me_compliance(api_client, user):
 
 @pytest.mark.django_db
 def test_unregistered_members(monkeypatch, corp, api_client, admin_user):
-    from evecsm.eve.models import EveName
+    from conduit.eve.models import EveName
 
     make_user(90000070, "Registered", corporation=corp)
     EveName.objects.create(id=90000071, name="Lurker", category="character")
-    fake = types.ModuleType("evecsm.corp.services")
+    fake = types.ModuleType("conduit.corp.services")
     fake.member_ids = lambda corporation_id: {90000070, 90000071} if corporation_id == corp.pk else None
-    monkeypatch.setitem(sys.modules, "evecsm.corp.services", fake)
-    monkeypatch.setattr("evecsm.eve.tasks.ensure_eve_names", lambda ids: None)
+    monkeypatch.setitem(sys.modules, "conduit.corp.services", fake)
+    monkeypatch.setattr("conduit.eve.tasks.ensure_eve_names", lambda ids: None)
 
     assert [m["name"] for m in unregistered_members(corp.pk)] == ["Lurker"]
     assert unregistered_members(1) is None

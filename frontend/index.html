@@ -9,7 +9,7 @@
     <script>
       // Pick the theme before the first paint, so light-theme users don't see a dark flash.
       try {
-        var t = localStorage.getItem("evecsm:theme");
+        var t = localStorage.getItem("conduit:theme");
         if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
         if (t === "light") { document.documentElement.dataset.theme = "light"; document.documentElement.className = "light"; }
       } catch (e) {}

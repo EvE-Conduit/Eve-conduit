@@ -4,12 +4,12 @@ import pytest
 from django.contrib.auth.models import Permission
 from django.utils import timezone
 
-from evecsm.accounts.models import Token
-from evecsm.sheet import registry
-from evecsm.sheet.assets.models import Asset
-from evecsm.sheet.assets.sync import root_locations
-from evecsm.sheet.models import Location, SyncStatus
-from evecsm.sheet.tasks import schedule_syncs, sync_section
+from conduit.accounts.models import Token
+from conduit.sheet import registry
+from conduit.sheet.assets.models import Asset
+from conduit.sheet.assets.sync import root_locations
+from conduit.sheet.models import Location, SyncStatus
+from conduit.sheet.tasks import schedule_syncs, sync_section
 
 from .conftest import make_user
 from .fake_esi import CID, FakeEsi, load_sde_fixture
@@ -26,7 +26,7 @@ def pilot(db):
 @pytest.fixture
 def fake(monkeypatch):
     fake = FakeEsi()
-    for target in ("evecsm.sheet.tasks.esi", "evecsm.sheet.locations.esi", "evecsm.eve.tasks.esi"):
+    for target in ("conduit.sheet.tasks.esi", "conduit.sheet.locations.esi", "conduit.eve.tasks.esi"):
         monkeypatch.setattr(target, lambda: fake)
     return fake
 
@@ -42,7 +42,7 @@ def test_core_sections_are_registered_with_scopes():
 
 @pytest.mark.django_db
 def test_required_scopes_include_sheet_scopes():
-    from evecsm.modules.services import required_scopes
+    from conduit.modules.services import required_scopes
 
     assert "esi-wallet.read_character_wallet.v1" in required_scopes()
 
@@ -50,7 +50,7 @@ def test_required_scopes_include_sheet_scopes():
 @pytest.mark.django_db
 def test_scheduler_queues_due_sections_once(pilot, monkeypatch):
     queued = []
-    monkeypatch.setattr("evecsm.sheet.tasks.sync_section.delay", lambda *a: queued.append(a))
+    monkeypatch.setattr("conduit.sheet.tasks.sync_section.delay", lambda *a: queued.append(a))
     assert schedule_syncs() == len(registry.synced())
     assert schedule_syncs() == 0  # already pushed into the future
     assert {s for _, s in queued} == set(registry.synced())
@@ -126,7 +126,7 @@ def test_root_locations_walk_containers():
 
 @pytest.mark.django_db
 def test_assets_sync_and_api(pilot, fake, client):
-    from evecsm.eve.tasks import update_market_prices
+    from conduit.eve.tasks import update_market_prices
 
     update_market_prices.run()
     assert run("assets") == SyncStatus.Result.OK
@@ -149,7 +149,7 @@ def test_assets_sync_and_api(pilot, fake, client):
 
 @pytest.mark.django_db
 def test_structure_without_scope_stays_restricted(pilot, fake):
-    from evecsm.sheet.locations import resolve
+    from conduit.sheet.locations import resolve
 
     Token.objects.filter(character_id=CID).update(scopes="publicData")
     pilot.main_character.refresh_from_db()
@@ -185,7 +185,7 @@ def test_corporation_permission_is_scoped_to_own_corp(pilot, fake, client, corp)
 
 @pytest.mark.django_db
 def test_location_kinds():
-    from evecsm.sheet.locations import kind_of
+    from conduit.sheet.locations import kind_of
 
     assert kind_of(30000142) == Location.Kind.SOLAR_SYSTEM
     assert kind_of(60003760) == Location.Kind.STATION
@@ -197,8 +197,8 @@ def test_location_kinds():
 
 @pytest.mark.django_db
 def test_refused_structure_is_not_asked_again_with_the_same_character(pilot):
-    from evecsm.esi.exceptions import EsiError
-    from evecsm.sheet.locations import resolve
+    from conduit.esi.exceptions import EsiError
+    from conduit.sheet.locations import resolve
 
     class Refusing(FakeEsi):
         def get(self, path, *, character=None, params=None):

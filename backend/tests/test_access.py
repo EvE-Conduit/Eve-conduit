@@ -1,8 +1,8 @@
 import pytest
 from django.contrib.auth.models import Group, Permission
 
-from evecsm.access.models import GroupProfile, State
-from evecsm.access.services import recompute_user_state
+from conduit.access.models import GroupProfile, State
+from conduit.access.services import recompute_user_state
 
 from .conftest import make_user
 

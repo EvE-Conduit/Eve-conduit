@@ -4,8 +4,8 @@ import pytest
 from django.contrib.auth.models import Permission
 from django.utils import timezone
 
-from evecsm.corp import registry
-from evecsm.corp.models import (
+from conduit.corp import registry
+from conduit.corp.models import (
     CorpAsset,
     CorpContract,
     CorpIndustryJob,
@@ -22,11 +22,11 @@ from evecsm.corp.models import (
     Structure,
     WalletDivision,
 )
-from evecsm.corp.services import member_ids
-from evecsm.corp.tasks import candidates, schedule_syncs, sync_section
-from evecsm.esi.exceptions import EsiError
-from evecsm.notify.models import Notification
-from evecsm.sheet.overview.models import CharacterInfo
+from conduit.corp.services import member_ids
+from conduit.corp.tasks import candidates, schedule_syncs, sync_section
+from conduit.esi.exceptions import EsiError
+from conduit.notify.models import Notification
+from conduit.sheet.overview.models import CharacterInfo
 
 from .conftest import make_user
 from .fake_esi import CID, FakeEsi, load_sde_fixture
@@ -139,7 +139,7 @@ def people(corp):
 @pytest.fixture
 def fake(monkeypatch):
     fake = CorpEsi()
-    for target in ("evecsm.corp.tasks.esi", "evecsm.sheet.locations.esi", "evecsm.eve.tasks.esi"):
+    for target in ("conduit.corp.tasks.esi", "conduit.sheet.locations.esi", "conduit.eve.tasks.esi"):
         monkeypatch.setattr(target, lambda: fake)
     return fake
 
@@ -210,7 +210,7 @@ def test_no_suitable_member(corp, fake):
 @pytest.mark.django_db
 def test_scheduler_queues_each_section_once(people, monkeypatch):
     queued = []
-    monkeypatch.setattr("evecsm.corp.tasks.sync_section.delay", lambda *a: queued.append(a))
+    monkeypatch.setattr("conduit.corp.tasks.sync_section.delay", lambda *a: queued.append(a))
     assert schedule_syncs() == len(registry.SECTIONS)
     assert schedule_syncs() == 0
     assert {c for c, _ in queued} == {CORP}
@@ -298,8 +298,8 @@ def test_reinforcement_notifies(people, fake):
 
 @pytest.mark.django_db
 def test_access_rules(people, api_client, corp):
-    from evecsm.corp.access import can_view_corporation
-    from evecsm.eve.models import EveCorporation
+    from conduit.corp.access import can_view_corporation
+    from conduit.eve.models import EveCorporation
 
     director, accountant, line = people
     api_client.force_login(line)
@@ -355,8 +355,8 @@ def test_api_routes(people, fake, api_client, admin_user):
 
 @pytest.mark.django_db
 def test_external_api_needs_corp_scope(people, fake, client):
-    from evecsm.external import areas
-    from evecsm.external.models import ApiKey
+    from conduit.external import areas
+    from conduit.external.models import ApiKey
 
     run("structures")
     run("wallets")
@@ -386,8 +386,8 @@ def test_structures_are_searchable(people, fake, api_client):
 
 @pytest.mark.django_db
 def test_structure_sync_names_our_structures_for_everyone(people, fake):
-    from evecsm.sheet.models import Location
-    from evecsm.corp.models import Structure
+    from conduit.sheet.models import Location
+    from conduit.corp.models import Structure
 
     run("structures")
     for s in Structure.objects.all():

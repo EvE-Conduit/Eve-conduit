@@ -9,7 +9,7 @@
  */
 import type { LoadedModule } from "./modules";
 
-const CACHE_PREFIX = "evecsm:css:";
+const CACHE_PREFIX = "conduit:css:";
 
 function hash(text: string) {
   let h = 5381;
@@ -19,7 +19,7 @@ function hash(text: string) {
 
 function inject(css: string) {
   const style = document.createElement("style");
-  style.dataset.evecsm = "module-styles";
+  style.dataset.conduit = "module-styles";
   style.textContent = css;
   document.head.appendChild(style);
 }
@@ -28,7 +28,7 @@ export async function applyModuleStyles(modules: LoadedModule[]) {
   const wanted = modules.flatMap((m) => m.classes ?? []);
   if (!wanted.length) return;
 
-  const { default: hostClasses } = await import("virtual:evecsm-host-classes");
+  const { default: hostClasses } = await import("virtual:conduit-host-classes");
   const host = new Set<string>(hostClasses);
   if (wanted.every((c) => host.has(c))) return;
 
@@ -61,13 +61,13 @@ async function compileUtilities(candidates: string[]) {
   const files: Record<string, string> = {
     "tailwindcss/theme.css": theme.default,
     "tailwindcss/utilities.css": utilities.default,
-    "evecsm/theme.css": siteTheme.default,
+    "conduit/theme.css": siteTheme.default,
   };
   const compiler = await compile(
     `@layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@import "evecsm/theme.css";`,
+@import "conduit/theme.css";`,
     {
       loadStylesheet: async (id) => {
         if (!(id in files)) throw new Error(`Unknown stylesheet ${id}`);

@@ -9,7 +9,7 @@ def hello(request):
 
 
 # For external services (API keys); see SampleModule.external_api.
-from evecsm.external.auth import require_scope  # noqa: E402
+from conduit.external.auth import require_scope  # noqa: E402
 
 external_router = Router()
 

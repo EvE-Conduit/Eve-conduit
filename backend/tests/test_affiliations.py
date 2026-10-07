@@ -1,8 +1,8 @@
 import pytest
 
-from evecsm.access.models import State
-from evecsm.eve import tasks
-from evecsm.esi.client import EsiResponse
+from conduit.access.models import State
+from conduit.eve import tasks
+from conduit.esi.client import EsiResponse
 
 
 class FakeEsi:
@@ -22,7 +22,7 @@ def test_affiliation_update_moves_user_into_member_state(user, monkeypatch):
     monkeypatch.setattr(tasks, "esi", lambda: FakeEsi())
     State.objects.create(name="Guest", priority=0, public=True)
     member = State.objects.create(name="Member", priority=10)
-    from evecsm.eve.models import EveAlliance
+    from conduit.eve.models import EveAlliance
 
     member.member_alliances.add(EveAlliance.objects.create(id=99000002))
 

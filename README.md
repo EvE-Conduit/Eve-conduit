@@ -38,7 +38,7 @@ You need Docker with Compose and a domain pointing at the server.
    ```
 4. Open the site, sign in with your main character and enter the code. The setup wizard then walks you through branding and modules.
 
-Caddy obtains the HTTPS certificate for `EVECSM_DOMAIN` automatically. On first start the worker imports EVE's static data (about a minute). After that it checks daily for new game builds.
+Caddy obtains the HTTPS certificate for `CONDUIT_DOMAIN` automatically. On first start the worker imports EVE's static data (about a minute). After that it checks daily for new game builds.
 
 ### Installing modules
 
@@ -50,9 +50,9 @@ Backend (Python 3.12+):
 
 ```sh
 cd backend
-uv venv && uv pip install -e ".[dev]" -e ../modules/evecsm-example
-export EVECSM_DEBUG=1 ESI_CLIENT_ID=... ESI_SECRET_KEY=... EVECSM_SITE_URL=http://localhost:5173
-python manage.py migrate && python manage.py evecsm_init
+uv venv && uv pip install -e ".[dev]" -e ../modules/conduit-example
+export CONDUIT_DEBUG=1 ESI_CLIENT_ID=... ESI_SECRET_KEY=... CONDUIT_SITE_URL=http://localhost:5173
+python manage.py migrate && python manage.py conduit_init
 python manage.py sde_update         # EVE static data (runs inline in dev)
 python manage.py runserver          # http://127.0.0.1:8000
 python -m pytest                    # tests
@@ -72,7 +72,7 @@ npm run build        # type-check and production build
 ## How it fits together
 
 ```
-backend/evecsm/
+backend/conduit/
   accounts/   users, characters, encrypted SSO tokens
   access/     states, groups, leaders, requests, rules and smart groups, compliance
   esi/        ESI client (cache, ETag, error and rate limits) and token refresh
@@ -88,43 +88,43 @@ backend/evecsm/
   site/       branding, setup wizard, bootstrap API, health, impersonation, maintenance
   sso/        EVE login (OAuth2 + PKCE)
 frontend/src/
-  sdk/        @evecsm/sdk: what module front ends may import
+  sdk/        @conduit/sdk: what module front ends may import
   lib/        API client, module loader, runtime styles
   pages/      core pages and admin
-modules/evecsm-example/   a complete module; copy it to start a new one
+modules/conduit-example/   a complete module; copy it to start a new one
 ```
 
 - **API:** Django Ninja under `/api/`. OpenAPI docs are at `/api/docs`.
 - **External API:** `/api/v1/` for other services, using API keys with scopes. Admins switch each API (directory, character sheets, group/state membership, logs, module APIs) on and off separately. Every call is logged, and there is an audit log plus a service log under Administration > Logs. See [docs/external-api.md](docs/external-api.md).
 - **Auth:** session cookies plus CSRF. The SPA and API share one origin behind Caddy.
 - **Background jobs:** Celery with Redis. Beat refreshes affiliations every 30 minutes, queues due character-sheet syncs every 2 minutes, refreshes market prices hourly and checks for new static data daily.
-- **Character sheet sections** register a `Section` (scopes, sync interval, `sync(character, esi)` function). The scheduler handles tokens, missing scopes, ESI back-off and retries with exponential delay. Sign-in asks for every scope EVE SSO offers (`evecsm/esi/scopes.py`, or `ESI_SCOPES` to narrow it), so members never have to re-authorise.
+- **Character sheet sections** register a `Section` (scopes, sync interval, `sync(character, esi)` function). The scheduler handles tokens, missing scopes, ESI back-off and retries with exponential delay. Sign-in asks for every scope EVE SSO offers (`conduit/esi/scopes.py`, or `ESI_SCOPES` to narrow it), so members never have to re-authorise.
 - **Who can see what:** owners always see their own characters. Grant `sheet.view_corporation_characters`, `sheet.view_alliance_characters` or `sheet.view_all_characters` (to a state or group) for leadership and recruiters.
-- **ESI:** always go through `evecsm.esi.client.esi()`. It honours `Expires`/`ETag`, pauses before the error limit is hit, backs off on `429` per rate-limit group, and sends `X-Compatibility-Date` (`ESI_COMPATIBILITY_DATE`).
+- **ESI:** always go through `conduit.esi.client.esi()`. It honours `Expires`/`ETag`, pauses before the error limit is hit, backs off on `429` per rate-limit group, and sends `X-Compatibility-Date` (`ESI_COMPATIBILITY_DATE`).
 
 ## Writing a module
 
-Start from `modules/evecsm-example`. A module has two parts.
+Start from `modules/conduit-example`. A module has two parts.
 
-**Python:** a `Module` subclass registered under the `evecsm.modules` entry point:
+**Python:** a `Module` subclass registered under the `conduit.modules` entry point:
 
 ```python
 class SkillsModule(Module):
     id = "skills"                              # stable; used in URLs and the DB
     name = "Skills"
     version = "1.0.0"
-    app = "evecsm_skills.apps.SkillsConfig"    # models, tasks, permissions
-    api = "evecsm_skills.api:router"           # mounted at /api/m/skills/
-    frontend = "evecsm_skills/module.js"       # static path of the built bundle
+    app = "conduit_skills.apps.SkillsConfig"    # models, tasks, permissions
+    api = "conduit_skills.api:router"           # mounted at /api/m/skills/
+    frontend = "conduit_skills/module.js"       # static path of the built bundle
     esi_scopes = ("esi-skills.read_skills.v1",)
     nav = (NavItem("Skills", "", "graduation-cap"),)
-    periodic_tasks = {"sync": {"task": "evecsm_skills.tasks.sync", "schedule": 3600}}
+    periodic_tasks = {"sync": {"task": "conduit_skills.tasks.sync", "schedule": 3600}}
 ```
 
 **Front end:** a bundle whose default export comes from `defineModule`:
 
 ```tsx
-import { defineModule, Card } from "@evecsm/sdk";
+import { defineModule, Card } from "@conduit/sdk";
 
 export default defineModule({
   routes: [{ path: "", Component: SkillsPage }],               // /m/skills
@@ -133,7 +133,7 @@ export default defineModule({
 });
 ```
 
-Build it with the preset in `frontend/vite-module.ts` (see the example's `vite.config.ts`). React, React Router, React Query and `@evecsm/sdk` come from the site at runtime, so the bundle stays small and matches the site's look. Style with the same Tailwind classes the site uses. The bundle exports the classes it uses, and the site compiles one correctly ordered stylesheet covering itself and every module.
+Build it with the preset in `frontend/vite-module.ts` (see the example's `vite.config.ts`). React, React Router, React Query and `@conduit/sdk` come from the site at runtime, so the bundle stays small and matches the site's look. Style with the same Tailwind classes the site uses. The bundle exports the classes it uses, and the site compiles one correctly ordered stylesheet covering itself and every module.
 
 Modules also get the core's events, notifications, per-user settings, search providers and group rules: see [docs/platform.md](docs/platform.md).
 

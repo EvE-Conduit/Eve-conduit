@@ -51,7 +51,7 @@ interface Delivery {
 const KINDS: { value: Kind; label: string; hint: string }[] = [
   { value: "discord", label: "Discord", hint: "Channel settings → Integrations → Webhooks → Copy URL" },
   { value: "slack", label: "Slack", hint: "An incoming-webhook URL from your Slack app" },
-  { value: "json", label: "Any service (JSON)", hint: "Signed JSON: check X-EVECSM-Signature (HMAC-SHA256 of the body with the secret)" },
+  { value: "json", label: "Any service (JSON)", hint: "Signed JSON: check X-Conduit-Signature (HMAC-SHA256 of the body with the secret)" },
 ];
 
 const KEY = ["admin", "webhooks"];

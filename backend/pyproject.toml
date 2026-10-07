@@ -1,6 +1,6 @@
 [project]
-name = "evecsm"
-version = "0.3.3"
+name = "conduit"
+version = "0.4.0"
 description = "Self-hosted EVE Online auth and management platform with a module system"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,16 +23,16 @@ dependencies = [
 mysql = ["mysqlclient>=2.2"]
 dev = ["pytest>=8", "pytest-django>=4.9"]
 
-[project.entry-points."evecsm.modules"]
+[project.entry-points."conduit.modules"]
 # First-party modules register here exactly like third-party ones, e.g.:
-# skills = "evecsm_skills.module:SkillsModule"
+# skills = "conduit_skills.module:SkillsModule"
 
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["evecsm*"]
+include = ["conduit*"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"

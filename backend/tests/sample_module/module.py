@@ -1,4 +1,4 @@
-from evecsm.modules import Module, NavItem
+from conduit.modules import Module, NavItem
 
 
 class SampleModule(Module):

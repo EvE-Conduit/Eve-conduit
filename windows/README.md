@@ -6,7 +6,7 @@ the web server, settings, logs and backups. Nothing goes to `Program Files`, and
 system-wide (no winget, no Visual C++ or .NET installers).
 
 Outside that folder, only Windows' own registrations change: the EvE Conduit services, one firewall rule,
-the folder added to the system PATH (for the `evecsm` command), the tray panel's sign-in entry and the
+the folder added to the system PATH (for the `conduit` command), the tray panel's sign-in entry and the
 "Apps & features" entry. The [uninstaller](#uninstalling) removes all of them.
 
 > **Status: experimental.** Built and tested component by component (see [Testing](#testing)), but
@@ -24,7 +24,7 @@ the folder added to the system PATH (for the `evecsm` command), the tray panel's
 | Database | PostgreSQL / MariaDB packages | **portable** PostgreSQL 17 / MariaDB 11.8 builds |
 | Process manager | Supervisor | **Windows services**, via WinSW |
 | Web server and HTTPS | nginx + certbot | **Caddy** (automatic Let's Encrypt) |
-| Admin command | `evecsm` (bash) | `evecsm` (PowerShell) |
+| Admin command | `conduit` (bash) | `conduit` (PowerShell) |
 
 ## Requirements
 
@@ -63,8 +63,8 @@ the folder added to the system PATH (for the `evecsm` command), the tray panel's
    If you choose web ports other than 80/443, it also asks whether your router forwards the standard
    ports to them (see [Ports](#ports)). It then shows a summary and asks you to confirm.
 4. The installer prints a **setup code**. Register the EVE application with the callback URL it shows,
-   put the Client ID and Secret Key in `<install folder>\config\evecsm.env`, then run
-   `evecsm restart` in an Administrator terminal.
+   put the Client ID and Secret Key in `<install folder>\config\conduit.env`, then run
+   `conduit restart` in an Administrator terminal.
 5. Open your site, sign in with your main character and enter the setup code.
 
 **Options:**
@@ -111,15 +111,15 @@ address, so the installer asks how people reach the site:
   still needs public port 80 or 443 to reach this machine to issue a certificate; the installer
   warns you if neither will.
 
-`evecsm ports` shows what's in use. Changing ports after installing isn't automated yet. Edit
-`config\evecsm.env` (`EVECSM_BIND`, `REDIS_URL`, `DATABASE_URL`), `config\Caddyfile`, and the port in
-`services\evecsm-garnet.xml`, then re-register that service (`services\evecsm-garnet.exe uninstall`,
-then `install`) and run `evecsm restart`. For the database port, also change `port` in
+`conduit ports` shows what's in use. Changing ports after installing isn't automated yet. Edit
+`config\conduit.env` (`CONDUIT_BIND`, `REDIS_URL`, `DATABASE_URL`), `config\Caddyfile`, and the port in
+`services\conduit-garnet.xml`, then re-register that service (`services\conduit-garnet.exe uninstall`,
+then `install`) and run `conduit restart`. For the database port, also change `port` in
 `data\postgres\postgresql.conf` (or `data\mariadb\my.ini`).
 
 ## What the installer does
 
-Every download is checked against a SHA-256 pinned in `scripts\Evecsm.psm1`, and the install stops if
+Every download is checked against a SHA-256 pinned in `scripts\Conduit.psm1`, and the install stops if
 one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `cache`).
 
 1. Asks for the install folder and the ports, and shows a summary to confirm.
@@ -133,15 +133,15 @@ one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `
    into `bin\postgres`, with the database in `data\postgres`; or MariaDB into `bin\mariadb` and
    `data\mariadb`. It listens on 127.0.0.1 only, and the administrator password is saved to
    `config\database-admin.txt`.
-6. Copies the release to `releases\X.Y.Z`, points the `app` junction at it, writes `config\evecsm.env`
+6. Copies the release to `releases\X.Y.Z`, points the `app` junction at it, writes `config\conduit.env`
    with fresh secrets and your ports, generates `config\Caddyfile`, and installs EvE Conduit, waitress and
    the modules.
 7. Locks down permissions: code and config are writable only by Administrators and SYSTEM. The
    services run as **Local Service**, which can read the code and config and write only to `data` and `logs`.
-8. Registers the services (`evecsm-postgres` or `evecsm-mariadb`, `evecsm-garnet`, `evecsm-web`,
-   `evecsm-worker`, `evecsm-beat` and `evecsm-caddy`), creates the EvE Conduit database, runs the migrations
+8. Registers the services (`conduit-postgres` or `conduit-mariadb`, `conduit-garnet`, `conduit-web`,
+   `conduit-worker`, `conduit-beat` and `conduit-caddy`), creates the EvE Conduit database, runs the migrations
    and starts everything. Services start automatically at boot and restart if they crash.
-9. Opens the web ports in Windows Firewall, and puts the `evecsm` command on the PATH.
+9. Opens the web ports in Windows Firewall, and puts the `conduit` command on the PATH.
 10. Adds EvE Conduit to **Apps & features**, and starts the **tray control panel**, which then starts
     whenever anyone signs in (skip with `-NoTray`; skipped automatically on Server Core).
 
@@ -154,14 +154,14 @@ one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `
 | `bin\postgres` or `bin\mariadb` | the database server |
 | `bin\garnet`, `bin\dotnet` | Garnet and its private .NET runtime |
 | `bin\caddy`, `bin\uv`, `bin\winsw`, `bin\vcruntime` | web server, Python tool, service wrapper, Visual C++ DLLs |
-| `config` | `evecsm.env`, `modules.txt`, `Caddyfile`, `database-admin.txt` |
+| `config` | `conduit.env`, `modules.txt`, `Caddyfile`, `database-admin.txt` |
 | `data` | the database files, static files, Caddy certificates, scheduler state |
 | `web` | the front end Caddy serves |
 | `services` | WinSW service wrappers and their configs |
 | `tray` | the tray control panel (readable by all users; no secrets) |
-| `evecsm.ps1`, `evecsm.cmd`, `uninstall.ps1` | admin command and uninstaller |
+| `conduit.ps1`, `conduit.cmd`, `uninstall.ps1` | admin command and uninstaller |
 | `logs` | one log per service, rotated at 10 MB |
-| `backups` | `evecsm backup` output (Administrators only) |
+| `backups` | `conduit backup` output (Administrators only) |
 | `cache`, `tmp` | pip/uv caches and temporary files |
 
 ## Manual install
@@ -175,14 +175,14 @@ To do it by hand, follow the installer's steps above. Everything runs from the i
 - **PostgreSQL:** unzip `pgsql\bin`, `pgsql\lib` and `pgsql\share` from the EDB binaries zip into
   `<folder>\bin\postgres`. Then run `initdb -D <folder>\data\postgres -U postgres --pwfile=... --encoding=UTF8
   --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C --auth=scram-sha-256 -c listen_addresses=127.0.0.1 -c port=5432`,
-  and create the `evecsm` user and database as in
+  and create the `conduit` user and database as in
   [the bare-metal guide, step 6](../docs/install-baremetal.md#6-create-the-database).
 - **Visual C++ DLLs:** if PostgreSQL or Garnet won't start with a missing `msvcp140.dll` or
   `vcruntime140.dll`, copy those DLLs next to their `.exe`.
-- **Configuration:** copy `windows\config\evecsm.env.example` to `<folder>\config\evecsm.env` and fill it
+- **Configuration:** copy `windows\config\conduit.env.example` to `<folder>\config\conduit.env` and fill it
   in. Generate `config\Caddyfile` from `windows\caddy\Caddyfile.template`.
-- **Database setup:** `<folder>\venv\Scripts\python <folder>\app\windows\service\evecsm_service.py manage migrate`,
-  then the same with `collectstatic --noinput` and `evecsm_init`.
+- **Database setup:** `<folder>\venv\Scripts\python <folder>\app\windows\service\conduit_service.py manage migrate`,
+  then the same with `collectstatic --noinput` and `conduit_init`.
 - **Services:** for each `windows\winsw\<id>.xml`, replace the `{{...}}` placeholders, save it as
   `<folder>\services\<id>.xml` next to a copy of `WinSW-x64.exe` named `<id>.exe`, and run `<id>.exe install`.
 
@@ -192,18 +192,18 @@ In an **Administrator** terminal:
 
 | Task | Command |
 |---|---|
-| Status and ports | `evecsm status` |
-| Ports only | `evecsm ports` |
-| Restart (e.g. after editing `evecsm.env`) | `evecsm restart` (or `evecsm restart web`) |
-| Follow a log | `evecsm logs web` (or `worker`, `beat`, `caddy`, `garnet`, `postgres`/`mariadb`) |
-| Any Django command | `evecsm manage <command>` |
-| Setup code again | `evecsm setup-code` |
-| Back up database and config | `evecsm backup` |
-| Install a module | `evecsm module install evecsm-something` |
-| List modules | `evecsm module list` |
+| Status and ports | `conduit status` |
+| Ports only | `conduit ports` |
+| Restart (e.g. after editing `conduit.env`) | `conduit restart` (or `conduit restart web`) |
+| Follow a log | `conduit logs web` (or `worker`, `beat`, `caddy`, `garnet`, `postgres`/`mariadb`) |
+| Any Django command | `conduit manage <command>` |
+| Setup code again | `conduit setup-code` |
+| Back up database and config | `conduit backup` |
+| Install a module | `conduit module install conduit-something` |
+| List modules | `conduit module list` |
 
-| Open the tray control panel | `evecsm tray` (`evecsm tray on` / `off`: start it at sign-in or not) |
-| Remove EvE Conduit | `evecsm uninstall` |
+| Open the tray control panel | `conduit tray` (`conduit tray on` / `off`: start it at sign-in or not) |
+| Remove EvE Conduit | `conduit uninstall` |
 
 The services also show up in **services.msc** as "EvE Conduit ...".
 
@@ -240,7 +240,7 @@ rights; anything that changes the services asks for administrator rights.
 Use **Settings → Apps → EvE Conduit → Uninstall**, or in an Administrator terminal:
 
 ```powershell
-evecsm uninstall
+conduit uninstall
 ```
 
 It asks what to remove:
@@ -254,19 +254,19 @@ It then closes the tray panel, stops and removes the services, removes the firew
 entry, the sign-in entry and the Apps & features entry, and deletes the files. Anything it can't remove
 (say, a file still in use) is listed at the end.
 
-For scripts: `evecsm uninstall -Mode All -BackupTo D:\Backups -Yes` (or `-Mode KeepData`, `-NoBackup`).
+For scripts: `conduit uninstall -Mode All -BackupTo D:\Backups -Yes` (or `-Mode KeepData`, `-NoBackup`).
 
 ## Updating
 
 ```powershell
 Unblock-File .\eve-conduit-X.Y.Z-windows.zip
-evecsm upgrade .\eve-conduit-X.Y.Z-windows.zip
+conduit upgrade .\eve-conduit-X.Y.Z-windows.zip
 ```
 
 This backs up first, stops the app (Windows locks files that are in use), installs the new release
 next to the old one, migrates, publishes the new front end and starts everything again. If installing
 fails, it puts the running release back and restarts it. If an upgrade stops half-way after switching releases (e.g. a service was down), fix the cause and run
-`evecsm repair` to redo the remaining steps. `evecsm rollback` returns to the previous
+`conduit repair` to redo the remaining steps. `conduit rollback` returns to the previous
 release; database migrations aren't undone, so restore the backup if the old version won't start.
 
 ## Limitations
@@ -283,7 +283,7 @@ release; database migrations aren't undone, so restore the backup if the old ver
 
 Tested so far:
 
-- **The service launcher** (`service\evecsm_service.py`) ran waitress, the Celery thread-pool worker and
+- **The service launcher** (`service\conduit_service.py`) ran waitress, the Celery thread-pool worker and
   beat against **Garnet 2.2.0** and **PostgreSQL 17**. The cache, task queue, scheduler, the full
   static data import and live ESI calls all worked. That run was on Linux; waitress and Celery's thread
   pool are pure Python and should behave the same on Windows, but haven't been run there yet.
@@ -303,7 +303,7 @@ Tested so far:
   reported Healthy, then correctly reported Down when Garnet was stopped, including the application
   failing because of it. The Healthy / Needs attention / Problem rules are covered by Pester tests.
 
-**Not tested yet:** a real run on Windows of `install.ps1`, `evecsm.ps1`, `uninstall.ps1` and the
+**Not tested yet:** a real run on Windows of `install.ps1`, `conduit.ps1`, `uninstall.ps1` and the
 tray panel's window and icon (Windows Forms). That covers the WinSW services, running PostgreSQL/MariaDB
 as Local Service, `expand.exe`, folder permissions, the registry entries and Windows Firewall. Do that on
 a test VM before relying on it.
@@ -315,5 +315,5 @@ python -m pytest windows/tests          # launcher
 pwsh windows/tests/run-tests.ps1        # PowerShell module, ports, Caddyfile, service templates
 pwsh windows/tests/lint.ps1             # PSScriptAnalyzer, Windows PowerShell 5.1 compatibility
 # Also test the Visual C++ extraction against the real file (7-Zip stands in for expand.exe off Windows):
-EVECSM_TEST_VCREDIST=VC_redist.x64.exe EVECSM_TEST_7Z=7z pwsh windows/tests/run-tests.ps1
+CONDUIT_TEST_VCREDIST=VC_redist.x64.exe CONDUIT_TEST_7Z=7z pwsh windows/tests/run-tests.ps1
 ```

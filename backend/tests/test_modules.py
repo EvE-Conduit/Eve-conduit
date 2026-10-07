@@ -1,8 +1,8 @@
 import pytest
 
-from evecsm.modules import registry
-from evecsm.modules.models import ModuleState
-from evecsm.modules.services import ModuleError, is_enabled, required_scopes, set_enabled, sync_installed
+from conduit.modules import registry
+from conduit.modules.models import ModuleState
+from conduit.modules.services import ModuleError, is_enabled, required_scopes, set_enabled, sync_installed
 
 
 def test_discovers_sample_module():

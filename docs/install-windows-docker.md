@@ -56,11 +56,11 @@ notepad .env
 
 Fill in everything under **Required**:
 
-- `EVECSM_SECRET_KEY` and `POSTGRES_PASSWORD`: long random strings. To generate one in PowerShell:
+- `CONDUIT_SECRET_KEY` and `POSTGRES_PASSWORD`: long random strings. To generate one in PowerShell:
   ```powershell
   -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 50 | ForEach-Object { [char]$_ })
   ```
-- `EVECSM_DOMAIN`, `EVECSM_SITE_URL`, `EVECSM_ALLOWED_HOSTS`: your domain
+- `CONDUIT_DOMAIN`, `CONDUIT_SITE_URL`, `CONDUIT_ALLOWED_HOSTS`: your domain
 - `ESI_CLIENT_ID`, `ESI_SECRET_KEY`: from <https://developers.eveonline.com/applications>, with the
   callback URL `https://your-domain/sso/callback`
 - `ESI_USER_AGENT_CONTACT`: your email (CCP asks every ESI application to identify itself)
@@ -108,7 +108,7 @@ A Windows PC isn't a server by default. Change these so the site stays up:
 | Status | `docker compose ps` |
 | Logs | `docker compose logs -f web` (or `worker`, `beat`) |
 | Restart after editing `.env` | `docker compose up -d` |
-| Back up the database | `docker compose exec db pg_dump -U evecsm -Fc evecsm > backup.dump` |
+| Back up the database | `docker compose exec db pg_dump -U conduit -Fc conduit > backup.dump` |
 | Update | `git pull` (or unpack the new source next to the old one and copy your `.env` across), then `docker compose up -d --build` |
 | Install a module | add it to `requirements-modules.txt`, then `docker compose up -d --build` |
 

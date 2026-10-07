@@ -1,7 +1,7 @@
 /**
- * @evecsm/sdk — everything a module's front end may use from the host.
+ * @conduit/sdk — everything a module's front end may use from the host.
  *
- * Module bundles import from "@evecsm/sdk", "react", "react-router" and
+ * Module bundles import from "@conduit/sdk", "react", "react-router" and
  * "@tanstack/react-query"; the host supplies all of them at runtime, so modules
  * share one React and look native.
  *

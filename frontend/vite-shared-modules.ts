@@ -15,8 +15,8 @@ import type { Plugin } from "vite";
 import { scanCandidates } from "./tailwind-candidates.ts";
 
 const require = createRequire(import.meta.url);
-const PREFIX = "\0evecsm-shared:";
-const HOST_CLASSES = "virtual:evecsm-host-classes";
+const PREFIX = "\0conduit-shared:";
+const HOST_CLASSES = "virtual:conduit-host-classes";
 
 /** specifier -> published file name under /sdk/ */
 export const SHARED: Record<string, string> = {
@@ -25,7 +25,7 @@ export const SHARED: Record<string, string> = {
   "react-dom": "react-dom",
   "react-router": "react-router",
   "@tanstack/react-query": "react-query",
-  "@evecsm/sdk": "evecsm-sdk",
+  "@conduit/sdk": "conduit-sdk",
 };
 
 // Packages shipped as CommonJS need their export names spelled out so both the
@@ -33,7 +33,7 @@ export const SHARED: Record<string, string> = {
 const CJS = new Set(["react", "react/jsx-runtime", "react-dom"]);
 
 function shimCode(spec: string): string {
-  if (spec === "@evecsm/sdk") return `export * from "/src/sdk/index.ts";`;
+  if (spec === "@conduit/sdk") return `export * from "/src/sdk/index.ts";`;
   if (!CJS.has(spec)) return `export * from ${JSON.stringify(spec)};`;
   const names = Object.keys(require(spec)).filter((n) => n !== "default" && n !== "__esModule" && /^[A-Za-z_$][\w$]*$/.test(n));
   return [
@@ -46,14 +46,14 @@ function shimCode(spec: string): string {
 export function sharedModules(): Plugin {
   let isBuild = false;
   return {
-    name: "evecsm-shared-modules",
+    name: "conduit-shared-modules",
     configResolved(config) {
       isBuild = config.command === "build";
     },
     resolveId(id) {
       if (id === HOST_CLASSES) return "\0" + HOST_CLASSES;
       if (id.startsWith(PREFIX)) return id;
-      if (id.startsWith("virtual:evecsm-shared/")) return PREFIX + id.slice("virtual:evecsm-shared/".length);
+      if (id.startsWith("virtual:conduit-shared/")) return PREFIX + id.slice("virtual:conduit-shared/".length);
       return null;
     },
     load(id) {
@@ -70,7 +70,7 @@ export function sharedModules(): Plugin {
       for (const [spec, file] of Object.entries(SHARED)) {
         this.emitFile({
           type: "chunk",
-          id: `virtual:evecsm-shared/${spec}`,
+          id: `virtual:conduit-shared/${spec}`,
           fileName: `sdk/${file}.js`,
           preserveSignature: "strict",
         });
@@ -80,7 +80,7 @@ export function sharedModules(): Plugin {
       const imports = Object.fromEntries(
         Object.entries(SHARED).map(([spec, file]) => [
           spec,
-          isBuild ? `/sdk/${file}.js` : `/@id/__x00__evecsm-shared:${spec}`,
+          isBuild ? `/sdk/${file}.js` : `/@id/__x00__conduit-shared:${spec}`,
         ]),
       );
       return [

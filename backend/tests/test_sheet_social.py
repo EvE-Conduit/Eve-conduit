@@ -1,9 +1,9 @@
 import pytest
 
-from evecsm.sheet.killmails.models import Killmail
-from evecsm.sheet.mail.models import Mail
-from evecsm.sheet.models import SyncStatus
-from evecsm.sheet.text import parse_notification, plain_text
+from conduit.sheet.killmails.models import Killmail
+from conduit.sheet.mail.models import Mail
+from conduit.sheet.models import SyncStatus
+from conduit.sheet.text import parse_notification, plain_text
 
 from .fake_esi import CID
 from .test_sheet import fake, pilot, run  # noqa: F401  (fixtures)
@@ -76,7 +76,7 @@ def test_fittings_eft_export(pilot, fake, client):
 
 @pytest.mark.django_db
 def test_killmails(pilot, fake, client):
-    from evecsm.eve.tasks import update_market_prices
+    from conduit.eve.tasks import update_market_prices
 
     update_market_prices.run()
     assert run("killmails") == SyncStatus.Result.OK
@@ -113,9 +113,9 @@ def test_intel_aggregates_interactions(pilot, fake, client):
 
 @pytest.mark.django_db
 def test_virtual_sections_are_not_scheduled(pilot, monkeypatch):
-    from evecsm.sheet.tasks import schedule_syncs
+    from conduit.sheet.tasks import schedule_syncs
 
     queued = []
-    monkeypatch.setattr("evecsm.sheet.tasks.sync_section.delay", lambda *a: queued.append(a[1]))
+    monkeypatch.setattr("conduit.sheet.tasks.sync_section.delay", lambda *a: queued.append(a[1]))
     schedule_syncs()
     assert "intel" not in queued and "wallet" in queued

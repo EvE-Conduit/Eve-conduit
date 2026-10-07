@@ -11,7 +11,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "paths": {
-      "@evecsm/sdk": ["./src/sdk/index.ts"],
+      "@conduit/sdk": ["./src/sdk/index.ts"],
       "@/*": ["./src/*"],
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
