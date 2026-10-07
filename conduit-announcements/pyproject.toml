@@ -1,0 +1,28 @@
+[project]
+name = "conduit-announcements"
+version = "1.0.0"
+description = "Announcements: news from leadership for everyone or chosen states and groups, with pinning, scheduling, notifications and a dashboard widget."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+announcements = "conduit_announcements.plugin:AnnouncementsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Announcements"
+icon = "bell"
+category = "Communication"
+min_conduit = "0.5.6"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_announcements*"]
+
+[tool.setuptools.package-data]
+conduit_announcements = ["static/**/*"]
