@@ -3,6 +3,35 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.14
+
+### Added
+- **Three new plugins** (Administration → Plugins → Browse):
+  - **Doctrines:** your fleet doctrines and their fits. A fit is shown like the in-game fitting window (ship in the
+    middle, high, mid and low slots, rigs and subsystems around it) or as a list. Fits are pasted straight from the
+    game or Pyfa, or taken from a member's saved in-game fittings. **Copy to paste in game** puts the fit on the
+    clipboard for the Fitting window's "Import from clipboard", and **Save to my fittings in EVE** saves it to a
+    character's fittings directly. Every member sees which of their characters can fly each fit, what's missing and
+    how long it takes to train, and can copy the missing skills for the game's skill plan import. Leadership gets a
+    readiness table (who can fly what), there's a Doctrines tab on the character sheet and a "Can fly doctrine fit"
+    group rule.
+  - **Skill Plans:** shared plans from leadership and personal plans for everyone, with each character's progress
+    and time left (using their attributes and implants). Plans are pasted from the game, built skill by skill or from
+    what a ship needs, and copied back into the game's Skill Plans window or skill queue. Leadership sees every
+    member's progress on a shared plan, and the "Completed skill plan" group rule can give roles and access.
+  - **Mentoring:** new members ask for a mentor, mentors claim them (or managers assign them), and goals track how
+    they're getting on. Goals can tick themselves from any group rule (skill points, fleets, skill plans, doctrine
+    ships...) or be ticked by the mentor. With a message thread, private mentor notes, graduation, and group rules
+    for "being mentored" and "graduated", e.g. for a New bro role on Discord.
+- **More static data:** the static data import now keeps the skills every item needs and the fitting layout of ships
+  and modules (slots, hardpoints, CPU, powergrid, calibration). Existing installs import their static data again
+  once after updating, by themselves (about a minute).
+
+### For plugin authors
+- `conduit.sheet.skills.training`: skill plans, prerequisites, training times and the in-game skill list format.
+- Group rule `choice` parameters can take a function, for choices that change. `RuleSetEditor` is in `@conduit/sdk`.
+  See [docs/platform.md](docs/platform.md).
+
 ## 0.5.13
 
 ### Changed
