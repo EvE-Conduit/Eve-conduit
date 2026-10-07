@@ -20,7 +20,9 @@ class SiteSettings(models.Model):
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.CharField(max_length=300, blank=True)
     # Where people land after signing in, e.g. a plugin's page ("/p/news"). Empty means the dashboard.
-    start_page = models.CharField(max_length=200, blank=True)
+    start_page = models.CharField(max_length=200, blank=True, default="/home")
+    # The landing page at /home (see landing.py). Empty means the built-in default.
+    landing = models.JSONField(default=dict, blank=True)
 
     class Meta:
         verbose_name_plural = "site settings"

@@ -1,4 +1,4 @@
-import { Building2, Crown, Download, HeartPulse, Layers, ShieldAlert, Webhook } from "lucide-react";
+import { Building2, Crown, Download, HeartPulse, Home, Layers, ShieldAlert, Webhook } from "lucide-react";
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { iconFor } from "@/lib/icons";
@@ -29,6 +29,7 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvaila
     {
       title: "Overview",
       items: [
+        { label: "Home", to: "/home", icon: Home },
         { label: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
         { label: "Characters", to: "/characters", icon: UsersRound },
         { label: "Wallet", to: "/wallet", icon: Wallet },

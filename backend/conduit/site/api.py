@@ -19,6 +19,7 @@ from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
 from conduit.updates.services import progress as update_progress
 
+from .landing import DEFAULT_LANDING, LandingIn, landing_content
 from .models import SiteSettings
 
 router = Router(tags=["core"])
@@ -317,6 +318,40 @@ def _admin_out(u, request) -> dict:
         "is_owner": u.pk == SiteSettings.load().owner_id,
         "last_login": u.last_login.isoformat() if u.last_login else None,
     }
+
+
+# --- landing page ---------------------------------------------------------------
+
+
+def landing_out(site: SiteSettings) -> dict:
+    return {"content": landing_content(site), "is_default": not site.landing, "default": DEFAULT_LANDING}
+
+
+@router.get("/landing", auth=django_auth)
+def landing(request):
+    """The landing page everyone sees at /home."""
+    return landing_out(SiteSettings.load())
+
+
+@admin_router.put("/landing")
+@require_perm("site.manage_site")
+def update_landing(request, payload: LandingIn):
+    site = SiteSettings.load()
+    site.landing = payload.dict()
+    site.save(update_fields=["landing"])
+    record("site.landing_changed", "changed the landing page", request=request, target_type="site")
+    return landing_out(site)
+
+
+@admin_router.delete("/landing")
+@require_perm("site.manage_site")
+def reset_landing(request):
+    site = SiteSettings.load()
+    if site.landing:
+        site.landing = {}
+        site.save(update_fields=["landing"])
+        record("site.landing_reset", "reset the landing page to the default", request=request, target_type="site")
+    return landing_out(site)
 
 
 @admin_router.get("/admins")
