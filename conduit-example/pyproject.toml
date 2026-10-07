@@ -1,6 +1,6 @@
 [project]
 name = "conduit-example"
-version = "0.1.0"
+version = "0.1.1"
 description = "Live Tranquility status on the dashboard. Also the starting point for new plugins."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
