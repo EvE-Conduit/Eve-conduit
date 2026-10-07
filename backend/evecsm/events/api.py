@@ -126,7 +126,7 @@ def test_webhook(request, hook_id: int):
     hook = get_object_or_404(Webhook, pk=hook_id)
     if not hook.enabled:
         raise HttpError(400, "Switch the webhook on first")
-    event = bus.Event("webhook.test", {"title": "Webhook test", "summary": f"{request.user.display_name} sent a test from EVECSM.", "level": "success"})
+    event = bus.Event("webhook.test", {"title": "Webhook test", "summary": f"{request.user.display_name} sent a test from EvE Conduit.", "level": "success"})
     result = deliver.apply(args=[hook.pk, event.as_dict(), False], throw=False).result
     hook.refresh_from_db()
     return {"result": result if isinstance(result, str) else "failed", "webhook": hook_out(hook, with_secret=True)}

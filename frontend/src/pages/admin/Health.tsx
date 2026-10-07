@@ -159,7 +159,7 @@ export function AdminHealth() {
               <CardHeader
                 icon={<Globe2 />}
                 title="EVE Online ESI"
-                description="ESI bans apps that ignore its error limit, so EVECSM pauses before it's reached."
+                description="ESI bans apps that ignore its error limit, so EvE Conduit pauses before it's reached."
                 actions={
                   <Link to="/admin/logs">
                     <Button size="sm" variant="ghost">
@@ -209,7 +209,7 @@ export function AdminHealth() {
                 <Row label="Errors logged (24h)" ok={data.problems.errors_24h === 0} value={num(data.problems.errors_24h)} />
                 <Row label="Warnings logged (24h)" ok={data.problems.warnings_24h < 50} value={num(data.problems.warnings_24h)} />
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  <Badge>EVECSM {data.about.version}</Badge>
+                  <Badge>EvE Conduit {data.about.version}</Badge>
                   <Badge>Python {data.about.python}</Badge>
                   <Badge>Django {data.about.django}</Badge>
                   <Badge>{data.about.database}</Badge>

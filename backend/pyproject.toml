@@ -1,6 +1,6 @@
 [project]
 name = "evecsm"
-version = "0.3.2"
+version = "0.3.3"
 description = "Self-hosted EVE Online auth and management platform with a module system"
 readme = "README.md"
 requires-python = ">=3.12"

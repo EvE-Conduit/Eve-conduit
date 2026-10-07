@@ -1,4 +1,4 @@
-"""Things other parts of EVECSM ask about corporations."""
+"""Things other parts of EvE Conduit ask about corporations."""
 
 from .models import CorporationMember, CorpSyncStatus
 

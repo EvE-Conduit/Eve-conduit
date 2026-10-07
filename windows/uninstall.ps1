@@ -1,10 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Removes EVECSM from this Windows machine.
+    Removes EvE Conduit from this Windows machine.
 
 .DESCRIPTION
-    Undoes everything install.ps1 did: stops and removes the EVECSM services, closes the tray panel,
+    Undoes everything install.ps1 did: stops and removes the EvE Conduit services, closes the tray panel,
     removes the firewall rule, the PATH entry, the sign-in entry for the tray panel and the
     "Apps & features" entry, then deletes the install folder.
 
@@ -47,7 +47,7 @@ if (-not $Root) {
     elseif (Test-Path $uninstallKey) { $Root = (Get-ItemProperty $uninstallKey).InstallLocation }
 }
 if (-not $Root -or -not (Test-Path -LiteralPath (Join-Path $Root 'config\evecsm.env'))) {
-    throw 'Could not find an EVECSM installation. Pass -Root <install folder>.'
+    throw 'Could not find an EvE Conduit installation. Pass -Root <install folder>.'
 }
 $Root = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
 
@@ -74,7 +74,7 @@ $services = @(Get-EvecsmServiceId | Where-Object { Get-Service -Name $_ -ErrorAc
 $version = if (Test-Path (Join-Path $p.App 'VERSION')) { (Get-Content (Join-Path $p.App 'VERSION') -TotalCount 1).Trim() } else { '?' }
 
 Write-Host ''
-Write-Host "EVECSM $version is installed in $Root" -ForegroundColor Cyan
+Write-Host "EvE Conduit $version is installed in $Root" -ForegroundColor Cyan
 Write-Host "Services: $(if ($services) { $services -join ', ' } else { 'none' })"
 Write-Host ''
 
@@ -126,7 +126,7 @@ if (-not $Yes) {
         Write-Host "This permanently deletes $Root, including the database." -ForegroundColor Yellow
         if ((Read-Host 'Type DELETE to continue').Trim() -cne 'DELETE') { Write-Host 'Nothing was changed.'; exit 0 }
     }
-    elseif ((Read-Host "Remove the EVECSM programs and services, keeping $Root\config, data and backups? [y/N]") -notmatch '^[Yy]$') {
+    elseif ((Read-Host "Remove the EvE Conduit programs and services, keeping $Root\config, data and backups? [y/N]") -notmatch '^[Yy]$') {
         Write-Host 'Nothing was changed.'
         exit 0
     }
@@ -195,14 +195,14 @@ else {
 # --- done ----------------------------------------------------------------------------------------------------------
 Write-Host ''
 if ($problems.Count) {
-    Write-Host 'EVECSM was removed, with these leftovers:' -ForegroundColor Yellow
+    Write-Host 'EvE Conduit was removed, with these leftovers:' -ForegroundColor Yellow
     foreach ($problem in $problems) { Write-Host "  - $problem" -ForegroundColor Yellow }
 }
 else {
-    Write-Host 'EVECSM was removed.' -ForegroundColor Green
+    Write-Host 'EvE Conduit was removed.' -ForegroundColor Green
 }
 if ($Mode -eq 'KeepData') {
     Write-Host "Kept in ${Root}: config (settings and passwords), data (database files) and backups."
-    Write-Host 'To use them again, install EVECSM into a new folder and restore a backup.'
+    Write-Host 'To use them again, install EvE Conduit into a new folder and restore a backup.'
 }
 if ($backupFile) { Write-Host "Your final backup: $backupFile" }

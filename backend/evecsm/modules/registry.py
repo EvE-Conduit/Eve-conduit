@@ -38,7 +38,7 @@ def discover() -> dict[str, DiscoveredModule]:
         try:
             mod = _load(target)()
         except Exception as exc:  # a broken module must not take the site down
-            log.exception("Failed to load EVECSM module %s", target)
+            log.exception("Failed to load EvE Conduit module %s", target)
             found[f"!{target}"] = DiscoveredModule(Module(), target, [f"failed to load: {exc}"])
             continue
         entry = DiscoveredModule(mod, target, mod.validate())

@@ -1,4 +1,4 @@
-"""The one way EVECSM talks to ESI.
+"""The one way EvE Conduit talks to ESI.
 
 Modules must go through this client rather than calling ESI themselves. It
 respects ESI caching (``Expires``/``ETag``), tracks the shared error limit and
@@ -37,7 +37,7 @@ RATE_LIMIT_RESERVE = 6  # tokens; a 4xx costs 5
 
 def user_agent() -> str:
     contact = settings.ESI_USER_AGENT_CONTACT
-    return f"EVECSM/{__version__} (+https://github.com/evecsm{'; ' + contact if contact else ''})"
+    return f"EvE-Conduit/{__version__} (+https://github.com/EvE-Conduit/Eve-conduit{'; ' + contact if contact else ''})"
 
 
 @dataclass

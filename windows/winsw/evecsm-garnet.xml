@@ -1,11 +1,11 @@
 <!--
-  EVECSM Garnet - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit Garnet - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   The installer copies this next to a copy of WinSW named evecsm-garnet.exe and fills in {{...}}.
 -->
 <service>
   <id>evecsm-garnet</id>
-  <name>EVECSM Garnet</name>
-  <description>Redis-compatible cache and task queue for EVECSM (Microsoft Garnet). Lua is required by Celery.</description>
+  <name>EvE Conduit Garnet</name>
+  <description>Redis-compatible cache and task queue for EvE Conduit (Microsoft Garnet). Lua is required by Celery.</description>
   <executable>{{ROOT}}\bin\garnet\net10.0\GarnetServer.exe</executable>
   <arguments>--port {{CACHE_PORT}} --bind 127.0.0.1 --lua --memory 512m --index 64m</arguments>
   <workingdirectory>{{ROOT}}</workingdirectory>

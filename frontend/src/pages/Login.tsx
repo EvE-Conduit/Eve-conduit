@@ -106,7 +106,7 @@ export function Login() {
       </main>
 
       <footer className="relative z-10 border-t border-border px-6 py-4 text-center font-mono text-[11px] uppercase tracking-[0.12em] text-subtle sm:px-10">
-        EVE Online and all related marks are property of CCP hf. · EVECSM v{site.version}
+        EVE Online and all related marks are property of CCP hf. · EvE Conduit v{site.version}
       </footer>
     </div>
   );

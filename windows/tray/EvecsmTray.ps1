@@ -1,10 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    EVECSM control panel in the system tray.
+    EvE Conduit control panel in the system tray.
 
 .DESCRIPTION
-    Shows a green / amber / red icon by the clock for the health of the EVECSM services, checks every
+    Shows a green / amber / red icon by the clock for the health of the EvE Conduit services, checks every
     30 seconds, and pops up a notification when something goes down or recovers. Right-click for:
     open the site, the status window, start/stop/restart (asks for administrator rights), back up,
     and logs.
@@ -47,7 +47,7 @@ function New-StatusIcon([System.Drawing.Color]$Color) {
         $g.Clear([System.Drawing.Color]::Transparent)
         $outline = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 11, 16, 24)), 2
         $fill = New-Object System.Drawing.SolidBrush $Color
-        # A hexagon, like the EVECSM logo.
+        # A hexagon, like the EvE Conduit logo.
         $points = foreach ($i in 0..5) {
             $angle = [Math]::PI / 3 * $i - [Math]::PI / 2
             New-Object System.Drawing.PointF ([float](16 + 14 * [Math]::Cos($angle))), ([float](16 + 14 * [Math]::Sin($angle)))
@@ -100,20 +100,20 @@ function Update-Health {
     $script:LastHealth = $health
     $notify.Icon = $icons[$health.Overall]
     # NotifyIcon text is limited to 63 characters on .NET Framework.
-    $text = "EVECSM: $($labels[$health.Overall])"
+    $text = "EvE Conduit: $($labels[$health.Overall])"
     if ($health.Overall -ne 'Healthy') { $text = "$text - $($health.Summary)" }
     $notify.Text = if ($text.Length -gt 63) { $text.Substring(0, 60) + '...' } else { $text }
-    $header.Text = "EVECSM $($script:Settings.Version): $($labels[$health.Overall])"
+    $header.Text = "EvE Conduit $($script:Settings.Version): $($labels[$health.Overall])"
 
     if ($script:LastOverall -and $health.Overall -ne $script:LastOverall) {
         if ($health.Overall -eq 'Healthy') {
-            $notify.ShowBalloonTip(5000, 'EVECSM is healthy again', 'All services are running.', [System.Windows.Forms.ToolTipIcon]::Info)
+            $notify.ShowBalloonTip(5000, 'EvE Conduit is healthy again', 'All services are running.', [System.Windows.Forms.ToolTipIcon]::Info)
         }
         elseif ($health.Overall -eq 'Down') {
-            $notify.ShowBalloonTip(10000, 'EVECSM has a problem', $health.Summary, [System.Windows.Forms.ToolTipIcon]::Error)
+            $notify.ShowBalloonTip(10000, 'EvE Conduit has a problem', $health.Summary, [System.Windows.Forms.ToolTipIcon]::Error)
         }
         elseif ($health.Overall -eq 'Degraded') {
-            $notify.ShowBalloonTip(8000, 'EVECSM needs attention', $health.Summary, [System.Windows.Forms.ToolTipIcon]::Warning)
+            $notify.ShowBalloonTip(8000, 'EvE Conduit needs attention', $health.Summary, [System.Windows.Forms.ToolTipIcon]::Warning)
         }
     }
     $script:LastOverall = $health.Overall
@@ -145,7 +145,7 @@ function Update-StatusForm {
 function Show-StatusForm {
     if ($script:StatusForm -and -not $script:StatusForm.IsDisposed) { $script:StatusForm.Activate(); return }
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = "EVECSM $($script:Settings.Version) - service status"
+    $form.Text = "EvE Conduit $($script:Settings.Version) - service status"
     $form.Size = New-Object System.Drawing.Size 760, 380
     $form.StartPosition = 'CenterScreen'
     $form.Icon = $icons['Healthy']
@@ -199,11 +199,11 @@ function Show-StatusForm {
 # --- tray icon and menu -----------------------------------------------------------------------------------
 $notify = New-Object System.Windows.Forms.NotifyIcon
 $notify.Icon = $icons['Checking']
-$notify.Text = 'EVECSM: checking...'
+$notify.Text = 'EvE Conduit: checking...'
 $notify.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
-$header = $menu.Items.Add('EVECSM')
+$header = $menu.Items.Add('EvE Conduit')
 $header.Enabled = $false
 [void]$menu.Items.Add('-')
 $menu.Items.Add('Open site').Add_Click({ Start-Process $script:Settings.SiteUrl })
@@ -212,7 +212,7 @@ $menu.Items.Add('Service status...').Add_Click({ Show-StatusForm })
 $menu.Items.Add('Restart all services').Add_Click({ Invoke-AdminCommand @('restart') })
 $menu.Items.Add('Start all services').Add_Click({ Invoke-AdminCommand @('start') })
 $menu.Items.Add('Stop all services').Add_Click({
-        $ok = [System.Windows.Forms.MessageBox]::Show('Stop all EVECSM services? The site goes offline until you start them again.', 'EVECSM', 'YesNo', 'Warning')
+        $ok = [System.Windows.Forms.MessageBox]::Show('Stop all EvE Conduit services? The site goes offline until you start them again.', 'EvE Conduit', 'YesNo', 'Warning')
         if ($ok -eq 'Yes') { Invoke-AdminCommand @('stop') }
     })
 [void]$menu.Items.Add('-')
@@ -230,7 +230,7 @@ $timer.Add_Tick({
         try { Update-Health }
         catch {
             $notify.Icon = $icons['NotInstalled']
-            $notify.Text = 'EVECSM: status check failed'
+            $notify.Text = 'EvE Conduit: status check failed'
         }
     })
 $timer.Start()

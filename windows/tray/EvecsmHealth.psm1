@@ -1,4 +1,4 @@
-# Health checks for the EVECSM tray panel. Windows-independent on purpose (no Get-Service, no
+# Health checks for the EvE Conduit tray panel. Windows-independent on purpose (no Get-Service, no
 # WinForms) so it can be tested on any OS: service states are passed in, and the network checks use
 # plain TCP and HTTP. Must keep working on Windows PowerShell 5.1.
 
@@ -10,7 +10,7 @@ $script:Components = @(
     @{ Id = 'evecsm-postgres'; Label = 'Database (PostgreSQL)'; Core = $true; Check = 'Database' }
     @{ Id = 'evecsm-mariadb'; Label = 'Database (MariaDB)'; Core = $true; Check = 'Database' }
     @{ Id = 'evecsm-garnet'; Label = 'Cache and task queue (Garnet)'; Core = $true; Check = 'Cache' }
-    @{ Id = 'evecsm-web'; Label = 'EVECSM application'; Core = $true; Check = 'App' }
+    @{ Id = 'evecsm-web'; Label = 'EvE Conduit application'; Core = $true; Check = 'App' }
     @{ Id = 'evecsm-worker'; Label = 'Background jobs (worker)'; Core = $false; Check = '' }
     @{ Id = 'evecsm-beat'; Label = 'Scheduler (beat)'; Core = $false; Check = '' }
     @{ Id = 'evecsm-caddy'; Label = 'Web server (Caddy)'; Core = $true; Check = 'Web' }
@@ -166,7 +166,7 @@ function Get-EvecsmHealth {
     }
 
     if (-not $items) {
-        return @{ Overall = 'NotInstalled'; Items = @(); Summary = 'EVECSM services not found' }
+        return @{ Overall = 'NotInstalled'; Items = @(); Summary = 'EvE Conduit services not found' }
     }
     $down = @($items | Where-Object Level -eq 'Down')
     $warn = @($items | Where-Object Level -eq 'Warning')

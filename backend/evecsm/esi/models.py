@@ -3,7 +3,7 @@ from django.utils import timezone
 
 
 class EsiCall(models.Model):
-    """One request EVECSM sent to ESI (or held back because of an error-limit or rate-limit pause).
+    """One request EvE Conduit sent to ESI (or held back because of an error-limit or rate-limit pause).
     Answers from the local cache never reach ESI and aren't recorded."""
 
     class Outcome(models.TextChoices):

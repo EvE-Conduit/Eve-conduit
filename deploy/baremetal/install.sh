@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# EVECSM bare-metal installer.
+# EvE Conduit bare-metal installer.
 #
 # Automates the steps in docs/install-baremetal.md. Run it from an unpacked release:
 #
-#   tar -xzf evecsm-X.Y.Z.tar.gz && cd evecsm-X.Y.Z
+#   tar -xzf eve-conduit-X.Y.Z.tar.gz && cd eve-conduit-X.Y.Z
 #   sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example.com
 #
 # Options:
@@ -49,7 +49,7 @@ die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 [[ "$DB" == postgres || "$DB" == mariadb ]] || die "--db must be postgres or mariadb"
 [[ -f "$RELEASE_SRC/VERSION" && -d "$RELEASE_SRC/web" ]] || die "run this from an unpacked release (see docs/install-baremetal.md)"
 VERSION=$(cat "$RELEASE_SRC/VERSION")
-[[ -e "$EVECSM_ETC/evecsm.env" ]] && die "EVECSM is already installed; use 'sudo evecsm upgrade <release.tar.gz>'"
+[[ -e "$EVECSM_ETC/evecsm.env" ]] && die "EvE Conduit is already installed; use 'sudo evecsm upgrade <release.tar.gz>'"
 
 # --- detect the OS ------------------------------------------------------------
 . /etc/os-release
@@ -64,7 +64,7 @@ case "$ID:$MAJOR" in
   *) echo "Warning: $PRETTY_NAME is not a tested release; continuing." ;;
 esac
 
-echo "Installing EVECSM $VERSION on $PRETTY_NAME"
+echo "Installing EvE Conduit $VERSION on $PRETTY_NAME"
 echo "  site:     https://$DOMAIN"
 echo "  database: $DB"
 if [[ $ASSUME_YES -eq 0 ]]; then
@@ -183,7 +183,7 @@ grep -v '^\s*#' "$RELEASE_DIR/requirements-modules.txt" | sed '/^\s*$/d' > "$EVE
 chown root:"$SERVICE_USER" "$EVECSM_ETC/modules.txt"
 
 # --- 6. application ---------------------------------------------------------------------
-step "Installing EVECSM $VERSION"
+step "Installing EvE Conduit $VERSION"
 EXTRAS=""
 [[ $DB == mariadb ]] && EXTRAS="[mysql]"
 (cd "$RELEASE_DIR" && "$EVECSM_HOME/venv/bin/python" -m pip install -q "./backend$EXTRAS")
@@ -229,7 +229,7 @@ if [[ $TLS -eq 1 ]]; then
 fi
 
 # --- done ---------------------------------------------------------------------------------
-step "EVECSM $VERSION is installed"
+step "EvE Conduit $VERSION is installed"
 echo "$SETUP_OUTPUT" | grep -iE "setup code|ESI_CLIENT" || true
 cat <<DONE
 

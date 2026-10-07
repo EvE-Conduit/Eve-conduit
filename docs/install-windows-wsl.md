@@ -74,19 +74,19 @@ netsh interface portproxy add v4tov4 listenport=443 listenaddress=0.0.0.0 connec
 **Both:** allow the ports through Windows Firewall (Administrator PowerShell):
 
 ```powershell
-New-NetFirewallRule -DisplayName "EVECSM HTTP/HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow
+New-NetFirewallRule -DisplayName "EvE Conduit HTTP/HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow
 ```
 
-## 4. Install EVECSM
+## 4. Install EvE Conduit
 
-Inside Ubuntu, keep EVECSM on the Linux file system (your home folder), not under `/mnt/c`. Windows
+Inside Ubuntu, keep EvE Conduit on the Linux file system (your home folder), not under `/mnt/c`. Windows
 drives are much slower from WSL.
 
 ```bash
 cd ~
-cp /mnt/c/Users/<you>/Downloads/evecsm-X.Y.Z.tar.gz .
-tar -xzf evecsm-X.Y.Z.tar.gz
-cd evecsm-X.Y.Z
+cp /mnt/c/Users/<you>/Downloads/eve-conduit-X.Y.Z.tar.gz .
+tar -xzf eve-conduit-X.Y.Z.tar.gz
+cd eve-conduit-X.Y.Z
 sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example.com
 ```
 
@@ -107,7 +107,7 @@ PowerShell, replace `YOURUSER` with the Windows account that installed Ubuntu):
 $action  = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d Ubuntu-24.04 --exec /bin/sh -c 'sleep infinity'"
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName "Start EVECSM (WSL)" -Action $action -Trigger $trigger -Settings $settings `
+Register-ScheduledTask -TaskName "Start EvE Conduit (WSL)" -Action $action -Trigger $trigger -Settings $settings `
     -User "YOURUSER" -RunLevel Highest
 ```
 

@@ -1,7 +1,7 @@
 [project]
 name = "evecsm-example"
 version = "0.1.0"
-description = "Example EVECSM module: Tranquility server status. Copy it to start your own module."
+description = "Example EvE Conduit module: Tranquility server status. Copy it to start your own module."
 requires-python = ">=3.12"
 dependencies = ["evecsm>=0.1"]
 

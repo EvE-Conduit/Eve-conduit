@@ -72,7 +72,7 @@ Describe 'Expand-EvecsmTemplate' {
 Describe 'WinSW service templates' {
     BeforeAll {
         $values = [ordered]@{
-            ROOT = 'C:\EVECSM'; ROOT_FWD = 'C:/EVECSM'; CACHE_PORT = 6380
+            ROOT = 'C:\EvE-Conduit'; ROOT_FWD = 'C:/EvE Conduit'; CACHE_PORT = 6380
             DB_DEPEND = "`r`n  <depend>evecsm-postgres</depend>"
         }
         $templates = Get-ChildItem (Join-Path (Split-Path $PSScriptRoot -Parent) 'winsw') -Filter *.xml
@@ -85,7 +85,7 @@ Describe 'WinSW service templates' {
         [xml]$xml = Expand-EvecsmTemplate -Text (Get-Content $file -Raw) -Values $values
         $xml.service.id | Should -Be $_
         $xml.service.serviceaccount.user | Should -Be 'LocalService'
-        $xml.service.executable | Should -BeLike 'C:\EVECSM\*'
+        $xml.service.executable | Should -BeLike 'C:\EvE-Conduit\*'
     }
     It 'makes the app services wait for Garnet and the database' {
         [xml]$xml = Expand-EvecsmTemplate -Text (Get-Content (Join-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'winsw') 'evecsm-worker.xml') -Raw) -Values $values
@@ -95,24 +95,24 @@ Describe 'WinSW service templates' {
         [xml]$xml = Expand-EvecsmTemplate -Text (Get-Content (Join-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'winsw') 'evecsm-garnet.xml') -Raw) -Values $values
         $xml.service.arguments | Should -Match '--lua'
         $xml.service.arguments | Should -Match '--port 6380 '
-        ($xml.service.env | Where-Object name -eq 'DOTNET_ROOT').value | Should -Be 'C:\EVECSM\bin\dotnet'
+        ($xml.service.env | Where-Object name -eq 'DOTNET_ROOT').value | Should -Be 'C:\EvE-Conduit\bin\dotnet'
     }
     It 'runs the databases from the install folder with a clean stop command' {
         $dir = Join-Path (Split-Path $PSScriptRoot -Parent) 'winsw'
         [xml]$pg = Expand-EvecsmTemplate -Text (Get-Content (Join-Path $dir 'evecsm-postgres.xml') -Raw) -Values $values
-        $pg.service.executable | Should -Be 'C:\EVECSM\bin\postgres\bin\postgres.exe'
-        $pg.service.startarguments | Should -Be '-D "C:\EVECSM\data\postgres"'
-        $pg.service.stopexecutable | Should -Be 'C:\EVECSM\bin\postgres\bin\pg_ctl.exe'
-        $pg.service.stoparguments | Should -Be 'stop -D "C:\EVECSM\data\postgres" -m fast -w'
+        $pg.service.executable | Should -Be 'C:\EvE-Conduit\bin\postgres\bin\postgres.exe'
+        $pg.service.startarguments | Should -Be '-D "C:\EvE-Conduit\data\postgres"'
+        $pg.service.stopexecutable | Should -Be 'C:\EvE-Conduit\bin\postgres\bin\pg_ctl.exe'
+        $pg.service.stoparguments | Should -Be 'stop -D "C:\EvE-Conduit\data\postgres" -m fast -w'
         [xml]$mdb = Expand-EvecsmTemplate -Text (Get-Content (Join-Path $dir 'evecsm-mariadb.xml') -Raw) -Values $values
-        $mdb.service.executable | Should -Be 'C:\EVECSM\bin\mariadb\bin\mariadbd.exe'
+        $mdb.service.executable | Should -Be 'C:\EvE-Conduit\bin\mariadb\bin\mariadbd.exe'
         $mdb.service.stoparguments | Should -BeLike '*shutdown'
     }
     It 'never points a service outside the install folder' {
         foreach ($f in Get-ChildItem (Join-Path (Split-Path $PSScriptRoot -Parent) 'winsw') -Filter *.xml) {
             [xml]$xml = Expand-EvecsmTemplate -Text (Get-Content $f.FullName -Raw) -Values $values
-            $xml.service.executable | Should -BeLike 'C:\EVECSM\*'
-            if ($xml.service.stopexecutable) { $xml.service.stopexecutable | Should -BeLike 'C:\EVECSM\*' }
+            $xml.service.executable | Should -BeLike 'C:\EvE-Conduit\*'
+            if ($xml.service.stopexecutable) { $xml.service.stopexecutable | Should -BeLike 'C:\EvE-Conduit\*' }
         }
     }
 }
@@ -151,49 +151,49 @@ Describe 'Release helpers' {
         finally { Remove-Item $dir -Recurse -Force }
     }
     It 'converts paths for Caddy' {
-        ConvertTo-ForwardSlashPath 'C:\EVECSM\data' | Should -Be 'C:/EVECSM/data'
+        ConvertTo-ForwardSlashPath 'C:\EvE-Conduit\data' | Should -Be 'C:/EvE Conduit/data'
     }
 }
 
 Describe 'Install folder rules' {
-    It 'suggests C:\EVECSM' {
-        Get-DefaultInstallRoot | Should -Be 'C:\EVECSM'
+    It 'suggests C:\EvE-Conduit' {
+        Get-DefaultInstallRoot | Should -Be 'C:\EvE-Conduit'
     }
-    It 'accepts <_>' -ForEach @('C:\EVECSM', 'D:\EVECSM', 'D:\Program Files\EVECSM', 'E:\Servers\Alliance Auth\EVECSM', 'c:\evecsm-2') {
+    It 'accepts <_>' -ForEach @('C:\EvE-Conduit', 'D:\EvE-Conduit', 'D:\Program Files\EvE-Conduit', 'E:\Servers\Alliance Auth\EvE-Conduit', 'c:\evecsm-2') {
         Get-InstallRootProblem $_ | Should -BeNullOrEmpty
     }
     It 'rejects <Path> (<Why>)' -ForEach @(
         @{ Path = ''; Why = 'empty' }
-        @{ Path = 'EVECSM'; Why = 'relative' }
-        @{ Path = '\\server\share\EVECSM'; Why = 'network path' }
+        @{ Path = 'EvE Conduit'; Why = 'relative' }
+        @{ Path = '\\server\share\EvE-Conduit'; Why = 'network path' }
         @{ Path = 'C:\'; Why = 'drive root' }
         @{ Path = 'C:'; Why = 'drive only' }
-        @{ Path = 'C:\Windows\EVECSM'; Why = 'inside Windows' }
-        @{ Path = 'c:\users\me\EVECSM'; Why = 'inside Users' }
+        @{ Path = 'C:\Windows\EvE-Conduit'; Why = 'inside Windows' }
+        @{ Path = 'c:\users\me\EvE-Conduit'; Why = 'inside Users' }
         @{ Path = 'C:\ProgramData'; Why = 'ProgramData' }
         @{ Path = 'C:\EVE & CSM'; Why = 'ampersand breaks XML' }
         @{ Path = 'C:\EVE%PATH%'; Why = 'percent is expanded by WinSW' }
         @{ Path = 'C:\a;b'; Why = 'semicolon breaks PATH' }
-        @{ Path = 'C:\EVECSM\..\x:y'; Why = 'extra colon' }
-        @{ Path = 'C:\EVECSM\\data'; Why = 'empty folder name' }
-        @{ Path = 'C:\EVECSM \data'; Why = 'name ends with space' }
-        @{ Path = 'C:\EVECSM.\data'; Why = 'name ends with dot' }
+        @{ Path = 'C:\EvE-Conduit\..\x:y'; Why = 'extra colon' }
+        @{ Path = 'C:\EvE-Conduit\\data'; Why = 'empty folder name' }
+        @{ Path = 'C:\EvE-Conduit \data'; Why = 'name ends with space' }
+        @{ Path = 'C:\EvE-Conduit.\data'; Why = 'name ends with dot' }
         @{ Path = ('C:\' + ('x' * 80)); Why = 'too long' }
     ) {
         Get-InstallRootProblem $Path | Should -Not -BeNullOrEmpty
     }
     It 'tidies typed input' {
-        Format-InstallRoot '  "D:\EVECSM\"  ' | Should -Be 'D:\EVECSM'
-        Format-InstallRoot 'D:\Program Files\EVECSM\' | Should -Be 'D:\Program Files\EVECSM'
+        Format-InstallRoot '  "D:\EvE-Conduit\"  ' | Should -Be 'D:\EvE-Conduit'
+        Format-InstallRoot 'D:\Program Files\EvE-Conduit\' | Should -Be 'D:\Program Files\EvE-Conduit'
         Format-InstallRoot 'C:\' | Should -Be 'C:\'
     }
     It 'fills service definitions correctly for a folder with spaces' {
         $file = Join-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'winsw') 'evecsm-caddy.xml'
-        $values = [ordered]@{ ROOT = 'D:\Program Files\EVECSM'; ROOT_FWD = 'D:/Program Files/EVECSM'; SITE_ADDRESS = 'a.example'; ACME_EMAIL = 'x@y.z'; DB_DEPEND = '' }
+        $values = [ordered]@{ ROOT = 'D:\Program Files\EvE-Conduit'; ROOT_FWD = 'D:/Program Files/EvE Conduit'; SITE_ADDRESS = 'a.example'; ACME_EMAIL = 'x@y.z'; DB_DEPEND = '' }
         [xml]$xml = Expand-EvecsmTemplate -Text (Get-Content $file -Raw) -Values $values
-        $xml.service.executable | Should -Be 'D:\Program Files\EVECSM\bin\caddy\caddy.exe'
-        $xml.service.arguments | Should -Be 'run --config "D:\Program Files\EVECSM\config\Caddyfile" --adapter caddyfile'
-        ($xml.service.env | Where-Object name -eq 'EVECSM_ROOT').value | Should -Be 'D:\Program Files\EVECSM'
+        $xml.service.executable | Should -Be 'D:\Program Files\EvE-Conduit\bin\caddy\caddy.exe'
+        $xml.service.arguments | Should -Be 'run --config "D:\Program Files\EvE-Conduit\config\Caddyfile" --adapter caddyfile'
+        ($xml.service.env | Where-Object name -eq 'EVECSM_ROOT').value | Should -Be 'D:\Program Files\EvE-Conduit'
     }
 }
 
@@ -254,13 +254,13 @@ Describe 'Public site address' {
 Describe 'Generated Caddyfile' {
     BeforeAll {
         $template = Get-Content (Join-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'caddy') 'Caddyfile.template') -Raw
-        $common = @{ Template = $template; Domain = 'auth.example.com'; Email = 'a@b.c'; Root = 'D:\Program Files\EVECSM'; AppPort = 8001 }
+        $common = @{ Template = $template; Domain = 'auth.example.com'; Email = 'a@b.c'; Root = 'D:\Program Files\EvE-Conduit'; AppPort = 8001 }
     }
     It 'uses Caddy''s own redirects on 80/443' {
         $c = New-EvecsmCaddyfile @common -HttpPort 80 -HttpsPort 443
         $c | Should -Not -Match 'disable_redirects'
         $c | Should -Match 'reverse_proxy 127\.0\.0\.1:8001'
-        $c | Should -Match 'root \* "D:/Program Files/EVECSM/web"'
+        $c | Should -Match 'root \* "D:/Program Files/EvE Conduit/web"'
         $c | Should -Not -Match '\{\{'
     }
     It 'redirects to the standard address when the router forwards 80/443' {
@@ -357,8 +357,8 @@ Describe 'ConvertTo-NamedArgument' {
 
 Describe 'Remove-PathEntry' {
     It 'removes the install folder from PATH, ignoring case and a trailing backslash' {
-        Remove-PathEntry -PathValue 'C:\Windows;D:\EVECSM\;C:\Tools;;' -Entry 'd:\evecsm' | Should -Be 'C:\Windows;C:\Tools'
-        Remove-PathEntry -PathValue 'C:\Windows' -Entry 'D:\EVECSM' | Should -Be 'C:\Windows'
+        Remove-PathEntry -PathValue 'C:\Windows;D:\EvE-Conduit\;C:\Tools;;' -Entry 'd:\evecsm' | Should -Be 'C:\Windows;C:\Tools'
+        Remove-PathEntry -PathValue 'C:\Windows' -Entry 'D:\EvE-Conduit' | Should -Be 'C:\Windows'
     }
 }
 
@@ -391,7 +391,7 @@ Describe 'Tray settings' {
 Describe 'Health verdict' {
     BeforeAll {
         Import-Module (Join-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'tray') 'EvecsmHealth.psm1') -Force
-        $settings = [pscustomobject]@{ SiteUrl = 'http://x'; Domain = 'x'; HttpPort = 80; AppPort = 8000; CachePort = 6379; DatabasePort = 5432; Version = '1'; Root = 'C:\EVECSM' }
+        $settings = [pscustomobject]@{ SiteUrl = 'http://x'; Domain = 'x'; HttpPort = 80; AppPort = 8000; CachePort = 6379; DatabasePort = 5432; Version = '1'; Root = 'C:\EvE-Conduit' }
         $allUp = { param($Kind, $Port, $HostHeader) 'answers' }
         $running = [ordered]@{ 'evecsm-postgres' = 'Running'; 'evecsm-garnet' = 'Running'; 'evecsm-web' = 'Running'; 'evecsm-worker' = 'Running'; 'evecsm-beat' = 'Running'; 'evecsm-caddy' = 'Running' }
     }
@@ -416,7 +416,7 @@ Describe 'Health verdict' {
         $h.Overall | Should -Be 'Degraded'
         ($h.Items | Where-Object Id -eq 'evecsm-web').Detail | Should -Be 'starting...'
     }
-    It 'skips the database when EVECSM does not run one' {
+    It 'skips the database when EvE Conduit does not run one' {
         $s = [ordered]@{} + $running; $s.Remove('evecsm-postgres')
         @((Get-EvecsmHealth -Settings $settings -ServiceStatus $s -Probe $allUp).Items | Where-Object Id -like '*postgres*').Count | Should -Be 0
     }

@@ -1,11 +1,11 @@
 <!--
-  EVECSM web - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit web - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   The installer copies this next to a copy of WinSW named evecsm-web.exe and fills in {{...}}.
 -->
 <service>
   <id>evecsm-web</id>
-  <name>EVECSM web</name>
-  <description>EVECSM web application (waitress on 127.0.0.1:8000).</description>
+  <name>EvE Conduit web</name>
+  <description>EvE Conduit web application (waitress on 127.0.0.1:8000).</description>
   <executable>{{ROOT}}\venv\Scripts\python.exe</executable>
   <arguments>"{{ROOT}}\app\windows\service\evecsm_service.py" web</arguments>
   <workingdirectory>{{ROOT}}</workingdirectory>

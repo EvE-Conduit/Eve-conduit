@@ -1,6 +1,6 @@
 # External API and logs
 
-Other services (Discord/TeamSpeak/Mumble bots, killboards, recruitment tools, a SIEM) talk to EVECSM
+Other services (Discord/TeamSpeak/Mumble bots, killboards, recruitment tools, a SIEM) talk to EvE Conduit
 through the external API at `/api/v1/`. Its interactive docs are at `/api/v1/docs`.
 
 ## Setting it up
@@ -20,7 +20,7 @@ through the external API at `/api/v1/`. Its interactive docs are at `/api/v1/doc
 
 2. **Administration > API > Keys:** create a key for each service with only the scopes it needs. You can
    limit a key to IP addresses or CIDR ranges and give it an expiry date. The secret (`evk_...`) is shown
-   once. EVECSM keeps only a hash of it. If a secret is lost, revoke the key and create a new one.
+   once. EvE Conduit keeps only a hash of it. If a secret is lost, revoke the key and create a new one.
 
 3. The service sends the key with every request:
 
@@ -103,7 +103,7 @@ which an admin switches on separately. Scope names containing `write` are flagge
 
 ## Sending notifications
 
-With the Notifications API on and a key holding `notify:write`, a bot can ping people inside EVECSM:
+With the Notifications API on and a key holding `notify:write`, a bot can ping people inside EvE Conduit:
 
 ```bash
 curl -X POST -H "Authorization: Bearer evk_..." -H "Content-Type: application/json" \

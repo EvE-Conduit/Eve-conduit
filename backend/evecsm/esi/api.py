@@ -1,4 +1,4 @@
-"""Administration > Logs > ESI: what EVECSM asked ESI, how it went, and how close the error limit is."""
+"""Administration > Logs > ESI: what EvE Conduit asked ESI, how it went, and how close the error limit is."""
 
 import time
 from datetime import UTC, datetime, timedelta

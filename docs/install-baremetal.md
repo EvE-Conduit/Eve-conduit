@@ -1,6 +1,6 @@
 # Bare-metal installation
 
-This guide installs EVECSM directly on a Linux server, the same way Alliance Auth and SeAT
+This guide installs EvE Conduit directly on a Linux server, the same way Alliance Auth and SeAT
 document their manual installs. Prefer containers? See the Docker section of the README.
 
 Every step below is also automated by `deploy/baremetal/install.sh`. Run the script, or follow the
@@ -23,8 +23,8 @@ ports 80 and 443 open; root access.
 ## Quick install (script)
 
 ```bash
-tar -xzf evecsm-X.Y.Z.tar.gz
-cd evecsm-X.Y.Z
+tar -xzf eve-conduit-X.Y.Z.tar.gz
+cd eve-conduit-X.Y.Z
 sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example.com
 # add --db mariadb to use MariaDB instead of PostgreSQL
 ```
@@ -90,8 +90,8 @@ install -d -o root   -g root   -m 0755 /var/www/evecsm/web
 ### 4. Unpack the release
 
 ```bash
-tar -xzf evecsm-X.Y.Z.tar.gz -C /opt/evecsm/releases
-mv /opt/evecsm/releases/evecsm-X.Y.Z /opt/evecsm/releases/X.Y.Z
+tar -xzf eve-conduit-X.Y.Z.tar.gz -C /opt/evecsm/releases
+mv /opt/evecsm/releases/eve-conduit-X.Y.Z /opt/evecsm/releases/X.Y.Z
 chown -R root:evecsm /opt/evecsm/releases/X.Y.Z
 ln -sfn /opt/evecsm/releases/X.Y.Z /opt/evecsm/app
 install -m 0755 /opt/evecsm/app/deploy/baremetal/evecsm /usr/local/bin/evecsm
@@ -100,7 +100,7 @@ cp -a /opt/evecsm/app/web/. /var/www/evecsm/web/
 
 ### 5. Python 3.12 and the virtualenv
 
-EVECSM needs Python 3.12 or newer. Ubuntu 22.04 and Debian 12 ship older versions, so we use
+EvE Conduit needs Python 3.12 or newer. Ubuntu 22.04 and Debian 12 ship older versions, so we use
 [uv](https://docs.astral.sh/uv/) to get the same Python everywhere, without adding package repositories:
 
 ```bash
@@ -140,7 +140,7 @@ SQL
 mariadb-secure-installation
 ```
 
-### 7. Configure EVECSM
+### 7. Configure EvE Conduit
 
 ```bash
 cp /opt/evecsm/app/deploy/baremetal/evecsm.env.example /etc/evecsm/evecsm.env
@@ -225,7 +225,7 @@ Open your site, sign in with your main character, and enter the setup code from 
 `sudo evecsm setup-code` prints it again until setup is complete. The wizard then walks you through
 branding and modules.
 
-## Running EVECSM
+## Running EvE Conduit
 
 | Task | Command |
 |---|---|
@@ -240,7 +240,7 @@ branding and modules.
 ## Updating
 
 ```bash
-sudo evecsm upgrade evecsm-X.Y.Z.tar.gz
+sudo evecsm upgrade eve-conduit-X.Y.Z.tar.gz
 ```
 
 This backs up the database and config, installs the new release next to the old one, runs migrations,
@@ -255,7 +255,7 @@ the upgrade.
 
 The layout follows the same pattern, with different paths and names:
 
-| | Alliance Auth | SeAT | EVECSM |
+| | Alliance Auth | SeAT | EvE Conduit |
 |---|---|---|---|
 | Service user | `allianceserver` | `www-data` | `evecsm` |
 | Code | `/home/allianceserver/myauth` | `/var/www/seat` | `/opt/evecsm/app` |

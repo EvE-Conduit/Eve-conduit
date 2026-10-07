@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/evecsm-X.Y.Z-windows.zip: the normal release (scripts/build-release.sh, unchanged)
+# Builds dist/eve-conduit-X.Y.Z-windows.zip: the normal release (scripts/build-release.sh, unchanged)
 # plus this windows/ folder, packed as a zip with a single top-level folder.
 # Run on Linux, macOS or WSL (needs Node.js for the front-end build and Python 3).
 set -euo pipefail
@@ -10,7 +10,7 @@ import sys, tarfile, time, zipfile
 from pathlib import Path
 
 tarball = Path(sys.argv[1])
-base = tarball.name.removesuffix(".tar.gz")            # evecsm-X.Y.Z
+base = tarball.name.removesuffix(".tar.gz")            # eve-conduit-X.Y.Z
 out = tarball.with_name(f"{base}-windows.zip")
 top = f"{base}-windows"
 skip = {"__pycache__", "tests", ".pytest_cache", ".ipynb_checkpoints"}  # also Jupyter autosave copies

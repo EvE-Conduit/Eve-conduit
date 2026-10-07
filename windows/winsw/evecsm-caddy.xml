@@ -1,11 +1,11 @@
 <!--
-  EVECSM Caddy - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
+  EvE Conduit Caddy - Windows service definition for WinSW 2.12 (https://github.com/winsw/winsw).
   The installer copies this next to a copy of WinSW named evecsm-caddy.exe and fills in {{...}}.
 -->
 <service>
   <id>evecsm-caddy</id>
-  <name>EVECSM Caddy</name>
-  <description>Web server and automatic HTTPS for EVECSM.</description>
+  <name>EvE Conduit Caddy</name>
+  <description>Web server and automatic HTTPS for EvE Conduit.</description>
   <executable>{{ROOT}}\bin\caddy\caddy.exe</executable>
   <arguments>run --config "{{ROOT}}\config\Caddyfile" --adapter caddyfile</arguments>
   <workingdirectory>{{ROOT}}</workingdirectory>

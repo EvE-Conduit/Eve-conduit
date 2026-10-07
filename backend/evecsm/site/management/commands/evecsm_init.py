@@ -41,7 +41,7 @@ class Command(BaseCommand):
             bar = "=" * 64
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"\n{bar}\n  EVECSM first-run setup code: {site.setup_token}\n"
+                    f"\n{bar}\n  EvE Conduit first-run setup code: {site.setup_token}\n"
                     f"  Sign in, then enter this code in the setup wizard to become admin.\n{bar}\n"
                 )
             )

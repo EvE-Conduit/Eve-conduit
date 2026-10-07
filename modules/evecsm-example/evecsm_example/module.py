@@ -8,7 +8,7 @@ class ExampleModule(Module):
     name = "Server Status"
     version = "0.1.0"
     description = "Live Tranquility status on the dashboard. Also the starting point for new modules."
-    author = "EVECSM"
+    author = "EvE Conduit"
     app = "evecsm_example.apps.ExampleConfig"
     api = "evecsm_example.api:router"
     frontend = "evecsm_example/module.js"

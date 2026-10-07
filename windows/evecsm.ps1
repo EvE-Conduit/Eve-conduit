@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Day-to-day administration of a native Windows EVECSM install.
+    Day-to-day administration of a native Windows EvE Conduit install.
 
 .DESCRIPTION
     Run in an Administrator terminal (the installer puts "evecsm" on the PATH):
@@ -13,13 +13,13 @@
       evecsm manage <command> [args]        any Django management command
       evecsm setup-code                     show the first-run setup code again
       evecsm backup                         database + config to <root>\backups
-      evecsm upgrade <evecsm-X.Y.Z-windows.zip>
+      evecsm upgrade <eve-conduit-X.Y.Z-windows.zip>
       evecsm rollback                       back to the previous release
       evecsm repair                         redo the last steps of an upgrade that stopped half-way
       evecsm module install <package>       PyPI name, git URL or path
       evecsm module list
       evecsm tray [on|off]                  open the tray control panel, or start it at sign-in (on/off)
-      evecsm uninstall                      remove EVECSM (asks what to keep)
+      evecsm uninstall                      remove EvE Conduit (asks what to keep)
 #>
 # No param() block on purpose: arguments are passed through untouched, so things like
 # "evecsm manage shell -c ..." or "evecsm uninstall -Mode All" aren't taken as options of this script.
@@ -40,7 +40,7 @@ function Assert-Admin {
 }
 
 function Get-InstalledServiceId {
-    <# This install's services in start order (the database service only if EVECSM runs one). #>
+    <# This install's services in start order (the database service only if EvE Conduit runs one). #>
     return @(Get-EvecsmServiceId | Where-Object { Get-Service -Name $_ -ErrorAction SilentlyContinue })
 }
 
@@ -59,7 +59,7 @@ function Show-Port {
     $rows = @(
         [pscustomobject]@{ Service = 'Web server (HTTP)'; Port = $settings['EVECSM_HTTP_PORT']; Reachable = 'public' }
         [pscustomobject]@{ Service = 'Web server (HTTPS)'; Port = $(if ($settings['EVECSM_HTTPS_PORT']) { $settings['EVECSM_HTTPS_PORT'] } else { 'off' }); Reachable = 'public' }
-        [pscustomobject]@{ Service = 'EVECSM application'; Port = $app; Reachable = 'this machine' }
+        [pscustomobject]@{ Service = 'EvE Conduit application'; Port = $app; Reachable = 'this machine' }
         [pscustomobject]@{ Service = 'Garnet cache/queue'; Port = $cache.Port; Reachable = 'this machine' }
         [pscustomobject]@{ Service = "Database ($($db.Scheme))"; Port = $db.Port; Reachable = "$($db.Host)" }
     )
@@ -167,7 +167,7 @@ function Test-MariaDb { (Read-EnvFile $p.EnvFile)['DATABASE_URL'].StartsWith('my
 
 function Invoke-Upgrade([string]$Zip) {
     Assert-Admin
-    if (-not $Zip -or -not (Test-Path -LiteralPath $Zip)) { throw 'usage: evecsm upgrade <evecsm-X.Y.Z-windows.zip>' }
+    if (-not $Zip -or -not (Test-Path -LiteralPath $Zip)) { throw 'usage: evecsm upgrade <eve-conduit-X.Y.Z-windows.zip>' }
     $staging = Join-Path $p.Releases "upgrade-$([guid]::NewGuid())"
     try {
         Expand-Archive -LiteralPath $Zip -DestinationPath $staging
@@ -200,7 +200,7 @@ function Invoke-Upgrade([string]$Zip) {
         Set-EvecsmAcl -Root $Root
         Invoke-Finish $target
         Restart-All
-        Write-Host "EVECSM $version is running. 'evecsm rollback' returns to the previous release."
+        Write-Host "EvE Conduit $version is running. 'evecsm rollback' returns to the previous release."
     }
     finally { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
 }
@@ -266,7 +266,7 @@ switch ($Command) {
         if ($current -is [array]) { $current = $current[0] }
         Invoke-Finish $current
         Restart-All
-        Write-Host "EVECSM $(Get-ReleaseVersion $current) is running."
+        Write-Host "EvE Conduit $(Get-ReleaseVersion $current) is running."
     }
     'uninstall' { Invoke-Uninstall $Rest }
     'tray' {
