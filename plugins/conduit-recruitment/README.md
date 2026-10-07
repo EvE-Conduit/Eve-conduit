@@ -16,7 +16,7 @@ Application forms, a review queue, and accepting people into groups.
   Discord account and be on your server before they can send an application. The apply page tells them what's
   missing and links to the Discord page; Discord is asked live when they apply. **Needs the
   [Discord](../conduit-discord) plugin installed, switched on and set up**; until it is, nothing is checked and the
-  Settings page says so. Give your Guest state `discord.access_discord` so applicants can link.
+  Settings page says so. Applicants need `discord.access_discord` to link; Discord gives it to every state by default.
 - **Webhooks:** `recruit.application_submitted` and `recruit.application_decided` can be sent to Discord or Slack
   under Administration → Integrations.
 

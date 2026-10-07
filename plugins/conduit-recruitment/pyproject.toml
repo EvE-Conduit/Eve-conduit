@@ -1,6 +1,6 @@
 [project]
 name = "conduit-recruitment"
-version = "1.1.1"
+version = "1.1.2"
 description = "Recruitment: application forms, a review queue with each applicant's characters, notes and messages, and accepting into groups."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
