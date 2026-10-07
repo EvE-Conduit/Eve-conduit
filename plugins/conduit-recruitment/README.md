@@ -15,4 +15,4 @@ Application forms, a review queue, and accepting people into groups.
 - **Webhooks:** `recruit.application_submitted` and `recruit.application_decided` can be sent to Discord or Slack
   under Administration → Integrations.
 
-Needs EvE Conduit 0.5.6 or newer. Give the two permissions to your recruiters' group under Administration → Access.
+Needs EvE Conduit 0.5.6 or newer. Give the two permissions to your recruiters' group under Administration → Groups.

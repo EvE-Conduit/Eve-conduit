@@ -36,6 +36,8 @@ class SiteOut(Schema):
     version: str
     maintenance: dict
     django_admin: bool
+    #: Where people land after signing in ("" = the dashboard).
+    start_page: str = ""
     #: Newest available version, only for people who can install it.
     update_available: str | None = None
     #: Set while the updater is installing a release or plugins (the site restarts at the end).
@@ -90,6 +92,7 @@ def site_out(site: SiteSettings) -> dict:
         "version": __version__,
         "maintenance": {"enabled": site.maintenance_mode, "message": site.maintenance_message},
         "django_admin": settings.CONDUIT_DJANGO_ADMIN,
+        "start_page": site.start_page,
         "updating": update_progress(),
     }
 
@@ -233,6 +236,17 @@ class SiteIn(Schema):
     logo_url: str = ""
     maintenance_mode: bool = False
     maintenance_message: str = ""
+    start_page: str = ""
+
+    @field_validator("start_page")
+    @classmethod
+    def _start_page(cls, v):
+        v = v.strip()
+        if v in ("", "/"):
+            return ""
+        if not v.startswith("/") or v.startswith("//") or "\\" in v or len(v) > 200:
+            raise ValueError("the start page must be a page on this site, like /p/news")
+        return v
 
     @field_validator("maintenance_message")
     @classmethod
@@ -277,6 +291,71 @@ def update_site(request, payload: SiteIn):
         record("site.settings_changed", f"changed the site settings ({', '.join(changed)})", request=request,
                target_type="site", details=changed)
     return site_out(site)
+
+
+# --- admin: administrators ------------------------------------------------------
+# Administrators have every permission, so only an administrator can see, add or remove them.
+
+
+def _require_admin(request):
+    if not request.user.is_superuser:
+        raise HttpError(403, "Only administrators can change who is an administrator")
+
+
+def _admin_out(u, request) -> dict:
+    return {
+        "id": u.pk,
+        "name": u.display_name,
+        "main": character_brief(u.main_character),
+        "is_you": u.pk == request.user.pk,
+        "last_login": u.last_login.isoformat() if u.last_login else None,
+    }
+
+
+@admin_router.get("/admins")
+def list_admins(request):
+    from conduit.accounts.models import User
+
+    _require_admin(request)
+    admins = User.objects.filter(is_superuser=True, is_active=True).select_related("main_character__corporation", "main_character__alliance")
+    return [_admin_out(u, request) for u in admins.order_by("main_character__name")]
+
+
+@admin_router.post("/admins/{user_id}")
+def add_admin(request, user_id: int):
+    from conduit.accounts.models import User
+    from conduit.notify import notify
+
+    _require_admin(request)
+    user = User.objects.filter(pk=user_id, is_active=True).select_related("main_character").first()
+    if user is None:
+        raise HttpError(404, "User not found")
+    if user.is_superuser:
+        raise HttpError(400, f"{user.display_name} is already an administrator")
+    user.is_superuser = True
+    user.is_staff = True
+    user.save(update_fields=["is_superuser", "is_staff"])
+    record("site.admin_added", f"made {user.display_name} an administrator", request=request, target=user)
+    notify(user, "You're now an administrator", f"{request.user.display_name} gave you full access to the site.",
+           link="/admin/settings", level="warning", force=True)
+    return [_admin_out(u, request) for u in User.objects.filter(is_superuser=True, is_active=True).select_related("main_character")]
+
+
+@admin_router.delete("/admins/{user_id}")
+def remove_admin(request, user_id: int):
+    from conduit.accounts.models import User
+
+    _require_admin(request)
+    user = User.objects.filter(pk=user_id, is_superuser=True).select_related("main_character").first()
+    if user is None:
+        raise HttpError(404, "That user isn't an administrator")
+    if not User.objects.filter(is_superuser=True, is_active=True).exclude(pk=user.pk).exists():
+        raise HttpError(400, "The site needs at least one administrator")
+    user.is_superuser = False
+    user.is_staff = False
+    user.save(update_fields=["is_superuser", "is_staff"])
+    record("site.admin_removed", f"removed {user.display_name} as an administrator", request=request, target=user)
+    return [_admin_out(u, request) for u in User.objects.filter(is_superuser=True, is_active=True).select_related("main_character")]
 
 
 # --- admin: impersonation --------------------------------------------------------

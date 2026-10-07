@@ -117,4 +117,9 @@ def callback(request):
         return _back(flow, added=character.pk)
     django_login(request, character.user, backend=settings.AUTHENTICATION_BACKENDS[0])
     record("auth.login", f"signed in with {character.name}", request=request, target=character)
+    if flow.get("next", "/") == "/":
+        # Nowhere in particular was asked for: go to the site's start page (e.g. the announcements).
+        from conduit.site.models import SiteSettings
+
+        flow = {**flow, "next": SiteSettings.load().start_page or "/"}
     return _back(flow)

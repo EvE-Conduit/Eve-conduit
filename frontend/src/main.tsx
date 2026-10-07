@@ -19,6 +19,7 @@ import { applyPluginStyles } from "@/lib/pluginStyles";
 import { applyPreferences, applyStoredTheme } from "@/lib/preferences";
 import type { UpdateProgress } from "@/lib/types";
 import { AdminAccess } from "@/pages/admin/Access";
+import { AdminGroups } from "@/pages/admin/Groups";
 import { AdminCompliance } from "@/pages/admin/Compliance";
 import { AdminApi } from "@/pages/admin/Api";
 import { AdminHealth } from "@/pages/admin/Health";
@@ -102,6 +103,7 @@ async function start() {
         { path: "settings", element: <UserSettings /> },
         { path: "admin/members", element: <AdminMembers /> },
         { path: "admin/access", element: <AdminAccess /> },
+        { path: "admin/groups", element: <AdminGroups /> },
         { path: "admin/compliance", element: <AdminCompliance /> },
         { path: "admin/plugins", element: <AdminPlugins /> },
         { path: "admin/api", element: <AdminApi /> },

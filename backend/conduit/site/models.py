@@ -16,6 +16,8 @@ class SiteSettings(models.Model):
     # While on, only people who can manage the site get in; everyone else sees the message.
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.CharField(max_length=300, blank=True)
+    # Where people land after signing in, e.g. a plugin's page ("/p/news"). Empty means the dashboard.
+    start_page = models.CharField(max_length=200, blank=True)
 
     class Meta:
         verbose_name_plural = "site settings"

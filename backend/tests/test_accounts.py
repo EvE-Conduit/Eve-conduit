@@ -128,3 +128,20 @@ def test_sso_callback_logs_in(client, monkeypatch):
 def test_sso_callback_rejects_bad_state(client):
     client.get("/sso/login")
     assert client.get("/sso/callback?code=abc&state=wrong").status_code == 400
+
+
+@pytest.mark.django_db
+def test_sso_login_lands_on_the_start_page(client, monkeypatch):
+    from conduit.site.models import SiteSettings
+    from conduit.sso import views
+
+    SiteSettings.objects.update_or_create(pk=1, defaults={"start_page": "/p/news"})
+    monkeypatch.setattr(views, "exchange_code", lambda code, verifier: TOKEN)
+    monkeypatch.setattr(views, "verify_access_token", lambda t: {"sub": "CHARACTER:EVE:91000005", "name": "Fresh", "owner": "o", "scp": "publicData"})
+    client.get("/sso/login")
+    resp = client.get(f"/sso/callback?code=abc&state={client.session['conduit_sso']['state']}")
+    assert resp["Location"] == "/p/news"
+    # A page that was asked for still wins.
+    client.get("/sso/login?next=/wallet")
+    resp = client.get(f"/sso/callback?code=abc&state={client.session['conduit_sso']['state']}")
+    assert resp["Location"] == "/wallet"

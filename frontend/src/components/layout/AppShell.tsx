@@ -144,7 +144,7 @@ export function AppShell() {
                     <Avatar src={user.main?.portrait} name={user.name} size="md" />
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{user.name}</div>
-                      <div className="truncate text-xs text-muted">{user.state?.name ?? "No state"}</div>
+                      <div className="truncate text-xs text-muted">{user.is_admin ? "Administrator" : (user.state?.name ?? "No state")}</div>
                     </div>
                   </div>
                   <DropdownSeparator />

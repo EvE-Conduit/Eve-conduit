@@ -110,12 +110,13 @@ function useRefresh() {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: ["groups"] });
+    qc.invalidateQueries({ queryKey: ["admin", "groups"] });
     qc.invalidateQueries({ queryKey: ["me", "leadership"] });
     qc.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
   };
 }
 
-function RequestQueue({ groupId }: { groupId: number | null }) {
+export function RequestQueue({ groupId }: { groupId: number | null }) {
   const [view, setView] = useState<"pending" | "decided">("pending");
   const { data, isLoading } = useQuery({
     queryKey: ["groups", "requests", view, groupId],
@@ -250,7 +251,7 @@ function RequestItem({ request: r, showGroup }: { request: GroupRequest; showGro
   );
 }
 
-function Members({ group }: { group: LedGroup }) {
+export function Members({ group }: { group: LedGroup }) {
   const refresh = useRefresh();
   const [q, setQ] = useState("");
   const [removing, setRemoving] = useState<GroupMember | null>(null);

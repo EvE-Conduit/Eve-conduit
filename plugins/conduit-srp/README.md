@@ -20,4 +20,4 @@ Losses come from the character sheet's killmails, so characters need the `esi-ki
 Loss values use CCP's average market prices, as on the character sheet.
 
 Events for webhooks: `srp.request_created`, `srp.request_decided`, `srp.request_paid`. Give the permissions to a
-state or group under Administration → Access.
+state (Administration → States) or a group (Administration → Groups).
