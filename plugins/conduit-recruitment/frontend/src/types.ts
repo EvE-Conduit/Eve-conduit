@@ -16,9 +16,19 @@ export interface FormInfo {
   description: string;
   questions: Question[];
   open: boolean;
+  require_discord: boolean;
   accept_groups?: { id: number; name: string }[];
   applications?: number;
   order?: number;
+}
+
+/** Whether the applicant has linked Discord and is on the server; null when no open form needs it. */
+export interface DiscordStatus {
+  linked: boolean;
+  username: string | null;
+  on_server: boolean;
+  error: string;
+  ok: boolean;
 }
 
 export interface Comment {

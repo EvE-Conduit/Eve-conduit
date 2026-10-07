@@ -130,3 +130,66 @@ def test_forms_are_checked(setup, api_client):
     assert "close it instead" in api_client.call("delete", f"/api/p/recruit/forms/{form.pk}").json()["detail"]
     assert api_client.call("delete", f"/api/p/recruit/forms/{ok['id']}").json()["ok"]
     assert Application.objects.count() == 1
+
+
+@pytest.fixture
+def discord_on(db, monkeypatch):
+    """The Discord plugin on and set up; ``on_server`` holds the Discord ids the bot finds on the server."""
+    from conduit_discord import discord_api
+    from conduit_discord.models import DiscordSettings
+
+    set_enabled("discord", True)
+    DiscordSettings.objects.update_or_create(pk=1, defaults={"client_id": "1", "client_secret": "s", "bot_token": "t", "guild_id": "9"})
+    on_server: set[str] = set()
+    monkeypatch.setattr(discord_api, "member", lambda token, guild, uid: {"user": {"id": uid}} if uid in on_server else None)
+    return on_server
+
+
+def test_applying_needs_discord_linked_and_on_the_server(setup, discord_on, api_client):
+    from conduit_discord.models import DiscordAccount
+
+    form, _, applicant, _ = setup
+    api_client.force_login(applicant)
+    me = api_client.call("get", "/api/p/recruit/me").json()
+    assert me["forms"][0]["require_discord"] and me["discord"] == {"linked": False, "username": None, "on_server": False, "error": "", "ok": False}
+    resp = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()})
+    assert resp.status_code == 403 and "Link your Discord" in resp.json()["detail"]
+
+    DiscordAccount.objects.create(user=applicant, discord_id="555", username="hopeful")
+    resp = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()})
+    assert resp.status_code == 403 and "Join our Discord server" in resp.json()["detail"]
+
+    discord_on.add("555")
+    assert api_client.call("get", "/api/p/recruit/me").json()["discord"]["ok"]
+    assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
+
+
+def test_discord_not_required_when_the_form_says_so_or_discord_is_off(setup, discord_on, api_client):
+    form, _, applicant, _ = setup
+    form.require_discord = False
+    form.save()
+    api_client.force_login(applicant)
+    assert api_client.call("get", "/api/p/recruit/me").json()["discord"] is None
+    assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
+
+    other = make_user(90000081, "Second Hopeful", member=False)
+    form.require_discord = True
+    form.save()
+    set_enabled("discord", False)
+    api_client.force_login(other)
+    assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
+
+
+def test_discord_outage_blocks_with_a_retry_message(setup, discord_on, api_client, monkeypatch):
+    from conduit_discord import discord_api
+    from conduit_discord.models import DiscordAccount
+
+    def down(*a):
+        raise discord_api.DiscordError(502, "Bad gateway")
+
+    form, _, applicant, _ = setup
+    DiscordAccount.objects.create(user=applicant, discord_id="555", username="hopeful")
+    monkeypatch.setattr(discord_api, "member", down)
+    api_client.force_login(applicant)
+    resp = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()})
+    assert resp.status_code == 503 and "try again" in resp.json()["detail"]

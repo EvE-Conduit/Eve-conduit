@@ -6,12 +6,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { Back, Form as FormIcon, Send, Users, X } from "./icons";
+import { Back, External, Form as FormIcon, Send, Users, X } from "./icons";
 import { Answer, Conversation, Progress, QuestionField, StatusBadge } from "./shared";
-import { type ApplicationInfo, BASE, type FormInfo } from "./types";
+import { type ApplicationInfo, BASE, type DiscordStatus, type FormInfo } from "./types";
 
 interface Me {
   forms: FormInfo[];
+  discord: DiscordStatus | null;
   current: ApplicationInfo | null;
   past: ApplicationInfo[];
   is_recruiter: boolean;
@@ -22,7 +23,7 @@ const KEY = ["recruit", "me"];
 export function ApplyPage() {
   const qc = useQueryClient();
   const user = useCurrentUser();
-  const { data, isLoading } = useQuery({ queryKey: KEY, queryFn: () => api.get<Me>(`${BASE}/me`) });
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: KEY, queryFn: () => api.get<Me>(`${BASE}/me`) });
   const [form, setForm] = useState<FormInfo | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | boolean | null>>({});
   const [withdrawing, setWithdrawing] = useState(false);
@@ -41,6 +42,7 @@ export function ApplyPage() {
 
   if (isLoading || !data) return <Skeleton className="h-64" />;
   const current = data.current;
+  const discordBlocked = !!form?.require_discord && !!data.discord && !data.discord.ok;
 
   return (
     <>
@@ -109,6 +111,7 @@ export function ApplyPage() {
       ) : form ? (
         <Card className="max-w-3xl">
           <CardBody className="space-y-6">
+            {discordBlocked && <DiscordNeeded status={data.discord!} checking={isFetching} onCheck={() => refetch()} />}
             {form.questions.length === 0 && <p className="text-sm text-muted">No questions: just send it.</p>}
             {form.questions.map((q) => (
               <QuestionField key={q.id} q={q} value={answers[q.id]} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
@@ -117,7 +120,7 @@ export function ApplyPage() {
               <Button variant="ghost" onClick={() => setForm(null)}>
                 <Back /> Back
               </Button>
-              <Button variant="primary" loading={submit.isPending} onClick={() => submit.mutate()}>
+              <Button variant="primary" loading={submit.isPending} disabled={discordBlocked} onClick={() => submit.mutate()}>
                 {!submit.isPending && <Send />} Send application
               </Button>
             </div>
@@ -139,7 +142,10 @@ export function ApplyPage() {
                   <div className="min-w-0">
                     <div className="font-medium">{f.name}</div>
                     {f.description && <p className="mt-1 line-clamp-3 text-sm text-muted">{f.description}</p>}
-                    <div className="mt-2 text-xs text-subtle">{f.questions.length} question{f.questions.length === 1 ? "" : "s"}</div>
+                    <div className="mt-2 text-xs text-subtle">
+                      {f.questions.length} question{f.questions.length === 1 ? "" : "s"}
+                      {f.require_discord && data.discord && " · needs Discord"}
+                    </div>
                   </div>
                 </div>
               </button>
@@ -164,6 +170,29 @@ export function ApplyPage() {
         </Card>
       )}
     </>
+  );
+}
+
+/** What's missing before a form that requires Discord can be sent. */
+function DiscordNeeded({ status, checking, onCheck }: { status: DiscordStatus; checking: boolean; onCheck: () => void }) {
+  const title = status.error
+    ? "We couldn't check your Discord"
+    : !status.linked
+      ? "Link your Discord account first"
+      : "Join our Discord server first";
+  const text = status.error
+    ? status.error
+    : !status.linked
+      ? "This application needs your Discord account linked and you on our server. Link it on the Discord page, then come back."
+      : `Your Discord account ${status.username ?? ""} is linked but isn't on our server. Join it from the Discord page, then come back.`;
+  return (
+    <Alert tone="warning" title={title}>
+      <p>{text}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link to="/p/discord"><Button size="sm" variant="outline"><External /> Go to Discord</Button></Link>
+        <Button size="sm" variant="ghost" loading={checking} onClick={onCheck}>Check again</Button>
+      </div>
+    </Alert>
   );
 }
 

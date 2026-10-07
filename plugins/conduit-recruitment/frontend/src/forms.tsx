@@ -19,6 +19,7 @@ interface Draft {
   name: string;
   description: string;
   open: boolean;
+  require_discord: boolean;
   order: number;
   accept_groups: number[];
   questions: (Question & { choicesText?: string })[];
@@ -35,6 +36,7 @@ const EXAMPLE: Draft = {
   name: "",
   description: "",
   open: true,
+  require_discord: true,
   order: 0,
   accept_groups: [],
   questions: [
@@ -71,7 +73,7 @@ export function FormsPage() {
   });
 
   const edit = (f: FormInfo) =>
-    setDraft({ id: f.id, name: f.name, description: f.description, open: f.open, order: f.order ?? 0, accept_groups: (f.accept_groups ?? []).map((g) => g.id), questions: f.questions.map((q) => ({ ...q })) });
+    setDraft({ id: f.id, name: f.name, description: f.description, open: f.open, require_discord: f.require_discord, order: f.order ?? 0, accept_groups: (f.accept_groups ?? []).map((g) => g.id), questions: f.questions.map((q) => ({ ...q })) });
 
   return (
     <>
@@ -160,6 +162,16 @@ function FormEditor({ draft, setDraft, groups, saving, onSave }: { draft: Draft;
             <Switch checked={draft.open} onCheckedChange={(open) => set({ open })} /> Taking applications
           </label>
         </div>
+        <label className="flex items-start gap-3 text-sm">
+          <Switch checked={draft.require_discord} onCheckedChange={(require_discord) => set({ require_discord })} />
+          <span>
+            Require Discord
+            <span className="block text-xs text-muted">
+              Applicants must link their Discord account and be on the server before they can apply. Only checked while the
+              Discord plugin is on; give your Guest state the "Can link a Discord account" permission so they can link.
+            </span>
+          </span>
+        </label>
         <Field label="Introduction" hint="Shown above the questions: who you are, what you expect, what happens next.">
           <Textarea rows={3} value={draft.description} onChange={(e) => set({ description: e.target.value })} />
         </Field>
