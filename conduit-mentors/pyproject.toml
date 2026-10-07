@@ -1,0 +1,28 @@
+[project]
+name = "conduit-mentors"
+version = "1.0.0"
+description = "Mentoring: new members ask for a mentor, mentors claim them, and goals (ticked by hand or by group rules) track how they get on, with a thread, private notes and graduation."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+mentors = "conduit_mentors.plugin:MentorsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Mentoring"
+icon = "life-buoy"
+category = "HR"
+min_conduit = "0.5.14"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_mentors*"]
+
+[tool.setuptools.package-data]
+conduit_mentors = ["static/**/*"]
