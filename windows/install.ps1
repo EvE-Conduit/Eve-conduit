@@ -49,6 +49,9 @@
     Don't start the tray control panel at sign-in (start it any time with "conduit tray").
 .PARAMETER Yes
     Don't ask any questions (needs -InstallRoot; ports not given use the defaults).
+.PARAMETER ResultFile
+    When done, write "Key=Value" lines (Version, Root, SiteUrl, SetupCode) to this file. Used by the
+    graphical installer (windows\installer) for its finish page.
 #>
 [CmdletBinding()]
 param(
@@ -67,7 +70,8 @@ param(
     [int]$DatabasePort = 0,
     [ValidateSet('', 'Standard', 'AsChosen')][string]$PublicPorts = '',
     [switch]$NoTray,
-    [switch]$Yes
+    [switch]$Yes,
+    [string]$ResultFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -386,7 +390,7 @@ Write-EnvFile -Path $p.EnvFile -Header "Written by install.ps1 on $(Get-Date -Fo
         CONDUIT_HTTP_PORT       = $ports.Http
         CONDUIT_HTTPS_PORT      = $(if ($NoTls) { '' } else { $ports.Https })
     })
-Set-Content -LiteralPath $p.Modules -Value (Get-ModuleRequirement (Join-Path $target 'requirements-modules.txt'))
+Set-Content -LiteralPath $p.Plugins -Value (Get-PluginRequirement (Join-Path $target 'requirements-plugins.txt'))
 $caddyfile = New-ConduitCaddyfile -Template (Get-Content -LiteralPath (Join-Path $target 'windows\caddy\Caddyfile.template') -Raw) `
     -Domain $Domain -Email $Email -Root $InstallRoot -HttpPort $ports.Http -HttpsPort $ports.Https -AppPort $ports.App `
     -NoTls:$NoTls -StandardPublicPorts:$standardPublic
@@ -482,6 +486,10 @@ $elapsed = (Get-Date) - $script:InstallStart
 Write-Host ("`n==> EvE Conduit $version is installed in $InstallRoot ({0}:{1:00})" -f [int][math]::Floor($elapsed.TotalMinutes), $elapsed.Seconds) -ForegroundColor Cyan
 ($setupOutput -split "`n") | Where-Object { $_ -match 'setup code|ESI_' } | ForEach-Object { Write-Host $_.Trim() -ForegroundColor Yellow }
 Get-Service conduit-* | Format-Table -AutoSize Name, Status, DisplayName
+if ($ResultFile) {
+    $setupCode = if ($setupOutput -match 'setup code:\s*(\S+)') { $Matches[1] } else { '' }
+    [IO.File]::WriteAllLines($ResultFile, [string[]]@("Version=$version", "Root=$InstallRoot", "SiteUrl=$siteUrl", "SetupCode=$setupCode"))
+}
 Write-Host @"
 Next steps:
   1. Create an EVE application at https://developers.eveonline.com/applications
