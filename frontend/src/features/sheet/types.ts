@@ -15,6 +15,8 @@ export interface CharacterHeader extends CharacterBrief {
   is_mine: boolean;
   is_main: boolean;
   token_valid: boolean;
+  /** Has sheet.refresh_characters, so may ask ESI for fresh data now. */
+  can_refresh: boolean;
   sections: SectionStatus[];
 }
 

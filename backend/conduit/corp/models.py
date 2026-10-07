@@ -34,6 +34,7 @@ class CorpSyncStatus(models.Model):
             ("view_alliance_corporations", "Can view the sheets of corporations in their alliance"),
             ("view_all_corporations", "Can view every corporation's sheet"),
             ("view_corporation_wallets", "Can view corporation finances (wallets, market, contracts)"),
+            ("refresh_corporations", "Can refresh corporation data from ESI now (corporations they can view)"),
         ]
 
 

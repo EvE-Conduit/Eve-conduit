@@ -218,3 +218,22 @@ def test_refused_structure_is_not_asked_again_with_the_same_character(pilot):
     fake.calls.clear()
     resolve({1040000000001}, character=pilot.main_character, client=fake)
     assert fake.calls == []
+
+
+@pytest.mark.django_db
+def test_refreshing_takes_a_permission(pilot, client, monkeypatch):
+    """ESI is called on schedule; asking for fresh data now is for people given sheet.refresh_characters."""
+    queued = []
+    monkeypatch.setattr("conduit.sheet.tasks.sync_section.delay", lambda cid, key: queued.append(key))
+    client.force_login(pilot)
+    assert client.get(f"/api/characters/{CID}").json()["can_refresh"] is False
+    assert client.post(f"/api/characters/{CID}/refresh").status_code == 403 and not queued
+
+    pilot.user_permissions.add(Permission.objects.get(codename="refresh_characters"))
+    assert client.get(f"/api/characters/{CID}").json()["can_refresh"] is True
+    assert client.post(f"/api/characters/{CID}/refresh").status_code == 200 and queued
+
+    officer = make_user(90000111, "Officer")
+    officer.user_permissions.add(*Permission.objects.filter(codename__in=["refresh_characters", "view_all_characters"]))
+    client.force_login(officer)
+    assert client.post(f"/api/characters/{CID}/refresh").status_code == 200  # any character they can view

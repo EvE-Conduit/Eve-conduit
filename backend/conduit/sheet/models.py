@@ -28,6 +28,7 @@ class SyncStatus(models.Model):
             ("view_all_characters", "Can view every member's character data"),
             ("view_alliance_characters", "Can view character data of their alliance"),
             ("view_corporation_characters", "Can view character data of their corporation"),
+            ("refresh_characters", "Can refresh character data from ESI now (characters they can view)"),
         ]
 
 

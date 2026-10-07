@@ -166,6 +166,7 @@ def corporation_header(request, corporation_id: int):
         "member_count": (info.member_count if info else None) or corp.member_count,
         "registered_characters": Character.objects.filter(corporation=corp).count(),
         "can_view_wallets": request.user.has_perm("corp.view_corporation_wallets"),
+        "can_refresh": request.user.has_perm("corp.refresh_corporations"),
         "sections": [section_out(s) for s in registry.ordered()],
     }
 
@@ -175,6 +176,8 @@ def refresh(request, corporation_id: int):
     from .tasks import sync_now
 
     corp = viewable_corporation(request, corporation_id)
+    if not request.user.has_perm("corp.refresh_corporations"):
+        raise HttpError(403, "You don't have permission to refresh corporations")
     sync_now(corp.pk)
     return {"ok": True}
 

@@ -115,7 +115,7 @@ export function CharacterSheet() {
               {header.alliance && <EntityChip entity={header.alliance} label="Alliance" />}
             </div>
           </div>
-          <SyncedAt status={header.sections.find((s) => s.key === tab) ?? header.sections[0]} onRefresh={header.is_mine ? () => refresh.mutate() : undefined} refreshing={refresh.isPending} />
+          <SyncedAt status={header.sections.find((s) => s.key === tab) ?? header.sections[0]} onRefresh={header.can_refresh ? () => refresh.mutate() : undefined} refreshing={refresh.isPending} />
         </div>
       </section>
 

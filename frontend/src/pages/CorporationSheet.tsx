@@ -103,9 +103,11 @@ export function CorporationSheet() {
           </div>
           <div className="flex items-center gap-2 text-xs text-muted">
             <span>Updated {timeAgo(current.last_success)}</span>
-            <Button size="sm" variant="ghost" onClick={() => refresh.mutate()} loading={refresh.isPending} aria-label="Refresh now">
-              {!refresh.isPending && <RefreshCw />} Refresh
-            </Button>
+            {header.can_refresh && (
+              <Button size="sm" variant="ghost" onClick={() => refresh.mutate()} loading={refresh.isPending} aria-label="Refresh now">
+                {!refresh.isPending && <RefreshCw />} Refresh
+              </Button>
+            )}
           </div>
         </div>
       </section>
