@@ -40,6 +40,8 @@ class SiteOut(Schema):
     update_available: str | None = None
     #: Set while the updater is installing a release or plugins (the site restarts at the end).
     updating: dict | None = None
+    #: An install that's waiting for the updater to pick it up; only for people who can manage the site.
+    update_pending: dict | None = None
 
 
 class SetupOut(Schema):
@@ -154,9 +156,10 @@ def bootstrap(request):
                 )
     out = {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
     if request.user.is_authenticated and request.user.has_perm("site.manage_site"):
-        from conduit.updates.services import newest_for_bootstrap
+        from conduit.updates.services import newest_for_bootstrap, pending_for_bootstrap
 
         out["site"]["update_available"] = newest_for_bootstrap()
+        out["site"]["update_pending"] = pending_for_bootstrap()
     return out
 
 

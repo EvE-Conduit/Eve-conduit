@@ -14,6 +14,8 @@ import { useBootstrap, useHasPerm } from "@/lib/bootstrap";
 import { applyPreferences } from "@/lib/preferences";
 import { cn } from "@/lib/utils";
 
+import { UpdateOverlay } from "@/components/updates/UpdateOverlay";
+
 import { ImpersonationBanner, MaintenanceBanner, MaintenanceScreen, UpdatingBanner } from "./Banners";
 import { Clocks } from "./Clocks";
 import { ExternalLinkGuard } from "@/lib/externalLinks";
@@ -84,6 +86,7 @@ export function AppShell() {
       </a>
       <ImpersonationBanner />
       <UpdatingBanner />
+      <UpdateOverlay />
       <ThreatStrip />
       {canManageSite && <MaintenanceBanner />}
       <div className="backdrop-space flex min-h-0 flex-1">

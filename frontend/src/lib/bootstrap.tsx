@@ -19,8 +19,10 @@ export function BootstrapProvider({ initial, children }: { initial: Bootstrap; c
     initialData: initial,
     staleTime: 60_000,
     // Notice an update starting (and finishing) without anyone reloading; quickly while one runs.
-    refetchInterval: (q) => (q.state.data?.site.updating ? 5_000 : 120_000),
+    refetchInterval: (q) => (q.state.data?.site.updating || q.state.data?.site.update_pending ? 4_000 : 120_000),
     retry: true,
+    // While the site restarts, try again every few seconds so it's noticed as soon as it's back.
+    retryDelay: 3_000,
   });
   return <BootstrapContext.Provider value={data}>{children}</BootstrapContext.Provider>;
 }

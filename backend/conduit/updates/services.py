@@ -373,6 +373,26 @@ def state_out(state: UpdateState) -> dict:
     }
 
 
+def pending_for_bootstrap() -> dict | None:
+    """An install an admin asked for that the updater hasn't started yet (it looks every two minutes)."""
+    from conduit.plugins.models import PluginInstaller
+
+    from conduit.plugins.installs import sync_result as sync_plugin_result
+
+    if progress():
+        return None
+    # Read the updater's result first: right after it restarted the site, the request may already be done.
+    state = UpdateState.objects.filter(pk=1, install_state=UpdateState.Install.REQUESTED).first()
+    if state and sync_install_result(state).install_state == UpdateState.Install.REQUESTED:
+        return {"kind": "release", "target": state.install_version,
+                "requested_at": state.install_requested_at.isoformat() if state.install_requested_at else None}
+    job = PluginInstaller.objects.filter(pk=1, job_state=PluginInstaller.Job.REQUESTED).first()
+    if job and sync_plugin_result(job).job_state == PluginInstaller.Job.REQUESTED:
+        return {"kind": "plugins", "target": "", "summary": job.job_summary,
+                "requested_at": job.job_requested_at.isoformat() if job.job_requested_at else None}
+    return None
+
+
 def newest_for_bootstrap() -> str | None:
     """Cheap: the newest known version, for the Updates badge in the admin menu."""
     row = UpdateState.objects.filter(pk=1).values_list("releases", flat=True).first()

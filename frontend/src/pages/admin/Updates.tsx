@@ -71,7 +71,14 @@ export function AdminUpdates() {
   const onError = (e: Error) => toast.error(e.message);
   const check = useMutation({ mutationFn: () => api.post<UpdateStatus>("/api/admin/updates/check"), onSuccess: (d) => { set(d); toast.success(d.latest ? `EvE Conduit ${d.latest} is available` : "You're up to date"); }, onError });
   const download = useMutation({ mutationFn: (version: string) => api.post<UpdateStatus>("/api/admin/updates/download", { version }), onSuccess: set, onError });
-  const install = useMutation({ mutationFn: () => api.post<UpdateStatus>("/api/admin/updates/install"), onSuccess: set, onError });
+  const install = useMutation({
+    mutationFn: () => api.post<UpdateStatus>("/api/admin/updates/install"),
+    onSuccess: (d) => {
+      set(d);
+      qc.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
+    },
+    onError,
+  });
   const cancel = useMutation({ mutationFn: () => api.post<UpdateStatus>("/api/admin/updates/cancel"), onSuccess: (d) => { set(d); toast.success("Install cancelled"); }, onError });
 
   // The new version is up: reload so the browser gets its front end too.
