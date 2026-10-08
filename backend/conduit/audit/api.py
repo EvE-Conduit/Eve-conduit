@@ -15,7 +15,7 @@ from conduit.permissions import require_perm
 from .models import AuditEvent, ServiceLog, SnoopEvent
 
 router = Router(tags=["admin"])
-LEVELS = ("WARNING", "ERROR", "CRITICAL")
+LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 MAX_TAIL_LINES = 5000
 
 
@@ -33,7 +33,8 @@ def audit_out(e: AuditEvent) -> dict:
 
 
 def service_out(s: ServiceLog) -> dict:
-    return {"id": s.pk, "at": s.at.isoformat(), "level": s.level, "logger": s.logger, "message": s.message, "traceback": s.traceback}
+    return {"id": s.pk, "at": s.at.isoformat(), "level": s.level, "logger": s.logger, "plugin": s.plugin or None,
+            "message": s.message, "traceback": s.traceback}
 
 
 def filter_audit(qs, action: str = "", actor: str = "", q: str = "", since: datetime | None = None):
@@ -73,7 +74,7 @@ def filter_snoop(qs, viewer: str = "", target: str = "", section: str = "", sinc
     return qs
 
 
-def filter_service(qs, level: str = "", logger: str = "", q: str = ""):
+def filter_service(qs, level: str = "", logger: str = "", q: str = "", plugin: str = ""):
     if level:
         level = level.upper()
         if level not in LEVELS:
@@ -81,6 +82,9 @@ def filter_service(qs, level: str = "", logger: str = "", q: str = ""):
         qs = qs.filter(level__in=LEVELS[LEVELS.index(level):])  # this level and worse
     if logger:
         qs = qs.filter(logger__startswith=logger)
+    if plugin:
+        # "core" is everything no plugin logged.
+        qs = qs.filter(plugin="" if plugin == "core" else plugin)
     if q:
         qs = qs.filter(Q(message__icontains=q) | Q(traceback__icontains=q))
     return qs
@@ -114,8 +118,18 @@ def snooper_sections(request):
 
 @router.get("/logs/service")
 @require_perm("site.view_logs")
-def service_log(request, level: str = "", logger: str = "", q: str = "", limit: int = 50, offset: int = 0):
-    return page(filter_service(ServiceLog.objects.all(), level, logger, q), service_out, limit, offset)
+def service_log(request, level: str = "", logger: str = "", q: str = "", plugin: str = "", limit: int = 50, offset: int = 0):
+    return page(filter_service(ServiceLog.objects.all(), level, logger, q, plugin), service_out, limit, offset)
+
+
+@router.get("/logs/service/plugins", response=list[str])
+@require_perm("site.view_logs")
+def service_log_plugins(request):
+    """Plugins to filter the service log by: the installed ones plus any that left rows behind."""
+    from conduit.plugins import registry
+
+    logged = ServiceLog.objects.exclude(plugin="").values_list("plugin", flat=True).distinct()
+    return sorted(set(registry.installed()) | set(logged))
 
 
 def _log_dir() -> Path | None:

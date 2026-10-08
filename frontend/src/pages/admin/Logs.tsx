@@ -43,8 +43,9 @@ interface SnoopEvent {
 interface ServiceLog {
   id: number;
   at: string;
-  level: "WARNING" | "ERROR" | "CRITICAL";
+  level: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
   logger: string;
+  plugin: string | null;
   message: string;
   traceback: string;
 }
@@ -55,7 +56,7 @@ interface LogFiles {
   files: { name: string; size: number; modified: string }[];
 }
 
-const LEVEL_COLORS: Record<ServiceLog["level"], string> = { WARNING: "var(--warning)", ERROR: "var(--danger)", CRITICAL: "#e11d48" };
+const LEVEL_COLORS: Record<ServiceLog["level"], string> = { DEBUG: "var(--subtle)", INFO: "var(--info)", WARNING: "var(--warning)", ERROR: "var(--danger)", CRITICAL: "#e11d48" };
 
 const ACTOR_ICONS = { user: User, api_key: Bot, system: Cpu };
 
@@ -69,7 +70,7 @@ export function AdminLogs() {
         eyebrow="Administration"
         title="Logs"
         icon={<ScrollText />}
-        description="What happened on this site and who did it, who looked at whose characters, plus warnings and errors from the server itself."
+        description="What happened on this site and who did it, who looked at whose characters, plus warnings and errors from the server itself and each plugin's own log."
       />
       <Tabs.Root defaultValue="audit">
         <Tabs.List className="mb-6 inline-flex rounded-xl border border-border bg-surface/70 p-1">
@@ -293,7 +294,14 @@ function Snooper() {
 
 // --- Service ---------------------------------------------------------------------
 
-function Service() {
+/** The service log. With `plugin` it shows just that plugin's log (Administration → Plugins → Logs). */
+export function Service({ plugin: only }: { plugin?: string } = {}) {
+  const plugins = useQuery({
+    queryKey: ["admin", "logs", "plugins"],
+    queryFn: () => api.get<string[]>("/api/admin/logs/service/plugins"),
+    enabled: !only,
+  });
+  const [plugin, setPlugin] = useState("");
   const [level, setLevel] = useState("");
   const [logger, setLogger] = useState("");
   const [q, setQ] = useState("");
@@ -303,6 +311,7 @@ function Service() {
 
   const params = new URLSearchParams();
   if (level) params.set("level", level);
+  if (plugin) params.set("plugin", plugin);
   if (loggerQ.trim()) params.set("logger", loggerQ.trim());
   if (textQ.trim()) params.set("q", textQ.trim());
 
@@ -316,17 +325,33 @@ function Service() {
         </Badge>
       ),
     },
+    ...(only ? [] : [{ header: "Plugin", cell: (l: ServiceLog) => (l.plugin ? <Badge tone="accent">{l.plugin}</Badge> : <span className="text-subtle">–</span>) }]),
     { header: "Logger", cell: (l) => <code className="whitespace-nowrap font-mono text-[11px] text-subtle">{l.logger}</code> },
     { header: "Message", className: "max-w-2xl", cell: (l) => <span className="font-mono text-xs">{l.message}</span> },
   ];
+  // Plugin logs also keep INFO messages; the core only keeps warnings and worse.
+  const levels = only || plugin ? ["", "INFO", "WARNING", "ERROR", "CRITICAL"] : ["", "WARNING", "ERROR", "CRITICAL"];
 
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <SearchInput value={q} onChange={setQ} placeholder="Search messages…" />
-        <SearchInput value={logger} onChange={setLogger} placeholder="Logger, e.g. conduit.esi" />
-        <div className="flex gap-1.5">
-          {["", "WARNING", "ERROR", "CRITICAL"].map((l) => (
+        {!only && (
+          <>
+            <SearchInput value={logger} onChange={setLogger} placeholder="Logger, e.g. conduit.esi" />
+            <Select value={plugin} onChange={setPlugin} label="Plugin">
+              <option value="">Core and plugins</option>
+              <option value="core">Core only</option>
+              {plugins.data?.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+          </>
+        )}
+        <div className="flex flex-wrap gap-1.5">
+          {levels.map((l) => (
             <FilterChip key={l} active={level === l} onClick={() => setLevel(l)}>
               {l ? l.charAt(0) + l.slice(1).toLowerCase() : "All"}
             </FilterChip>
@@ -336,12 +361,16 @@ function Service() {
       <Card className="overflow-hidden">
         <PagedTable<ServiceLog>
           key={params.toString()}
-          url="/api/admin/logs/service"
+          url={only ? `/api/admin/plugins/${encodeURIComponent(only)}/logs` : "/api/admin/logs/service"}
           params={params.toString()}
           columns={columns}
           rowKey={(l) => l.id}
           onRowClick={setOpen}
-          empty={{ icon: <Server />, title: "No warnings or errors", description: params.toString() ? "Nothing matches these filters." : "The server hasn't logged any problems." }}
+          empty={
+            only
+              ? { icon: <Server />, title: "Nothing logged yet", description: params.toString() ? "Nothing matches these filters." : "Installs, updates, switching it on and off and the plugin's own messages show up here." }
+              : { icon: <Server />, title: "No warnings or errors", description: params.toString() ? "Nothing matches these filters." : "The server hasn't logged any problems." }
+          }
         />
       </Card>
       {open && (

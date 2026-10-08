@@ -17,6 +17,9 @@ results, group rules and ESI scopes.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
+- Each plugin has its own log (Administration → Plugins → Logs) without any setup. Log with
+  `logging.getLogger(__name__)` anywhere in the plugin's package; `INFO` and up are kept
+  (`CONDUIT_PLUGIN_LOG_LEVEL`), next to its installs, updates and being switched on and off.
 
 ## Installing
 

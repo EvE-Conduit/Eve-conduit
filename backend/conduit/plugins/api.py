@@ -1,7 +1,14 @@
+from datetime import timedelta
+
+from django.db.models import Count, Q
+from django.utils import timezone
 from ninja import Router, Schema
 from ninja.errors import HttpError
 
+from conduit.audit.api import filter_service, service_out
+from conduit.audit.models import ServiceLog
 from conduit.audit.services import record
+from conduit.paging import page
 from conduit.permissions import require_perm
 
 from . import installs, registry
@@ -16,6 +23,9 @@ class ModuleOut(Schema):
     manifest: dict | None
     enabled: bool
     problems: list[str]
+    #: Warnings and errors in the plugin's log over the last 24 hours.
+    log_warnings: int
+    log_errors: int
 
 
 class ToggleIn(Schema):
@@ -27,6 +37,12 @@ class ToggleIn(Schema):
 def list_modules(request):
     sync_installed()
     on = enabled_ids()
+    counts = {
+        row["plugin"]: row
+        for row in ServiceLog.objects.filter(at__gte=timezone.now() - timedelta(hours=24)).exclude(plugin="")
+        .values("plugin")
+        .annotate(warnings=Count("id", filter=Q(level="WARNING")), errors=Count("id", filter=Q(level__in=("ERROR", "CRITICAL"))))
+    }
     return [
         {
             "id": mid,
@@ -34,6 +50,8 @@ def list_modules(request):
             "manifest": entry.plugin.manifest() if entry.ok else None,
             "enabled": mid in on,
             "problems": entry.problems,
+            "log_warnings": counts.get(mid, {}).get("warnings", 0),
+            "log_errors": counts.get(mid, {}).get("errors", 0),
         }
         for mid, entry in sorted(registry.discover().items())
     ]
@@ -50,6 +68,14 @@ def toggle_module(request, plugin_id: str, payload: ToggleIn):
            f"{'enabled' if payload.enabled else 'disabled'} plugin {plugin_id}", request=request,
            target_type="plugin", details={"plugin": plugin_id})
     return {"ok": True, "enabled": payload.enabled}
+
+
+@router.get("/plugins/{plugin_id}/logs")
+@require_perm("site.manage_plugins")
+def module_logs(request, plugin_id: str, level: str = "", q: str = "", limit: int = 50, offset: int = 0):
+    """Everything the plugin logged: its own messages from CONDUIT_PLUGIN_LOG_LEVEL up, plus installs,
+    updates and switching it on and off."""
+    return page(filter_service(ServiceLog.objects.filter(plugin=plugin_id), level, q=q), service_out, limit, offset)
 
 
 # --- installing from the catalog or git (Administration → Plugins → Browse) ------------------------------

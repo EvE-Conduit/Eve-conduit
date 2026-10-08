@@ -32,11 +32,13 @@ class AuditEvent(models.Model):
 
 
 class ServiceLog(models.Model):
-    """A warning or error the application logged (see logging.DatabaseLogHandler)."""
+    """A warning or error the application logged, or anything a plugin logged (see logging.DatabaseLogHandler)."""
 
     at = models.DateTimeField(default=timezone.now, db_index=True)
     level = models.CharField(max_length=10, db_index=True)
     logger = models.CharField(max_length=200)
+    #: Id of the plugin that logged it, "" for the core.
+    plugin = models.CharField(max_length=40, blank=True, db_index=True)
     message = models.TextField()
     traceback = models.TextField(blank=True)
 

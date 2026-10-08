@@ -18,6 +18,9 @@ export interface AdminModule {
   source: string;
   enabled: boolean;
   problems: string[];
+  /** Warnings and errors in the plugin's log over the last 24 hours. */
+  log_warnings: number;
+  log_errors: number;
   manifest: {
     name: string;
     version: string;

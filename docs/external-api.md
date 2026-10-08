@@ -65,6 +65,9 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
   duration, IP and user agent.
 - **Service log:** warnings and errors the web server and worker log (turn this off with
   `CONDUIT_SERVICE_LOG_DB=false`). The Windows install also shows its log files there.
+  Every plugin also gets its own log here, filtered by plugin and under **Administration > Plugins > Logs**: it
+  is installed, updated, switched on and off, plus everything the plugin logs from `CONDUIT_PLUGIN_LOG_LEVEL` up
+  (default `INFO`).
   Elsewhere, set `CONDUIT_LOG_DIR` to the folder holding the log files.
 
 - **ESI call log:** every request the server sends to ESI: route, character, what made the call (e.g.

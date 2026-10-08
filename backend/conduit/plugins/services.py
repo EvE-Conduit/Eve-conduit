@@ -1,5 +1,7 @@
 """Turning plugins on and off at runtime."""
 
+import logging
+
 from django.core.cache import cache
 from django.db import transaction
 
@@ -7,6 +9,12 @@ from . import registry
 from .models import PluginState
 
 CACHE_KEY = "conduit:plugins:enabled"
+log = logging.getLogger(__name__)
+
+
+def plugin_log(plugin_id: str, level: int, msg: str, *args):
+    """Write to a plugin's own log (Administration → Plugins → Logs) on its behalf."""
+    log.log(level, msg, *args, extra={"plugin": plugin_id})
 
 
 class PluginError(Exception):
@@ -44,7 +52,10 @@ def sync_installed():
         state, created = PluginState.objects.get_or_create(
             plugin_id=mid, defaults={"enabled": mod.default_enabled, "installed_version": mod.version}
         )
-        if not created and state.installed_version != mod.version:
+        if created:
+            plugin_log(mid, logging.INFO, "%s %s installed%s", mod.name, mod.version, ", switched on" if mod.default_enabled else "")
+        elif state.installed_version != mod.version:
+            plugin_log(mid, logging.INFO, "%s updated from %s to %s", mod.name, state.installed_version or "?", mod.version)
             state.installed_version = mod.version
             state.save(update_fields=["installed_version"])
     cache.delete(CACHE_KEY)
@@ -69,6 +80,8 @@ def set_enabled(plugin_id: str, enabled: bool):
         defaults={"enabled": enabled, "installed_version": installed[plugin_id].version},
     )
     cache.delete(CACHE_KEY)
+    if enabled != (plugin_id in on):
+        plugin_log(plugin_id, logging.INFO, "%s switched %s", installed[plugin_id].name, "on" if enabled else "off")
 
 
 def required_scopes() -> list[str]:
