@@ -3,6 +3,22 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.21
+
+### Added
+- **Move characters to another account.** For someone who signed up twice instead of adding an alt: Administration →
+  Members → Move characters (needs "Can manage states and groups"). Pick the characters and the member they belong to;
+  their logins and everything synced for them go along. Moving all of them merges the accounts: the old one is
+  switched off (it can't sign in), leaves its groups and drops off the member list, and its history stays for the
+  record. States, compliance and smart groups are re-checked for both.
+  - Whoever owns a character signs in to the account that holds it, so you can only move characters into an account
+    whose permissions you hold yourself, and only administrators can move characters to or from an administrator.
+  - New webhook events: **Character moved** and **Accounts merged**.
+
+### Plugins
+- **Discord 1.1.1:** when accounts are merged, the old account's Discord link moves to the main one (if it has none;
+  otherwise the old account's roles are taken away).
+
 ## 0.5.20
 
 ### Added
