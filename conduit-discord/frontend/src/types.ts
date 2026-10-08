@@ -9,6 +9,8 @@ export interface Account {
   error: string;
   nickname: string;
   roles: string[];
+  /** On the server at the last sync. */
+  on_server: boolean;
 }
 
 export interface Me {
@@ -40,6 +42,7 @@ export interface Admin {
     guild_name: string;
     nickname_format: string;
     kick_without_access: boolean;
+    require_for_compliance: boolean;
     configured: boolean;
     last_full_sync: string | null;
   };
@@ -66,8 +69,20 @@ export interface Check {
   problems: string[];
 }
 
+export interface LinkedCharacter {
+  id: number;
+  name: string;
+  portrait: string;
+  main: boolean;
+  corporation: string | null;
+  /** Whether you may open its character sheet. Alts you may not are left out. */
+  viewable: boolean;
+}
+
 export interface LinkedMember extends Account {
   user: { id: number; name: string; portrait: string };
   has_access: boolean;
   role_names: string[];
+  /** Main first, then the alts you're allowed to see. */
+  characters?: LinkedCharacter[];
 }

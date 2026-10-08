@@ -6,13 +6,15 @@ from conduit.plugins import NavItem, Plugin
 class DiscordPlugin(Plugin):
     id = "discord"
     name = "Discord"
-    version = "1.0.4"
+    version = "1.1.0"
     description = "Members link their Discord account and join your server; roles and nicknames follow their groups and state."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-discord"
     app = "conduit_discord.apps.DiscordConfig"
     api = "conduit_discord.api:router"
     frontend = "conduit_discord/plugin.js"
+    # "Must be on the Discord server" (a setting) as part of compliance (EvE Conduit 0.5.20+).
+    compliance = ("conduit_discord.services:compliance_problems",)
     # Where its permissions show in Administration's permission picker (EvE Conduit 0.5.19+).
     permission_tiers = {"access_discord": "member", "manage_discord": "director"}
     nav = (NavItem("Discord", "", "message-square"),)

@@ -13,6 +13,14 @@ groups, state and main character.
   bot's own). Map groups and states to Discord roles, and see every linked member with their roles and the last
   sync result, with sync, unlink and kick (an administrator can force an unlink while Discord is unreachable; the
   roles then stay on Discord).
+- **Mains and alts:** each linked member shows their main character and their alts, and the search finds a Discord
+  account from any of those character names. Alts are only listed for people who may open those characters' sheets
+  (the core `sheet.view_*` permissions; administrators see everyone's), so managing Discord doesn't reveal whose alt
+  is whose.
+- **Must be on the Discord server to be compliant** (a setting under Setup, off by default; needs EvE Conduit
+  0.5.20+): members who may link Discord count as not compliant until they've linked it, and while they're not on
+  the server. It shows on Administration → Compliance, in their notification, and in the Compliant group rule, so a
+  smart group can depend on it. Leaving the server is noticed at the next sync (at most 6 hours later).
 
 How syncing works:
 

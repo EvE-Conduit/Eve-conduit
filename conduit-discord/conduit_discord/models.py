@@ -20,6 +20,9 @@ class DiscordSettings(models.Model):
     nickname_format = models.CharField(max_length=100, default="[{corp_ticker}] {character}", blank=True)
     #: Remove people from the server once they lose access, instead of only taking the roles away.
     kick_without_access = models.BooleanField(default=False)
+    #: Members who may link Discord must be on the server to count as compliant (Administration → Compliance and the
+    #: Compliant group rule). Needs EvE Conduit 0.5.20 or newer.
+    require_for_compliance = models.BooleanField(default=False)
     last_full_sync = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -68,6 +71,8 @@ class DiscordAccount(models.Model):
     #: The mapped roles the member had at the last sync.
     roles = models.JSONField(default=list, blank=True)
     nickname = models.CharField(max_length=32, blank=True)
+    #: Whether they were on the server at the last sync (every 6 hours, on group changes and on Fix my roles).
+    on_server = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["username"]
