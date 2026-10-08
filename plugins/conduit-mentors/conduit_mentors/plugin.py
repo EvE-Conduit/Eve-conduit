@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class MentorsPlugin(Plugin):
     id = "mentors"
     name = "Mentoring"
-    version = "1.0.3"
+    version = "1.1.0"
     description = "New members ask for a mentor; mentors guide them through goals that tick themselves, with a thread, notes and graduation."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-mentors"

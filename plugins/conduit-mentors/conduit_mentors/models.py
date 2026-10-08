@@ -79,7 +79,7 @@ class Mentorship(models.Model):
 
 
 class Goal(models.Model):
-    """Something every mentee works toward. With a rule set it ticks itself; without, the mentor ticks it."""
+    """Something mentees work toward. With a rule set it ticks itself; without, the mentor ticks it."""
 
     title = models.CharField(max_length=150)
     description = models.TextField(blank=True)
@@ -87,6 +87,8 @@ class Goal(models.Model):
     rules = models.JSONField(default=dict, blank=True)
     #: The mentee may tick it themselves (goals without rules only).
     mentee_can_tick = models.BooleanField(default=False)
+    #: Only for mentees who asked for help with one of these focus areas; empty means every mentee.
+    focus = models.JSONField(default=list, blank=True)
     order = models.IntegerField(default=0)
 
     class Meta:
