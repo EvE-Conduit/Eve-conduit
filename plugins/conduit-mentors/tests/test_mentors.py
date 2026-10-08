@@ -234,6 +234,37 @@ def test_graduation_and_ending(people, api_client, monkeypatch):
     assert len(login(api_client, newbro).call("get", BASE).json()["past"]) == 2
 
 
+def test_managers_see_graduates_and_reopen(people, api_client):
+    newbro, mentor, manager = people["newbro"], people["mentor"], people["manager"]
+    m = services.assign(services.request_mentor(newbro), mentor, mentor)
+    services.graduate(m, mentor, "Well done")
+    c = login(api_client, manager)
+    graduates = c.call("get", f"{BASE}/program?status=graduated").json()["mentorships"]
+    assert [(g["mentee"]["name"], g["mentor"]["name"]) for g in graduates] == [("New Bro", "Mentor Mia")] and graduates[0]["ended_at"]
+    # Only program managers reopen, and only what's closed.
+    assert login(api_client, mentor).call("get", f"{BASE}/m/{m.pk}").json()["can"]["reopen"] is False
+    assert login(api_client, mentor).call("post", f"{BASE}/m/{m.pk}/reopen").status_code == 403
+    c = login(api_client, manager)
+    assert c.call("get", f"{BASE}/m/{m.pk}").json()["can"]["reopen"] is True
+    out = c.call("post", f"{BASE}/m/{m.pk}/reopen").json()
+    assert out["status"] == "active" and out["mentor"]["name"] == "Mentor Mia" and out["ended_at"] is None and out["end_reason"] == ""
+    assert out["messages"][-1]["event"] == "reopened"
+    assert Notification.objects.filter(user=newbro, title="Your mentorship is open again").exists()
+    assert Notification.objects.filter(user=mentor, title="You're mentoring New Bro again").exists()
+    assert c.call("post", f"{BASE}/m/{m.pk}/reopen").status_code == 400  # already open
+    # Not while the mentee has another one open.
+    m.refresh_from_db()
+    services.end(m, manager, "Left")
+    services.request_mentor(newbro)
+    assert c.call("get", f"{BASE}/m/{m.pk}").json()["can"]["reopen"] is False
+    assert c.call("post", f"{BASE}/m/{m.pk}/reopen").status_code == 400
+    # A mentor who stopped mentoring doesn't get them back: they wait for a new one.
+    Mentorship.objects.filter(mentee=newbro, status="waiting").delete()
+    mentor.user_permissions.clear()
+    out = c.call("post", f"{BASE}/m/{m.pk}/reopen").json()
+    assert out["status"] == "waiting" and out["mentor"] is None
+
+
 def test_rule_edits_need_manage_access(people, api_client):
     manager = people["manager"]
     sp_rules = {"rules": [{"type": "total_sp", "params": {"sp": 1000}}]}

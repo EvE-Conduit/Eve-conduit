@@ -1,7 +1,7 @@
-import { Alert as e, Avatar as t, Badge as n, Button as r, Card as i, CardBody as a, CardHeader as o, ConfirmDialog as s, Dialog as c, EmptyState as l, Field as u, Input as d, PageHeader as f, Progress as p, RuleSetEditor as m, Segmented as h, Select as g, Skeleton as _, StatCard as v, Switch as y, THead as b, TabPanel as x, Table as S, Tabs as C, Td as w, Textarea as T, Th as E, Tr as D, api as O, cn as k, date as A, definePlugin as j, timeAgo as M, toast as N } from "@conduit/sdk";
-import { useMutation as P, useQuery as F, useQueryClient as I } from "@tanstack/react-query";
-import { Link as L, useNavigate as R, useParams as ee } from "react-router";
-import { useEffect as te, useState as z } from "react";
+import { Alert as e, Avatar as t, Badge as n, Button as r, Card as i, CardBody as a, CardHeader as o, ConfirmDialog as s, Dialog as c, EmptyState as l, Field as u, Input as d, PageHeader as f, Progress as p, RuleSetEditor as m, Segmented as h, Select as g, Skeleton as _, StatCard as v, Switch as y, THead as b, TabPanel as x, Table as S, Tabs as C, Td as w, Textarea as T, Th as E, Tr as D, api as O, cn as k, date as A, definePlugin as ee, timeAgo as j, toast as M } from "@conduit/sdk";
+import { useMutation as N, useQuery as P, useQueryClient as F } from "@tanstack/react-query";
+import { Link as I, useNavigate as L, useParams as te } from "react-router";
+import { useEffect as R, useState as z } from "react";
 import { Fragment as B, jsx as V, jsxs as H } from "react/jsx-runtime";
 //#region src/icons.tsx
 function U({ children: e, className: t = "size-4" }) {
@@ -88,11 +88,14 @@ var W = (e) => /* @__PURE__ */ H(U, {
 	children: /* @__PURE__ */ V("path", { d: "m6 9 6 6 6-6" })
 }), de = (e) => /* @__PURE__ */ H(U, {
 	...e,
+	children: [/* @__PURE__ */ V("path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" }), /* @__PURE__ */ V("path", { d: "M3 3v5h5" })]
+}), fe = (e) => /* @__PURE__ */ H(U, {
+	...e,
 	children: [/* @__PURE__ */ V("path", { d: "m12 19-7-7 7-7" }), /* @__PURE__ */ V("path", { d: "M19 12H5" })]
-}), fe = (e) => /* @__PURE__ */ V(U, {
+}), pe = (e) => /* @__PURE__ */ V(U, {
 	...e,
 	children: /* @__PURE__ */ V("path", { d: "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" })
-}), pe = (e) => /* @__PURE__ */ H(U, {
+}), me = (e) => /* @__PURE__ */ H(U, {
 	...e,
 	children: [
 		/* @__PURE__ */ V("path", { d: "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" }),
@@ -173,7 +176,7 @@ function Q({ done: e, total: t }) {
 		})]
 	});
 }
-function me({ goals: e, canTick: t, onTick: r }) {
+function he({ goals: e, canTick: t, onTick: r }) {
 	return e.length === 0 ? /* @__PURE__ */ V("p", {
 		className: "text-sm text-muted",
 		children: "The program has no goals yet."
@@ -223,7 +226,7 @@ function me({ goals: e, canTick: t, onTick: r }) {
 							children: [
 								"Ticked by ",
 								e.done_by,
-								e.done_at && `, ${M(e.done_at)}`
+								e.done_at && `, ${j(e.done_at)}`
 							]
 						})
 					]
@@ -237,16 +240,17 @@ var $ = {
 	assigned: "",
 	withdrawn: "withdrew the request",
 	graduated: "graduated them",
-	ended: "ended the mentorship"
+	ended: "ended the mentorship",
+	reopened: "reopened the mentorship"
 };
-function he({ messages: e, staff: i, onSend: a, disabled: o }) {
+function ge({ messages: e, staff: i, onSend: a, disabled: o }) {
 	let [s, c] = z(""), [l, u] = z(!1), [d, f] = z(!1), p = async () => {
 		if (s.trim()) {
 			f(!0);
 			try {
 				await a(s, l), c("");
 			} catch (e) {
-				N.error(e instanceof Error ? e.message : "Couldn't send");
+				M.error(e instanceof Error ? e.message : "Couldn't send");
 			} finally {
 				f(!1);
 			}
@@ -279,7 +283,7 @@ function he({ messages: e, staff: i, onSend: a, disabled: o }) {
 							}),
 							" ",
 							"· ",
-							M(e.created_at),
+							j(e.created_at),
 							(e.event === "graduated" || e.event === "ended") && e.text && e.text !== "Graduated" && /* @__PURE__ */ H("span", {
 								className: "block italic",
 								children: [
@@ -309,7 +313,7 @@ function he({ messages: e, staff: i, onSend: a, disabled: o }) {
 							}),
 							/* @__PURE__ */ V("span", {
 								className: "text-subtle",
-								children: M(e.created_at)
+								children: j(e.created_at)
 							}),
 							e.private && /* @__PURE__ */ H(n, {
 								tone: "warning",
@@ -358,12 +362,26 @@ function he({ messages: e, staff: i, onSend: a, disabled: o }) {
 		})]
 	});
 }
+function _e({ mentorship: e, onClose: t, onDone: n }) {
+	return /* @__PURE__ */ V(s, {
+		open: e !== null,
+		onOpenChange: (e) => !e && t(),
+		title: `Reopen ${e?.mentee.name}'s mentorship?`,
+		description: e?.mentor ? `It goes back to ${e.mentor.name}, if they still mentor (otherwise back on the waiting list), with the goals ticked so far and the thread. Both are told.` : "It goes back on the waiting list, with the goals ticked so far and the thread. They're told.",
+		confirmLabel: "Reopen",
+		onConfirm: () => O.post(`${J}/m/${e.id}/reopen`).then((e) => {
+			M.success(`${e.mentee.name}'s mentorship is open again`), n(e);
+		}, (e) => {
+			throw M.error(e.message), e;
+		})
+	});
+}
 //#endregion
 //#region src/home.tsx
-var ge = ["mentors", "overview"];
-function _e() {
-	let { data: e, isLoading: t } = F({
-		queryKey: ge,
+var ve = ["mentors", "overview"];
+function ye() {
+	let { data: e, isLoading: t } = P({
+		queryKey: ve,
 		queryFn: () => O.get(J)
 	});
 	return t || !e ? /* @__PURE__ */ V(_, { className: "h-96" }) : /* @__PURE__ */ H(B, { children: [/* @__PURE__ */ V(f, {
@@ -371,27 +389,27 @@ function _e() {
 		title: "Mentoring",
 		icon: /* @__PURE__ */ V(W, {}),
 		description: "New members get a mentor to show them the ropes, with goals to work through together.",
-		actions: e.can_manage ? /* @__PURE__ */ V(L, {
+		actions: e.can_manage ? /* @__PURE__ */ V(I, {
 			to: "/p/mentors/program",
 			children: /* @__PURE__ */ H(r, { children: [/* @__PURE__ */ V(q, {}), " Program"] })
 		}) : void 0
 	}), /* @__PURE__ */ H("div", {
 		className: "space-y-6",
 		children: [
-			e.mine ? /* @__PURE__ */ V(ve, { m: e.mine }) : /* @__PURE__ */ V(ye, { data: e }),
-			e.is_mentor && e.profile && /* @__PURE__ */ V(xe, {
+			e.mine ? /* @__PURE__ */ V(be, { m: e.mine }) : /* @__PURE__ */ V(xe, { data: e }),
+			e.is_mentor && e.profile && /* @__PURE__ */ V(Ce, {
 				data: e,
 				profile: e.profile
 			}),
-			!e.is_mentor && e.can_manage && e.waiting && e.waiting.length > 0 && /* @__PURE__ */ V(Ce, {
+			!e.is_mentor && e.can_manage && e.waiting && e.waiting.length > 0 && /* @__PURE__ */ V(Te, {
 				rows: e.waiting,
 				focus: []
 			}),
-			e.past.length > 0 && /* @__PURE__ */ V(Te, { rows: e.past })
+			e.past.length > 0 && /* @__PURE__ */ V(De, { rows: e.past })
 		]
 	})] });
 }
-function ve({ m: e }) {
+function be({ m: e }) {
 	return /* @__PURE__ */ H(i, { children: [/* @__PURE__ */ V(o, {
 		title: "Your mentorship",
 		actions: /* @__PURE__ */ V(X, { status: e.status })
@@ -423,7 +441,7 @@ function ve({ m: e }) {
 				children: [
 					e.requested_mentor ? `You asked for ${e.requested_mentor.name}.` : "You asked for any mentor.",
 					" Mentors have been told; you'll get a notification when one takes you on. You asked ",
-					M(e.created_at),
+					j(e.created_at),
 					"."
 				]
 			}),
@@ -431,7 +449,7 @@ function ve({ m: e }) {
 				className: "min-w-48 flex-1",
 				children: /* @__PURE__ */ V(Q, { ...e.progress })
 			}),
-			/* @__PURE__ */ V(L, {
+			/* @__PURE__ */ V(I, {
 				to: `/p/mentors/m/${e.id}`,
 				className: "ml-auto",
 				children: /* @__PURE__ */ V(r, {
@@ -442,8 +460,8 @@ function ve({ m: e }) {
 		]
 	})] });
 }
-function ye({ data: t }) {
-	let n = I(), s = R(), [c, l] = z([]), [f, p] = z(""), [m, h] = z(""), [g, _] = z(null), v = P({
+function xe({ data: t }) {
+	let n = F(), s = L(), [c, l] = z([]), [f, p] = z(""), [m, h] = z(""), [g, _] = z(null), v = N({
 		mutationFn: () => O.post(`${J}/request`, {
 			focus: c,
 			note: f,
@@ -451,13 +469,13 @@ function ye({ data: t }) {
 			mentor_id: g
 		}),
 		onSuccess: (e) => {
-			n.invalidateQueries({ queryKey: ["mentors"] }), N.success("Mentors have been told"), s(`/p/mentors/m/${e.id}`);
+			n.invalidateQueries({ queryKey: ["mentors"] }), M.success("Mentors have been told"), s(`/p/mentors/m/${e.id}`);
 		},
-		onError: (e) => N.error(e.message)
+		onError: (e) => M.error(e.message)
 	});
 	return /* @__PURE__ */ H(i, { children: [/* @__PURE__ */ V(o, {
 		title: "Get a mentor",
-		icon: t.suggested ? /* @__PURE__ */ V(pe, {}) : void 0,
+		icon: t.suggested ? /* @__PURE__ */ V(me, {}) : void 0,
 		description: "A mentor is an experienced member who helps you find your feet: fitting ships, fleets, making ISK and who's who."
 	}), /* @__PURE__ */ H(a, {
 		className: "space-y-5",
@@ -499,12 +517,12 @@ function ye({ data: t }) {
 				hint: t.mentors.length ? "Pick someone, or leave it to whoever is free." : "Nobody has free places right now; ask anyway and a mentor will pick you up.",
 				children: /* @__PURE__ */ H("div", {
 					className: "grid gap-2 sm:grid-cols-2 xl:grid-cols-3",
-					children: [/* @__PURE__ */ V(be, {
+					children: [/* @__PURE__ */ V(Se, {
 						selected: g === null,
 						onSelect: () => _(null),
 						title: "Anyone",
 						subtitle: "The first mentor free takes you on"
-					}), t.mentors.map((e) => /* @__PURE__ */ V(be, {
+					}), t.mentors.map((e) => /* @__PURE__ */ V(Se, {
 						selected: g === e.id,
 						onSelect: () => _(e.id),
 						mentor: e
@@ -523,7 +541,7 @@ function ye({ data: t }) {
 		]
 	})] });
 }
-function be({ selected: e, onSelect: n, mentor: r, title: i, subtitle: a }) {
+function Se({ selected: e, onSelect: n, mentor: r, title: i, subtitle: a }) {
 	return /* @__PURE__ */ H("button", {
 		type: "button",
 		onClick: n,
@@ -561,9 +579,9 @@ function be({ selected: e, onSelect: n, mentor: r, title: i, subtitle: a }) {
 		})]
 	});
 }
-function xe({ data: e, profile: t }) {
+function Ce({ data: e, profile: t }) {
 	return /* @__PURE__ */ H(B, { children: [
-		/* @__PURE__ */ V(Se, {
+		/* @__PURE__ */ V(we, {
 			areas: e.focus_areas,
 			profile: t
 		}),
@@ -571,22 +589,22 @@ function xe({ data: e, profile: t }) {
 			icon: /* @__PURE__ */ V(W, {}),
 			title: "No mentees yet",
 			description: "Claim someone from the waiting list below."
-		}) : /* @__PURE__ */ V(we, { rows: e.mentees ?? [] })] }),
-		/* @__PURE__ */ V(Ce, {
+		}) : /* @__PURE__ */ V(Ee, { rows: e.mentees ?? [] })] }),
+		/* @__PURE__ */ V(Te, {
 			rows: e.waiting ?? [],
 			focus: t.focus
 		})
 	] });
 }
-function Se({ areas: e, profile: t }) {
-	let n = I(), [s, c] = z(t);
-	te(() => c(t), [t]);
-	let l = P({
+function we({ areas: e, profile: t }) {
+	let n = F(), [s, c] = z(t);
+	R(() => c(t), [t]);
+	let l = N({
 		mutationFn: (e) => O.put(`${J}/profile`, e),
 		onSuccess: () => {
-			n.invalidateQueries({ queryKey: ["mentors"] }), N.success("Profile saved");
+			n.invalidateQueries({ queryKey: ["mentors"] }), M.success("Profile saved");
 		},
-		onError: (e) => N.error(e.message)
+		onError: (e) => M.error(e.message)
 	}), f = (e) => c((t) => ({
 		...t,
 		...e
@@ -659,8 +677,8 @@ function Se({ areas: e, profile: t }) {
 		})]
 	})] });
 }
-function Ce({ rows: e, focus: r }) {
-	let a = R(), [s, c] = z(!1), u = s ? e.filter((e) => e.for_me || e.matches > 0) : e;
+function Te({ rows: e, focus: r }) {
+	let a = L(), [s, c] = z(!1), u = s ? e.filter((e) => e.for_me || e.matches > 0) : e;
 	return /* @__PURE__ */ H(i, { children: [/* @__PURE__ */ V(o, {
 		title: `Waiting for a mentor · ${e.length}`,
 		description: "Open one to read what they asked for and take them on.",
@@ -717,13 +735,13 @@ function Ce({ rows: e, focus: r }) {
 			/* @__PURE__ */ V(w, {
 				align: "right",
 				className: "text-xs text-muted",
-				children: M(e.created_at)
+				children: j(e.created_at)
 			})
 		]
 	}, e.id)) })] })] });
 }
-function we({ rows: e, showMentor: n }) {
-	let r = R();
+function Ee({ rows: e, showMentor: n }) {
+	let r = L();
 	return /* @__PURE__ */ H(S, { children: [/* @__PURE__ */ V(b, { children: /* @__PURE__ */ H("tr", { children: [
 		/* @__PURE__ */ V(E, { children: "Mentee" }),
 		n && /* @__PURE__ */ V(E, { children: "Mentor" }),
@@ -763,21 +781,21 @@ function we({ rows: e, showMentor: n }) {
 			/* @__PURE__ */ V(w, {
 				align: "right",
 				className: "text-xs text-muted",
-				children: M(e.ended_at ?? e.assigned_at ?? e.created_at)
+				children: j(e.ended_at ?? e.assigned_at ?? e.created_at)
 			})
 		]
 	}, e.id)) })] });
 }
-function Te({ rows: e }) {
+function De({ rows: e }) {
 	return /* @__PURE__ */ H(i, { children: [/* @__PURE__ */ V(o, { title: "Your earlier mentorships" }), /* @__PURE__ */ V("ul", {
 		className: "divide-y divide-border",
-		children: e.map((e) => /* @__PURE__ */ V("li", { children: /* @__PURE__ */ H(L, {
+		children: e.map((e) => /* @__PURE__ */ V("li", { children: /* @__PURE__ */ H(I, {
 			to: `/p/mentors/m/${e.id}`,
 			className: "flex items-center justify-between gap-3 px-card py-3 text-sm hover:bg-hover",
 			children: [/* @__PURE__ */ V("span", { children: e.mentor ? `With ${e.mentor.name}` : "No mentor" }), /* @__PURE__ */ H("span", {
 				className: "flex items-center gap-3 text-xs text-muted",
 				children: [
-					e.ended_at && M(e.ended_at),
+					e.ended_at && j(e.ended_at),
 					" ",
 					/* @__PURE__ */ V(X, { status: e.status })
 				]
@@ -787,61 +805,61 @@ function Te({ rows: e }) {
 }
 //#endregion
 //#region src/mentorship.tsx
-function Ee() {
-	let { id: s } = ee(), d = I(), p = [
+function Oe() {
+	let { id: s } = te(), d = F(), p = [
 		"mentors",
 		"mentorship",
 		s
-	], { data: m, isLoading: h, error: g } = F({
+	], { data: m, isLoading: h, error: g } = P({
 		queryKey: p,
 		queryFn: () => O.get(`${J}/m/${s}`)
-	}), [v, y] = z(null), [b, x] = z(""), S = (e) => {
+	}), [v, y] = z(null), [b, x] = z(!1), [S, C] = z(""), w = (e) => {
 		d.setQueryData(p, e), d.invalidateQueries({ queryKey: ["mentors", "overview"] }), d.invalidateQueries({ queryKey: ["mentors", "program"] }), d.invalidateQueries({ queryKey: ["mentors", "widget"] });
-	}, C = (e) => N.error(e.message), w = P({
+	}, E = (e) => M.error(e.message), D = N({
 		mutationFn: () => O.post(`${J}/m/${s}/claim`),
 		onSuccess: (e) => {
-			S(e), N.success(`You're now mentoring ${e.mentee.name}`);
+			w(e), M.success(`You're now mentoring ${e.mentee.name}`);
 		},
-		onError: C
-	}), E = P({
+		onError: E
+	}), k = N({
 		mutationFn: () => O.post(`${J}/m/${s}/withdraw`),
-		onSuccess: S,
-		onError: C
-	}), D = P({
+		onSuccess: w,
+		onError: E
+	}), ee = N({
 		mutationFn: ({ g: e, done: t }) => O.post(`${J}/m/${s}/goals/${e.id}`, { done: t }),
-		onSuccess: S,
-		onError: C
-	}), k = P({
-		mutationFn: () => O.post(`${J}/m/${s}/${v}`, { text: b }),
+		onSuccess: w,
+		onError: E
+	}), j = N({
+		mutationFn: () => O.post(`${J}/m/${s}/${v}`, { text: S }),
 		onSuccess: (e) => {
-			S(e), y(null), x(""), N.success(e.status === "graduated" ? `${e.mentee.name} graduated` : "Mentorship ended");
+			w(e), y(null), C(""), M.success(e.status === "graduated" ? `${e.mentee.name} graduated` : "Mentorship ended");
 		},
-		onError: C
+		onError: E
 	});
 	if (g) return /* @__PURE__ */ V(l, {
 		icon: /* @__PURE__ */ V(W, {}),
 		title: "Mentorship not found",
-		action: /* @__PURE__ */ V(L, {
+		action: /* @__PURE__ */ V(I, {
 			to: "/p/mentors",
 			children: /* @__PURE__ */ V(r, { children: "Back to mentoring" })
 		})
 	});
 	if (h || !m) return /* @__PURE__ */ V(_, { className: "h-96" });
-	let j = m.role === "mentor" || m.role === "manager", M = m.goals.length > 0 && m.goals.every((e) => e.done), R = [
+	let L = m.role === "mentor" || m.role === "manager", R = m.goals.length > 0 && m.goals.every((e) => e.done), U = [
 		`Asked ${A(m.created_at)}`,
 		m.assigned_at && `mentored since ${A(m.assigned_at)}`,
 		m.ended_at && `${m.status === "graduated" ? "graduated" : "ended"} ${A(m.ended_at)}`
 	].filter(Boolean).join(" · ");
 	return /* @__PURE__ */ H(B, { children: [
-		/* @__PURE__ */ H(L, {
+		/* @__PURE__ */ H(I, {
 			to: "/p/mentors",
 			className: "mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text",
-			children: [/* @__PURE__ */ V(de, {}), " Mentoring"]
+			children: [/* @__PURE__ */ V(fe, {}), " Mentoring"]
 		}),
 		/* @__PURE__ */ V(f, {
 			eyebrow: "Mentorship",
 			title: m.role === "mentee" ? "Your mentorship" : m.mentee.name,
-			description: R,
+			description: U,
 			icon: m.mentee.portrait ? /* @__PURE__ */ V("img", {
 				src: m.mentee.portrait,
 				alt: "",
@@ -853,15 +871,15 @@ function Ee() {
 					/* @__PURE__ */ V(X, { status: m.status }),
 					m.can.withdraw && /* @__PURE__ */ H(r, {
 						variant: "ghost",
-						loading: E.isPending,
-						onClick: () => E.mutate(),
+						loading: k.isPending,
+						onClick: () => k.mutate(),
 						children: [/* @__PURE__ */ V(K, {}), " Withdraw"]
 					}),
 					m.can.claim && /* @__PURE__ */ H(r, {
 						variant: "primary",
-						loading: w.isPending,
-						onClick: () => w.mutate(),
-						children: [!w.isPending && /* @__PURE__ */ V(ae, {}), " Take them on"]
+						loading: D.isPending,
+						onClick: () => D.mutate(),
+						children: [!D.isPending && /* @__PURE__ */ V(ae, {}), " Take them on"]
 					}),
 					m.can.end && /* @__PURE__ */ H(r, {
 						variant: "danger",
@@ -872,6 +890,10 @@ function Ee() {
 						variant: "primary",
 						onClick: () => y("graduate"),
 						children: [/* @__PURE__ */ V(W, {}), " Graduate"]
+					}),
+					m.can.reopen && /* @__PURE__ */ H(r, {
+						onClick: () => x(!0),
+						children: [/* @__PURE__ */ V(de, {}), " Reopen"]
 					})
 				]
 			})
@@ -881,7 +903,7 @@ function Ee() {
 			children: [/* @__PURE__ */ H("div", {
 				className: "space-y-6",
 				children: [
-					m.can.graduate && M && /* @__PURE__ */ H(e, {
+					m.can.graduate && R && /* @__PURE__ */ H(e, {
 						tone: "success",
 						title: "Every goal is done",
 						action: /* @__PURE__ */ H(r, {
@@ -896,26 +918,26 @@ function Ee() {
 						description: m.role === "mentee" ? "Goals that tick themselves update as you go; your mentor ticks the rest." : "Goals with rules tick themselves; tick the others when they're done."
 					}), /* @__PURE__ */ H(a, {
 						className: "space-y-3",
-						children: [/* @__PURE__ */ V(Q, { ...m.progress }), /* @__PURE__ */ V(me, {
+						children: [/* @__PURE__ */ V(Q, { ...m.progress }), /* @__PURE__ */ V(he, {
 							goals: m.goals,
 							canTick: (e) => m.status === "active" && (m.can.tick || m.role === "mentee" && e.mentee_can_tick && !e.auto),
-							onTick: (e, t) => D.mutate({
+							onTick: (e, t) => ee.mutate({
 								g: e,
 								done: t
 							})
 						})]
 					})] }),
 					m.role !== "candidate" && /* @__PURE__ */ H(i, { children: [/* @__PURE__ */ V(o, {
-						title: j ? "Messages and notes" : "Messages",
-						description: j ? "Private notes are only for mentors and program managers." : void 0
-					}), /* @__PURE__ */ V(a, { children: /* @__PURE__ */ V(he, {
+						title: L ? "Messages and notes" : "Messages",
+						description: L ? "Private notes are only for mentors and program managers." : void 0
+					}), /* @__PURE__ */ V(a, { children: /* @__PURE__ */ V(ge, {
 						messages: m.messages,
 						staff: m.can.private_notes,
 						disabled: !m.can.message,
 						onSend: (e, t) => O.post(`/api/p/mentors/m/${s}/messages`, {
 							text: e,
 							private: t
-						}).then(S)
+						}).then(w)
 					}) })] })
 				]
 			}), /* @__PURE__ */ H("div", {
@@ -950,10 +972,10 @@ function Ee() {
 					}) : /* @__PURE__ */ V("p", {
 						className: "text-sm text-muted",
 						children: m.requested_mentor ? `Asked for ${m.requested_mentor.name}.` : "Waiting for any mentor."
-					}), m.can.assign && /* @__PURE__ */ V(De, {
+					}), m.can.assign && /* @__PURE__ */ V(ke, {
 						id: m.id,
 						current: m.mentor?.id ?? null,
-						onDone: S
+						onDone: w
 					})] })] }),
 					/* @__PURE__ */ H(i, { children: [/* @__PURE__ */ V(o, { title: "What they asked for" }), /* @__PURE__ */ H(a, {
 						className: "space-y-3 text-sm",
@@ -1013,7 +1035,7 @@ function Ee() {
 										children: [e.corporation, e.total_sp == null ? null : `${(e.total_sp / 1e6).toFixed(1)}M SP`].filter(Boolean).join(" · ") || "—"
 									})]
 								}),
-								m.sheet_access && /* @__PURE__ */ V(L, {
+								m.sheet_access && /* @__PURE__ */ V(I, {
 									to: `/characters/${e.id}`,
 									target: "_blank",
 									className: "text-subtle hover:text-text",
@@ -1037,37 +1059,42 @@ function Ee() {
 				children: "Cancel"
 			}), /* @__PURE__ */ V(r, {
 				variant: v === "graduate" ? "primary" : "solidDanger",
-				loading: k.isPending,
-				disabled: v === "end" && !b.trim(),
-				onClick: () => k.mutate(),
+				loading: j.isPending,
+				disabled: v === "end" && !S.trim(),
+				onClick: () => j.mutate(),
 				children: v === "graduate" ? /* @__PURE__ */ H(B, { children: [/* @__PURE__ */ V(G, {}), " Graduate"] }) : /* @__PURE__ */ H(B, { children: [/* @__PURE__ */ V(K, {}), " End"] })
 			})] }),
 			children: /* @__PURE__ */ V(u, {
 				label: v === "graduate" ? "A message to them (optional)" : "Why does it end?",
 				children: /* @__PURE__ */ V(T, {
 					rows: 3,
-					value: b,
-					onChange: (e) => x(e.target.value),
+					value: S,
+					onChange: (e) => C(e.target.value),
 					placeholder: v === "graduate" ? "Well done! You're ready for the big fleets now." : "They left the corporation."
 				})
 			})
+		}),
+		/* @__PURE__ */ V(_e, {
+			mentorship: b ? m : null,
+			onClose: () => x(!1),
+			onDone: w
 		})
 	] });
 }
-function De({ id: e, current: t, onDone: n }) {
-	let { data: i } = F({
+function ke({ id: e, current: t, onDone: n }) {
+	let { data: i } = P({
 		queryKey: [
 			"mentors",
 			"program",
 			"open"
 		],
 		queryFn: () => O.get(`${J}/program?status=open`)
-	}), [a, o] = z(""), s = P({
+	}), [a, o] = z(""), s = N({
 		mutationFn: () => O.post(`${J}/m/${e}/assign`, { mentor_id: Number(a) }),
 		onSuccess: (e) => {
-			n(e), o(""), N.success(`${e.mentor?.name} is the mentor now`);
+			n(e), o(""), M.success(`${e.mentor?.name} is the mentor now`);
 		},
-		onError: (e) => N.error(e.message)
+		onError: (e) => M.error(e.message)
 	}), c = (i?.mentors ?? []).filter((e) => e.id !== t);
 	return /* @__PURE__ */ H("div", {
 		className: "mt-4 flex items-end gap-2 border-t border-border pt-4",
@@ -1103,7 +1130,7 @@ function De({ id: e, current: t, onDone: n }) {
 }
 //#endregion
 //#region src/program.tsx
-var Oe = [
+var Ae = [
 	{
 		value: "open",
 		label: "Open"
@@ -1125,8 +1152,8 @@ var Oe = [
 		label: "Ended"
 	}
 ];
-function ke() {
-	let [e, t] = z("open"), { data: n, isLoading: r } = F({
+function je() {
+	let [e, t] = z("open"), { data: n, isLoading: r } = P({
 		queryKey: [
 			"mentors",
 			"program",
@@ -1135,16 +1162,16 @@ function ke() {
 		queryFn: () => O.get(`${J}/program?status=${e}`)
 	});
 	return /* @__PURE__ */ H(B, { children: [
-		/* @__PURE__ */ H(L, {
+		/* @__PURE__ */ H(I, {
 			to: "/p/mentors",
 			className: "mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text",
-			children: [/* @__PURE__ */ V(de, {}), " Mentoring"]
+			children: [/* @__PURE__ */ V(fe, {}), " Mentoring"]
 		}),
 		/* @__PURE__ */ V(f, {
 			eyebrow: "Mentoring",
 			title: "Program",
 			icon: /* @__PURE__ */ V(q, {}),
-			description: "Every mentorship, how busy the mentors are, the goals mentees work through, and settings."
+			description: "Every mentorship, who graduated, how busy the mentors are, the goals mentees work through, and settings."
 		}),
 		r || !n ? /* @__PURE__ */ V(_, { className: "h-96" }) : /* @__PURE__ */ H("div", {
 			className: "space-y-6",
@@ -1181,6 +1208,11 @@ function ke() {
 						label: "Mentorships"
 					},
 					{
+						value: "graduates",
+						label: "Graduates",
+						count: n.stats.graduated
+					},
+					{
 						value: "mentors",
 						label: "Mentors",
 						count: n.mentors.length
@@ -1204,27 +1236,32 @@ function ke() {
 							children: /* @__PURE__ */ V(h, {
 								value: e,
 								onChange: t,
-								options: Oe,
+								options: Ae,
 								size: "sm",
 								"aria-label": "Status"
 							})
 						}), n.mentorships.length === 0 ? /* @__PURE__ */ V(l, {
 							icon: /* @__PURE__ */ V(q, {}),
 							title: "Nothing here"
-						}) : /* @__PURE__ */ V(we, {
+						}) : /* @__PURE__ */ V(Ee, {
 							rows: n.mentorships,
 							showMentor: !0
 						})] })
 					}),
 					/* @__PURE__ */ V(x, {
+						value: "graduates",
+						className: "pt-4",
+						children: /* @__PURE__ */ V(Ne, {})
+					}),
+					/* @__PURE__ */ V(x, {
 						value: "mentors",
 						className: "pt-4",
-						children: /* @__PURE__ */ V(Ae, { data: n })
+						children: /* @__PURE__ */ V(Pe, { data: n })
 					}),
 					/* @__PURE__ */ V(x, {
 						value: "goals",
 						className: "pt-4",
-						children: /* @__PURE__ */ V(Me, {
+						children: /* @__PURE__ */ V(Ie, {
 							goals: n.goals,
 							focusAreas: n.settings.focus_areas,
 							canEditRules: n.can_edit_rules
@@ -1233,7 +1270,7 @@ function ke() {
 					/* @__PURE__ */ V(x, {
 						value: "settings",
 						className: "pt-4",
-						children: /* @__PURE__ */ V(Pe, {
+						children: /* @__PURE__ */ V(Re, {
 							settings: n.settings,
 							canEditRules: n.can_edit_rules
 						})
@@ -1243,7 +1280,83 @@ function ke() {
 		})
 	] });
 }
-function Ae({ data: e }) {
+function Me(e, t) {
+	if (!e || !t) return null;
+	let n = Math.max(0, Math.round((Date.parse(t) - Date.parse(e)) / 864e5));
+	return `${n} day${n === 1 ? "" : "s"}`;
+}
+function Ne() {
+	let e = F(), n = L(), [a, o] = z(null), { data: s, isLoading: c } = P({
+		queryKey: [
+			"mentors",
+			"program",
+			"graduated"
+		],
+		queryFn: () => O.get(`${J}/program?status=graduated`)
+	});
+	if (c || !s) return /* @__PURE__ */ V(_, { className: "h-64" });
+	let u = [...s.mentorships].sort((e, t) => (t.ended_at ?? "").localeCompare(e.ended_at ?? ""));
+	return /* @__PURE__ */ H(i, { children: [u.length === 0 ? /* @__PURE__ */ V(l, {
+		icon: /* @__PURE__ */ V(W, {}),
+		title: "Nobody has graduated yet"
+	}) : /* @__PURE__ */ H(S, { children: [/* @__PURE__ */ V(b, { children: /* @__PURE__ */ H("tr", { children: [
+		/* @__PURE__ */ V(E, { children: "Mentee" }),
+		/* @__PURE__ */ V(E, { children: "Mentor" }),
+		/* @__PURE__ */ V(E, { children: "Graduated" }),
+		/* @__PURE__ */ V(E, { children: "Mentored for" }),
+		/* @__PURE__ */ V(E, {
+			align: "right",
+			children: /* @__PURE__ */ V("span", {
+				className: "sr-only",
+				children: "Actions"
+			})
+		})
+	] }) }), /* @__PURE__ */ V("tbody", { children: u.map((e) => /* @__PURE__ */ H(D, {
+		interactive: !0,
+		onClick: () => n(`/p/mentors/m/${e.id}`),
+		children: [
+			/* @__PURE__ */ V(w, { children: /* @__PURE__ */ H("div", {
+				className: "flex items-center gap-3",
+				children: [/* @__PURE__ */ V(t, {
+					src: e.mentee.portrait,
+					name: e.mentee.name,
+					size: "sm"
+				}), /* @__PURE__ */ V("span", {
+					className: "font-medium",
+					children: e.mentee.name
+				})]
+			}) }),
+			/* @__PURE__ */ V(w, {
+				className: "text-muted",
+				children: e.mentor?.name ?? "—"
+			}),
+			/* @__PURE__ */ V(w, {
+				className: "text-muted",
+				children: A(e.ended_at)
+			}),
+			/* @__PURE__ */ V(w, {
+				className: "text-muted",
+				children: Me(e.assigned_at, e.ended_at) ?? "—"
+			}),
+			/* @__PURE__ */ V(w, {
+				align: "right",
+				children: /* @__PURE__ */ H(r, {
+					size: "sm",
+					variant: "ghost",
+					onClick: (t) => {
+						t.stopPropagation(), o(e);
+					},
+					children: [/* @__PURE__ */ V(de, {}), " Reopen"]
+				})
+			})
+		]
+	}, e.id)) })] }), /* @__PURE__ */ V(_e, {
+		mentorship: a,
+		onClose: () => o(null),
+		onDone: () => e.invalidateQueries({ queryKey: ["mentors"] })
+	})] });
+}
+function Pe({ data: e }) {
 	return e.mentors.length === 0 ? /* @__PURE__ */ V(i, { children: /* @__PURE__ */ V(l, {
 		icon: /* @__PURE__ */ V(q, {}),
 		title: "No mentors yet",
@@ -1306,18 +1419,18 @@ function Ae({ data: e }) {
 		})
 	] }, e.id)) })] }) });
 }
-var je = {
+var Fe = {
 	title: "",
 	description: "",
 	rules: {},
 	mentee_can_tick: !1,
 	focus: []
 };
-function Me({ goals: e, focusAreas: t, canEditRules: a }) {
-	let c = I(), [u, d] = z(null), [f, p] = z(null), m = () => c.invalidateQueries({ queryKey: ["mentors"] }), h = P({
+function Ie({ goals: e, focusAreas: t, canEditRules: a }) {
+	let c = F(), [u, d] = z(null), [f, p] = z(null), m = () => c.invalidateQueries({ queryKey: ["mentors"] }), h = N({
 		mutationFn: (e) => O.post(`${J}/program/goals/order`, { ids: e }),
 		onSuccess: m,
-		onError: (e) => N.error(e.message)
+		onError: (e) => M.error(e.message)
 	}), g = (t, n) => {
 		let r = e.map((e) => e.id);
 		[r[t], r[t + n]] = [r[t + n], r[t]], h.mutate(r);
@@ -1394,7 +1507,7 @@ function Me({ goals: e, focusAreas: t, canEditRules: a }) {
 						size: "icon-sm",
 						onClick: () => d(t),
 						"aria-label": `Edit ${t.title}`,
-						children: /* @__PURE__ */ V(fe, {})
+						children: /* @__PURE__ */ V(pe, {})
 					}),
 					/* @__PURE__ */ V(r, {
 						variant: "ghost",
@@ -1406,7 +1519,7 @@ function Me({ goals: e, focusAreas: t, canEditRules: a }) {
 				]
 			}, t.id))
 		}),
-		u && /* @__PURE__ */ V(Ne, {
+		u && /* @__PURE__ */ V(Le, {
 			goal: u === "new" ? null : u,
 			focusAreas: t,
 			canEditRules: a,
@@ -1420,16 +1533,16 @@ function Me({ goals: e, focusAreas: t, canEditRules: a }) {
 			confirmLabel: "Delete",
 			danger: !0,
 			onConfirm: () => O.delete(`${J}/program/goals/${f.id}`).then(m, (e) => {
-				throw N.error(e.message), e;
+				throw M.error(e.message), e;
 			})
 		})
 	] });
 }
-function Ne({ goal: t, focusAreas: n, canEditRules: i, onClose: a }) {
-	let o = I(), [s, l] = z(t ?? {
-		...je,
+function Le({ goal: t, focusAreas: n, canEditRules: i, onClose: a }) {
+	let o = F(), [s, l] = z(t ?? {
+		...Fe,
 		rules_text: ""
-	}), f = (s.rules.rules ?? []).length > 0, p = P({
+	}), f = (s.rules.rules ?? []).length > 0, p = N({
 		mutationFn: () => {
 			let e = {
 				title: s.title,
@@ -1441,9 +1554,9 @@ function Ne({ goal: t, focusAreas: n, canEditRules: i, onClose: a }) {
 			return t ? O.put(`${J}/program/goals/${t.id}`, e) : O.post(`${J}/program/goals`, e);
 		},
 		onSuccess: () => {
-			o.invalidateQueries({ queryKey: ["mentors"] }), N.success("Goal saved"), a();
+			o.invalidateQueries({ queryKey: ["mentors"] }), M.success("Goal saved"), a();
 		},
-		onError: (e) => N.error(e.message)
+		onError: (e) => M.error(e.message)
 	});
 	return /* @__PURE__ */ V(c, {
 		open: !0,
@@ -1532,17 +1645,17 @@ function Ne({ goal: t, focusAreas: n, canEditRules: i, onClose: a }) {
 		})
 	});
 }
-function Pe({ settings: t, canEditRules: n }) {
-	let s = I(), [c, l] = z(t.focus_areas), [u, f] = z(""), [p, h] = z(t.suggest_rules);
-	te(() => {
+function Re({ settings: t, canEditRules: n }) {
+	let s = F(), [c, l] = z(t.focus_areas), [u, f] = z(""), [p, h] = z(t.suggest_rules);
+	R(() => {
 		l(t.focus_areas), h(t.suggest_rules);
 	}, [t]);
-	let g = P({
+	let g = N({
 		mutationFn: (e) => O.put(`${J}/program/settings`, e),
 		onSuccess: () => {
-			s.invalidateQueries({ queryKey: ["mentors"] }), N.success("Settings saved");
+			s.invalidateQueries({ queryKey: ["mentors"] }), M.success("Settings saved");
 		},
-		onError: (e) => N.error(e.message)
+		onError: (e) => M.error(e.message)
 	}), _ = () => {
 		let e = u.trim();
 		e && !c.some((t) => t.toLowerCase() === e.toLowerCase()) && l([...c, e]), f("");
@@ -1642,8 +1755,8 @@ function Pe({ settings: t, canEditRules: n }) {
 }
 //#endregion
 //#region src/index.tsx
-function Fe() {
-	let { data: e, isLoading: t } = F({
+function ze() {
+	let { data: e, isLoading: t } = P({
 		queryKey: ["mentors", "widget"],
 		queryFn: () => O.get(`${J}/widget`),
 		refetchInterval: 12e4
@@ -1652,7 +1765,7 @@ function Fe() {
 	if (!e) return null;
 	if (e.mine) {
 		let t = e.mine;
-		return /* @__PURE__ */ H(L, {
+		return /* @__PURE__ */ H(I, {
 			to: `/p/mentors/m/${t.id}`,
 			className: "block space-y-3",
 			children: [/* @__PURE__ */ H("div", {
@@ -1673,7 +1786,7 @@ function Fe() {
 			}), t.progress && /* @__PURE__ */ V(Q, { ...t.progress })]
 		});
 	}
-	return e.is_mentor ? /* @__PURE__ */ V(L, {
+	return e.is_mentor ? /* @__PURE__ */ V(I, {
 		to: "/p/mentors",
 		className: "block",
 		children: /* @__PURE__ */ H("div", {
@@ -1703,7 +1816,7 @@ function Fe() {
 		}), /* @__PURE__ */ V("p", {
 			className: "text-sm text-muted",
 			children: "An experienced member helps you find your feet: ships, fleets, ISK and who's who."
-		})] }), /* @__PURE__ */ V(L, {
+		})] }), /* @__PURE__ */ V(I, {
 			to: "/p/mentors",
 			children: /* @__PURE__ */ V(r, {
 				variant: "primary",
@@ -1711,36 +1824,36 @@ function Fe() {
 				children: "Ask for a mentor"
 			})
 		})]
-	}) : /* @__PURE__ */ V(L, {
+	}) : /* @__PURE__ */ V(I, {
 		to: "/p/mentors",
 		className: "block text-sm text-muted hover:text-text",
 		children: "Mentors help new members find their feet. Open Mentoring to ask for one."
 	});
 }
-var Ie = j({
+var Be = ee({
 	routes: [
 		{
 			path: "",
-			Component: _e
+			Component: ye
 		},
 		{
 			path: "program",
-			Component: ke
+			Component: je
 		},
 		{
 			path: "m/:id",
-			Component: Ee
+			Component: Oe
 		}
 	],
 	widgets: [{
 		id: "mentoring",
 		title: "Mentoring",
-		Component: Fe,
+		Component: ze,
 		size: "sm",
 		order: 40
 	}]
 });
 //#endregion
-export { Ie as default };
+export { Be as default };
 
-export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","about","accent","access","action","actions","active","add","again","align","allDone","also","alt","an","and","another","any","anyway","are","areas","aria-label","aria-pressed","as","ask","asked","asking","assign","assigned","assigned_at","async","at","author","author_id","auto","average","avg_days_to_graduate","avg_days_waiting","await","badges","be","been","before","between","bg-accent-soft","bg-border","bg-border-strong","bg-success","bg-surface-2/60","bg-surface-3","bg-warning-soft/60","big","bio","block","body","boolean","border","border-accent","border-b","border-border","border-border-strong","border-success","border-t","border-warning/30","busy","but","button","by","by_rules","can","canEditRules","canTick","can_edit_rules","can_manage","candidate","capacity","catch","changed","character","characters","checked","checklist","checks","children","chips","claim","className","close","confirmLabel","congratulated","const","corporation","count","counts","created_at","ctrlKey","current","currentColor","cursor-default","cursor-pointer","cx","cy","d","danger","dashboard","data","days","default","defaultValue","description","disabled","divide-border","divide-y","do","doctrine","does","doesn","done","done!","done_at","done_by","down","each","earlier","early","empty","emptyText","end","end_reason","ended","ended_at","error","evenings","event","every","everyone","everything","experienced","export","extends","eyebrow","feet","few","fill","finally","find","first","fitting","fleet","fleets","flex","flex-1","flex-col","flex-wrap","fly","focus","focusAreas","focus_areas","focusing","following","font-medium","font-mono","font-semibold","footer","for","for_me","found","free","from","function","gap-1","gap-1.5","gap-2","gap-3","gap-4","gap-5","gap-6","get","gets","ghost","given","goal","goals","goes","graduate","graduated","grid","grid-cols-2","group","h-16","h-96","h-px","had","hand","has","hasRules","have","height","help","helps","here","hint","home","hover:bg-hover","hover:border-accent","hover:text-danger-fg","hover:text-text","how","icon","icon-sm","icon-xs","icons","id","ids","if","import","in","info","inline","inline-flex","instanceof","interactive","interface","invited","is","isLoading","isPending","is_mentor","it","italic","items","items-center","items-end","items-start","itself","justify-between","justify-center","justify-end","key","label","leave","left","length","lg","lg:grid-cols-2","like","line-clamp-2","list","little","ll","loading","look","m","m12","m18","m21.854","m6","main","making","manage","manager","managers","match","matches","matching","max","max-w-sm","maxLength","may","mb-4","md","member","members","mentee","mentee_can_tick","mentees","mentor","mentor_id","mentor_profile","mentored","mentoring","mentors","mentorship","mentorships","message","messages","min","min-w-0","min-w-48","mine","ml-auto","most","mostly","move","mt-0.5","mt-1","mt-1.5","mt-4","mutationFn","my","name","navigate","neutral","never","new","no","nobody","none","not","note","notes","notification","now","null","number","object-cover","of","ok","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDone","onError","onKeyDown","onOpenChange","onSelect","onSend","onSuccess","onTick","one","only","open","options","or","order","others","over","overview","own","p-3","pages","pair","passes","past","patch","path","paused","people","pick","placeholder","places","plain","plan","play","play_time","played","plugin","portrait","post","preview","primary","priv","private","private_notes","profile","program","progress","pt-4","put","px-2","px-2.5","px-card","py-1","py-3","qc","queryFn","queryKey","re","react","react-router","read","ready","refetchInterval","refresh","request","requested","requested_mentor","rest","return","right","role","round","routes","rows","rule","rules","rules_text","rx","ry","s","save","saved","secondary","see","sees","selected","send","sends","set","setArea","setAreas","setBusy","setClosing","setDeleting","setEditing","setFocus","setForm","setMatching","setMentor","setNote","setPlayTime","setPriv","setStatus","setSuggest","setText","settings","several","sheet","sheet_access","sheets","should","show","showMentor","shown","shrink-0","since","site","size","size-1.5","size-10","size-3","size-3.5","size-4","size-5","size-full","skill","sm","sm:grid-cols-2","small-gang","snooper","so","solidDanger","someone","space-y-0.5","space-y-1","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","src","staff","state","stats","status","stays","still","straight","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subtitle","success","suggest","suggest_rules","suggest_text","suggested","t","tabular-nums","take","takes","target","text","text-3xl","text-[11px]","text-base","text-center","text-left","text-lg","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-white","text-xs","that","the","their","them","themselves","these","they","this","thread","through","throw","tick","tickable","ticks","time","title","to","toast","toggle","told","tone","total","total_sp","transition-colors","truncate","try","type","undefined","under","up","update","us","useNavigate","useParams","useQuery","useQueryClient","useState","used","usually","value","variant","ve","viewBox","void","w-48","wait","waiting","want","warfare","warning","was","what","whatever","when","whether","while","whitespace-pre-line","who","whoever","widget","widgets","width","will","with","withdraw","withdrawn","withdrew","work","works","would","write","x","xl:col-span-2","xl:grid-cols-2","xl:grid-cols-3","xl:grid-cols-4","xl:grid-cols-[1fr_400px]","yet","you","your","zone"];
+export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","about","accent","access","action","actions","active","add","again","align","allDone","also","alt","an","and","another","any","anyway","are","areas","aria-label","aria-pressed","as","ask","asked","asking","assign","assigned","assigned_at","async","at","author","author_id","auto","average","avg_days_to_graduate","avg_days_waiting","await","back","badges","be","been","before","between","bg-accent-soft","bg-border","bg-border-strong","bg-success","bg-surface-2/60","bg-surface-3","bg-warning-soft/60","big","bio","block","body","boolean","border","border-accent","border-b","border-border","border-border-strong","border-success","border-t","border-warning/30","busy","but","button","by","by_rules","can","canEditRules","canTick","can_edit_rules","can_manage","candidate","capacity","catch","changed","character","characters","checked","checks","children","chips","claim","className","close","confirmLabel","congratulated","const","corporation","count","counts","created_at","ctrlKey","current","currentColor","cursor-default","cursor-pointer","cx","cy","d","danger","dashboard","data","days","default","defaultValue","description","disabled","divide-border","divide-y","do","doctrine","does","doesn","done","done!","done_at","done_by","down","each","earlier","early","empty","emptyText","end","end_reason","ended","ended_at","error","evenings","event","every","everyone","everything","experienced","export","extends","eyebrow","far","feet","few","fill","finally","find","first","fitting","fleet","fleets","flex","flex-1","flex-col","flex-wrap","fly","focus","focusAreas","focus_areas","focusing","following","font-medium","font-mono","font-semibold","footer","for","for_me","found","free","from","function","gap-1","gap-1.5","gap-2","gap-3","gap-4","gap-5","gap-6","get","gets","ghost","given","goal","goals","goes","graduate","graduated","graduates","grid","grid-cols-2","group","h-16","h-64","h-96","h-px","had","hand","has","hasRules","have","height","help","helps","here","hint","home","hover:bg-hover","hover:border-accent","hover:text-danger-fg","hover:text-text","how","icon","icon-sm","icon-xs","icons","id","ids","if","import","in","info","inline","inline-flex","instanceof","interactive","interface","invited","is","isLoading","isPending","is_mentor","it","italic","items","items-center","items-end","items-start","itself","justify-between","justify-center","justify-end","key","label","leave","left","length","lg","lg:grid-cols-2","like","line-clamp-2","list","little","ll","loading","look","m","m12","m18","m21.854","m6","main","making","manage","manager","managers","match","matches","matching","max","max-w-sm","maxLength","may","mb-4","md","member","members","mentee","mentee_can_tick","mentees","mentor","mentor_id","mentor_profile","mentored","mentoring","mentors","mentorship","mentorships","message","messages","min","min-w-0","min-w-48","mine","ml-auto","most","mostly","move","mt-0.5","mt-1","mt-1.5","mt-4","mutationFn","my","n","name","navigate","needs","neutral","never","new","newest","no","nobody","none","not","note","notes","notification","now","null","number","object-cover","of","ok","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDone","onError","onKeyDown","onOpenChange","onSelect","onSend","onSuccess","onTick","one","only","open","options","or","order","others","over","overview","own","p-3","pages","pair","passes","past","patch","path","paused","people","pick","placeholder","places","plain","plan","play","play_time","played","plugin","portrait","post","preview","primary","priv","private","private_notes","profile","program","progress","pt-4","put","px-2","px-2.5","px-card","py-1","py-3","qc","queryFn","queryKey","re","react","react-router","read","ready","refetchInterval","refresh","reopen","reopened","reopening","request","requested","requested_mentor","rest","return","right","role","round","routes","rows","rule","rules","rules_text","rx","ry","s","save","saved","secondary","see","sees","selected","send","sends","set","setArea","setAreas","setBusy","setClosing","setDeleting","setEditing","setFocus","setForm","setMatching","setMentor","setNote","setPlayTime","setPriv","setReopening","setStatus","setSuggest","setText","settings","several","sheet","sheet_access","sheets","should","show","showMentor","shown","shrink-0","since","site","size","size-1.5","size-10","size-3","size-3.5","size-4","size-5","size-full","skill","sm","sm:grid-cols-2","small-gang","snooper","so","solidDanger","someone","space-y-0.5","space-y-1","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","sr-only","src","staff","state","stats","status","stays","still","straight","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subtitle","success","suggest","suggest_rules","suggest_text","suggested","t","tabular-nums","take","takes","target","text","text-3xl","text-[11px]","text-base","text-center","text-left","text-lg","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-white","text-xs","that","the","their","them","themselves","these","they","this","thread","through","throw","tick","tickable","ticked","ticks","time","title","to","toast","toggle","told","tone","total","total_sp","transition-colors","truncate","try","type","undefined","under","up","update","us","useNavigate","useParams","useQuery","useQueryClient","useState","used","usually","value","variant","ve","viewBox","void","w-48","wait","waiting","want","warfare","warning","was","what","whatever","when","whether","while","whitespace-pre-line","who","whoever","widget","widgets","width","will","with","withdraw","withdrawn","withdrew","work","works","would","write","x","xl:col-span-2","xl:grid-cols-2","xl:grid-cols-3","xl:grid-cols-4","xl:grid-cols-[1fr_400px]","yet","you","your","zone"];

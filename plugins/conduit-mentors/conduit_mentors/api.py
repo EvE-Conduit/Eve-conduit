@@ -129,6 +129,14 @@ def end(request, mentorship_id: int, payload: CloseIn):
     return _detail(request, m)
 
 
+@router.post("/m/{mentorship_id}/reopen")
+@require_perm(MANAGE_PERM)
+def reopen(request, mentorship_id: int):
+    m = _visible(request, mentorship_id)
+    _run(services.reopen, m, request.user, request=request)
+    return _detail(request, m)
+
+
 class ProfileIn(Schema):
     active: bool = True
     capacity: int = 3

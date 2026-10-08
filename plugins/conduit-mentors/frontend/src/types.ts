@@ -69,7 +69,7 @@ export interface Detail extends Brief {
   mentor_profile?: { bio: string; play_time: string; focus: string[] } | null;
   sheet_access?: boolean;
   characters?: MenteeCharacter[];
-  can: { message: boolean; private_notes: boolean; claim: boolean; assign: boolean; graduate: boolean; end: boolean; withdraw: boolean; tick: boolean };
+  can: { message: boolean; private_notes: boolean; claim: boolean; assign: boolean; graduate: boolean; end: boolean; withdraw: boolean; tick: boolean; reopen: boolean };
 }
 
 export interface MentorCard extends Person {

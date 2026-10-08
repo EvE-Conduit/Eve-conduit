@@ -1,9 +1,9 @@
-// Pieces used on several pages: status, focus chips, the goals checklist and the mentoring thread.
-import { Avatar, Badge, Button, cn, Progress, Switch, Textarea, timeAgo, toast } from "@conduit/sdk";
+// Pieces used on several pages: status, focus chips, the goals checklist, the mentoring thread and reopening.
+import { api, Avatar, Badge, Button, cn, ConfirmDialog, Progress, Switch, Textarea, timeAgo, toast } from "@conduit/sdk";
 import { useState } from "react";
 
 import { Check, Lock, Send } from "./icons";
-import { type GoalState, type Message, STATUS, type Status } from "./types";
+import { BASE, type Brief, type Detail, type GoalState, type Message, STATUS, type Status } from "./types";
 
 export function StatusBadge({ status }: { status: Status }) {
   return <Badge tone={STATUS[status].tone}>{STATUS[status].label}</Badge>;
@@ -107,6 +107,7 @@ const EVENTS: Record<string, string> = {
   withdrawn: "withdrew the request",
   graduated: "graduated them",
   ended: "ended the mentorship",
+  reopened: "reopened the mentorship",
 };
 
 /** The thread between mentor and mentee. Mentors and managers can also write private notes. */
@@ -196,5 +197,34 @@ export function Thread({ messages, staff, onSend, disabled }: { messages: Messag
         </div>
       )}
     </div>
+  );
+}
+
+/** Program managers reopen a graduated or ended mentorship. */
+export function ReopenDialog({ mentorship, onClose, onDone }: { mentorship: Brief | null; onClose: () => void; onDone: (d: Detail) => void }) {
+  return (
+    <ConfirmDialog
+      open={mentorship !== null}
+      onOpenChange={(o) => !o && onClose()}
+      title={`Reopen ${mentorship?.mentee.name}'s mentorship?`}
+      description={
+        mentorship?.mentor
+          ? `It goes back to ${mentorship.mentor.name}, if they still mentor (otherwise back on the waiting list), with the goals ticked so far and the thread. Both are told.`
+          : "It goes back on the waiting list, with the goals ticked so far and the thread. They're told."
+      }
+      confirmLabel="Reopen"
+      onConfirm={() =>
+        api.post<Detail>(`${BASE}/m/${mentorship!.id}/reopen`).then(
+          (d) => {
+            toast.success(`${d.mentee.name}'s mentorship is open again`);
+            onDone(d);
+          },
+          (e: Error) => {
+            toast.error(e.message);
+            throw e;
+          },
+        )
+      }
+    />
   );
 }

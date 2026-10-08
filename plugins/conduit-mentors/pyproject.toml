@@ -1,6 +1,6 @@
 [project]
 name = "conduit-mentors"
-version = "1.1.0"
+version = "1.2.0"
 description = "Mentoring: new members ask for a mentor, mentors claim them, and goals (ticked by hand or by group rules) track how they get on, with a thread, private notes and graduation."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
