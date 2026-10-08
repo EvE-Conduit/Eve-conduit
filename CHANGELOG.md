@@ -3,6 +3,21 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.16
+
+### Fixed
+- **Static data is imported again reliably after updating.** 0.5.14 reads more of EVE's static data (fitting data
+  and the skills items need), and installs import it again after updating. That import could be picked up by a
+  background worker still running the old version, which skipped it, so Doctrines said the ship's slot layout
+  wasn't known. Workers now check when they start and import it if needed.
+
+### Added
+- **Administration → Health** says when the static data needs importing again, and has an **Import again** button
+  (for people who can change site settings).
+
+### Plugins
+- **Doctrines 1.0.1:** explains what to do when a ship's slot layout is missing.
+
 ## 0.5.15
 
 ### Changed
