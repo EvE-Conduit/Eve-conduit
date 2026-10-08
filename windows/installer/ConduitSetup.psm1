@@ -82,8 +82,8 @@ function Get-SetupProblem {
     )
     $problems = New-Object System.Collections.Generic.List[string]
     $domain = ([string]$Values['Domain']).Trim() -replace '^[A-Za-z]+://', '' -replace '/+$', ''
-    if (-not $domain) { $problems.Add('Enter the domain name of the site, e.g. auth.example.com.') }
-    elseif ($domain -notmatch '^[A-Za-z0-9.-]+$') { $problems.Add("'$domain' doesn't look like a domain name (just the name: no https://, port or path).") }
+    $addressProblem = Get-SiteAddressProblem -Address $domain -NoTls:(Test-SetupFlag $Values 'NoTls')
+    if ($addressProblem) { $problems.Add($addressProblem) }
     if (([string]$Values['Email']) -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { $problems.Add('Enter a valid email address.') }
     $root = Format-InstallRoot ([string]$Values['InstallRoot'])
     $rootProblem = Get-InstallRootProblem $root

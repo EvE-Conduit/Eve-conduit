@@ -73,11 +73,16 @@ Describe 'Get-SetupProblem' {
     }
     It 'reports a bad domain, email, folder and ports' {
         $problems = Get-SetupProblem -Values (New-Answers @{ Domain = 'auth.example.com:8443/x'; Email = 'nope'; InstallRoot = 'D:\'; AppPort = 'x'; CachePort = '80' })
-        ($problems -join "`n") | Should -Match "doesn't look like a domain"
+        ($problems -join "`n") | Should -Match "doesn't look like a domain name or IP address"
         ($problems -join "`n") | Should -Match 'valid email'
         ($problems -join "`n") | Should -Match 'root of a drive'
         ($problems -join "`n") | Should -Match 'App port must be a number'
         ($problems -join "`n") | Should -Match "can't both use port 80"
+    }
+    It 'accepts a public IP address instead of a domain, but not a private one with HTTPS' {
+        Get-SetupProblem -Values (New-Answers @{ Domain = '203.0.113.7' }) | Should -BeNullOrEmpty
+        (Get-SetupProblem -Values (New-Answers @{ Domain = '192.168.1.5' })) -join "`n" | Should -Match 'private address'
+        Get-SetupProblem -Values (New-Answers @{ Domain = '192.168.1.5'; NoTls = '1' }) | Should -BeNullOrEmpty
     }
     It 'accepts a pasted URL as the domain' {
         Get-SetupProblem -Values (New-Answers @{ Domain = 'https://auth.example.com/' }) | Should -BeNullOrEmpty

@@ -13,7 +13,8 @@ MariaDB) on a Windows machine.
 - Windows 11 22H2 or newer (recommended, for *mirrored networking*), or Windows 10 22H2
 - Hardware virtualisation enabled in the BIOS/UEFI
 - 8 GB RAM or more, 20 GB free disk
-- A domain pointing at your public IP, and ports 80/443 forwarded from your router to this PC
+- A domain pointing at your public IP, and ports 80/443 forwarded from your router to this PC. No domain? Pass your
+  public IPv4 address as `--domain` (see [No domain](install-baremetal.md#no-domain)); it must not change.
 
 ## 1. Install Ubuntu on WSL2
 
@@ -124,4 +125,4 @@ so the PC stays up.
 | Site works on the PC but not from outside | Router forwarding, Windows Firewall rule, and (Windows 10) the portproxy IP after a reboot |
 | Services stopped after closing the terminal | `vmIdleTimeout=-1` in `.wslconfig`, and the startup task |
 | `systemctl` says "System has not been booted with systemd" | Step 2, then `wsl --shutdown` |
-| Certificate request failed | Port 80 must reach WSL from the internet; re-run `sudo certbot --nginx -d your-domain` |
+| Certificate request failed | Port 80 must reach WSL from the internet; re-run `sudo certbot --nginx -d your-domain` (or `sudo conduit ip-cert` for a site on an IP address) |

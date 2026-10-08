@@ -12,6 +12,8 @@
 #                                         the conduit-update.path watcher, with cron as a backup)
 #   conduit setup-updater                 (re)install that watcher
 #   conduit web-headers                   stop browsers caching the site (older nginx configs; upgrades do it)
+#   conduit ip-cert                       HTTPS for a site on an IP address (no domain): get, install and keep
+#                                         renewing a Let's Encrypt IP address certificate
 #   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
 #   conduit plugin list                   list installed plugins
 #   conduit run web|worker|beat           used by Supervisor to start the services
@@ -24,6 +26,7 @@ CONDUIT_LOG=${CONDUIT_LOG:-/var/log/conduit}
 CONDUIT_BACKUPS=${CONDUIT_BACKUPS:-/var/backups/conduit}
 CONDUIT_STATE=${CONDUIT_STATE:-/var/lib/conduit}
 CONDUIT_USER=${CONDUIT_USER:-conduit}
+CRON_DIR=${CRON_DIR:-/etc/cron.d}
 APP="$CONDUIT_HOME/app"
 VENV="$CONDUIT_HOME/venv"
 ENV_FILE="$CONDUIT_ETC/conduit.env"
@@ -458,6 +461,70 @@ cmd_apply_plugins() {
   supervisor restart "$SUPERVISOR_GROUP:*"
 }
 
+nginx_conf() {
+  local conf
+  for conf in ${CONDUIT_NGINX_CONF:-} /etc/nginx/sites-available/conduit.conf /etc/nginx/conf.d/conduit.conf; do
+    [[ -f "$conf" ]] && { echo "$conf"; return 0; }
+  done
+  die "no nginx config for EvE Conduit found"
+}
+
+cmd_ip_cert() {
+  # A site on a public IPv4 address instead of a domain. Let's Encrypt issues IP address certificates only with its
+  # six-day "shortlived" profile, and only certbot 5.4+ can ask for them, newer than the distributions ship: it gets
+  # its own venv, and its own config directory so the distribution's certbot timer never touches this certificate.
+  require_root
+  load_env
+  local ip=${CONDUIT_SITE_URL#*://}
+  ip=${ip%%[:/]*}
+  [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || die "this site's address ($ip) isn't an IP address; a domain gets its certificate with: certbot --nginx -d $ip"
+  [[ -n "${ESI_USER_AGENT_CONTACT:-}" ]] || die "set ESI_USER_AGENT_CONTACT in $ENV_FILE first (also Let's Encrypt's contact address)"
+  local conf certbot="$CONDUIT_HOME/certbot/bin/certbot" uv="$CONDUIT_HOME/tools/bin/uv"
+  conf=$(nginx_conf)
+  if ! "$certbot" --version 2>/dev/null | grep -qE ' (5\.([4-9]|[1-9][0-9])|[6-9]|[1-9][0-9])'; then
+    echo "Installing certbot 5.4 or newer in $CONDUIT_HOME/certbot"
+    UV_PYTHON_INSTALL_DIR="$CONDUIT_HOME/python" "$uv" venv -q --clear --python 3.12 "$CONDUIT_HOME/certbot"
+    "$uv" pip install -q -p "$CONDUIT_HOME/certbot/bin/python" 'certbot>=5.4'
+  fi
+  local -a cb=("$certbot" --config-dir "$CONDUIT_ETC/letsencrypt" --work-dir "$CONDUIT_STATE/letsencrypt"
+    --logs-dir "$CONDUIT_LOG/letsencrypt")
+
+  # Let's Encrypt fetches a file from /.well-known/acme-challenge/ over port 80 (configs before 0.5.17 lack it).
+  install -d -m 0755 "$CONDUIT_WWW/acme"
+  command -v restorecon >/dev/null && restorecon -R "$CONDUIT_WWW/acme" 2>/dev/null || true
+  if ! grep -q 'acme-challenge' "$conf"; then
+    local before='    location \/static\/ {'
+    grep -q '    # Django static files' "$conf" && before='    # Django static files'
+    sed -i "0,/$before/s##    location ^~ /.well-known/acme-challenge/ {\n        root $CONDUIT_WWW/acme;\n        default_type text/plain;\n    }\n\n&#" "$conf"
+    nginx -t && systemctl reload nginx
+  fi
+
+  "${cb[@]}" certonly --webroot -w "$CONDUIT_WWW/acme" --ip-address "$ip" --preferred-profile shortlived \
+    -m "$ESI_USER_AGENT_CONTACT" --agree-tos --non-interactive --keep-until-expiring --deploy-hook "systemctl reload nginx"
+
+  # Serve HTTPS from the same server block and send plain HTTP there, as certbot --nginx does for domains.
+  local live="$CONDUIT_ETC/letsencrypt/live/$ip"
+  if ! grep -q "ssl_certificate $live/fullchain.pem;" "$conf"; then
+    cp -a "$conf" "$conf.bak"
+    sed -i "0,/server_name $ip;/s##server_name $ip;\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate $live/fullchain.pem;\n    ssl_certificate_key $live/privkey.pem;\n    if (\$scheme = http) { return 301 https://\$host\$request_uri; }#" "$conf"
+    if nginx -t; then
+      rm -f "$conf.bak"
+    else
+      mv "$conf.bak" "$conf"
+      die "nginx didn't accept the HTTPS settings, so $conf was left as it was"
+    fi
+  fi
+  systemctl reload nginx
+
+  # certbot renews when about a third of the certificate's life is left (two days), so check often.
+  cat > "$CRON_DIR/conduit-certbot" <<CRON
+# EvE Conduit: renew the Let's Encrypt IP address certificate (valid six days). See: conduit ip-cert
+17 */4 * * * root ${cb[*]} renew -q
+CRON
+  chmod 0644 "$CRON_DIR/conduit-certbot"
+  echo "HTTPS is on: https://$ip (certificate renewed automatically)"
+}
+
 cmd_run() {
   load_env
   cd "$APP/backend"
@@ -482,8 +549,9 @@ case "${1:-}" in
   apply-update) cmd_apply_update ;;
   setup-updater) cmd_setup_updater ;;
   web-headers) cmd_web_headers ;;
+  ip-cert) cmd_ip_cert ;;
   _apply-plugins) shift; cmd_apply_plugins "$@" ;;
   plugin) shift; cmd_plugin "$@" ;;
   run) shift; cmd_run "$@" ;;
-  *) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

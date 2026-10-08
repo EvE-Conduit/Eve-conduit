@@ -8,8 +8,8 @@ steps by hand to see what it does. Either way, read this page once.
 
 **Supported:** Ubuntu 22.04 / 24.04, Debian 12 / 13, Rocky Linux / AlmaLinux / RHEL / CentOS Stream 9 / 10.
 
-**You need:** a server with 2+ CPU cores, 4 GB RAM and 20 GB disk; a domain name pointing at it;
-ports 80 and 443 open; root access.
+**You need:** a server with 2+ CPU cores, 4 GB RAM and 20 GB disk; a domain name pointing at it (or a fixed
+public IPv4 address, see [No domain](#no-domain)); ports 80 and 443 open; root access.
 
 | Piece | What we use |
 |---|---|
@@ -31,6 +31,17 @@ sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example
 
 The script prints a **setup code** when it finishes. Continue with
 [Register the EVE application](#9-register-the-eve-application).
+
+### No domain
+
+Pass the server's public IPv4 address instead: `--domain 203.0.113.7`. The site is then `https://203.0.113.7` and the
+EVE callback URL `https://203.0.113.7/sso/callback`. The address must not change (ask your provider for a static IP): the EVE login's callback URL and the certificate are tied to it. Private addresses (192.168.x.x, 10.x.x.x) and connections behind carrier-grade NAT can't get a certificate; use plain HTTP for a site that's only on your local network.
+
+Let's Encrypt only issues IP address certificates valid for six days, and only certbot 5.4 or newer can ask for them
+(the distributions' certbot is older). `sudo conduit ip-cert`, which the installer runs, installs that certbot in
+`/opt/conduit/certbot`, keeps its files in `/etc/conduit/letsencrypt`, adds HTTPS to the nginx site and renews from
+`/etc/cron.d/conduit-certbot` every four hours. If the certificate request failed, fix the cause (usually port 80 not
+reachable from the internet) and run `sudo conduit ip-cert` again. Running it again is always safe.
 
 ## Manual install
 

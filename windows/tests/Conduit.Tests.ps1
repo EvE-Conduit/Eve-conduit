@@ -279,6 +279,33 @@ Describe 'Generated Caddyfile' {
         $c | Should -Match '(?m)^http://auth\.example\.com \{'
         $c | Should -Not -Match 'redir'
     }
+    It 'asks Let''s Encrypt for an IP certificate when there is no domain' {
+        $c = New-ConduitCaddyfile @common -Domain '203.0.113.7' -HttpPort 80 -HttpsPort 443
+        $c | Should -Match '(?m)^203\.0\.113\.7 \{'
+        $c | Should -Match 'profile shortlived'
+        New-ConduitCaddyfile @common -HttpPort 80 -HttpsPort 443 | Should -Not -Match 'shortlived'
+        New-ConduitCaddyfile @common -Domain '203.0.113.7' -HttpPort 80 -HttpsPort 443 -NoTls | Should -Not -Match 'shortlived'
+    }
+}
+
+Describe 'Get-SiteAddressProblem' {
+    It 'accepts a domain or a public IPv4 address' {
+        Get-SiteAddressProblem -Address 'auth.example.com' | Should -BeNullOrEmpty
+        Get-SiteAddressProblem -Address '203.0.113.7' | Should -BeNullOrEmpty
+    }
+    It 'refuses private addresses for HTTPS, but not for plain HTTP' {
+        foreach ($a in '192.168.1.5', '10.0.0.2', '172.20.1.1', '127.0.0.1', '100.64.0.9') {
+            Get-SiteAddressProblem -Address $a | Should -Match 'private address'
+        }
+        Get-SiteAddressProblem -Address '192.168.1.5' -NoTls | Should -BeNullOrEmpty
+        Get-SiteAddressProblem -Address '172.32.0.1' | Should -BeNullOrEmpty
+    }
+    It 'explains what is wrong' {
+        Get-SiteAddressProblem -Address '' | Should -Match 'domain name or public IP'
+        Get-SiteAddressProblem -Address '1.2.3.999' | Should -Match "isn't a valid IP"
+        Get-SiteAddressProblem -Address '2001:db8::1' | Should -Match 'IPv6'
+        Get-SiteAddressProblem -Address 'auth.example.com:8443' | Should -Match "doesn't look like"
+    }
 }
 
 Describe 'Expand-ZipSubset' {
