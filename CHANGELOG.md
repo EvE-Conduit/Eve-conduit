@@ -3,6 +3,20 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.19
+
+### Changed
+- **Permissions are grouped by who they're for.** When editing a state or a group, the permissions are in four
+  sections: **Regular users**, **HR staff**, **Directors** and **Admins**, each with a short hint and how many are on.
+  Plugins say where theirs belong (`Plugin.permission_tiers`); anything else shows under **Other**.
+- Django's automatic add/change/delete/view permissions for plugin tables, which nothing on the site uses, are no
+  longer offered. Any that were granted are listed under "Granted, no longer offered" so you can remove them.
+
+### Plugins
+- **Announcements 1.1.1, Discord 1.0.4, Doctrines 1.0.3, Fleets 1.0.2, Mentoring 1.0.3, Moons 1.1.1, Recruitment
+  1.1.5, Skill Plans 1.0.2, SRP 1.0.3:** say which section their permissions belong in. Nothing else changed; on
+  older versions of EvE Conduit their permissions show under Other.
+
 ## 0.5.18
 
 ### Security
