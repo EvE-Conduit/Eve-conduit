@@ -3,6 +3,24 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.25
+
+### Added
+- **Upload the landing page's background image.** Administration → Settings → Landing page has an **Upload** button
+  next to the hero's background image: a PNG, JPEG, WebP or GIF of up to 5 MB. Pasting an https:// address still
+  works. Uploaded images are kept in the database, so they need no extra setup on any kind of install and your
+  database backups include them. Images no longer used are removed when the landing page is next saved.
+
+### Changed
+- **Sidebar links have their own Save settings button**, next to Add link, so you don't have to scroll back up.
+
+### Plugins
+- **Doctrines 1.1.0:** fits that aren't in any doctrine are listed under **Other fits** on the Doctrines page and the
+  character sheet tab, and can be picked in the "Can fly doctrine fit" group rule. Managers get a **New fit** button.
+  The fitting window looks more like the game's: every rack has a fixed place (a Strategic Cruiser's subsystems no
+  longer run into its high slots), module icons sit on one band, and the hardpoints and the CPU, powergrid and
+  calibration gauges are inside the ring. Resources count the fitting skills at V, with a toggle for no skills.
+
 ## 0.5.24
 
 ### Added
