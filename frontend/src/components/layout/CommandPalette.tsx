@@ -13,7 +13,7 @@ import { api } from "@/lib/api";
 import { iconFor } from "@/lib/icons";
 import type { MyCharacter, SearchGroup, SearchHit } from "@/lib/types";
 
-import type { NavSection } from "./nav";
+import { flatItems, type NavSection } from "./nav";
 import { useToggleTheme } from "./ThemeToggle";
 
 const groupClass =
@@ -122,7 +122,7 @@ export function CommandPalette({
 
               {sections.map((section) => (
                 <Command.Group key={section.title} heading={section.title} className={groupClass}>
-                  {section.items.map((item) => (
+                  {flatItems(section.items).map((item) => (
                     <Command.Item key={item.to} value={`page ${section.title} ${item.label}`} onSelect={() => go(item.to)} className={itemClass}>
                       <span className="grid size-7 place-items-center rounded-md bg-hover-strong text-muted group-data-[selected=true]:text-accent-ink">
                         <item.icon />

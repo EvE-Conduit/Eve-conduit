@@ -19,7 +19,7 @@ New members get a mentor to show them the ropes, with goals to work through toge
   (Doctrines), Discord linked, or any other rule. The others are ticked by the mentor, or by the mentee if the goal
   allows it. A new site starts with a few: meeting your mentor on comms, setting your home station and clone, your
   first fleet (ticks itself with the Fleets plugin) and 5 million skill points.
-- **Program** (permission `mentors.manage_program`): every mentorship by status, mentors and their load, average
+- **Settings** (Mentoring → Settings, permission `mentors.manage_program`): every mentorship by status, mentors and their load, average
   wait and time to graduate, assigning or handing a mentee to another mentor (also over their limit), goals and
   focus areas. Setting a goal's rules, or **Who counts as new** (members who match and never had a mentor are invited
   on the dashboard), uses the group rule editor and so needs `site.manage_access` as well.
