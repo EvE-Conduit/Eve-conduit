@@ -48,7 +48,9 @@ def ledger_admin(admin_user):
     admin_user.is_superuser = False
     admin_user.save()
     admin_user.user_permissions.add(*Permission.objects.filter(content_type__app_label="moons"))
-    return admin_user
+    # The ledger follows the corporation sheet's permissions: this one may see every corporation.
+    admin_user.user_permissions.add(Permission.objects.get(codename="view_all_corporations"))
+    return type(admin_user).objects.get(pk=admin_user.pk)
 
 
 def test_ledger_groups_alts_under_their_member(mined, last_month):
@@ -111,3 +113,50 @@ def test_plugin_off_means_no_api(mined, api_client):
     set_enabled("moons", False)
     api_client.force_login(mined)
     assert api_client.call("get", "/api/p/moons/me").status_code == 404
+
+
+def test_ledger_only_shows_corporations_the_viewer_may_see(mined, last_month, api_client):
+    """A corporation's moon officer sees their own corporation's mining, not the rest of the alliance's."""
+    from django.contrib.auth.models import Permission
+
+    from conduit.eve.models import EveCorporation
+
+    other = EveCorporation.objects.create(id=98000002, name="Other Corp", ticker="OTHER", alliance=mined.main_character.corporation.alliance)
+    MiningObservation.objects.create(corporation=other, observer_id=1_000_000_000_002, character_id=888, type_id=ORE, quantity=10,
+                                     last_updated=last_month + timedelta(days=4))
+    EveName.objects.create(id=888, name="Other Miner", category="character")
+    officer = make_user(90000050, "Moon Officer", corporation=mined.main_character.corporation)
+    officer.user_permissions.add(*Permission.objects.filter(codename__in=["view_ledger", "manage_ledger", "view_own_corporation"]))
+    officer = type(officer).objects.get(pk=officer.pk)
+    api_client.force_login(officer)
+    data = api_client.call("get", f"/api/p/moons/ledger?month={last_month:%Y-%m}").json()
+    assert {m["name"] for m in data["members"]} == {"Pilot One", "Stranger"}
+    csv = api_client.call("get", f"/api/p/moons/ledger.csv?month={last_month:%Y-%m}").content.decode()
+    assert "Other Miner" not in csv
+    settings = api_client.call("get", "/api/p/moons/settings").json()
+    assert [c["name"] for c in settings["available_corporations"]] == ["Test Corp"]
+    # Closing, reopening and the settings cover every corporation, so they need access to all of them.
+    resp = api_client.call("post", f"/api/p/moons/months/{last_month:%Y-%m}/close")
+    assert resp.status_code == 403 and "Other Corp" in resp.json()["detail"]
+    assert api_client.call("put", "/api/p/moons/settings", {"tax_rate": 1}).status_code == 403
+    # Without any corporation permission: nothing at all.
+    officer.user_permissions.remove(Permission.objects.get(codename="view_own_corporation"))
+    api_client.force_login(type(officer).objects.get(pk=officer.pk))
+    assert api_client.call("get", f"/api/p/moons/ledger?month={last_month:%Y-%m}").json()["members"] == []
+
+
+def test_invoices_of_hidden_corporations_cannot_be_marked(mined, last_month, admin_user):
+    from django.contrib.auth.models import Permission
+
+    services.close_month(last_month, admin_user)
+    inv = Invoice.objects.get(user=mined)
+    outsider = make_user(90000051, "Outsider")
+    outsider.user_permissions.add(*Permission.objects.filter(codename__in=["manage_ledger", "view_own_corporation"]))
+    with pytest.raises(services.LedgerError, match="can't see"):
+        services.set_paid(inv.pk, True, type(outsider).objects.get(pk=outsider.pk))
+
+
+def test_far_off_months_are_refused(mined, api_client):
+    api_client.force_login(mined)
+    assert api_client.call("get", "/api/p/moons/me?month=9999-12").status_code == 400
+    assert api_client.call("get", "/api/p/moons/me?month=2026-13").status_code == 400

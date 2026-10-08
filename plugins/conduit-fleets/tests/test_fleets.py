@@ -162,3 +162,46 @@ def test_attendance_and_the_group_rule(people, api_client):
     api_client.force_login(type(manager).objects.get(pk=manager.pk))
     board = api_client.call("get", "/api/p/fleets/stats/members?days=30").json()["members"]
     assert board[0]["name"] == "Pilot One" and board[0]["fleets"] == 3 and board[0]["characters"] == ["Pilot Alt", "Pilot One"]
+
+
+def test_managers_cant_track_with_someone_elses_character(people, esi, api_client):
+    """Tracking reads ESI with the character's login every minute; only its owner may start that."""
+    fc = people["fc"]
+    fc.user_permissions.add(Permission.objects.get(codename="manage_fleets"))
+    fleet = start(api_client, type(fc).objects.get(pk=fc.pk))
+    resp = api_client.call("post", f"/api/p/fleets/{fleet['id']}/track", {"character": 90000002})
+    assert resp.status_code == 400 and "your own" in resp.json()["detail"]
+    assert not Fleet.objects.get(pk=fleet["id"]).tracking
+
+
+def test_fats_cant_be_farmed_for_group_rules(people, api_client):
+    fc, pilot = people["fc"], people["pilot"]
+    # An FC adding their own character by hand to fleets they ran themselves: none of it counts.
+    for i in range(3):
+        f = Fleet.objects.create(name=f"Solo {i}", fc=fc, created_by=fc)
+        services.record(f, [(90000001, None, None)], Fat.Via.MANUAL, by=fc)
+    assert services.fleets_attended(fc, 30) == 0
+    # Added by someone else, it does; and leadership can require real fleets.
+    f = Fleet.objects.create(name="Small gang", fc=fc, created_by=fc)
+    services.record(f, [(90000002, None, None)], Fat.Via.MANUAL, by=fc)
+    assert services.fleets_attended(pilot, 30) == 1
+    assert services.fleets_attended(pilot, 30, min_pilots=2) == 0
+    services.record(f, [(90000001, None, None)], Fat.Via.LINK)
+    assert services.fleets_attended(pilot, 30, min_pilots=2) == 1
+
+    def rule(**params):
+        return rules.evaluate_ruleset(pilot, rules.validate_ruleset({"rules": [{"type": "fleets_attended", "params": params}]}))
+
+    assert rule(count=1, days=30) and not rule(count=1, days=30, min_pilots=3)
+    assert rules.explain_rule({"type": "fleets_attended", "params": {"count": 2, "days": 30, "types": "", "min_pilots": 10}}) == \
+        "Flew in at least 2 fleets of 10+ pilots (FATs) in the last 30 days"
+
+
+def test_only_managers_change_the_type_of_an_ended_fleet(people, api_client):
+    fleet = start(api_client, people["fc"])
+    cta = next(t for t in services.fleet_types() if t.name == "CTA")
+    api_client.call("post", f"/api/p/fleets/{fleet['id']}/end")
+    resp = api_client.call("put", f"/api/p/fleets/{fleet['id']}", {"name": "Sunday roam", "fleet_type": cta.pk})
+    assert resp.status_code == 403
+    # Renaming is still fine.
+    assert api_client.call("put", f"/api/p/fleets/{fleet['id']}", {"name": "Sunday roam!"}).status_code == 200

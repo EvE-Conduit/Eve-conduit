@@ -230,12 +230,16 @@ export function ApplicationPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader
-              title={`Characters · ${data.characters?.length ?? 0}`}
-              description={open ? "Their full character sheets are open to recruiters while the application is open." : "Character sheets closed with the application."}
+              title={open ? `Characters · ${data.characters?.length ?? 0}` : "Characters"}
+              description={open ? "Their full character sheets are open to recruiters while the application is open." : undefined}
             />
-            <ul className="divide-y divide-border">
-              {(data.characters ?? []).map((c) => <CharacterRow key={c.id} c={c} />)}
-            </ul>
+            {open ? (
+              <ul className="divide-y divide-border">
+                {(data.characters ?? []).map((c) => <CharacterRow key={c.id} c={c} />)}
+              </ul>
+            ) : (
+              <CardBody className="text-sm text-muted">Shown only while the application is open, like their character sheets.</CardBody>
+            )}
           </Card>
           {(data.accept_groups ?? []).length > 0 && (
             <Card>

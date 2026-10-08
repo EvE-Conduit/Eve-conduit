@@ -14,7 +14,7 @@ const FEED = "/p/announcements";
 /** The message as one line of plain text, for the smaller stories. */
 function excerpt(body: string, length = 180) {
   const text = body
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]\n]{0,200})\]\([^)\s]{0,2000}\)/g, "$1")
     .replace(/^\s*(#{1,3}|[-*]|\d+\.|>)\s+/gm, "")
     .replace(/[*_`]/g, "")
     .replace(/\s+/g, " ")

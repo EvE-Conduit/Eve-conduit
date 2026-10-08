@@ -31,6 +31,18 @@ def _run(fn, *args):
         raise HttpError(400, str(exc)) from None
 
 
+def _all_corporations(request, month=None):
+    try:
+        services.require_all_corporations(request.user, month)
+    except services.LedgerError as exc:
+        raise HttpError(403, str(exc)) from None
+
+
+def _csv_row(cells) -> list[str]:
+    """Spreadsheets run cells starting with = + - @ as formulas; quote those."""
+    return ["'" + str(c) if str(c)[:1] in ("=", "+", "-", "@", "\t", "\r") else str(c) for c in cells]
+
+
 def settings_out(s: MoonSettings) -> dict:
     return {"tax_rate": float(s.tax_rate), "corporations": s.corporations, "payment_instructions": s.payment_instructions}
 
@@ -57,31 +69,31 @@ def me(request, month: str = ""):
 @router.get("/ledger")
 @require_perm("moons.view_ledger")
 def ledger(request, month: str = ""):
-    return services.ledger(_month(month))
+    return services.ledger(_month(month), viewer=request.user)
 
 
 @router.get("/ledger.csv")
 @require_perm("moons.view_ledger")
 def ledger_csv(request, month: str = ""):
-    data = services.ledger(_month(month))
+    data = services.ledger(_month(month), viewer=request.user)
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="moon-mining-{data["month"]}.csv"'
     out = csv.writer(resp)
-    out.writerow(["Member", "Character", "Registered", "Ore units", "Value (ISK)", f"Tax at {data['tax_rate']:g}% (ISK)", "Paid"])
+    out.writerow(_csv_row(["Member", "Character", "Registered", "Ore units", "Value (ISK)", f"Tax at {data['tax_rate']:g}% (ISK)", "Paid"]))
     for m in data["members"]:
         for c in m["characters"]:
-            out.writerow([m["name"], c["name"], "yes" if m["registered"] else "no", c["quantity"], round(c["value"]),
-                          round(c["value"] * data["tax_rate"] / 100) if m["registered"] else "", ""])
+            out.writerow(_csv_row([m["name"], c["name"], "yes" if m["registered"] else "no", c["quantity"], round(c["value"]),
+                                   round(c["value"] * data["tax_rate"] / 100) if m["registered"] else "", ""]))
         if m["invoice"]:
-            out.writerow([m["name"], "(total owed)", "yes", m["quantity"], round(m["value"]), round(m["invoice"]["amount"]),
-                          "yes" if m["invoice"]["paid"] else "no"])
+            out.writerow(_csv_row([m["name"], "(total owed)", "yes", m["quantity"], round(m["value"]), round(m["invoice"]["amount"]),
+                                   "yes" if m["invoice"]["paid"] else "no"]))
     return resp
 
 
 @router.get("/settings")
 @require_perm("moons.view_ledger")
 def get_settings(request):
-    return {**settings_out(MoonSettings.load()), "available_corporations": services.corporations()}
+    return {**settings_out(MoonSettings.load()), "available_corporations": services.corporations(request.user)}
 
 
 class SettingsIn(Schema):
@@ -95,31 +107,34 @@ class SettingsIn(Schema):
 def put_settings(request, payload: SettingsIn):
     if not 0 <= payload.tax_rate <= 100:
         raise HttpError(400, "The tax rate must be between 0 and 100 %")
+    _all_corporations(request)  # the settings apply to every corporation's members
     s = MoonSettings.load()
     s.tax_rate = Decimal(str(round(payload.tax_rate, 2)))
     s.corporations = sorted(set(payload.corporations))
     s.payment_instructions = payload.payment_instructions.strip()[:2000]
     s.save()
     record("moons.settings", f"set moon tax to {s.tax_rate}%", request=request, target_type="plugin", details={"plugin": "moons"})
-    return {**settings_out(s), "available_corporations": services.corporations()}
+    return {**settings_out(s), "available_corporations": services.corporations(request.user)}
 
 
 @router.post("/months/{month}/close")
 @require_perm("moons.manage_ledger")
 def close_month(request, month: str):
     m = _month(month)
+    _all_corporations(request, m)
     _run(services.close_month, m, request.user)
     record("moons.close_month", f"closed moon mining for {services.label(m)}", request=request, target_type="plugin")
-    return services.ledger(m)
+    return services.ledger(m, viewer=request.user)
 
 
 @router.post("/months/{month}/reopen")
 @require_perm("moons.manage_ledger")
 def reopen_month(request, month: str):
     m = _month(month)
+    _all_corporations(request, m)
     _run(services.reopen_month, m)
     record("moons.reopen_month", f"reopened moon mining for {services.label(m)}", request=request, target_type="plugin")
-    return services.ledger(m)
+    return services.ledger(m, viewer=request.user)
 
 
 class PaidIn(Schema):

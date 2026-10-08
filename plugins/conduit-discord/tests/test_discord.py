@@ -6,6 +6,7 @@ import re
 import httpx
 import pytest
 from django.contrib.auth.models import Group, Permission
+from django.core.cache import cache
 
 from conduit.access.groups import add_member, remove_member
 from conduit.plugins.services import set_enabled, sync_installed
@@ -179,10 +180,47 @@ def test_unlink_takes_managed_roles_away(setup, discord, api_client):
     assert discord.members[ME]["roles"] == [R_HAND]
 
 
-def test_rate_limits_are_waited_out(setup, discord):
+def test_rate_limits_are_waited_out_only_in_background_tasks(setup, discord):
     discord.rate_limit_next = True
-    assert discord_api.guild("bot-token", GUILD)["name"] == "Test Alliance"
+    with discord_api.allow_waiting():
+        assert discord_api.guild("bot-token", GUILD)["name"] == "Test Alliance"
     assert discord.calls.count(("GET", f"/guilds/{GUILD}")) == 2
+    # In a web request a rate limit fails straight away: sleeping there would tie up the site's workers.
+    discord.rate_limit_next = True
+    with pytest.raises(discord_api.DiscordError) as err:
+        discord_api.guild("bot-token", GUILD)
+    assert err.value.status == 429 and discord.calls.count(("GET", f"/guilds/{GUILD}")) == 3
+
+
+def test_fix_my_roles_is_throttled(setup, api_client):
+    pilot, _ = setup
+    link(api_client, pilot)
+    cache.clear()
+    assert api_client.call("post", "/api/p/discord/sync").status_code == 200
+    resp = api_client.call("post", "/api/p/discord/sync")
+    assert resp.status_code == 429 and "try again" in resp.json()["detail"]
+
+
+def test_unlinking_keeps_the_link_when_discord_cant_take_the_roles_away(setup, discord, api_client):
+    pilot, caps = setup
+    add_member(pilot, caps, "admin")
+    link(api_client, pilot)
+    discord.rate_limit_next = True  # Discord refuses the clean-up
+    resp = api_client.call("post", "/api/p/discord/unlink")
+    assert resp.status_code == 502 and "stays linked" in resp.json()["detail"]
+    assert DiscordAccount.objects.filter(user=pilot).exists() and R_CAPS in discord.members[ME]["roles"]
+    # Once Discord answers again it works; an administrator can also force it.
+    assert api_client.call("post", "/api/p/discord/unlink").json()["account"] is None
+    assert discord.members[ME]["roles"] == []
+    link(api_client, pilot)
+    admin = make_user(90000009, "Admin")
+    admin.user_permissions.add(Permission.objects.get(codename="manage_discord"))
+    api_client.force_login(type(admin).objects.get(pk=admin.pk))
+    discord.rate_limit_next = True
+    assert api_client.call("delete", f"/api/p/discord/admin/members/{pilot.pk}").status_code == 502
+    discord.rate_limit_next = True
+    assert api_client.call("delete", f"/api/p/discord/admin/members/{pilot.pk}?force=true").status_code == 200
+    assert not DiscordAccount.objects.filter(user=pilot).exists()
 
 
 def test_server_check_spots_roles_the_bot_cant_give(setup):

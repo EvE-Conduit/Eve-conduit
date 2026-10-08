@@ -1,6 +1,7 @@
 """Recruitment: applying, the review queue, notes and messages, sheet access and accepting into groups."""
 
 import pytest
+from django.core.cache import cache
 from django.contrib.auth.models import Group, Permission
 
 from conduit.events import bus
@@ -177,7 +178,11 @@ def test_applying_needs_discord_linked_and_on_the_server(setup, discord_on, api_
     assert resp.status_code == 403 and "Join our Discord server" in resp.json()["detail"]
 
     discord_on.add("555")
+    # The page keeps Discord's answer for a few seconds (reloading it mustn't make the bot call Discord each time)...
+    assert not api_client.call("get", "/api/p/recruit/me").json()["discord"]["ok"]
+    cache.clear()
     assert api_client.call("get", "/api/p/recruit/me").json()["discord"]["ok"]
+    # ...but applying always asks Discord.
     assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
 
 
@@ -225,3 +230,50 @@ def test_discord_outage_blocks_with_a_retry_message(setup, discord_on, api_clien
     api_client.force_login(applicant)
     resp = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()})
     assert resp.status_code == 503 and "try again" in resp.json()["detail"]
+
+
+def _admin_group():
+    admins = Group.objects.create(name="Admins")
+    admins.permissions.add(Permission.objects.get(content_type__app_label="site", codename="manage_access"))
+    return admins
+
+
+def test_only_administrators_can_make_recruits_administrators(setup, api_client):
+    """A form that accepts into a group with administrator permissions would let a recruiter make their own alt an admin."""
+    form, recruiter, applicant, members = setup
+    admins = _admin_group()
+    api_client.force_login(recruiter)  # manages forms and reviews, but doesn't manage access
+    body = {"name": "Sneaky", "questions": QUESTIONS, "accept_groups": [members.pk, admins.pk]}
+    resp = api_client.call("post", "/api/p/recruit/forms", body)
+    assert resp.status_code == 403 and "administrator" in resp.json()["detail"]
+    assert api_client.call("put", f"/api/p/recruit/forms/{form.pk}", body).status_code == 403
+    # Set up earlier by someone else: accepting into it is still refused, and nothing changes.
+    form.accept_groups.add(admins)
+    app = services.apply(applicant, form, answers())
+    resp = api_client.call("post", f"/api/p/recruit/applications/{app.pk}/decide", {"accept": True})
+    assert resp.status_code == 403
+    applicant.refresh_from_db()
+    assert not applicant.groups.exists() and Application.objects.get(pk=app.pk).is_open
+    assert not applicant.has_perm("site.manage_access")
+    # An administrator may.
+    boss = make_user(90000080, "Boss")
+    boss.user_permissions.add(*Permission.objects.filter(content_type__app_label="recruit"),
+                              Permission.objects.get(content_type__app_label="site", codename="manage_access"))
+    api_client.force_login(type(boss).objects.get(pk=boss.pk))
+    assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/decide", {"accept": True}).status_code == 200
+    assert set(applicant.groups.values_list("name", flat=True)) == {"Members", "Admins"}
+
+
+def test_closed_applications_take_no_more_messages_and_hide_live_data(setup, api_client):
+    form, recruiter, applicant, _ = setup
+    app = services.apply(applicant, form, answers())
+    api_client.force_login(recruiter)
+    assert api_client.call("get", f"/api/p/recruit/applications/{app.pk}").json()["characters"]
+    api_client.force_login(applicant)
+    assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/withdraw").status_code == 200
+    before = Notification.objects.count()
+    resp = api_client.call("post", f"/api/p/recruit/applications/{app.pk}/comments", {"text": "ping"})
+    assert resp.status_code == 400 and "closed" in resp.json()["detail"] and Notification.objects.count() == before
+    # Recruiters keep the application, but not a live view of the person's wallet and characters.
+    api_client.force_login(recruiter)
+    assert api_client.call("get", f"/api/p/recruit/applications/{app.pk}").json()["characters"] == []

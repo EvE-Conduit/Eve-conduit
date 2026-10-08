@@ -40,6 +40,8 @@ def parse_month(text: str | None) -> date:
         return today.replace(day=1)
     try:
         year, month = (int(p) for p in text.split("-"))
+        if not 2003 <= year <= 2100:  # EVE launched in 2003; far-off years would overflow date arithmetic
+            raise ValueError
         return date(year, month, 1)
     except ValueError:
         raise LedgerError("Use a month like 2026-09") from None
@@ -54,12 +56,37 @@ def label(month: date) -> str:
     return month.strftime("%B %Y")
 
 
-def observations():
+def observations(viewer=None):
+    """Mining in the ledger's corporations; with ``viewer``, only corporations whose mining that person may see on the
+    corporation sheet (the ledger shows who mined what and what it's worth, so the corporation permissions apply)."""
     settings = MoonSettings.load()
     qs = MiningObservation.objects.all()
     if settings.corporations:
         qs = qs.filter(corporation_id__in=settings.corporations)
+    if viewer is not None:
+        qs = qs.filter(corporation_id__in=visible_corporations(viewer))
     return qs
+
+
+def visible_corporations(viewer) -> set[int]:
+    """Corporations with mining data whose Mining section ``viewer`` may open on the corporation sheet."""
+    from conduit.corp.access import can_view_section
+
+    ids = set(MiningObservation.objects.values_list("corporation_id", flat=True).distinct())
+    return {cid for cid in ids if can_view_section(viewer, cid, "mining")}
+
+
+def require_all_corporations(viewer, month: date | None = None) -> None:
+    """Closing or reopening a month, and the settings, cover every corporation in the ledger at once; only someone who
+    may see all of them may do that."""
+    qs = observations()
+    if month is not None:
+        qs = qs.filter(last_updated__gte=month, last_updated__lt=month_end(month))
+    hidden = set(qs.values_list("corporation_id", flat=True).distinct()) - visible_corporations(viewer)
+    if hidden:
+        names = ", ".join(EveCorporation.objects.filter(pk__in=hidden).order_by("name").values_list("name", flat=True)) or "other corporations"
+        raise LedgerError(f"This covers mining in corporations you can't see on the corporation sheet ({names}); "
+                          "someone with access to all of them has to do it")
 
 
 def months() -> list[dict]:
@@ -77,12 +104,13 @@ def _isk(value: float | Decimal) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
-def ledger(month: date, user=None) -> dict:
-    """The month's ledger; with ``user``, only that member's characters."""
+def ledger(month: date, user=None, viewer=None) -> dict:
+    """The month's ledger; with ``user``, only that member's characters; with ``viewer``, only the corporations that
+    person may see."""
     settings = MoonSettings.load()
     closed = LedgerMonth.objects.filter(month=month).first()
     rate = closed.tax_rate if closed else settings.tax_rate
-    rows = observations().filter(last_updated__gte=month, last_updated__lt=month_end(month))
+    rows = observations(viewer).filter(last_updated__gte=month, last_updated__lt=month_end(month))
     if user is not None:
         rows = rows.filter(character_id__in=user.characters.values_list("pk", flat=True))
     rows = list(rows)
@@ -235,6 +263,12 @@ def set_paid(invoice_id: int, paid: bool, by) -> Invoice:
     inv = Invoice.objects.select_related("month").filter(pk=invoice_id).first()
     if inv is None:
         raise LedgerError("No such invoice")
+    month = inv.month.month
+    mined_in = set(observations().filter(last_updated__gte=month, last_updated__lt=month_end(month),
+                                         character_id__in=inv.user.characters.values_list("pk", flat=True))
+                   .values_list("corporation_id", flat=True).distinct())
+    if mined_in - visible_corporations(by):
+        raise LedgerError("This member mined in corporations you can't see on the corporation sheet")
     inv.paid = paid
     inv.paid_at = timezone.now() if paid else None
     inv.marked_by = by
@@ -242,7 +276,7 @@ def set_paid(invoice_id: int, paid: bool, by) -> Invoice:
     return inv
 
 
-def corporations() -> list[dict]:
-    """Corporations with moon mining data, for the settings."""
-    ids = set(MiningObservation.objects.values_list("corporation_id", flat=True).distinct())
+def corporations(viewer=None) -> list[dict]:
+    """Corporations with moon mining data, for the settings (with ``viewer``: those that person may see)."""
+    ids = visible_corporations(viewer) if viewer is not None else set(MiningObservation.objects.values_list("corporation_id", flat=True).distinct())
     return [{"id": c.pk, "name": c.name, "ticker": c.ticker} for c in EveCorporation.objects.filter(pk__in=ids).order_by("name")]

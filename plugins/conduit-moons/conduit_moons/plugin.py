@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class MoonsPlugin(Plugin):
     id = "moons"
     name = "Moon Mining Ledger"
-    version = "1.0.0"
+    version = "1.1.0"
     description = "Who mined what from your moons each month, what it's worth, and moon tax with payments."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-moons"

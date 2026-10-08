@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
 from django.utils import timezone
@@ -76,12 +77,26 @@ def form_out(form: Form, *, admin: bool = False) -> dict:
     return out
 
 
+def _check_admin_groups(groups, by) -> None:
+    """Accepting into a group with administrator permissions would make the applicant an administrator, so only people
+    who manage access may set such a group on a form, or accept anyone into one (EvE Conduit before 0.5.18 didn't
+    check that for plugins)."""
+    from conduit.access.services import admin_permissions_in
+
+    if by.has_perm("site.manage_access"):
+        return
+    for g in groups:
+        if admin_permissions_in(g.permissions.all()):
+            raise RecruitError(f"{g.name} grants administrator permissions, so only an administrator can use it here", 403)
+
+
 def save_form(form: Form | None, data: dict, by, request=None) -> Form:
     name = str(data.get("name", "")).strip()[:100]
     if not name:
         raise RecruitError("Give the form a name")
     questions = clean_questions(data.get("questions", []))
     groups = list(Group.objects.filter(pk__in=data.get("accept_groups") or []))
+    _check_admin_groups(groups, by)
     with transaction.atomic():
         form = form or Form()
         form.name = name
@@ -134,19 +149,32 @@ def settings_out() -> dict:
     return {"require_discord": RecruitSettings.load().require_discord, "discord_plugin": discord_plugin()}
 
 
-def discord_status(user) -> dict:
-    """Whether the user has linked Discord and is on the server, asking Discord live. ``ok`` is True when both are."""
+def discord_status(user, fresh: bool = False) -> dict:
+    """Whether the user has linked Discord and is on the server. ``ok`` is True when both are.
+
+    The apply page asks on every load, so the answer from Discord is kept for a short while (``fresh`` asks Discord
+    again, as applying does): otherwise reloading the page would make the bot call Discord without limit.
+    """
+    from django.core.cache import cache
+
     from conduit_discord import discord_api
     from conduit_discord.models import DiscordAccount, DiscordSettings
 
     acct = DiscordAccount.objects.filter(user=user).first()
     out = {"linked": acct is not None, "username": acct.username if acct else None, "on_server": False, "error": ""}
     if acct is not None:
-        s = DiscordSettings.load()
-        try:
-            out["on_server"] = discord_api.member(s.bot_token, s.guild_id, acct.discord_id) is not None
-        except discord_api.DiscordError:
-            out["error"] = "Couldn't reach Discord to check; try again in a minute"
+        key = f"recruit:discord-member:{user.pk}:{acct.discord_id}"
+        cached = None if fresh else cache.get(key)
+        if cached is not None:
+            out["on_server"] = cached
+        else:
+            s = DiscordSettings.load()
+            try:
+                out["on_server"] = discord_api.member(s.bot_token, s.guild_id, acct.discord_id) is not None
+                # Someone who just joined shouldn't wait long to see it; someone on the server rarely leaves.
+                cache.set(key, out["on_server"], timeout=300 if out["on_server"] else 20)
+            except discord_api.DiscordError:
+                out["error"] = "Couldn't reach Discord to check; try again in a minute"
     out["ok"] = out["linked"] and out["on_server"]
     return out
 
@@ -154,7 +182,7 @@ def discord_status(user) -> dict:
 def check_discord(user) -> None:
     if not discord_required():
         return
-    status = discord_status(user)
+    status = discord_status(user, fresh=True)
     if status["error"]:
         raise RecruitError(status["error"], 503)
     if not status["linked"]:
@@ -192,6 +220,8 @@ def clean_answers(form: Form, raw) -> dict:
 def apply(user, form: Form, answers) -> Application:
     if not form.open:
         raise RecruitError("This form isn't taking applications right now")
+    # Lock the applicant's row so two applies sent at once can't both pass the check below.
+    get_user_model().objects.select_for_update().filter(pk=user.pk).first()
     if open_application(user):
         raise RecruitError("You already have an application in progress")
     check_discord(user)
@@ -239,6 +269,9 @@ def comment(app: Application, by, text: str, internal: bool) -> Comment:
     is_reviewer = by.has_perm(REVIEW_PERM)
     if app.user_id != by.pk and not is_reviewer:
         raise RecruitError("Not your application", 403)
+    if app.user_id == by.pk and not app.is_open:
+        # Each message notifies the recruiters; a closed application is over (apply again instead).
+        raise RecruitError("This application is closed")
     internal = internal and is_reviewer and app.user_id != by.pk
     c = Comment.objects.create(application=app, author=by, text=text, internal=internal)
     link = f"/p/recruit/applications/{app.pk}"
@@ -256,6 +289,8 @@ def decide(app: Application, by, accept: bool, message: str = "", request=None) 
 
     if not app.is_open:
         raise RecruitError("This application is already closed")
+    if accept:
+        _check_admin_groups(app.form.accept_groups.all(), by)
     app.status = Application.Status.ACCEPTED if accept else Application.Status.REJECTED
     app.decided_at = timezone.now()
     app.decided_by = by
@@ -356,7 +391,9 @@ def application_out(app: Application, viewer, *, detail: bool = False) -> dict:
         comments = app.comments.select_related("author").all()
         out["comments"] = [comment_out(c) for c in comments if is_recruiter or not c.internal]
         if is_recruiter:
-            out["characters"] = characters_out(app.user)
+            # Live character data (wallet, skill points...) only while the application is being decided, like the
+            # character sheets themselves; not for every past applicant forever.
+            out["characters"] = characters_out(app.user) if app.is_open else []
             out["accept_groups"] = [g.name for g in app.form.accept_groups.all()]
             out["history"] = [
                 {"id": a.pk, "status": a.status, "form": a.form.name, "created_at": a.created_at.isoformat()}

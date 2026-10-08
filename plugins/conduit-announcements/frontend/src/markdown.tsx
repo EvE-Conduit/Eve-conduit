@@ -3,7 +3,8 @@
 // *italic*, `code` and [links](https://...). Links must be https:// or a page on this site.
 import { Fragment, type ReactNode } from "react";
 
-const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+// Every part is bounded and stays on one line, so a crafted message can't make matching slow in readers' browsers.
+const INLINE = /(\*\*[^*\n]{1,500}\*\*|\*[^*\s][^*\n]{0,500}\*|_[^_\s][^_\n]{0,500}_|`[^`\n]{1,500}`|\[[^\]\n]{1,200}\]\([^)\s]{1,2000}\))/g;
 
 function safeHref(href: string): string | null {
   if (href.startsWith("https://")) return href;

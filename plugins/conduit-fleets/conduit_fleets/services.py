@@ -107,7 +107,9 @@ def start_tracking(fleet: Fleet, character_id: int, by) -> Fleet:
     if fleet.ended_at:
         raise FleetError("This fleet has ended")
     char = Character.objects.filter(pk=character_id).select_related("token").first()
-    if char is None or (char.user_id != by.pk and not can_manage(by)):
+    # Always the FC's own character, managers included: tracking reads ESI with that character's login every minute,
+    # which would let someone follow another member's in-game fleet without them knowing.
+    if char is None or char.user_id != by.pk:
         raise FleetError("Pick one of your own characters")
     token = getattr(char, "token", None)
     if token is None or not token.has_scopes(FLEET_SCOPE):
@@ -233,9 +235,19 @@ def user_fats(user, days: int | None = None, type_names: list[str] | None = None
     return qs
 
 
-def fleets_attended(user, days: int | None = None, type_names: list[str] | None = None) -> int:
-    """Fleets the user flew in with any character (two characters in one fleet count once)."""
-    return user_fats(user, days, type_names).values("fleet_id").distinct().count()
+def fleets_attended(user, days: int | None = None, type_names: list[str] | None = None, min_pilots: int = 1) -> int:
+    """Fleets the user flew in with any character (two characters in one fleet count once).
+
+    FATs someone added by hand for their own characters don't count (an FC could otherwise hand themselves
+    attendance), and with ``min_pilots`` only fleets with at least that many pilots count.
+    """
+    from django.db.models import Count
+
+    qs = user_fats(user, days, type_names).exclude(via=Fat.Via.MANUAL, added_by=user)
+    if min_pilots > 1:
+        big = Fleet.objects.annotate(pilots=Count("fats")).filter(pilots__gte=min_pilots).values("pk")
+        qs = qs.filter(fleet_id__in=big)
+    return qs.values("fleet_id").distinct().count()
 
 
 def my_attendance(user) -> dict:

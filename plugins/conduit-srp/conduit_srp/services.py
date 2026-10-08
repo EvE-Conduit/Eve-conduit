@@ -39,8 +39,27 @@ class SrpError(Exception):
         self.status = status
 
 
+#: Killmail ids are far below this; bigger numbers are typos or probes (and would overflow the database).
+MAX_KILLMAIL_ID = 2**31 - 1
+#: No ship replacement is anywhere near this many ISK.
+MAX_PAYOUT = Decimal("1e15")
+
+
 def _isk(value) -> Decimal:
-    return Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    try:
+        amount = Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    except (ArithmeticError, ValueError):
+        raise SrpError("Enter the payout as a number of ISK") from None
+    if not amount.is_finite() or amount > MAX_PAYOUT:
+        raise SrpError("That payout is far too large")
+    return amount
+
+
+def _killmail_id(value) -> int:
+    km_id = int(value)
+    if not 0 < km_id <= MAX_KILLMAIL_ID:
+        raise SrpError("That isn't a killmail id", 404)
+    return km_id
 
 
 # --- payouts ---------------------------------------------------------------------------------------------------
@@ -137,12 +156,12 @@ def killmail_from_link(link: str) -> Killmail:
 
     m = KILL_LINK_RE.search(link or "")
     if m:
-        km_id, km_hash = int(m.group(1)), m.group(2).lower()
+        km_id, km_hash = _killmail_id(m.group(1)[:12]), m.group(2).lower()
     else:
         z = ZKILL_LINK_RE.search(link or "")
         if not z:
             raise SrpError("Paste a zKillboard link (https://zkillboard.com/kill/123/) or the killmail's \"Copy external kill link\"")
-        km_id = int(z.group(1))
+        km_id = _killmail_id(z.group(1)[:12])
         known = Killmail.objects.filter(pk=km_id).first()
         if known is not None:
             return known
@@ -203,7 +222,7 @@ def submit(user, *, killmail_id: int | None = None, link: str = "", fleet: str =
     from conduit.notify.services import notify_permission
 
     settings = SrpSettings.load()
-    km = killmail_from_link(link) if link else Killmail.objects.filter(pk=killmail_id).first()
+    km = killmail_from_link(link) if link else Killmail.objects.filter(pk=_killmail_id(killmail_id or 0)).first()
     if km is None:
         raise SrpError("No such killmail", 404)
     char = Character.objects.filter(pk=km.victim_character_id, user=user).first()
@@ -234,7 +253,9 @@ def submit(user, *, killmail_id: int | None = None, link: str = "", fleet: str =
     return req
 
 
+@transaction.atomic
 def withdraw(req: SrpRequest, user) -> None:
+    req = _locked(req)
     if req.user_id != user.pk:
         raise SrpError("That isn't your request", 403)
     if req.status != SrpRequest.Status.PENDING:
@@ -243,8 +264,18 @@ def withdraw(req: SrpRequest, user) -> None:
 
 
 def _may_decide(req: SrpRequest, user) -> None:
-    if req.user_id == user.pk and not user.is_superuser:
+    """Nobody decides their own request, administrators included."""
+    if req.user_id == user.pk:
         raise SrpError("Someone else has to decide your own request", 403)
+
+
+def _locked(req: SrpRequest) -> SrpRequest:
+    """The request as it is now, locked until the transaction ends: someone may have withdrawn, decided or paid it
+    since it was loaded, and saving the old copy would undo that (or bring a withdrawn request back)."""
+    fresh = SrpRequest.objects.select_for_update().filter(pk=req.pk).first()
+    if fresh is None:
+        raise SrpError("That request was withdrawn", 404)
+    return fresh
 
 
 def _ship_name(req: SrpRequest) -> str:
@@ -255,6 +286,7 @@ def _ship_name(req: SrpRequest) -> str:
 def approve(req: SrpRequest, by, payout: float | None = None, note: str = "") -> SrpRequest:
     from conduit.notify.services import notify
 
+    req = _locked(req)
     _may_decide(req, by)
     if req.status not in (SrpRequest.Status.PENDING, SrpRequest.Status.REJECTED):
         raise SrpError(f"This request is already {req.get_status_display().lower()}")
@@ -263,7 +295,7 @@ def approve(req: SrpRequest, by, payout: float | None = None, note: str = "") ->
         raise SrpError("Enter the payout")
     req.status, req.payout = SrpRequest.Status.APPROVED, amount
     req.decided_at, req.decided_by, req.decision_note = timezone.now(), by, note.strip()[:2000]
-    req.save()
+    req.save(update_fields=["status", "payout", "decided_at", "decided_by", "decision_note"])
     ship = _ship_name(req)
     bus.emit("srp.request_decided", user_id=req.user_id, user=req.user.display_name, request_id=req.pk, decision="approved",
              payout=float(amount), title="SRP approved", summary=f"{req.character_name}'s {ship}: {amount:,.0f} ISK",
@@ -277,6 +309,7 @@ def approve(req: SrpRequest, by, payout: float | None = None, note: str = "") ->
 def reject(req: SrpRequest, by, note: str) -> SrpRequest:
     from conduit.notify.services import notify
 
+    req = _locked(req)
     _may_decide(req, by)
     if req.status not in (SrpRequest.Status.PENDING, SrpRequest.Status.APPROVED):
         raise SrpError(f"This request is already {req.get_status_display().lower()}")
@@ -285,7 +318,7 @@ def reject(req: SrpRequest, by, note: str) -> SrpRequest:
         raise SrpError("Say why, so the member knows")
     req.status, req.payout = SrpRequest.Status.REJECTED, None
     req.decided_at, req.decided_by, req.decision_note = timezone.now(), by, note
-    req.save()
+    req.save(update_fields=["status", "payout", "decided_at", "decided_by", "decision_note"])
     ship = _ship_name(req)
     bus.emit("srp.request_decided", user_id=req.user_id, user=req.user.display_name, request_id=req.pk, decision="rejected",
              title="SRP rejected", summary=f"{req.character_name}'s {ship}: {note}", link=f"/p/srp/requests/{req.pk}", level="warning")
@@ -296,19 +329,24 @@ def reject(req: SrpRequest, by, note: str) -> SrpRequest:
 @transaction.atomic
 def reopen(req: SrpRequest, by) -> SrpRequest:
     """Back to pending, e.g. after a mistaken decision. Paid requests stay paid."""
+    req = _locked(req)
+    _may_decide(req, by)
     if req.status not in (SrpRequest.Status.APPROVED, SrpRequest.Status.REJECTED):
         raise SrpError("Only approved or rejected requests can be reopened")
     req.status, req.payout, req.decided_at, req.decided_by, req.decision_note = SrpRequest.Status.PENDING, None, None, None, ""
-    req.save()
+    req.save(update_fields=["status", "payout", "decided_at", "decided_by", "decision_note"])
     return req
 
 
 @transaction.atomic
-def mark_paid(ids: list[int], by) -> list[SrpRequest]:
-    """Mark approved requests as paid; the rest are skipped."""
+def mark_paid(ids: list[int], by) -> tuple[list[SrpRequest], list[int]]:
+    """Mark approved requests as paid; the rest are skipped. Payers can't mark their own requests paid (someone else
+    sends that ISK). Returns the paid requests and the ids of the payer's own that were skipped."""
     from conduit.notify.services import notify
 
-    reqs = list(SrpRequest.objects.select_for_update().filter(pk__in=ids, status=SrpRequest.Status.APPROVED).select_related("user", "killmail"))
+    approved = SrpRequest.objects.select_for_update().filter(pk__in=ids, status=SrpRequest.Status.APPROVED)
+    own = list(approved.filter(user=by).values_list("pk", flat=True))
+    reqs = list(approved.exclude(user=by).select_related("user", "killmail"))
     now = timezone.now()
     for req in reqs:
         req.status, req.paid_at, req.paid_by = SrpRequest.Status.PAID, now, by
@@ -318,7 +356,7 @@ def mark_paid(ids: list[int], by) -> list[SrpRequest]:
                  title="SRP paid", summary=f"{req.character_name}'s {ship}: {req.payout:,.0f} ISK", link=f"/p/srp/requests/{req.pk}", level="success")
         notify(req.user_id, f"SRP paid: {ship}", f"{req.payout:,.0f} ISK has been sent to {req.character_name}.",
                link=f"/p/srp/requests/{req.pk}", level="success", category="p.srp")
-    return reqs
+    return reqs, own
 
 
 # --- output --------------------------------------------------------------------------------------------------------

@@ -98,6 +98,20 @@ def test_webhook_delivery_signs_and_logs(monkeypatch, django_capture_on_commit_c
 
 
 @pytest.mark.django_db
+def test_private_events_only_go_to_webhooks_that_chose_them(monkeypatch, django_capture_on_commit_callbacks):
+    """A member's own notifications mustn't land in a channel just because its webhook takes "every event"."""
+    Webhook.objects.create(name="Everything", kind="json", url="https://example.com/all", events=[])
+    Webhook.objects.create(name="Mod log", kind="json", url="https://example.com/mods", events=["notification.created"])
+    sent = []
+    monkeypatch.setattr("conduit.events.webhooks.httpx.post", lambda url, **kw: sent.append(url) or httpx.Response(204))
+    with django_capture_on_commit_callbacks(execute=True):
+        bus.emit("notification.created", user_id=1, title="SRP rejected")
+        bus.emit("user.created", user_id=1, user="Pilot")
+    assert sorted(sent) == ["https://example.com/all", "https://example.com/mods"]
+    assert bus.is_private("notification.created") and not bus.is_private("user.created")
+
+
+@pytest.mark.django_db
 def test_failed_delivery_is_recorded(monkeypatch):
     from conduit.events.webhooks import deliver
 

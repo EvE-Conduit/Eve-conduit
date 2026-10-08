@@ -37,6 +37,9 @@ class EventType:
     label: str
     description: str = ""
     plugin: str | None = None
+    #: Carries things meant for some people only (one member's notifications, a leadership-only announcement): sent
+    #: only to webhooks that picked it by name, never to "every event" ones.
+    private: bool = False
 
 
 @dataclass
@@ -53,10 +56,14 @@ EVENT_TYPES: dict[str, EventType] = {}
 _handlers: dict[str, list[Callable[[Event], None]]] = defaultdict(list)
 
 
-def register(name: str, label: str, description: str = "", plugin: str | None = None) -> EventType:
-    """Declare an event so admins can pick it for webhooks."""
-    EVENT_TYPES[name] = EventType(name, label, description, plugin)
+def register(name: str, label: str, description: str = "", plugin: str | None = None, private: bool = False) -> EventType:
+    """Declare an event so admins can pick it for webhooks. ``private``: see ``EventType.private``."""
+    EVENT_TYPES[name] = EventType(name, label, description, plugin, private)
     return EVENT_TYPES[name]
+
+
+def is_private(name: str) -> bool:
+    return name in EVENT_TYPES and EVENT_TYPES[name].private
 
 
 def on(*names: str):
@@ -104,8 +111,11 @@ CORE_EVENTS = [
     ("group.request_decided", "Group request decided", "A group leader approved or rejected a request"),
     ("sync.failed", "Sync failing", "A character sheet section failed several times in a row"),
     ("compliance.changed", "Compliance changed", "A user became compliant or non-compliant"),
-    ("notification.created", "Notification", "A notification was sent to a user"),
+    ("notification.created", "Notification", "A notification was sent to a user (any member's own notifications: choose it only for a private channel)"),
     ("webhook.test", "Webhook test", "Sent when an admin presses Test on a webhook"),
 ]
+#: Core events only sent to webhooks that chose them (see EventType.private).
+PRIVATE_CORE_EVENTS = {"notification.created"}
+
 for _name, _label, _desc in CORE_EVENTS:
-    register(_name, _label, _desc)
+    register(_name, _label, _desc, private=_name in PRIVATE_CORE_EVENTS)

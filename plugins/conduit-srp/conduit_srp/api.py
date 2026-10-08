@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.security import django_auth
+from pydantic import Field
 
 from conduit.audit.services import record
 from conduit.permissions import require_perm
@@ -65,7 +66,7 @@ def me(request):
 
 class ClaimIn(Schema):
     killmail_id: int | None = None
-    link: str = ""
+    link: str = Field("", max_length=500)
     fleet: str = ""
     fc: str = ""
     notes: str = ""
@@ -107,6 +108,11 @@ def queue(request, status: str = "pending", q: str = ""):
     return services.queue(status, q.strip())
 
 
+def _csv_row(cells) -> list[str]:
+    """Spreadsheets run cells starting with = + - @ as formulas; the fleet is text members type, so quote those."""
+    return ["'" + str(c) if str(c)[:1] in ("=", "+", "-", "@", "\t", "\r") else str(c) for c in cells]
+
+
 @router.get("/queue.csv")
 @require_perm("srp.pay_requests")
 def payouts_csv(request):
@@ -117,8 +123,8 @@ def payouts_csv(request):
     out = csv.writer(resp)
     out.writerow(["Request", "Member", "Pay to", "Ship", "Lost", "Fleet", "Payout (ISK)"])
     for r in reqs:
-        out.writerow([r["id"], r["user"]["name"], r["character"]["name"], r["ship"]["name"], r["time"][:16].replace("T", " "),
-                      r["fleet"], round(r["payout"] or 0)])
+        out.writerow(_csv_row([r["id"], r["user"]["name"], r["character"]["name"], r["ship"]["name"], r["time"][:16].replace("T", " "),
+                               r["fleet"], round(r["payout"] or 0)]))
     return resp
 
 
@@ -133,14 +139,14 @@ class DecideIn(Schema):
 def decide(request, request_id: int, payload: DecideIn):
     req = _request(request_id)
     if payload.decision == "approve":
-        _run(services.approve, req, request.user, payload.payout, payload.note)
+        req = _run(services.approve, req, request.user, payload.payout, payload.note)
         record("srp.approve", f"approved SRP for {req.character_name} ({req.payout:,.0f} ISK)", request=request, target=req.user,
                details={"request_id": req.pk, "payout": float(req.payout)})
     elif payload.decision == "reject":
-        _run(services.reject, req, request.user, payload.note)
+        req = _run(services.reject, req, request.user, payload.note)
         record("srp.reject", f"rejected SRP for {req.character_name}", request=request, target=req.user, details={"request_id": req.pk})
     elif payload.decision == "reopen":
-        _run(services.reopen, req, request.user)
+        req = _run(services.reopen, req, request.user)
         record("srp.reopen", f"reopened SRP for {req.character_name}", request=request, target=req.user, details={"request_id": req.pk})
     else:
         raise HttpError(400, "Unknown decision")
@@ -154,12 +160,12 @@ class PaidIn(Schema):
 @router.post("/paid")
 @require_perm("srp.pay_requests")
 def mark_paid(request, payload: PaidIn):
-    reqs = services.mark_paid(payload.ids, request.user)
+    reqs, own = services.mark_paid(payload.ids[:1000], request.user)
     if reqs:
         total = sum((r.payout for r in reqs), Decimal(0))
         record("srp.paid", f"marked {len(reqs)} SRP request{'s' if len(reqs) != 1 else ''} paid ({total:,.0f} ISK)", request=request,
                target_type="plugin", details={"plugin": "srp", "ids": [r.pk for r in reqs]})
-    return {"paid": len(reqs)}
+    return {"paid": len(reqs), "skipped_own": len(own)}
 
 
 # --- settings and rules ------------------------------------------------------------------------------------------

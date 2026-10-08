@@ -103,7 +103,7 @@ def test_member_claims_and_reviewer_approves(pilot, api_client, admin_user):
     grant(reviewer, "review_requests", "pay_requests")
     csv = api_client.call("get", "/api/p/srp/queue.csv")
     assert b"Pilot One" in csv.content and b"8000000" in csv.content
-    assert api_client.call("post", "/api/p/srp/paid", {"ids": [req_id]}).json() == {"paid": 1}
+    assert api_client.call("post", "/api/p/srp/paid", {"ids": [req_id]}).json() == {"paid": 1, "skipped_own": 0}
     assert SrpRequest.objects.get(pk=req_id).status == "paid"
 
 
@@ -212,3 +212,62 @@ def test_rules_api(pilot, api_client, admin_user):
     assert api_client.call("post", "/api/p/srp/rules", {"type_id": 2048}).status_code == 400  # not a ship
     assert services.suggest(SCYTHE, 1) == Decimal(60_000_000)
     assert api_client.call("delete", f"/api/p/srp/rules/{rule['id']}").status_code == 200
+
+
+def test_nobody_reopens_or_pays_their_own_request(pilot, api_client):
+    """Not even administrators decide their own request; reopening and paying count as deciding."""
+    req = services.submit(pilot, killmail_id=lose(pilot.main_character).pk, fleet="CTA")
+    other = grant(make_user(90000050, "Reviewer"), "review_requests")
+    services.reject(req, other, "Not a doctrine fit")
+    grant(pilot, "review_requests", "pay_requests")
+    api_client.force_login(pilot)
+    assert api_client.call("post", f"/api/p/srp/requests/{req.pk}/decide", {"decision": "reopen"}).status_code == 403
+    services.approve(SrpRequest.objects.get(pk=req.pk), other, 5_000_000)
+    assert api_client.call("post", "/api/p/srp/paid", {"ids": [req.pk]}).json() == {"paid": 0, "skipped_own": 1}
+    assert SrpRequest.objects.get(pk=req.pk).status == "approved"
+    pilot.is_superuser = True
+    pilot.save()
+    with pytest.raises(services.SrpError):
+        services.reopen(SrpRequest.objects.get(pk=req.pk), pilot)
+
+
+def test_stale_copies_cant_undo_payment_or_bring_back_a_withdrawn_request(pilot):
+    req = services.submit(pilot, killmail_id=lose(pilot.main_character).pk, fleet="CTA")
+    reviewer = grant(make_user(90000050, "Reviewer"), "review_requests", "pay_requests")
+    stale = SrpRequest.objects.get(pk=req.pk)
+    services.approve(SrpRequest.objects.get(pk=req.pk), reviewer, 5_000_000)
+    services.mark_paid([req.pk], reviewer)
+    # A reviewer's page loaded before it was paid: reopening the old copy fails instead of un-paying it.
+    stale.status = "approved"
+    with pytest.raises(services.SrpError):
+        services.reopen(stale, reviewer)
+    assert SrpRequest.objects.get(pk=req.pk).status == "paid"
+    # Withdrawn while a reviewer had it open: approving the old copy doesn't recreate it.
+    req2 = services.submit(pilot, killmail_id=lose(pilot.main_character).pk, fleet="CTA")
+    stale2 = SrpRequest.objects.get(pk=req2.pk)
+    services.withdraw(SrpRequest.objects.get(pk=req2.pk), pilot)
+    with pytest.raises(services.SrpError):
+        services.approve(stale2, reviewer, 1_000_000)
+    assert not SrpRequest.objects.filter(pk=req2.pk).exists()
+
+
+def test_bad_numbers_are_refused_not_crashed(pilot, api_client):
+    req = services.submit(pilot, killmail_id=lose(pilot.main_character).pk, fleet="CTA")
+    reviewer = grant(make_user(90000050, "Reviewer"), "review_requests")
+    api_client.force_login(reviewer)
+    for payout in (1e20, float("inf")):
+        resp = api_client.call("post", f"/api/p/srp/requests/{req.pk}/decide", {"decision": "approve", "payout": payout})
+        assert resp.status_code in (400, 422), (payout, resp.status_code)
+    api_client.force_login(pilot)
+    for body in ({"killmail_id": 10**30, "fleet": "x"}, {"killmail_id": 2**40, "fleet": "x"},
+                 {"link": "https://zkillboard.com/kill/" + "9" * 40 + "/", "fleet": "x"}):
+        assert api_client.call("post", "/api/p/srp/requests", body).status_code in (400, 404, 422), body
+
+
+def test_payout_csv_cannot_run_formulas(pilot, api_client):
+    req = services.submit(pilot, killmail_id=lose(pilot.main_character).pk, fleet='=HYPERLINK("http://evil","x")')
+    reviewer = grant(make_user(90000050, "Reviewer"), "review_requests", "pay_requests")
+    services.approve(req, reviewer, 1_000_000)
+    api_client.force_login(reviewer)
+    csv = api_client.call("get", "/api/p/srp/queue.csv").content.decode()
+    assert "'=HYPERLINK" in csv

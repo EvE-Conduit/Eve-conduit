@@ -140,6 +140,10 @@ def edit(request, fleet_id: int, payload: EditIn):
         raise HttpError(400, "Give the fleet a name")
     if payload.fleet_type and not FleetType.objects.filter(pk=payload.fleet_type).exists():
         raise HttpError(400, "No such fleet type")
+    if fleet.ended_at and (payload.fleet_type or None) != fleet.fleet_type_id and not services.can_manage(request.user):
+        # Group rules can count only some fleet types (e.g. CTAs): changing a finished fleet's type would change who
+        # passes them, so that's for fleet managers.
+        raise HttpError(403, "Only a fleet manager can change the type of a fleet that has ended")
     fleet.name, fleet.fleet_type_id, fleet.notes = name, payload.fleet_type or None, payload.notes.strip()[:4000]
     fleet.save(update_fields=["name", "fleet_type", "notes"])
     return services.fleet_detail(_fleet(fleet_id), request.user)
@@ -254,6 +258,11 @@ def stats(request, days: int = 30, type: int | None = None):
     return {"days": days, "members": services.leaderboard(max(1, min(days, 3650)), type)}
 
 
+def _csv_row(cells) -> list[str]:
+    """Spreadsheets run cells starting with = + - @ as formulas; quote those."""
+    return ["'" + str(c) if str(c)[:1] in ("=", "+", "-", "@", "\t", "\r") else str(c) for c in cells]
+
+
 @router.get("/stats/members.csv")
 @require_perm("fleets.manage_fleets")
 def stats_csv(request, days: int = 30, type: int | None = None):
@@ -263,7 +272,7 @@ def stats_csv(request, days: int = 30, type: int | None = None):
     out = csv.writer(resp)
     out.writerow(["Member", "Registered", "Fleets", "Characters", "Last fleet"])
     for m in rows:
-        out.writerow([m["name"], "yes" if m["registered"] else "no", m["fleets"], ", ".join(m["characters"]), m["last"][:10]])
+        out.writerow(_csv_row([m["name"], "yes" if m["registered"] else "no", m["fleets"], ", ".join(m["characters"]), m["last"][:10]]))
     return resp
 
 

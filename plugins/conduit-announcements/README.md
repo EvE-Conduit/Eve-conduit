@@ -14,8 +14,11 @@ News and orders from leadership, on a page of its own and on the dashboard.
   hide the whole Bulletin under Administration → Settings → Landing page → From plugins. Needs EvE Conduit 0.5.18 or
   newer (older versions just don't show it).
 - **Telling people:** when an announcement goes out, everyone who can see it gets a notification (urgent ones even
-  if they muted announcements), and the `announcements.published` event fires, so a Discord webhook under
-  Administration → Integrations can post it to a channel.
+  if they muted announcements), and an event fires, so a Discord webhook under
+  Administration → Integrations can post it to a channel. Announcements for everyone fire
+  `announcements.published`; ones for some states or groups only fire `announcements.published_restricted`
+  instead (with the audience in the payload), so they never land in a channel everyone can read unless you send
+  that event there.
 
 To make it the first page people see after signing in, pick **Announcements** under Administration → Settings →
 Start page (needs EvE Conduit 0.5.7 or newer; the plugin itself works on 0.5.6).
