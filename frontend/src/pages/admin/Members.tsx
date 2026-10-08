@@ -1,5 +1,5 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, LogIn, Search, Shield, Users } from "lucide-react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRightLeft, ChevronLeft, ChevronRight, LogIn, Search, Shield, Users } from "lucide-react";
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -8,6 +8,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
+import { Alert } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { EmptyState, PageHeader } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +37,8 @@ export function AdminMembers() {
   const [q, setQ] = useState(params0.get("q") ?? "");
   const me = useBootstrap().user;
   const canImpersonate = useHasPerm("site.impersonate_users");
+  const canMove = useHasPerm("site.manage_access");
+  const [moving, setMoving] = useState<Member | null>(null);
   const [switching, setSwitching] = useState<number | null>(null);
   const impersonate = async (m: Member) => {
     setSwitching(m.id);
@@ -115,7 +119,7 @@ export function AdminMembers() {
                   <th className="px-5 py-3 font-medium">Groups</th>
                   <th className="px-5 py-3 text-right font-medium">Alts</th>
                   <th className="px-5 py-3 text-right font-medium">Last seen</th>
-                  {canImpersonate && <th className="w-12 px-3 py-3" />}
+                  {(canImpersonate || canMove) && <th className="w-24 px-3 py-3" />}
                 </tr>
               </thead>
               <tbody>
@@ -154,9 +158,16 @@ export function AdminMembers() {
                     </td>
                     <td className="px-5 py-3 text-right font-mono tabular-nums text-muted">{m.character_count}</td>
                     <td className="px-5 py-3 text-right text-muted">{timeAgo(m.last_login)}</td>
-                    {canImpersonate && (
-                      <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        {m.id !== me?.id && (!m.is_admin || me?.is_admin) && (
+                    {(canImpersonate || canMove) && (
+                      <td className="whitespace-nowrap px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        {canMove && (!m.is_admin || me?.is_admin) && (
+                          <Tooltip content="Move characters to another account">
+                            <Button size="icon" variant="ghost" aria-label={`Move ${m.name}'s characters to another account`} onClick={() => setMoving(m)}>
+                              <ArrowRightLeft />
+                            </Button>
+                          </Tooltip>
+                        )}
+                        {canImpersonate && m.id !== me?.id && (!m.is_admin || me?.is_admin) && (
                           <Tooltip content={`Sign in as ${m.name}`}>
                             <Button size="icon" variant="ghost" aria-label={`Sign in as ${m.name}`} loading={switching === m.id} onClick={() => impersonate(m)}>
                               {switching !== m.id && <LogIn />}
@@ -187,7 +198,119 @@ export function AdminMembers() {
           </div>
         )}
       </Card>
+      {moving && <MoveCharacters member={moving} onClose={() => setMoving(null)} />}
     </>
+  );
+}
+
+interface MemberCharacter extends CharacterBrief {
+  main: boolean;
+}
+
+type Person = { id: number; name: string; portrait: string | null };
+
+/**
+ * Move characters to another member's account, e.g. someone who signed up twice instead of adding an alt. Moving all
+ * of them merges the accounts: the old one is switched off.
+ */
+function MoveCharacters({ member, onClose }: { member: Member; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["admin", "member-characters", member.id],
+    queryFn: () => api.get<{ characters: MemberCharacter[] }>(`/api/admin/members/${member.id}/characters`),
+  });
+  const [picked, setPicked] = useState<number[] | null>(null);
+  const chosen = picked ?? (data?.characters ?? []).map((c) => c.id);
+  const [q, setQ] = useState("");
+  const dq = useDeferredValue(q.trim());
+  const [target, setTarget] = useState<Person | null>(null);
+  const hits = useQuery({
+    queryKey: ["admin", "user-lookup", dq],
+    queryFn: () => api.get<Person[]>(`/api/admin/users/lookup?q=${encodeURIComponent(dq)}`),
+    enabled: dq.length >= 2,
+  });
+  const all = !!data && chosen.length === data.characters.length;
+  const move = useMutation({
+    mutationFn: () => api.post<{ moved: string[]; emptied: boolean }>(`/api/admin/members/${member.id}/move-characters`, { target: target!.id, characters: chosen }),
+    onSuccess: (r) => {
+      toast.success(`Moved ${r.moved.join(", ")} to ${target!.name}` + (r.emptied ? `; ${member.name}'s old account is switched off` : ""));
+      qc.invalidateQueries({ queryKey: ["admin", "members"] });
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const flip = (id: number) => setPicked(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id]);
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Move ${member.name}'s characters`}
+      description="For someone who signed up twice instead of adding an alt to their main. Logins and everything synced for the characters go with them."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!target || !chosen.length} loading={move.isPending} onClick={() => move.mutate()}>
+            <ArrowRightLeft /> {all ? "Merge accounts" : `Move ${chosen.length} character${chosen.length === 1 ? "" : "s"}`}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <div className="mb-1.5 text-[13px] font-medium">Characters</div>
+          {!data ? (
+            <Skeleton className="h-16" />
+          ) : (
+            <div className="space-y-1 rounded-lg border border-border p-2">
+              {data.characters.map((c) => (
+                <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm hover:bg-hover">
+                  <input type="checkbox" checked={chosen.includes(c.id)} onChange={() => flip(c.id)} className="size-4 accent-[var(--site-accent)]" />
+                  <Avatar src={c.portrait} name={c.name} size="xs" />
+                  <span className="flex-1 truncate">{c.name}</span>
+                  {c.main && <Badge size="xs">main</Badge>}
+                  {c.corporation && <span className="text-xs text-subtle">{c.corporation.ticker ? `[${c.corporation.ticker}]` : c.corporation.name}</span>}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-[13px] font-medium">Move them to</div>
+          {target ? (
+            <div className="flex items-center gap-3 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-sm">
+              <Avatar src={target.portrait ?? undefined} name={target.name} size="xs" />
+              <span className="flex-1 font-medium">{target.name}</span>
+              <Button size="sm" variant="ghost" onClick={() => setTarget(null)}>Change</Button>
+            </div>
+          ) : (
+            <>
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name of any of their characters" autoFocus />
+              <div className="mt-1 space-y-0.5">
+                {(hits.data ?? [])
+                  .filter((p) => p.id !== member.id)
+                  .map((p) => (
+                    <button key={p.id} type="button" onClick={() => setTarget(p)} className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm hover:bg-hover">
+                      <Avatar src={p.portrait ?? undefined} name={p.name} size="xs" />
+                      {p.name}
+                    </button>
+                  ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {target && chosen.length > 0 && (
+          <Alert tone={all ? "warning" : "info"}>
+            {all
+              ? `All of ${member.name}'s characters move to ${target.name}, so ${member.name}'s account is switched off (it can't sign in any more) and leaves its groups. Its history stays for the record. A linked Discord account moves too, if ${target.name} hasn't linked one.`
+              : `${chosen.length} character${chosen.length === 1 ? "" : "s"} move to ${target.name}; ${member.name} keeps the rest.`}{" "}
+            Whoever owns these characters signs in to {target.name}'s account with them from now on.
+          </Alert>
+        )}
+      </div>
+    </Dialog>
   );
 }
 

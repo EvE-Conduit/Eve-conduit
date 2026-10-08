@@ -104,6 +104,8 @@ CORE_EVENTS = [
     ("character.added", "Character added", "A character was linked to an account"),
     ("character.removed", "Character removed", "A character was unlinked"),
     ("character.main_changed", "Main changed", "A user picked a different main character"),
+    ("character.moved", "Character moved", "An administrator moved a character to another member's account"),
+    ("user.merged", "Accounts merged", "An administrator moved every character of an account into another (the old one is switched off)"),
     ("token.invalid", "Token lost", "A character's ESI token stopped working and needs a new login"),
     ("group.joined", "Joined group", "A user joined a group (by themselves, by request, by an admin or automatically)"),
     ("group.left", "Left group", "A user left or was removed from a group"),

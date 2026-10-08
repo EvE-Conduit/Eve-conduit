@@ -335,3 +335,18 @@ def test_must_be_on_the_server_to_be_compliant(setup, discord, api_client, admin
     pilot.user_permissions.clear()
     pilot = type(pilot).objects.get(pk=pilot.pk)
     assert [p for p in check_user(pilot)["problems"] if p.startswith("Discord")] == []
+
+
+def test_a_merged_account_takes_its_discord_link_along(setup, discord, api_client, corp, django_capture_on_commit_callbacks):
+    from conduit.accounts.models import Character
+    from conduit.accounts.services import move_characters
+
+    pilot, _ = setup  # their second account, which linked Discord
+    assert link(api_client, pilot).status_code == 200
+    main = make_user(90000060, "Real Main", corporation=corp)
+    admin = make_user(90000061, "Admin")
+    admin.is_superuser = True
+    admin.save()
+    with django_capture_on_commit_callbacks(execute=True):
+        move_characters(admin, pilot, main, list(Character.objects.filter(user=pilot).values_list("pk", flat=True)))
+    assert DiscordAccount.objects.get().user_id == main.pk

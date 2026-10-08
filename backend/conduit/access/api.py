@@ -478,7 +478,8 @@ class MemberOut(Schema):
 @paginate
 def list_members(request, q: str = "", state: int | None = None):
     qs = (
-        User.objects.select_related("main_character__corporation", "main_character__alliance", "state")
+        # Switched-off accounts (e.g. merged into another) can't sign in and aren't members any more.
+        User.objects.filter(is_active=True).select_related("main_character__corporation", "main_character__alliance", "state")
         .prefetch_related("groups")
         .annotate(character_count=Count("characters"))
         .order_by("main_character__name")
@@ -500,6 +501,39 @@ def list_members(request, q: str = "", state: int | None = None):
         }
         for u in qs
     ]
+
+
+@router.get("/members/{user_id}/characters")
+@require_perm("site.manage_access")
+def member_characters(request, user_id: int):
+    """A member's characters, for moving some of them to another account."""
+    user = get_object_or_404(User, pk=user_id)
+    return {
+        "user": _user_brief(user),
+        "characters": [
+            {**character_brief(c), "main": c.pk == user.main_character_id}
+            for c in user.characters.select_related("corporation", "alliance").order_by("name")
+        ],
+    }
+
+
+class MoveIn(Schema):
+    target: int
+    characters: list[int] = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/members/{user_id}/move-characters")
+@require_perm("site.manage_access")
+def move_member_characters(request, user_id: int, payload: MoveIn):
+    """Move characters to another member's account, e.g. someone who signed up twice instead of adding an alt."""
+    from conduit.accounts.services import MoveError, move_characters
+
+    source = get_object_or_404(User, pk=user_id)
+    target = get_object_or_404(User, pk=payload.target)
+    try:
+        return move_characters(request.user, source, target, payload.characters, request=request)
+    except MoveError as exc:
+        raise HttpError(exc.status, str(exc)) from None
 
 
 class EntityHit(Schema):
