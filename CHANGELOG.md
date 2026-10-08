@@ -3,6 +3,22 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.20
+
+### Added
+- **Plugins can add to compliance.** Besides every character having a working login, enabled plugins can ask for
+  more (`Plugin.compliance`). Those problems show on Administration → Compliance (also on a member's detail), in the
+  member's notification ("Your account needs attention") and in the Compliant group rule.
+
+### Plugins
+- **Discord 1.1.0:**
+  - **Mains and alts** in Discord → Members: each linked member's main and the alts you may see (administrators and
+    people who can view every character see all), with links to the character sheets. The search also finds a
+    Discord account by any of its characters' names.
+  - **"Must be on the Discord server to be compliant"** (Setup, off by default): members who may link Discord are not
+    compliant until they've linked it, and while they're not on the server. Leaving the server is noticed at the next
+    sync, within 6 hours. Members who left are marked "not on the server" in the list.
+
 ## 0.5.19
 
 ### Changed
