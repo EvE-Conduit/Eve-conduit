@@ -43,6 +43,20 @@ class SrpError(Exception):
 MAX_KILLMAIL_ID = 2**31 - 1
 #: No ship replacement is anywhere near this many ISK.
 MAX_PAYOUT = Decimal("1e15")
+#: Pasted kill links each ask zKillboard and ESI; this many per member per window is plenty for honest use.
+LINK_LOOKUPS, LINK_WINDOW = 10, 600
+
+
+def owned_loss(km: Killmail, user) -> Character | None:
+    """The member's character that lost this ship, if it's theirs: the victim is one of their characters, and the loss
+    happened after that character was linked to their account. A character that changed hands is linked afresh, so
+    its new owner can't claim what the previous owner lost."""
+    if not km.victim_character_id:
+        return None
+    char = Character.objects.filter(pk=km.victim_character_id, user=user).first()
+    if char is None or km.time < char.added_at:
+        return None
+    return char
 
 
 def _isk(value) -> Decimal:
@@ -105,7 +119,8 @@ def claimable(user) -> list[dict]:
         .select_related("killmail", "character")
         .order_by("-killmail__time")[:200]
     )
-    kms = [link.killmail for link in links if link.killmail.victim_character_id == link.character_id and _counts(link.killmail, settings)]
+    kms = [link.killmail for link in links if link.killmail.victim_character_id == link.character_id
+           and link.killmail.time >= link.character.added_at and _counts(link.killmail, settings)]
     rules = list(ShipRule.objects.all())
     out = killmails_out(kms)
     for row, km in zip(out, kms):
@@ -149,11 +164,28 @@ def _value(data: dict) -> float:
     return total
 
 
-def killmail_from_link(link: str) -> Killmail:
-    """The killmail behind an ESI kill link, fetched from ESI if it hasn't been seen yet."""
+def _count_lookup(user) -> None:
+    """Pasted links make the server ask zKillboard and ESI; limit how often one member can make it do that."""
+    from django.core.cache import cache
+
+    key = f"srp:link-lookups:{user.pk}"
+    cache.add(key, 0, timeout=LINK_WINDOW)
+    try:
+        used = cache.incr(key)
+    except ValueError:  # expired in between
+        cache.set(key, 1, timeout=LINK_WINDOW)
+        used = 1
+    if used > LINK_LOOKUPS:
+        raise SrpError("That's a lot of kill links in a short time; wait a few minutes and try again", 429)
+
+
+def killmail_from_link(link: str, user) -> Killmail:
+    """The killmail behind an ESI kill link, fetched from ESI if it hasn't been seen yet. Only the member's own losses
+    are fetched and kept: anything else is refused before it's stored."""
     from conduit.esi.client import esi
     from conduit.esi.exceptions import EsiError
 
+    _count_lookup(user)
     m = KILL_LINK_RE.search(link or "")
     if m:
         km_id, km_hash = _killmail_id(m.group(1)[:12]), m.group(2).lower()
@@ -176,6 +208,9 @@ def killmail_from_link(link: str) -> Killmail:
     except EsiError:
         raise SrpError("ESI didn't recognise that kill link") from None
     victim = data["victim"]
+    char = Character.objects.filter(pk=victim.get("character_id") or 0, user=user).first()
+    if char is None or parse_dt(data["killmail_time"]) < char.added_at:
+        raise SrpError("That loss isn't one of your characters'")
     final = next((a for a in data.get("attackers", []) if a.get("final_blow")), {})
     km, _ = Killmail.objects.get_or_create(pk=km_id, defaults=dict(
         hash=km_hash,
@@ -222,11 +257,13 @@ def submit(user, *, killmail_id: int | None = None, link: str = "", fleet: str =
     from conduit.notify.services import notify_permission
 
     settings = SrpSettings.load()
-    km = killmail_from_link(link) if link else Killmail.objects.filter(pk=_killmail_id(killmail_id or 0)).first()
+    km = killmail_from_link(link, user) if link else Killmail.objects.filter(pk=_killmail_id(killmail_id or 0)).first()
     if km is None:
         raise SrpError("No such killmail", 404)
-    char = Character.objects.filter(pk=km.victim_character_id, user=user).first()
+    char = owned_loss(km, user)
     if char is None:
+        if Character.objects.filter(pk=km.victim_character_id, user=user).exists():
+            raise SrpError("That loss happened before the character was linked to your account, so it can't be claimed here")
         raise SrpError("That loss isn't one of your characters'")
     if not _counts(km, settings):
         raise SrpError("Losses in that corporation aren't covered")
