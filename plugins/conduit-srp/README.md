@@ -4,8 +4,12 @@ Members claim ships they lost on fleet; reviewers check the loss, approve a payo
 
 - **My SRP** (everyone): the member's losses from the last 30 days (configurable) that haven't been claimed, with
   what the rules would pay. Claiming asks for the fleet, the FC and a note. Losses that haven't synced can be
-  claimed by pasting their zKillboard link or the in-game "Copy external kill link". Members follow each request and get a notification when it's
-  approved, rejected or paid, and can withdraw a request while it's pending.
+  claimed by pasting their zKillboard link or the in-game "Copy external kill link" (up to 10 links in 10 minutes).
+  Members follow each request and get a notification when it's approved, rejected or paid, and can withdraw a request
+  while it's pending.
+- **Only your own losses:** the ship must have been lost by one of the member's characters, after that character was
+  linked to their account. A character that changes hands is linked afresh, so its new owner can't claim what the
+  previous owner lost. Pasted links for anyone else's losses are refused before anything is fetched further or stored.
 - **Queue** (permission `srp.review_requests`): pending, approved, rejected and paid requests with the pilot, ship,
   system, fleet, loss value and payout. Each request shows the full fitting and cargo (destroyed or dropped), the
   victim's corporation and the final blow, and how many requests the member had approved or rejected before.
