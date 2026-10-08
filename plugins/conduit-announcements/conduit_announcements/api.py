@@ -27,6 +27,12 @@ class ReadIn(Schema):
     ids: list[int] | None = None
 
 
+@router.get("/bulletin")
+def bulletin(request, limit: int = 4):
+    """The latest announcements posted to the landing page that this member may see, pinned first."""
+    return services.bulletin(request.user, max(1, min(limit, 12)))
+
+
 @router.post("/read")
 def mark_read(request, payload: ReadIn):
     services.mark_read(request.user, payload.ids)
@@ -47,6 +53,7 @@ class AnnouncementIn(Schema):
     body: str = ""
     tone: str = "info"
     pinned: bool = False
+    on_landing: bool = True
     states: list[int] = []
     groups: list[int] = []
     publish_at: datetime | None = None

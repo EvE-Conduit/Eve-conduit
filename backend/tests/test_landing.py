@@ -57,3 +57,13 @@ def test_landing_rejects_unsafe_or_oversized_content(admin_user, api_client, pat
 @pytest.mark.django_db
 def test_new_sites_start_on_the_landing_page():
     assert SiteSettings.load().start_page == "/home"
+
+
+@pytest.mark.django_db
+def test_plugin_sections_can_be_hidden(admin_user, api_client):
+    api_client.force_login(admin_user)
+    body = {**edited(), "hidden_plugin_sections": ["announcements:bulletin", "announcements:bulletin", ""]}
+    saved = api_client.call("put", "/api/admin/landing", body).json()
+    assert saved["content"]["hidden_plugin_sections"] == ["announcements:bulletin"]
+    # Pages saved before plugins could add sections show them all.
+    assert api_client.call("put", "/api/admin/landing", edited()).json()["content"]["hidden_plugin_sections"] == []

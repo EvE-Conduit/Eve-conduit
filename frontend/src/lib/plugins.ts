@@ -33,10 +33,25 @@ export interface CharacterTab {
   order?: number;
 }
 
+/**
+ * A section on the landing page (/home), e.g. the latest announcements. Admins can hide it in the landing page
+ * editor. `preview` is true in that editor: show something even without data, and don't mark anything as read.
+ */
+export interface LandingSection {
+  id: string;
+  /** Shown in the landing page editor's list of plugin sections. */
+  title: string;
+  Component: ComponentType<{ preview: boolean }>;
+  /** "top": under the hero and status strip (the default); "bottom": after the page's own text sections. */
+  placement?: "top" | "bottom";
+  order?: number;
+}
+
 export interface PluginFrontend {
   routes?: ModuleRoute[];
   widgets?: DashboardWidget[];
   characterTabs?: CharacterTab[];
+  landingSections?: LandingSection[];
 }
 
 export function definePlugin(frontend: PluginFrontend): PluginFrontend {
