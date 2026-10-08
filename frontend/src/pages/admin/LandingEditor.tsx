@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Eye, Home, LayoutGrid, Link2, PencilLine, Plus, Puzzle, RotateCcw, Sparkles, Text, Trash2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, Eye, Home, ImageUp, LayoutGrid, Link2, PencilLine, Plus, Puzzle, RotateCcw, Sparkles, Text, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
@@ -129,9 +129,7 @@ export function LandingEditor() {
               <Field label="Text" className="md:col-span-2">
                 <Textarea value={draft.hero.subtitle} maxLength={600} rows={3} onChange={(e) => setHero({ subtitle: e.target.value })} />
               </Field>
-              <Field label="Background image" hint="Optional https:// image, faded in on the right. Ship renders from images.evetech.net work well.">
-                <Input value={draft.hero.image_url} onChange={(e) => setHero({ image_url: e.target.value })} placeholder="https://images.evetech.net/types/…/render?size=1024" />
-              </Field>
+              <HeroImageField value={draft.hero.image_url} onChange={(image_url) => setHero({ image_url })} />
               <div className="self-end">
                 <SwitchRow
                   label="Show who's signed in"
@@ -330,6 +328,66 @@ function ListCard<T>({
         ))}
       </CardBody>
     </Card>
+  );
+}
+
+const IMAGE_TYPES = "image/png,image/jpeg,image/webp,image/gif";
+const MAX_IMAGE_MB = 5;
+
+/** The hero's background: upload an image, or paste an https:// address. */
+function HeroImageField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const uploaded = value.startsWith("/api/core/images/");
+  const upload = useMutation({
+    mutationFn: (file: File) => api.upload<{ url: string }>("/api/admin/images", file),
+    onSuccess: ({ url }) => {
+      onChange(url);
+      toast.success("Image uploaded. Save the page to use it.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const pick = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) toast.error(`That image is too big: ${MAX_IMAGE_MB} MB at most`);
+    else upload.mutate(file);
+  };
+  return (
+    <Field
+      label="Background image"
+      hint={`Optional, faded in on the right. Upload a PNG, JPEG, WebP or GIF (up to ${MAX_IMAGE_MB} MB), or paste an https:// address; ship renders from images.evetech.net work well.`}
+    >
+      <div className="flex items-center gap-2">
+        {value && <img src={value} alt="" className="size-9 shrink-0 border border-border-strong object-cover" />}
+        {uploaded ? (
+          <span className="min-w-0 flex-1 truncate text-sm text-muted">Uploaded image</span>
+        ) : (
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="https://images.evetech.net/types/…/render?size=1024"
+            className="min-w-0 flex-1"
+          />
+        )}
+        <input
+          ref={input}
+          type="file"
+          accept={IMAGE_TYPES}
+          className="hidden"
+          onChange={(e) => {
+            pick(e.target.files?.[0]);
+            e.target.value = ""; // so picking the same file again still uploads it
+          }}
+        />
+        <Button size="sm" variant="subtle" loading={upload.isPending} onClick={() => input.current?.click()}>
+          <ImageUp /> Upload
+        </Button>
+        {value && (
+          <Button size="icon-sm" variant="ghost" aria-label="Remove image" onClick={() => onChange("")}>
+            <X />
+          </Button>
+        )}
+      </div>
+    </Field>
   );
 }
 

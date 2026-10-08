@@ -1,11 +1,14 @@
 import re
 import secrets
+import uuid
 
 from django.conf import settings
 from django.contrib.auth import logout
+from django.http import HttpResponse, HttpResponseNotModified
 from django.templatetags.static import static
 from django.middleware.csrf import get_token
-from ninja import Router, Schema
+from ninja import File, Router, Schema
+from ninja.files import UploadedFile
 from ninja.errors import HttpError
 from ninja.security import django_auth
 from pydantic import Field, field_validator
@@ -20,7 +23,8 @@ from conduit.schemas import CharacterBrief, StateBrief, character_brief
 from conduit.updates.services import progress as update_progress
 
 from .landing import DEFAULT_LANDING, ICONS, LandingIn, _link, landing_content
-from .models import SiteSettings
+from . import images
+from .models import SiteImage, SiteSettings
 
 router = Router(tags=["core"])
 setup_router = Router(tags=["setup"])
@@ -393,6 +397,7 @@ def update_landing(request, payload: LandingIn):
     site.landing = payload.dict()
     site.save(update_fields=["landing"])
     record("site.landing_changed", "changed the landing page", request=request, target_type="site")
+    images.prune(site)
     return landing_out(site)
 
 
@@ -404,7 +409,50 @@ def reset_landing(request):
         site.landing = {}
         site.save(update_fields=["landing"])
         record("site.landing_reset", "reset the landing page to the default", request=request, target_type="site")
+        images.prune(site)
     return landing_out(site)
+
+
+# --- uploaded images -------------------------------------------------------------
+
+
+@admin_router.post("/images")
+@require_perm("site.manage_site")
+def upload_image(request, file: UploadedFile = File(...)):
+    """Upload a PNG, JPEG, WebP or GIF (up to 5 MB) for the site; returns the address to use it by."""
+    if file.size > images.MAX_SIZE:
+        raise HttpError(400, "The image is too big: 5 MB at most")
+    content = file.read()
+    content_type = images.sniff(content[:16])
+    if not content_type:
+        raise HttpError(400, "That isn't a PNG, JPEG, WebP or GIF image")
+    image = SiteImage.objects.create(
+        content=content, content_type=content_type, size=len(content), name=(file.name or "")[:200], uploaded_by=request.user
+    )
+    record("site.image_uploaded", f"uploaded an image ({image.name or image.url})", request=request, target_type="site",
+           details={"url": image.url, "size": image.size})
+    return {"url": image.url, "content_type": content_type, "size": image.size}
+
+
+@router.get("/images/{image_id}")
+def site_image(request, image_id: str):
+    """An image an admin uploaded. Its address never changes content, so browsers revalidate with a cheap 304."""
+    try:
+        pk = uuid.UUID(image_id)
+    except ValueError:
+        raise HttpError(404, "No such image")
+    etag = f'"{pk.hex}"'
+    exists = SiteImage.objects.filter(pk=pk)
+    if request.headers.get("If-None-Match") == etag and exists.exists():
+        return HttpResponseNotModified(headers={"ETag": etag})
+    image = exists.first()
+    if not image:
+        raise HttpError(404, "No such image")
+    resp = HttpResponse(bytes(image.content), content_type=image.content_type)
+    resp["ETag"] = etag
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return resp
 
 
 @admin_router.get("/admins")

@@ -1,4 +1,5 @@
 import secrets
+import uuid
 
 from django.conf import settings
 from django.db import models
@@ -50,3 +51,23 @@ class SiteSettings(models.Model):
             obj.setup_token = secrets.token_urlsafe(18)
             obj.save(update_fields=["setup_token"])
         return obj
+
+
+class SiteImage(models.Model):
+    """An image an admin uploaded for the site (the landing page's hero, say), kept in the database so every kind
+    of install serves it without a media folder, and backups include it. Served at ``/api/core/images/<id>``."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    content = models.BinaryField()
+    content_type = models.CharField(max_length=30)
+    size = models.PositiveIntegerField()
+    name = models.CharField(max_length=200, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name or str(self.id)
+
+    @property
+    def url(self) -> str:
+        return f"/api/core/images/{self.id.hex}"
