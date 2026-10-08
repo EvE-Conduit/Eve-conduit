@@ -98,3 +98,35 @@ def test_admins_use_members_only_plugins_whatever_their_state(client):
     admin.save()
     client.force_login(admin)
     assert client.get("/api/p/sample/hello").status_code == 200
+
+
+@pytest.mark.django_db
+def test_each_plugin_gets_its_own_log(admin_user, client):
+    import logging
+
+    from conduit.audit.models import ServiceLog
+
+    sync_installed()
+    set_enabled("sample", True)
+    logging.getLogger("tests.sample_plugin.api").info("synced %d widgets", 3)  # plugins keep INFO and up
+    logging.getLogger("tests.sample_plugin.api").debug("too chatty")
+    logging.getLogger("conduit.esi").info("core info stays out")
+    logging.getLogger("conduit.esi").warning("core warning")
+
+    rows = list(ServiceLog.objects.filter(plugin__in=("sample", "")).order_by("id").values_list("plugin", "level", "message"))
+    assert rows == [
+        ("sample", "INFO", "Sample 1.0.0 installed"),
+        ("sample", "INFO", "Sample switched on"),
+        ("sample", "INFO", "synced 3 widgets"),
+        ("", "WARNING", "core warning"),
+    ]
+
+    client.force_login(admin_user)
+    logs = client.get("/api/admin/plugins/sample/logs").json()
+    assert [e["message"] for e in logs["items"]] == ["synced 3 widgets", "Sample switched on", "Sample 1.0.0 installed"]
+    assert client.get("/api/admin/logs/service?plugin=core").json()["items"][0]["message"] == "core warning"
+    assert "sample" in client.get("/api/admin/logs/service/plugins").json()
+
+    logging.getLogger("tests.sample_plugin").error("ESI said no")
+    sample = next(m for m in client.get("/api/admin/plugins").json() if m["id"] == "sample")
+    assert (sample["log_warnings"], sample["log_errors"]) == (0, 1)

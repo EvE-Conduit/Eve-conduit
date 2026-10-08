@@ -70,3 +70,22 @@ def beat_schedule() -> dict:
         for name, entry in (m.periodic_tasks or {}).items():
             schedule[f"{mid}:{name}"] = entry
     return schedule
+
+
+@cache
+def _logger_prefixes() -> tuple[tuple[str, str], ...]:
+    """(package, plugin id), longest package first: a plugin's logs are everything logged under the package
+    holding its ``Plugin`` subclass, e.g. ``conduit_discord.services`` for ``conduit_discord.plugin:DiscordModule``."""
+    prefixes = []
+    for mid, m in installed().items():
+        module = type(m).__module__
+        prefixes.append((module.rpartition(".")[0] or module, mid))
+    return tuple(sorted(prefixes, key=lambda p: -len(p[0])))
+
+
+def plugin_for_logger(name: str) -> str:
+    """The id of the plugin a logger belongs to, or ""."""
+    for package, mid in _logger_prefixes():
+        if name == package or name.startswith(package + "."):
+            return mid
+    return ""

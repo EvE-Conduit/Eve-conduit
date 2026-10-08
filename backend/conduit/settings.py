@@ -212,12 +212,13 @@ CELERY_BEAT_SCHEDULE = {
 NINJA_PAGINATION_PER_PAGE = 50
 
 # Warnings and errors are also kept in the database for Administration > Logs (CONDUIT_SERVICE_LOG_DB=false: don't).
+# Plugins get their own log there, which also keeps their messages from CONDUIT_PLUGIN_LOG_LEVEL up.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {
         "console": {"class": "logging.StreamHandler"},
-        "database": {"class": "conduit.audit.logging.DatabaseLogHandler", "level": "WARNING"},
+        "database": {"class": "conduit.audit.logging.DatabaseLogHandler", "level": "DEBUG"},  # it picks what to keep
     },
     "root": {
         "handlers": ["console", "database"] if env_bool("CONDUIT_SERVICE_LOG_DB", True) else ["console"],
@@ -231,6 +232,8 @@ CONDUIT_AUDIT_LOG_DAYS = int(env("CONDUIT_AUDIT_LOG_DAYS", "365"))
 CONDUIT_SNOOP_LOG_DAYS = int(env("CONDUIT_SNOOP_LOG_DAYS", "365"))
 CONDUIT_API_LOG_DAYS = int(env("CONDUIT_API_LOG_DAYS", "90"))
 CONDUIT_SERVICE_LOG_DAYS = int(env("CONDUIT_SERVICE_LOG_DAYS", "30"))
+# Lowest level kept in each plugin's log: DEBUG, INFO, WARNING...
+CONDUIT_PLUGIN_LOG_LEVEL = env("CONDUIT_PLUGIN_LOG_LEVEL", "INFO").strip().upper()
 CONDUIT_ESI_LOG_DAYS = int(env("CONDUIT_ESI_LOG_DAYS", "7"))
 # Which ESI calls to record: all, errors (anything but 200/304) or off.
 CONDUIT_ESI_LOG = env("CONDUIT_ESI_LOG", "all").strip().lower()

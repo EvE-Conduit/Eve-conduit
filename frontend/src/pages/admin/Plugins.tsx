@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpCircle, BadgeCheck, Check, Copy, Download, ExternalLink, GitBranch, KeyRound, Loader2, Puzzle, RefreshCw,
-  Server, ShieldCheck, Trash2, X,
+  ScrollText, Server, ShieldCheck, Trash2, X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -24,6 +24,8 @@ import { BOOTSTRAP_KEY } from "@/lib/bootstrap";
 import { iconFor } from "@/lib/icons";
 import type { UpdateProgress } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
+
+import { Service as ServiceLog } from "./Logs";
 
 type Source = "catalog" | "git" | "server";
 
@@ -102,6 +104,7 @@ export function AdminPlugins() {
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [linesOpen, setLinesOpen] = useState(false);
+  const [logsFor, setLogsFor] = useState<AdminModule | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: KEY,
@@ -173,12 +176,14 @@ export function AdminPlugins() {
 
   const extra = (m: AdminModule) => {
     const pkg = byPlugin.get(m.id);
-    if (!pkg) return null;
+    const logs = m.manifest && <LogsButton module={m} onClick={() => setLogsFor(m)} />;
+    if (!pkg) return logs && <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">{logs}</div>;
     const src = SOURCE[pkg.source];
     const name = m.manifest?.name ?? m.id;
     const entry = data?.catalog.find((c) => c.package === pkg.package);
     return (
       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+        {logs}
         <Tooltip content={src.hint}>
           <span>
             <Badge tone={src.tone}>
@@ -390,7 +395,29 @@ export function AdminPlugins() {
         onConfirm={() => install.mutateAsync(confirm!.actions)}
       />
       {data && <InstallLines open={linesOpen} onOpenChange={setLinesOpen} data={data} plugins={picked} />}
+      {logsFor && (
+        <Dialog
+          open
+          onOpenChange={(o) => !o && setLogsFor(null)}
+          title={`${logsFor.manifest?.name ?? logsFor.id} log`}
+          description="Installs, updates, switching it on and off, and everything the plugin logged."
+          className="max-w-5xl"
+        >
+          <ServiceLog plugin={logsFor.id} />
+        </Dialog>
+      )}
     </>
+  );
+}
+
+/** Opens a plugin's log; shows how many warnings and errors it logged in the last day. */
+function LogsButton({ module: m, onClick }: { module: AdminModule; onClick: () => void }) {
+  return (
+    <Button size="xs" variant="outline" onClick={onClick}>
+      <ScrollText /> Logs
+      {m.log_errors > 0 && <Badge tone="danger">{m.log_errors}</Badge>}
+      {m.log_warnings > 0 && <Badge tone="warning">{m.log_warnings}</Badge>}
+    </Button>
   );
 }
 
