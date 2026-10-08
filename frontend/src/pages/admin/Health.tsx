@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { useHasPerm } from "@/lib/bootstrap";
 import { humanize, num } from "@/lib/format";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -54,7 +56,14 @@ interface Health {
     ok: boolean;
   };
   sync: { by_result: Record<string, number>; overdue: number; tokens_total: number; tokens_invalid: number; ok: boolean };
-  data: { sde_build: number | null; sde_imported_at: string | null; prices_updated_at: string | null; ok: boolean };
+  data: {
+    sde_build: number | null;
+    sde_imported_at: string | null;
+    sde_outdated: boolean;
+    sde_importing: boolean;
+    prices_updated_at: string | null;
+    ok: boolean;
+  };
   problems: {
     errors_24h: number;
     warnings_24h: number;
@@ -202,9 +211,18 @@ export function AdminHealth() {
               <CardBody className="space-y-3">
                 <Row
                   label="EVE static data"
-                  ok={data.data.ok}
-                  value={data.data.sde_build ? `build ${data.data.sde_build}, ${timeAgo(data.data.sde_imported_at)}` : "not imported yet"}
+                  ok={!!data.data.sde_build && !data.data.sde_outdated}
+                  value={
+                    data.data.sde_importing
+                      ? "importing now…"
+                      : data.data.sde_outdated
+                        ? "needs importing again for this version"
+                        : data.data.sde_build
+                          ? `build ${data.data.sde_build}, ${timeAgo(data.data.sde_imported_at)}`
+                          : "not imported yet"
+                  }
                 />
+                <StaticDataImport importing={data.data.sde_importing} urgent={data.data.sde_outdated || !data.data.sde_build} onQueued={() => refetch()} />
                 <Row label="Market prices" ok={!!data.data.prices_updated_at} value={data.data.prices_updated_at ? timeAgo(data.data.prices_updated_at) : "never"} />
                 <Row label="Errors logged (24h)" ok={data.problems.errors_24h === 0} value={num(data.problems.errors_24h)} />
                 <Row label="Warnings logged (24h)" ok={data.problems.warnings_24h < 50} value={num(data.problems.warnings_24h)} />
@@ -270,6 +288,28 @@ function StatusBanner({ health }: { health: Health }) {
         <div className="text-lg font-semibold tracking-tight">{s.label}</div>
         <div className="text-sm text-muted">Checked {timeAgo(health.checked_at)}</div>
       </div>
+    </div>
+  );
+}
+
+/** Import EVE's static data again now, e.g. after an update that reads more of it. */
+function StaticDataImport({ importing, urgent, onQueued }: { importing: boolean; urgent: boolean; onQueued: () => void }) {
+  const canRun = useHasPerm("site.manage_site");
+  const run = useMutation({
+    mutationFn: () => api.post("/api/admin/health/static-data"),
+    onSuccess: () => {
+      toast.success("Importing the static data. It takes about a minute.");
+      onQueued();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't start the import"),
+  });
+  if (!canRun) return null;
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <span className="text-subtle">{urgent ? "Fitting data and item skill requirements are missing until it's imported again." : "Checked for a new game build every day."}</span>
+      <Button size="sm" variant={urgent ? "primary" : "ghost"} className="ml-auto shrink-0" onClick={() => run.mutate()} loading={run.isPending} disabled={importing}>
+        Import again
+      </Button>
     </div>
   );
 }

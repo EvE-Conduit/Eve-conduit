@@ -118,14 +118,19 @@ def _sync() -> dict:
 def _data() -> dict:
     from conduit.eve.models import MarketPrice
     from conduit.sde.models import SdeVersion
+    from conduit.sde.tasks import IMPORTING_KEY, outdated
 
     sde = SdeVersion.objects.first()
     newest_price = MarketPrice.objects.order_by("-updated_at").values_list("updated_at", flat=True).first()
+    stale = outdated()
     return {
         "sde_build": sde.build_number if sde else None,
         "sde_imported_at": sde.imported_at.isoformat() if sde else None,
+        #: Imported by an older EvE Conduit: fitting data and item skill requirements are missing until it's imported again.
+        "sde_outdated": stale,
+        "sde_importing": bool(cache.get(IMPORTING_KEY)),
         "prices_updated_at": newest_price.isoformat() if newest_price else None,
-        "ok": sde is not None,
+        "ok": sde is not None and not stale,
     }
 
 
@@ -139,6 +144,18 @@ def _problems() -> dict:
         "warnings_24h": ServiceLog.objects.filter(at__gte=since, level="WARNING").count(),
         "failing_webhooks": list(Webhook.objects.filter(enabled=True, failures__gt=0).values("id", "name", "failures", "last_error")),
     }
+
+
+@router.post("/health/static-data")
+@require_perm("site.manage_site")
+def import_static_data(request):
+    """Import EVE's static data again now (it otherwise checks for a new build once a day)."""
+    from conduit.audit.services import record
+    from conduit.sde.tasks import update_sde
+
+    update_sde.delay(force=True)
+    record("site.sde_import", "started importing the EVE static data again", request=request)
+    return {"queued": True}
 
 
 @router.get("/health")

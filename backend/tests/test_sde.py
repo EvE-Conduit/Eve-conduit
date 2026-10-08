@@ -119,3 +119,38 @@ def test_init_reimports_static_data_from_an_older_version(monkeypatch, schema, q
     SdeVersion.objects.create(build_number=100, schema=schema)
     call_command("conduit_init", stdout=open("/dev/null", "w"))
     assert bool(calls) is queued
+
+
+@pytest.mark.django_db
+def test_new_workers_reimport_static_data_left_by_an_older_version(monkeypatch):
+    """The import conduit_init queues can be taken by a worker still running the old version; new workers check."""
+    from conduit.sde import tasks
+
+    runs = []
+    monkeypatch.setattr(importer, "update", lambda force=False: runs.append(force))
+    tasks.update_sde_if_outdated()
+    assert runs == []  # nothing imported yet: the first import is conduit_init's job
+    SdeVersion.objects.create(build_number=100, schema=1)
+    tasks.update_sde_if_outdated()
+    assert runs == [False]
+    # Only one import at a time.
+    from django.core.cache import cache
+
+    cache.set(tasks.IMPORTING_KEY, True)
+    assert tasks.update_sde() is None and runs == [False]
+
+
+@pytest.mark.django_db
+def test_health_shows_outdated_static_data_and_imports_again(monkeypatch, api_client, admin_user, user):
+    from conduit.sde import tasks
+
+    queued = []
+    monkeypatch.setattr(tasks.update_sde, "delay", lambda **kw: queued.append(kw))
+    SdeVersion.objects.create(build_number=100, schema=1)
+    api_client.force_login(admin_user)
+    data = api_client.call("get", "/api/admin/health").json()["data"]
+    assert data["sde_outdated"] and not data["ok"] and not data["sde_importing"]
+    assert api_client.call("post", "/api/admin/health/static-data").json() == {"queued": True}
+    assert queued == [{"force": True}]
+    api_client.force_login(user)
+    assert api_client.call("post", "/api/admin/health/static-data").status_code == 403
