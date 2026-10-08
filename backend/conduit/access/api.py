@@ -520,6 +520,8 @@ def member_characters(request, user_id: int):
 class MoveIn(Schema):
     target: int
     characters: list[int] = Field(..., min_length=1, max_length=500)
+    #: When every character moves (a merge): also move the person's records (SRP requests, skill plans...).
+    move_records: bool = False
 
 
 @router.post("/members/{user_id}/move-characters")
@@ -531,7 +533,7 @@ def move_member_characters(request, user_id: int, payload: MoveIn):
     source = get_object_or_404(User, pk=user_id)
     target = get_object_or_404(User, pk=payload.target)
     try:
-        return move_characters(request.user, source, target, payload.characters, request=request)
+        return move_characters(request.user, source, target, payload.characters, request=request, move_records_too=payload.move_records)
     except MoveError as exc:
         raise HttpError(exc.status, str(exc)) from None
 

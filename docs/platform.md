@@ -26,7 +26,7 @@ when an event is shown to people, e.g. in a Discord embed.
 
 Core events: `user.created`, `user.state_changed`, `character.added`, `character.removed`,
 `character.main_changed`, `character.moved`, `user.merged` (an administrator moved every character of an
-account into another; `from_user_id`, `to_user_id`: move what your plugin keeps per user), `token.invalid`, `group.joined`, `group.left` (both with `via`: `self`, `request`,
+account into another; `from_user_id`, `to_user_id`, `records_moved`), `token.invalid`, `group.joined`, `group.left` (both with `via`: `self`, `request`,
 `admin`, `auto` or `state`), `group.request_created`, `group.request_decided`, `sync.failed`,
 `compliance.changed`, `notification.created`. Plugins add their own.
 
@@ -113,6 +113,15 @@ def compliance_problems(user):
 
 Checks run every 30 minutes for every user, so read stored data; never call another service from them. A check that
 raises is logged and ignored. To re-check one member straight away, queue `conduit.access.tasks.update_user_groups`.
+
+## Merged accounts
+
+Administrators can merge a member's second account into their main (Administration → Members → Move characters).
+With "Also move their records", every row of every app that points at the old account through a foreign key to the
+user is pointed at the main account, plugins included, with nothing for plugins to do. Rows that may only exist once
+per member stay behind when the main account already has one: declare that with a one-to-one field, `unique=True`,
+`unique_together` or a `UniqueConstraint` that includes the user field. Plugins that keep users in other forms
+(ids in JSON, external accounts) can listen for `user.merged`.
 
 ## Landing page sections
 

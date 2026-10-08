@@ -350,3 +350,24 @@ def test_a_merged_account_takes_its_discord_link_along(setup, discord, api_clien
     with django_capture_on_commit_callbacks(execute=True):
         move_characters(admin, pilot, main, list(Character.objects.filter(user=pilot).values_list("pk", flat=True)))
     assert DiscordAccount.objects.get().user_id == main.pk
+
+
+def test_a_merge_with_records_still_gives_the_main_account_its_roles(setup, discord, api_client, corp, django_capture_on_commit_callbacks):
+    from conduit.accounts.models import Character
+    from conduit.accounts.services import move_characters
+
+    pilot, _ = setup
+    assert link(api_client, pilot).status_code == 200
+    main = make_user(90000060, "Real Main", corporation=corp)
+    admin = make_user(90000061, "Admin")
+    admin.is_superuser = True
+    admin.save()
+    synced = []
+    real = services.sync_user
+    services.sync_user = lambda user, *a, **k: synced.append(user.pk) or real(user, *a, **k)
+    try:
+        with django_capture_on_commit_callbacks(execute=True):
+            move_characters(admin, pilot, main, list(Character.objects.filter(user=pilot).values_list("pk", flat=True)), move_records_too=True)
+    finally:
+        services.sync_user = real
+    assert DiscordAccount.objects.get().user_id == main.pk and main.pk in synced

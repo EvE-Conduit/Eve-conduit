@@ -203,6 +203,13 @@ export function AdminMembers() {
   );
 }
 
+interface MoveResult {
+  moved: string[];
+  emptied: boolean;
+  /** When records were moved too: how many of each kind, and those left behind. */
+  records: { moved: Record<string, number>; kept: Record<string, number> } | null;
+}
+
 interface MemberCharacter extends CharacterBrief {
   main: boolean;
 }
@@ -224,6 +231,7 @@ function MoveCharacters({ member, onClose }: { member: Member; onClose: () => vo
   const [q, setQ] = useState("");
   const dq = useDeferredValue(q.trim());
   const [target, setTarget] = useState<Person | null>(null);
+  const [withRecords, setWithRecords] = useState(true);
   const hits = useQuery({
     queryKey: ["admin", "user-lookup", dq],
     queryFn: () => api.get<Person[]>(`/api/admin/users/lookup?q=${encodeURIComponent(dq)}`),
@@ -231,9 +239,18 @@ function MoveCharacters({ member, onClose }: { member: Member; onClose: () => vo
   });
   const all = !!data && chosen.length === data.characters.length;
   const move = useMutation({
-    mutationFn: () => api.post<{ moved: string[]; emptied: boolean }>(`/api/admin/members/${member.id}/move-characters`, { target: target!.id, characters: chosen }),
+    mutationFn: () =>
+      api.post<MoveResult>(`/api/admin/members/${member.id}/move-characters`, { target: target!.id, characters: chosen, move_records: all && withRecords }),
     onSuccess: (r) => {
-      toast.success(`Moved ${r.moved.join(", ")} to ${target!.name}` + (r.emptied ? `; ${member.name}'s old account is switched off` : ""));
+      const moved = Object.entries(r.records?.moved ?? {}).map(([what, n]) => `${n} ${what}`);
+      const kept = Object.entries(r.records?.kept ?? {}).map(([what, n]) => `${n} ${what}`);
+      toast.success(`Moved ${r.moved.join(", ")} to ${target!.name}` + (r.emptied ? `; ${member.name}'s old account is switched off` : ""), {
+        description: [
+          moved.length ? `Records moved: ${moved.join(", ")}.` : "",
+          kept.length ? `Left with the old account because ${target!.name} already has their own: ${kept.join(", ")}.` : "",
+        ].filter(Boolean).join(" ") || undefined,
+        duration: kept.length ? 15000 : undefined,
+      });
       qc.invalidateQueries({ queryKey: ["admin", "members"] });
       onClose();
     },
@@ -301,10 +318,24 @@ function MoveCharacters({ member, onClose }: { member: Member; onClose: () => vo
           )}
         </div>
 
+        {all && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5 text-sm">
+            <input type="checkbox" checked={withRecords} onChange={(e) => setWithRecords(e.target.checked)} className="mt-0.5 size-4 accent-[var(--site-accent)]" />
+            <span>
+              <span className="font-medium">Also move their records</span>
+              <span className="block text-xs text-muted">
+                SRP requests, skill plans, applications, mentoring, moon invoices, notifications and anything else plugins keep for them. Where only one is
+                allowed per member (e.g. a moon invoice for the same month, preferences, a Discord link) and the main account already has one, the old
+                one stays behind and you're told which.
+              </span>
+            </span>
+          </label>
+        )}
+
         {target && chosen.length > 0 && (
           <Alert tone={all ? "warning" : "info"}>
             {all
-              ? `All of ${member.name}'s characters move to ${target.name}, so ${member.name}'s account is switched off (it can't sign in any more) and leaves its groups. Its history stays for the record. A linked Discord account moves too, if ${target.name} hasn't linked one.`
+              ? `All of ${member.name}'s characters move to ${target.name}, so ${member.name}'s account is switched off (it can't sign in any more) and leaves its groups. ${withRecords ? "Their records move too." : "Its records stay with it for the record."} A linked Discord account moves too, if ${target.name} hasn't linked one.`
               : `${chosen.length} character${chosen.length === 1 ? "" : "s"} move to ${target.name}; ${member.name} keeps the rest.`}{" "}
             Whoever owns these characters signs in to {target.name}'s account with them from now on.
           </Alert>

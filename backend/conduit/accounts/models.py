@@ -98,6 +98,9 @@ class UserPreferences(models.Model):
     plugins = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        verbose_name_plural = "user preferences"
+
     @classmethod
     def for_user(cls, user) -> "UserPreferences":
         prefs, _ = cls.objects.get_or_create(user=user)
