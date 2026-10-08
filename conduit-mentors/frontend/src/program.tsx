@@ -1,16 +1,16 @@
 // Running the program (mentors.manage_program): every mentorship, mentors' load, goals and settings.
 import {
-  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, EmptyState, Field, Input, PageHeader,
+  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, Dialog, EmptyState, Field, Input, PageHeader,
   RuleSetEditor, type RuleSet, Segmented, Skeleton, StatCard, Switch, Table, TabPanel, Tabs, Td, Textarea, Th, THead, toast, Tr,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { MentorshipTable } from "./home";
-import { FocusChips } from "./shared";
-import { Back, Down, Pencil, Plus, Settings, Trash, Up, X } from "./icons";
-import { BASE, type Goal, type Program, type ProgramSettings } from "./types";
+import { FocusChips, ReopenDialog } from "./shared";
+import { Back, Cap, Down, Pencil, Plus, Reopen, Settings, Trash, Up, X } from "./icons";
+import { BASE, type Brief, type Goal, type Program, type ProgramSettings } from "./types";
 
 const FILTERS = [
   { value: "open", label: "Open" },
@@ -26,7 +26,7 @@ export function ProgramPage() {
   return (
     <>
       <Link to="/p/mentors" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text"><Back /> Mentoring</Link>
-      <PageHeader eyebrow="Mentoring" title="Program" icon={<Settings />} description="Every mentorship, how busy the mentors are, the goals mentees work through, and settings." />
+      <PageHeader eyebrow="Mentoring" title="Program" icon={<Settings />} description="Every mentorship, who graduated, how busy the mentors are, the goals mentees work through, and settings." />
       {isLoading || !data ? (
         <Skeleton className="h-96" />
       ) : (
@@ -41,6 +41,7 @@ export function ProgramPage() {
             defaultValue="mentorships"
             items={[
               { value: "mentorships", label: "Mentorships" },
+              { value: "graduates", label: "Graduates", count: data.stats.graduated },
               { value: "mentors", label: "Mentors", count: data.mentors.length },
               { value: "goals", label: "Goals", count: data.goals.length },
               { value: "settings", label: "Settings" },
@@ -58,6 +59,7 @@ export function ProgramPage() {
                 )}
               </Card>
             </TabPanel>
+            <TabPanel value="graduates" className="pt-4"><Graduates /></TabPanel>
             <TabPanel value="mentors" className="pt-4"><Mentors data={data} /></TabPanel>
             <TabPanel value="goals" className="pt-4"><Goals goals={data.goals} focusAreas={data.settings.focus_areas} canEditRules={data.can_edit_rules} /></TabPanel>
             <TabPanel value="settings" className="pt-4"><SettingsForm settings={data.settings} canEditRules={data.can_edit_rules} /></TabPanel>
@@ -65,6 +67,64 @@ export function ProgramPage() {
         </div>
       )}
     </>
+  );
+}
+
+function days(from: string | null, to: string | null) {
+  if (!from || !to) return null;
+  const n = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000));
+  return `${n} day${n === 1 ? "" : "s"}`;
+}
+
+/** Everyone who graduated, newest first, and reopening a mentorship that needs another round. */
+function Graduates() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [reopening, setReopening] = useState<Brief | null>(null);
+  const { data, isLoading } = useQuery({ queryKey: ["mentors", "program", "graduated"], queryFn: () => api.get<Program>(`${BASE}/program?status=graduated`) });
+  if (isLoading || !data) return <Skeleton className="h-64" />;
+  const rows = [...data.mentorships].sort((a, b) => (b.ended_at ?? "").localeCompare(a.ended_at ?? ""));
+  return (
+    <Card>
+      {rows.length === 0 ? (
+        <EmptyState icon={<Cap />} title="Nobody has graduated yet" />
+      ) : (
+        <Table>
+          <THead>
+            <tr>
+              <Th>Mentee</Th>
+              <Th>Mentor</Th>
+              <Th>Graduated</Th>
+              <Th>Mentored for</Th>
+              <Th align="right"><span className="sr-only">Actions</span></Th>
+            </tr>
+          </THead>
+          <tbody>
+            {rows.map((r) => (
+              <Tr key={r.id} interactive onClick={() => navigate(`/p/mentors/m/${r.id}`)}>
+                <Td>
+                  <div className="flex items-center gap-3">
+                    <Avatar src={r.mentee.portrait} name={r.mentee.name} size="sm" />
+                    <span className="font-medium">{r.mentee.name}</span>
+                  </div>
+                </Td>
+                <Td className="text-muted">{r.mentor?.name ?? "—"}</Td>
+                <Td className="text-muted">{date(r.ended_at)}</Td>
+                <Td className="text-muted">{days(r.assigned_at, r.ended_at) ?? "—"}</Td>
+                <Td align="right">
+                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setReopening(r); }}><Reopen /> Reopen</Button>
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+      <ReopenDialog
+        mentorship={reopening}
+        onClose={() => setReopening(null)}
+        onDone={() => qc.invalidateQueries({ queryKey: ["mentors"] })}
+      />
+    </Card>
   );
 }
 

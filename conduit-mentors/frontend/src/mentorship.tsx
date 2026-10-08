@@ -7,8 +7,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
-import { Back, Cap, Check, External, Hand, X } from "./icons";
-import { FocusChips, GoalProgress, Goals, StatusBadge, Thread } from "./shared";
+import { Back, Cap, Check, External, Hand, Reopen, X } from "./icons";
+import { FocusChips, GoalProgress, Goals, ReopenDialog, StatusBadge, Thread } from "./shared";
 import { BASE, type Detail, type GoalState, type Program } from "./types";
 
 export function MentorshipPage() {
@@ -17,6 +17,7 @@ export function MentorshipPage() {
   const key = ["mentors", "mentorship", id];
   const { data, isLoading, error } = useQuery({ queryKey: key, queryFn: () => api.get<Detail>(`${BASE}/m/${id}`) });
   const [closing, setClosing] = useState<"graduate" | "end" | null>(null);
+  const [reopening, setReopening] = useState(false);
   const [text, setText] = useState("");
   const set = (d: Detail) => {
     qc.setQueryData(key, d);
@@ -64,6 +65,7 @@ export function MentorshipPage() {
             {data.can.claim && <Button variant="primary" loading={claim.isPending} onClick={() => claim.mutate()}>{!claim.isPending && <Hand />} Take them on</Button>}
             {data.can.end && <Button variant="danger" onClick={() => setClosing("end")}><X /> End</Button>}
             {data.can.graduate && <Button variant="primary" onClick={() => setClosing("graduate")}><Cap /> Graduate</Button>}
+            {data.can.reopen && <Button onClick={() => setReopening(true)}><Reopen /> Reopen</Button>}
           </div>
         }
       />
@@ -192,6 +194,7 @@ export function MentorshipPage() {
           />
         </Field>
       </Dialog>
+      <ReopenDialog mentorship={reopening ? data : null} onClose={() => setReopening(false)} onDone={set} />
     </>
   );
 }

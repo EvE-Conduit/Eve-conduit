@@ -23,6 +23,7 @@ export const Plus = (p: P) => (<Icon {...p}><path d="M5 12h14" /><path d="M12 5v
 export const Trash = (p: P) => (<Icon {...p}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></Icon>);
 export const Up = (p: P) => (<Icon {...p}><path d="m18 15-6-6-6 6" /></Icon>);
 export const Down = (p: P) => (<Icon {...p}><path d="m6 9 6 6 6-6" /></Icon>);
+export const Reopen = (p: P) => (<Icon {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></Icon>);
 export const Back = (p: P) => (<Icon {...p}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></Icon>);
 export const Pencil = (p: P) => (<Icon {...p}><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /></Icon>);
 export const Sparkles = (p: P) => (<Icon {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4" /><path d="M22 5h-4" /></Icon>);
