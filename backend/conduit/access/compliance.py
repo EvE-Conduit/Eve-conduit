@@ -1,17 +1,21 @@
 """Compliance: does every character of a user have a working login with every scope the site needs?
 
 A user is compliant when each of their characters has a valid token holding every required scope
-(the character sheet's plus enabled plugins'). Failing or stale character-sheet syncs are reported
-as warnings; they are often ESI's fault, so they don't make anyone non-compliant.
+(the character sheet's plus enabled plugins'), and enabled plugins' own checks (``Plugin.compliance``, e.g. being on
+the Discord server) find nothing. Failing or stale character-sheet syncs are reported as warnings; they are often
+ESI's fault, so they don't make anyone non-compliant.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from django.utils import timezone
 
 from conduit.events import bus
+
+log = logging.getLogger(__name__)
 
 # A sync that has failed this many times in a row is worth a warning.
 FAILING_AFTER = 3
@@ -23,6 +27,38 @@ def _required() -> list[str]:
     from conduit.plugins.services import required_scopes
 
     return required_scopes()
+
+
+def _plugin_checks() -> list:
+    """The compliance checks of enabled plugins."""
+    import importlib
+
+    from conduit.plugins import registry
+    from conduit.plugins.services import enabled_ids
+
+    enabled = enabled_ids()
+    checks = []
+    for pid, plugin in registry.installed().items():
+        if pid not in enabled:
+            continue
+        for path in getattr(plugin, "compliance", ()) or ():
+            module, _, name = path.partition(":")
+            try:
+                checks.append((pid, getattr(importlib.import_module(module), name)))
+            except Exception:
+                log.exception("Could not load compliance check %s of plugin %s", path, pid)
+    return checks
+
+
+def plugin_problems(user) -> list[str]:
+    out = []
+    for pid, check in _plugin_checks():
+        try:
+            out += [str(p) for p in check(user) or []]
+        except Exception:
+            # A broken plugin mustn't make everyone non-compliant (or everyone compliant): log it and move on.
+            log.exception("Compliance check of plugin %s failed for user %s", pid, user.pk)
+    return out
 
 
 def character_status(character, required: list[str], statuses: list) -> dict:
@@ -78,11 +114,14 @@ def check_user(user, required: list[str] | None = None) -> dict:
     problems = [f"{c['name']}: {p}" for c in characters for p in c["problems"]]
     warnings = [f"{c['name']}: {s['label']} is failing to update" for c in characters for s in c["failing_sections"]]
     warnings += [f"{c['name']}: {s['label']} hasn't updated for a while" for c in characters for s in c["stale_sections"]]
-    if not chars:
-        problems.append("No characters linked")
+    account_problems = [] if chars else ["No characters linked"]
+    account_problems += plugin_problems(user)
+    problems += account_problems
     return {
         "compliant": not problems,
         "problems": problems,
+        #: Problems that aren't about one character (no characters, or a plugin's, such as not being on Discord).
+        "account_problems": account_problems,
         "warnings": warnings,
         "characters": sorted(characters, key=lambda c: (c["ok"], c["name"].lower())),
     }
@@ -121,14 +160,16 @@ def refresh_user(user, required: list[str] | None = None) -> dict:
                    link="/characters", level="success", category="compliance")
         elif not _only_lost_tokens(result):
             # A lost token already told its owner (esi.tokens.token_lost); don't say it twice.
-            notify(user, "Some of your characters need attention", "\n".join(result["problems"][:10]),
-                   link="/characters", level="warning", category="compliance")
+            title = "Your account needs attention" if result["account_problems"] else "Some of your characters need attention"
+            notify(user, title, "\n".join(result["problems"][:10]), link="/characters", level="warning", category="compliance")
     return result
 
 
 def _only_lost_tokens(result: dict) -> bool:
     bad = [c for c in result["characters"] if c["problems"]]
-    return bool(bad) and all(c["problems"] == ["needs to log in again"] for c in bad)
+    # Account-level problems (e.g. a plugin's: not on the Discord server) still need saying.
+    account_level = len(result["problems"]) > sum(len(c["problems"]) for c in bad)
+    return bool(bad) and not account_level and all(c["problems"] == ["needs to log in again"] for c in bad)
 
 
 def refresh_all() -> int:

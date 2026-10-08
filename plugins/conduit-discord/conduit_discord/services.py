@@ -15,6 +15,7 @@ from django.conf import settings as django_settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from conduit.accounts.models import Character
 from conduit.events import bus
 from conduit.eve.models import portrait_url
 
@@ -83,11 +84,39 @@ def check_nickname_format(fmt: str) -> None:
 
 
 def _set_status(acct: DiscordAccount, error: str = "", **fields) -> None:
+    was_on_server = acct.on_server
     acct.sync_error = error[:300]
     acct.synced_at = timezone.now()
     for k, v in fields.items():
         setattr(acct, k, v)
     acct.save()
+    if acct.on_server != was_on_server:
+        recheck_compliance(acct.user_id)
+
+
+def recheck_compliance(user_id: int) -> None:
+    """Being on the server can count towards compliance; re-check the member now rather than at the next half hour."""
+    if not DiscordSettings.load().require_for_compliance:
+        return
+    try:
+        from conduit.access.tasks import update_user_groups
+    except ImportError:  # an EvE Conduit without it
+        return
+    transaction.on_commit(lambda: update_user_groups.delay(user_id))
+
+
+def compliance_problems(user) -> list[str]:
+    """Plugin.compliance: with "Must be on the Discord server" switched on, members who may link Discord have to have
+    linked it and be on the server. Reads what the last sync found; never asks Discord (this runs for everyone)."""
+    s = DiscordSettings.load()
+    if not (s.require_for_compliance and s.configured and has_access(user)):
+        return []
+    acct = DiscordAccount.objects.filter(user=user).first()
+    if acct is None:
+        return ["Discord: not linked (link it and join the server on the Discord page)"]
+    if not acct.on_server:
+        return ["Discord: not on the server (join it again on the Discord page)"]
+    return []
 
 
 def explain(exc: api.DiscordError) -> str:
@@ -110,7 +139,7 @@ def sync_user(user, s: DiscordSettings | None = None, mappings: list[RoleMapping
     try:
         member = api.member(s.bot_token, s.guild_id, acct.discord_id)
         if member is None:
-            _set_status(acct, "Not on the server; press Join the server to come back", roles=[])
+            _set_status(acct, "Not on the server; press Join the server to come back", roles=[], on_server=False)
             return acct.sync_error
         access = has_access(user)
         if not access and s.kick_without_access:
@@ -136,7 +165,7 @@ def sync_user(user, s: DiscordSettings | None = None, mappings: list[RoleMapping
                     raise
                 api.modify_member(s.bot_token, s.guild_id, acct.discord_id, roles=changes["roles"])
                 warning = "Roles are up to date, but the bot can't change this member's nickname"
-        _set_status(acct, warning, roles=sorted(wanted), nickname=nick or member.get("nick") or "")
+        _set_status(acct, warning, roles=sorted(wanted), nickname=nick or member.get("nick") or "", on_server=True)
         return warning
     except api.DiscordError as exc:
         log.warning("Discord sync for %s failed: %s", user, exc)
@@ -212,6 +241,7 @@ def finish_link(request, code: str, state: str) -> DiscordAccount:
         _set_status(acct, explain(exc))
         raise LinkError(f"Linked, but Discord wouldn't add you to the server: {explain(exc)}") from None
     sync_user(user, s)  # already a member: adding changes nothing, so set roles and nickname now
+    recheck_compliance(user.pk)
     bus.emit("discord.linked", user_id=user.pk, user=user.display_name, discord=acct.username,
              summary=f"{user.display_name} linked Discord account {acct.username}", level="success")
     return acct
@@ -221,6 +251,7 @@ def _forget(acct: DiscordAccount, summary: str) -> None:
     user = acct.user
     bus.emit("discord.unlinked", user_id=user.pk, user=user.display_name, discord=acct.username, summary=summary, level="warning")
     acct.delete()
+    recheck_compliance(user.pk)
 
 
 def unlink(user, *, kick: bool | None = None, reason: str = "", notify_user: bool = True, force: bool = False) -> None:
@@ -323,6 +354,32 @@ def server_check(s: DiscordSettings | None = None) -> dict:
     }
 
 
+def linked_characters(users, viewer) -> dict[int, list[dict]]:
+    """Each linked member's characters, main first, for the admin list. Alts are only listed for people allowed to
+    open their character sheets (the core sheet permissions): a Discord manager isn't automatically allowed to learn
+    whose alt is whose. The main character is always shown; the member list shows it anyway."""
+    from conduit.sheet.access import can_view
+
+    see_all = viewer.has_perm("sheet.view_all_characters")
+    out: dict[int, list[dict]] = {}
+    mains = {u.pk: u.main_character_id for u in users}
+    chars = Character.objects.filter(user_id__in=mains).select_related("corporation").order_by("name")
+    for c in chars:
+        main = c.pk == mains[c.user_id]
+        viewable = see_all or can_view(viewer, c)
+        if not (main or viewable):
+            continue
+        out.setdefault(c.user_id, []).append({
+            "id": c.pk, "name": c.name, "portrait": portrait_url(c.pk, 64), "main": main,
+            "corporation": (c.corporation.ticker or c.corporation.name) if c.corporation else None,
+            # Whether the admin may open its character sheet (links to it).
+            "viewable": viewable,
+        })
+    for rows in out.values():
+        rows.sort(key=lambda r: (not r["main"], r["name"].lower()))
+    return out
+
+
 def account_out(acct: DiscordAccount, with_user: bool = False) -> dict:
     out = {
         "discord_id": acct.discord_id,
@@ -333,6 +390,7 @@ def account_out(acct: DiscordAccount, with_user: bool = False) -> dict:
         "error": acct.sync_error,
         "nickname": acct.nickname,
         "roles": acct.roles,
+        "on_server": acct.on_server,
     }
     if with_user:
         u = acct.user

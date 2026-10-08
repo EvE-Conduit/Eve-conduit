@@ -280,3 +280,58 @@ def test_every_state_may_link_discord_by_default(db):
     old.permissions.clear()
     old.save()  # taking it away sticks: only new states get it
     assert not old.permissions.filter(codename="access_discord").exists()
+
+
+def test_admins_see_mains_and_the_alts_they_may_see(setup, api_client, corp):
+    """Discord managers see each member's main; alts only if they may open those characters' sheets."""
+    from conduit.accounts.models import Character
+
+    pilot, _ = setup
+    assert link(api_client, pilot).status_code == 200
+    Character.objects.create(id=90000002, name="Pilot Alt", owner_hash="alt", user=pilot, corporation=corp)
+    manager = make_user(90000050, "Discord Admin")
+    manager.user_permissions.add(Permission.objects.get(codename="manage_discord"))
+    api_client.force_login(manager)
+    row = api_client.call("get", "/api/p/discord/admin/members").json()[0]
+    assert [(c["name"], c["main"]) for c in row["characters"]] == [("Pilot One", True)]
+    # Someone who may view every character (here an administrator) sees the alt too, with links to the sheets.
+    api_client.force_login(admin := make_user(90000051, "Site Admin"))
+    admin.is_superuser = True
+    admin.save()
+    row = api_client.call("get", "/api/p/discord/admin/members").json()[0]
+    assert [(c["name"], c["main"], c["viewable"]) for c in row["characters"]] == [("Pilot One", True, True), ("Pilot Alt", False, True)]
+
+
+def test_must_be_on_the_server_to_be_compliant(setup, discord, api_client, admin_user, monkeypatch, django_capture_on_commit_callbacks):
+    """With the setting on, members who may link Discord are only compliant while linked and on the server."""
+    from conduit.access import tasks as access_tasks
+    from conduit.access.compliance import check_user
+
+    rechecked = []
+    monkeypatch.setattr(access_tasks.update_user_groups, "delay", lambda uid: rechecked.append(uid))
+    pilot, _ = setup
+    discord_problems = lambda: [p for p in check_user(pilot)["problems"] if p.startswith("Discord")]  # noqa: E731
+    assert discord_problems() == []  # off by default
+
+    api_client.force_login(admin_user)
+    s = api_client.call("get", "/api/p/discord/admin").json()["settings"]
+    body = {k: s[k] for k in ("client_id", "guild_id", "nickname_format", "kick_without_access")} | {"require_for_compliance": True}
+    assert api_client.call("put", "/api/p/discord/admin/settings", body).json()["settings"]["require_for_compliance"]
+    assert discord_problems() == ["Discord: not linked (link it and join the server on the Discord page)"]
+
+    assert link(api_client, pilot).status_code == 200
+    assert discord_problems() == []
+    discord.members.pop(ME)  # left the server; noticed at the next sync
+    with django_capture_on_commit_callbacks(execute=True):
+        services.sync_user(pilot)
+    assert discord_problems() == ["Discord: not on the server (join it again on the Discord page)"]
+    assert DiscordAccount.objects.get().on_server is False and pilot.pk in rechecked
+
+    # People who may not link Discord (every state may by default; take it away) aren't asked to.
+    from conduit.access.models import State
+
+    for state in State.objects.all():
+        state.permissions.remove(Permission.objects.get(codename="access_discord"))
+    pilot.user_permissions.clear()
+    pilot = type(pilot).objects.get(pk=pilot.pk)
+    assert [p for p in check_user(pilot)["problems"] if p.startswith("Discord")] == []

@@ -152,3 +152,26 @@ def test_stale_sync_is_a_warning():
     SyncStatus.objects.create(character=u.main_character, section="wallet", result="ok",
                               last_success=timezone.now() - timedelta(days=5))
     assert check_user(u)["warnings"] == ["Pilot One: Wallet hasn't updated for a while"]
+
+
+@pytest.mark.django_db
+def test_plugins_add_their_own_compliance_checks(monkeypatch):
+    """Plugin.compliance: enabled plugins can ask for more (e.g. being on the Discord server); a broken check is ignored."""
+    from conduit.plugins.services import set_enabled, sync_installed
+    from tests.sample_plugin.plugin import SamplePlugin
+
+    checks = types.ModuleType("sample_checks")
+    checks.discord = lambda user: ["Discord: not on the server"]
+    checks.broken = lambda user: 1 / 0
+    monkeypatch.setitem(sys.modules, "sample_checks", checks)
+    monkeypatch.setattr(SamplePlugin, "compliance", ("sample_checks:discord", "sample_checks:broken", "nope.missing:fn"), raising=False)
+    u = make_user(scopes=ALL + " esi-fleets.read_fleet.v1")  # the sample plugin's own scope
+    sync_installed()
+    set_enabled("sample", False)
+    assert check_user(u)["compliant"]  # only enabled plugins count
+    set_enabled("sample", True)
+    result = check_user(u)
+    assert not result["compliant"] and result["problems"] == result["account_problems"] == ["Discord: not on the server"]
+    refresh_user(u)
+    note = Notification.objects.get()
+    assert note.title == "Your account needs attention" and "not on the server" in note.body

@@ -1,6 +1,7 @@
 """Mounted at /api/p/discord/. Only reachable while the plugin is enabled."""
 
 from django.contrib.auth.models import Group
+from django.db import transaction
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.security import django_auth
@@ -110,6 +111,7 @@ def admin_out() -> dict:
             "guild_name": s.guild_name,
             "nickname_format": s.nickname_format,
             "kick_without_access": s.kick_without_access,
+            "require_for_compliance": s.require_for_compliance,
             "configured": s.configured,
             "last_full_sync": s.last_full_sync.isoformat() if s.last_full_sync else None,
         },
@@ -140,6 +142,7 @@ class SettingsIn(Schema):
     bot_token: str | None = None
     nickname_format: str = ""
     kick_without_access: bool = False
+    require_for_compliance: bool = False
 
 
 def _snowflake(value: str, label: str) -> str:
@@ -166,7 +169,17 @@ def put_settings(request, payload: SettingsIn):
     _run(services.check_nickname_format, fmt)
     s.nickname_format = fmt
     s.kick_without_access = payload.kick_without_access
+    compliance_changed = s.require_for_compliance != payload.require_for_compliance
+    s.require_for_compliance = payload.require_for_compliance
     s.save()
+    if compliance_changed:
+        # Everyone's compliance may have changed; the core re-checks everyone every 30 minutes, so start it now.
+        try:
+            from conduit.access.tasks import update_compliance
+
+            transaction.on_commit(update_compliance.delay)
+        except ImportError:
+            pass
     changed = [k for k in ("client_secret", "bot_token") if getattr(payload, k) is not None]
     record("discord.settings", "changed the Discord settings" + (f" (new {', '.join(c.replace('_', ' ') for c in changed)})" if changed else ""),
            request=request, target_type="plugin", details={"plugin": "discord"})
@@ -221,8 +234,10 @@ def put_mappings(request, payload: MappingsIn):
 @require_perm("discord.manage_discord")
 def members(request):
     names = dict(RoleMapping.objects.values_list("role_id", "role_name"))
-    accounts = DiscordAccount.objects.select_related("user__main_character").order_by("user__main_character__name")
-    return [{**services.account_out(a, with_user=True), "role_names": sorted({names.get(r) or r for r in a.roles})} for a in accounts]
+    accounts = list(DiscordAccount.objects.select_related("user__main_character").order_by("user__main_character__name"))
+    characters = services.linked_characters([a.user for a in accounts], request.user)
+    return [{**services.account_out(a, with_user=True), "role_names": sorted({names.get(r) or r for r in a.roles}),
+             "characters": characters.get(a.user_id, [])} for a in accounts]
 
 
 @router.post("/admin/sync")

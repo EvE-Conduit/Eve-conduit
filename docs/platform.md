@@ -96,6 +96,23 @@ def find(request, q, limit):
 Only return what the user may see. A hit has an `image` URL or an `icon` (a Lucide icon name); `url` is a path
 on the site or an `https://` URL.
 
+## Compliance checks
+
+A member is compliant when every character has a working login with the scopes the site needs. Plugins can ask for
+more with `Plugin.compliance`, dotted paths to `fn(user) -> list[str]` (one string per problem, `[]` when all is
+well). Problems show on Administration → Compliance, in the member's notification and in the Compliant group rule:
+
+```python
+class DiscordPlugin(Plugin):
+    compliance = ("conduit_discord.services:compliance_problems",)
+
+def compliance_problems(user):
+    return [] if on_the_server(user) else ["Discord: not on the server (join it again on the Discord page)"]
+```
+
+Checks run every 30 minutes for every user, so read stored data; never call another service from them. A check that
+raises is logged and ignored. To re-check one member straight away, queue `conduit.access.tasks.update_user_groups`.
+
 ## Landing page sections
 
 Plugins can add sections to the landing page (`/home`), like dashboard widgets. Admins switch each one off or on

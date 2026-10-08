@@ -9,7 +9,7 @@ import { type ReactNode, useState } from "react";
 import { Link } from "react-router";
 
 import { ArrowLeft, Check, Copy, DiscordLogo, ExternalLink, Plus, Refresh, Trash, Unlink } from "./icons";
-import { type Admin, BASE, type Check as CheckResult, type LinkedMember, type Mapping } from "./types";
+import { type Admin, BASE, type Check as CheckResult, type LinkedCharacter, type LinkedMember, type Mapping } from "./types";
 
 const KEY = ["discord", "admin"];
 
@@ -105,7 +105,13 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
 function SetupTab({ data }: { data: Admin }) {
   const qc = useQueryClient();
   const s = data.settings;
-  const [form, setForm] = useState({ client_id: s.client_id, guild_id: s.guild_id, nickname_format: s.nickname_format, kick_without_access: s.kick_without_access });
+  const [form, setForm] = useState({
+    client_id: s.client_id,
+    guild_id: s.guild_id,
+    nickname_format: s.nickname_format,
+    kick_without_access: s.kick_without_access,
+    require_for_compliance: s.require_for_compliance,
+  });
   const [secret, setSecret] = useState("");
   const [token, setToken] = useState("");
   const [check, setCheck] = useState<CheckResult | null>(null);
@@ -191,6 +197,12 @@ function SetupTab({ data }: { data: Admin }) {
                   description="Off: they only lose the roles this site gave them. On: they're kicked and have to link again once they have access."
                   checked={form.kick_without_access}
                   onCheckedChange={(v) => set({ kick_without_access: v })}
+                />
+                <SwitchRow
+                  label="Must be on the Discord server to be compliant"
+                  description="Members who may link Discord count as not compliant until they've linked it and while they're not on the server (Administration → Compliance, and the Compliant group rule). Leaving is noticed at the next sync, at most 6 hours later."
+                  checked={form.require_for_compliance}
+                  onCheckedChange={(v) => set({ require_for_compliance: v })}
                 />
               </div>
             </Step>
@@ -384,11 +396,17 @@ function MembersTab() {
 
   if (isLoading || !data) return <Skeleton className="h-64" />;
   const needle = q.trim().toLowerCase();
-  const rows = needle ? data.filter((m) => m.user.name.toLowerCase().includes(needle) || m.username.toLowerCase().includes(needle)) : data;
+  // Match the member, their Discord name and nickname, or any of their characters you can see (find the Discord
+  // account behind an alt).
+  const rows = needle
+    ? data.filter((m) =>
+        [m.user.name, m.username, m.nickname ?? "", ...(m.characters ?? []).map((c) => c.name)].some((s) => s.toLowerCase().includes(needle)),
+      )
+    : data;
   return (
     <Card>
       <TableToolbar>
-        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Member or Discord name" className="w-72" />
+        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Member, character or Discord name" className="w-80" />
       </TableToolbar>
       {rows.length === 0 ? (
         <EmptyState icon={<DiscordLogo />} title={data.length ? "Nobody matches" : "Nobody has linked Discord yet"} />
@@ -412,6 +430,8 @@ function MembersTab() {
                     <div className="min-w-0">
                       <div className="truncate font-medium">{m.user.name}</div>
                       {!m.has_access && <Badge tone="warning">no access</Badge>}
+                      {!m.on_server && <Badge tone="danger">not on the server</Badge>}
+                      <Characters list={m.characters ?? []} needle={needle} />
                     </div>
                   </div>
                 </Td>
@@ -461,5 +481,39 @@ function MembersTab() {
         onConfirm={() => remove && unlink.mutateAsync({ id: remove.m.user.id, kick: remove.kick })}
       />
     </Card>
+  );
+}
+
+/** A member's main and the alts you may see; long lists fold, but a character matching the search always shows. */
+function Characters({ list, needle }: { list: LinkedCharacter[]; needle: string }) {
+  const [open, setOpen] = useState(false);
+  const alts = list.filter((c) => !c.main);
+  if (!list.length) return null;
+  const shown = open ? list : list.filter((c, i) => i < 3 || (needle && c.name.toLowerCase().includes(needle)));
+  const name = (c: LinkedCharacter) => (
+    <span className={cn("truncate", c.main ? "text-text" : "text-muted")}>
+      {c.name}
+      {c.corporation && <span className="ml-1 text-subtle">[{c.corporation}]</span>}
+    </span>
+  );
+  return (
+    <div className="mt-1.5 space-y-1">
+      {shown.map((c) => (
+        <div key={c.id} className="flex items-center gap-1.5 text-xs">
+          <img src={c.portrait} alt="" className="size-4 shrink-0" />
+          {c.viewable ? <Link to={`/characters/${c.id}`} className="flex min-w-0 hover:text-accent-ink hover:underline">{name(c)}</Link> : name(c)}
+          {c.main && <Badge size="xs">main</Badge>}
+        </div>
+      ))}
+      {list.length > shown.length && (
+        <button type="button" onClick={() => setOpen(true)} className="text-xs text-accent-ink hover:underline">
+          {list.length - shown.length} more character{list.length - shown.length === 1 ? "" : "s"}
+        </button>
+      )}
+      {open && list.length > 3 && (
+        <button type="button" onClick={() => setOpen(false)} className="text-xs text-subtle hover:underline">Show fewer</button>
+      )}
+      {alts.length === 0 && <div className="text-[11px] text-subtle">No alts you can see</div>}
+    </div>
   );
 }

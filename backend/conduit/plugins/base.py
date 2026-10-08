@@ -70,6 +70,11 @@ class Plugin:
     #: Dotted paths to ``fn(user, character) -> bool`` that let more people read a character's sheet, e.g.
     #: recruiters looking at an applicant. Asked only when the core rules say no, and only while enabled.
     sheet_access: tuple[str, ...] = ()
+    #: Dotted paths to ``fn(user) -> list[str]``: extra things a member must do to be compliant, besides every
+    #: character having a working login (e.g. being on the Discord server). Each string is one problem, shown to the
+    #: member and on the compliance page; return [] when all is well. Asked every 30 minutes for every user, so read
+    #: stored data, never call outside services. Only asked while the plugin is enabled.
+    compliance: tuple[str, ...] = ()
     #: Who each of the plugin's permissions is meant for, so Administration groups them in the permission picker:
     #: ``{"review_applications": "hr", "manage_forms": "hr"}``. Tiers: ``member`` (regular users), ``hr`` (HR staff),
     #: ``director`` (directors) and ``admin``. Unlisted ones show under "Other". Django's automatic add/change/delete/
