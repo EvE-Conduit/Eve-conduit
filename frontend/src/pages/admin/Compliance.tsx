@@ -296,11 +296,23 @@ function MembersTable({ rows }: { rows: ComplianceRow[] }) {
 function UserDetail({ userId }: { userId: number }) {
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "compliance", "user", userId],
-    queryFn: () => api.get<{ compliant: boolean; problems: string[]; warnings: string[]; characters: CharacterCompliance[] }>(`/api/admin/compliance/users/${userId}`),
+    queryFn: () =>
+      api.get<{ compliant: boolean; problems: string[]; account_problems?: string[]; warnings: string[]; characters: CharacterCompliance[] }>(
+        `/api/admin/compliance/users/${userId}`,
+      ),
   });
   if (isLoading || !data) return <Spinner label="Checking characters…" />;
   return (
     <div className="space-y-3">
+      {!!data.account_problems?.length && (
+        <ul className="space-y-1 rounded-lg border border-warning/40 bg-surface p-3 text-sm">
+          {data.account_problems.map((p) => (
+            <li key={p} className="flex items-center gap-2 text-warning-fg">
+              <XCircle className="size-4 shrink-0" /> {p}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         {data.characters.map((c) => (
           <div key={c.id} className={cn("flex gap-3 rounded-lg border bg-surface p-3", c.ok ? "border-border" : "border-warning/40")}>
