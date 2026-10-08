@@ -3,6 +3,20 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.17
+
+### Added
+- **No domain needed: install on the server's IP address.** Let's Encrypt now issues certificates for IP addresses,
+  so every install type takes the server's public IPv4 address where it asked for a domain, and the site still gets
+  real HTTPS (`https://203.0.113.7`). The certificate is valid six days and renewed automatically. The address must
+  not change (the EVE login's callback URL and the certificate are tied to it), and port 80 or 443 must be reachable
+  from the internet.
+  - **Windows:** enter the IP address in the setup wizard (or `install.ps1 -Domain 203.0.113.7`). Private, IPv6 and
+    mistyped addresses are explained before anything is installed.
+  - **Linux:** `install.sh --domain 203.0.113.7`. The new `sudo conduit ip-cert` gets and renews the certificate (it
+    installs a certbot new enough for IP certificates); run it again if the first request failed.
+  - **Docker:** set `CONDUIT_DOMAIN` (and the site URL) to the IP address.
+
 ## 0.5.16
 
 ### Fixed
