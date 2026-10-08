@@ -3,6 +3,26 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.24
+
+### Added
+- **Your own links in the sidebar.** Administration → Settings → Sidebar links: add up to 20 links to your wiki,
+  killboard, Discord invite or anything else, each with a label and an icon, under a heading you choose ("Links" by
+  default). They show in everyone's sidebar between Plugins and Administration and in the command palette. Other
+  websites open in a new tab; pages on this site open in place. Signed-out visitors don't see them.
+
+### Plugins
+- **Discord 1.1.3:** states made in Administration → States can link Discord again. Saving the form took the
+  Discord permission away right after it was given, so their members had no access and got none of the mapped
+  roles. States made before this need "Can link a Discord account and join the server" ticked by hand.
+- **Discord 1.1.4:** removing a role mapping takes the role away from everyone again, instead of it looking like a
+  role given by hand and staying. Mappings removed before this update aren't known, so take those roles off by hand.
+- **Mentoring 1.1.0:** a goal can be for certain focus areas only (PvP, Industry...): only mentees who asked for help
+  with one of them get it, and their progress and the graduation prompt count only their own goals.
+- **Mentoring 1.2.0:** Mentoring → Settings has a **Graduates** tab: who graduated, when, with whom and after how
+  long. Program managers can **Reopen** a graduated or ended mentorship with its goals and thread, back with its
+  mentor if they still mentor, or on the waiting list otherwise.
+
 ## 0.5.23
 
 ### Added
