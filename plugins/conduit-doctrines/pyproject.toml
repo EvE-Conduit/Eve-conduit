@@ -1,6 +1,6 @@
 [project]
 name = "conduit-doctrines"
-version = "1.0.2"
+version = "1.0.3"
 description = "Doctrines: your fleet doctrines and fits, shown like the in-game fitting window, copied into the game or saved to a character's fittings, and who can fly each fit."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
