@@ -16,6 +16,7 @@ from pathlib import Path
 
 import httpx
 from django.db import transaction
+from django.utils import timezone
 
 from conduit.esi.client import user_agent
 from conduit.db import upsert
@@ -321,7 +322,7 @@ def import_archive(path: Path, build: dict, progress: Callable[[str], None] = lo
         release = build.get("releaseDate")
         version, _ = SdeVersion.objects.update_or_create(
             build_number=build["buildNumber"],
-            defaults={"release_date": datetime.fromisoformat(release.replace("Z", "+00:00")) if release else None, "schema": SCHEMA},
+            defaults={"release_date": datetime.fromisoformat(release.replace("Z", "+00:00")) if release else None, "schema": SCHEMA, "imported_at": timezone.now()},
         )
     progress(f"SDE build {version.build_number} imported in {time.monotonic() - started:.0f}s")
     return version

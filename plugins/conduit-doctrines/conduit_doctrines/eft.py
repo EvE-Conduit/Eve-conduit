@@ -66,7 +66,9 @@ def check(ship: ItemType, items: list[dict], types: dict[int, ItemType]) -> list
     subs = [types[i["type_id"]] for i in items if i["slot"] == "sub" and i["type_id"] in types]
     slots = ship_slots(ship, subs)
     if ship.fitting is None:
-        return ["The ship's slot layout isn't known yet: the static data needs updating (Administration → Health)."]
+        return ["This site's EVE static data has no fitting data yet, so modules can't be put in their slots. It's imported "
+                "again by itself after updating EvE Conduit (about a minute); if this stays, an administrator can press "
+                "Import again under Administration → Health."]
     counts = Counter(i["slot"] for i in items if i["slot"] in SLOTS)
     for slot, n in counts.items():
         if n > slots[slot]:

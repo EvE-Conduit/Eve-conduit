@@ -301,7 +301,7 @@ export function FitDisplay({ view }: { view: FitView }) {
           <span className="font-mono text-sm tabular-nums text-muted">{isk(view.value)}</span>
         </div>
         {!view.known && (
-          <p className="mb-3 text-sm text-warning-fg">This ship's slot layout isn't known yet; the static data needs updating. Modules are shown as fitted.</p>
+          <p className="mb-3 text-sm text-warning-fg">This site's EVE static data has no fitting data for this ship yet (Administration → Health → Import again). Modules are shown as saved.</p>
         )}
         {mode === "ring" ? <FittingRing view={view} /> : <FitList view={view} />}
       </Card>
