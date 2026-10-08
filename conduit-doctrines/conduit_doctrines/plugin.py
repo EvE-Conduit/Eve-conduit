@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class DoctrinesPlugin(Plugin):
     id = "doctrines"
     name = "Doctrines"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Fleet doctrines and their fits, shown like the in-game fitting window, with who can fly each fit and the skills they're missing."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-doctrines"
