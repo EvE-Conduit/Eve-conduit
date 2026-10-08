@@ -41,8 +41,16 @@ export interface DoctrineCard {
   flyable: number;
 }
 
+export interface LooseFit extends FitBrief {
+  value: number;
+  /** My best character's status (null without characters). */
+  best: FlyStatus | null;
+}
+
 export interface Overview {
   doctrines: DoctrineCard[];
+  /** Fits that aren't in any doctrine. */
+  fits: LooseFit[];
   can_manage: boolean;
   can_see_readiness: boolean;
   roles: string[];
@@ -90,7 +98,8 @@ export interface FitView {
   known: boolean;
   items: ViewItem[];
   hardpoints_used: { turrets: number; launchers: number };
-  resources: { key: string; label: string; used: number; total: number; unit: string }[];
+  /** With the fitting skills at V; base_* without skills. */
+  resources: { key: string; label: string; used: number; total: number; base_used: number; base_total: number; unit: string }[];
   value: number;
 }
 
@@ -148,7 +157,8 @@ export interface Readiness {
 }
 
 export interface CharacterDoctrine {
-  id: number;
+  /** None for the fits that aren't in a doctrine. */
+  id: number | null;
   name: string;
   fits: (FitBrief & FlyStatus)[];
 }

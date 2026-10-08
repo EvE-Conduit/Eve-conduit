@@ -140,7 +140,7 @@ function FitEditor({ fit, doctrine }: { fit?: FitDetail; doctrine: string | null
                 <datalist id="doctrine-roles">{overview.data?.roles.map((r) => <option key={r} value={r} />)}</datalist>
               </Field>
             </div>
-            <Field label="Doctrines">
+            <Field label="Doctrines" hint="Optional: fits that aren't in a doctrine are listed under Other fits.">
               <div className="flex flex-wrap gap-2">
                 {overview.data?.doctrines.map((d) => {
                   const on = doctrines.includes(d.id);

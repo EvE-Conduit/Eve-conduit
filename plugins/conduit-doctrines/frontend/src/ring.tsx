@@ -1,28 +1,37 @@
-// The fit drawn like the in-game fitting window: the ship in a circle, its slots on arcs around it (high slots
-// across the top, mid slots down the right, low slots along the bottom, rigs lower left, subsystems upper left),
-// hardpoints, resources, and the drone bay and cargo beside it. Colours come from the theme tokens, so it works in
-// every theme.
+// The fit drawn like the in-game fitting window: the ship inside a ring of slots with fixed racks (high slots across
+// the top, mid slots down the right, low slots along the bottom, rigs lower left, subsystems upper left), loaded charges
+// just outside their module, turret and launcher hardpoints under the high slots, and CPU, powergrid and calibration
+// gauges on the inside of the ring. Colours come from the theme tokens, so it works in every theme.
 import { Card, cn, isk, Meter, num, Segmented, Table, Td, Th, THead, Tr } from "@conduit/sdk";
 import { Fragment, useId, useState } from "react";
 
 import { List, Ring } from "./icons";
 import type { FitView, Slot, ViewItem } from "./types";
 
-const SIZE = 440;
+const SIZE = 520;
 const C = SIZE / 2;
-const ORBIT = 176;
-const SOCKET = 19;
-const SHIP_R = 118;
+const ORBIT = 206;
+const CELL = 30;
+const BAND = CELL + 12;
+const SHIP_R = 140;
+const GAUGE_R = 170;
+const CHARGE_R = ORBIT + CELL / 2 + 12;
 
-/** Where each kind of slot sits, in degrees clockwise from the top. Services (structures) use the subsystem arc. */
-const SECTORS: Record<Slot, [number, number]> = {
-  hi: [-62, 52],
-  med: [64, 150],
-  low: [160, 250],
-  rig: [262, 298],
-  sub: [308, 344],
-  service: [308, 344],
-};
+/** Each rack's room in the ring, like the game's: 8 high, mid and low slots, 3 rigs and 4 subsystems. Racks keep their
+ * place whatever the ship has, so a Strategic Cruiser's subsystems never run into its high slots. */
+const RACKS: [Slot, number][] = [["hi", 8], ["med", 8], ["low", 8], ["rig", 3], ["sub", 4]];
+const STEP = 9.2;
+const GAP = (360 - RACKS.reduce((a, [, n]) => a + n, 0) * STEP) / RACKS.length;
+/** Degrees clockwise from the top: [start, end] of each rack, the high rack centred at the top. */
+const SECTORS = {} as Record<Slot, [number, number]>;
+{
+  let at = -(8 * STEP) / 2;
+  for (const [slot, n] of RACKS) {
+    SECTORS[slot] = [at, at + n * STEP];
+    at += n * STEP + GAP;
+  }
+  SECTORS.service = SECTORS.sub; // structures have services where ships have subsystems
+}
 const LABEL: Record<Slot, string> = { hi: "High", med: "Mid", low: "Low", rig: "Rigs", sub: "Subsystems", service: "Services" };
 const ORDER: Slot[] = ["hi", "med", "low", "rig", "sub", "service"];
 
@@ -31,21 +40,69 @@ function point(angle: number, r: number) {
   return { x: C + r * Math.sin(a), y: C - r * Math.cos(a) };
 }
 
+/** Slot centres, in the middle of the rack; more slots than the rack has room for (big structures) are squeezed in. */
 function angles(slot: Slot, n: number): number[] {
   const [a, b] = SECTORS[slot];
-  const step = n > 1 ? Math.min(16, (b - a) / (n - 1)) : 0;
+  const step = Math.min(STEP, (b - a) / n);
   const mid = (a + b) / 2;
   return Array.from({ length: n }, (_, i) => mid + (i - (n - 1) / 2) * step);
 }
 
-function arc(from: number, to: number, r: number) {
-  const s = point(from, r);
-  const e = point(to, r);
-  return `M ${s.x} ${s.y} A ${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${e.x} ${e.y}`;
+/** An arc path; drawn the other way round when ``reverse`` so text along the bottom of the ring reads upright. */
+function arc(from: number, to: number, r: number, reverse = false) {
+  const [s, e] = reverse ? [point(to, r), point(from, r)] : [point(from, r), point(to, r)];
+  return `M ${s.x} ${s.y} A ${r} ${r} 0 ${Math.abs(to - from) > 180 ? 1 : 0} ${reverse ? 0 : 1} ${e.x} ${e.y}`;
 }
 
 function describe(item: ViewItem) {
   return `${item.type.name}${item.charge ? ` · ${item.charge.name}` : ""}${item.offline ? " (offline)" : ""}`;
+}
+
+/** Where the resource gauges sit inside the ring: CPU lower right, powergrid lower left, calibration by the rigs. */
+const GAUGES: Record<string, { from: number; to: number; reverse: boolean }> = {
+  cpu: { from: 104, to: 166, reverse: true },
+  power: { from: 194, to: 256, reverse: true },
+  calibration: { from: 266, to: 314, reverse: false },
+};
+
+function Gauge({ id, resource }: { id: string; resource: FitView["resources"][number] }) {
+  const g = GAUGES[resource.key];
+  if (!g || (!resource.total && !resource.used)) return null;
+  const share = resource.total ? resource.used / resource.total : 1;
+  const tone = share > 1 ? "stroke-danger" : share > 0.9 ? "stroke-warning" : "stroke-accent";
+  const fill = g.from + (g.to - g.from) * Math.min(1, share);
+  const pathId = `${id}-gauge-${resource.key}`;
+  return (
+    <g>
+      <title>{`${resource.label}: ${num(resource.used)} / ${num(resource.total)} ${resource.unit} with fitting skills at V`}</title>
+      <path d={arc(g.from, g.to, GAUGE_R)} className="fill-none stroke-border-strong" strokeWidth={5} opacity={0.45} />
+      {share > 0 && <path d={arc(g.from, fill, GAUGE_R)} className={cn("fill-none", tone)} strokeWidth={5} />}
+      <path id={pathId} d={arc(g.from, g.to, g.reverse ? GAUGE_R - 9 : GAUGE_R - 12, g.reverse)} fill="none" />
+      <text fontSize={9.5} letterSpacing={0.6} className={share > 1 ? "fill-danger" : "fill-muted"} dominantBaseline="middle">
+        <textPath href={`#${pathId}`} startOffset="50%" textAnchor="middle">
+          {`${resource.label.toUpperCase()}  ${num(Math.round(resource.used * 10) / 10)} / ${num(resource.total)}`}
+        </textPath>
+      </text>
+    </g>
+  );
+}
+
+/** Turret hardpoints left of the top, launcher hardpoints right of it, just under the high slots like in the game. */
+function HardpointPips({ used, total, side, kind }: { used: number; total: number; side: -1 | 1; kind: "turret" | "launcher" }) {
+  const n = Math.max(total, used);
+  if (!n) return null;
+  return (
+    <g>
+      <title>{`${kind === "turret" ? "Turret" : "Launcher"} hardpoints: ${used} of ${total} used`}</title>
+      {Array.from({ length: n }, (_, i) => {
+        const p = point(side * (5 + i * 4.6), GAUGE_R);
+        return (
+          <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} transform={`rotate(45 ${p.x} ${p.y})`} strokeWidth={1}
+            className={i >= total ? "fill-danger stroke-danger" : i < used ? (kind === "turret" ? "fill-accent stroke-accent" : "fill-info stroke-info") : "fill-none stroke-border-strong"} />
+        );
+      })}
+    </g>
+  );
 }
 
 export function FittingRing({ view }: { view: FitView }) {
@@ -65,58 +122,48 @@ export function FittingRing({ view }: { view: FitView }) {
   }).filter((g) => g.count > 0);
 
   return (
-    <div className="mx-auto w-full max-w-[460px]">
-      <div className="mb-2 flex items-center justify-between gap-4 text-[11px] uppercase tracking-[0.12em] text-muted">
-        <Hardpoints label="Turrets" used={view.hardpoints_used.turrets} total={view.slots.turrets} />
-        <Hardpoints label="Launchers" used={view.hardpoints_used.launchers} total={view.slots.launchers} right />
-      </div>
+    <div className="mx-auto w-full max-w-[520px]">
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="h-auto w-full select-none" role="img" aria-label={`${view.ship.name} fitting`}>
         <defs>
           <clipPath id={`${id}-ship`}>
             <circle cx={C} cy={C} r={SHIP_R} />
           </clipPath>
-          <clipPath id={`${id}-icon`} clipPathUnits="objectBoundingBox">
-            <circle cx={0.5} cy={0.5} r={0.5} />
-          </clipPath>
           <radialGradient id={`${id}-glow`}>
-            <stop offset="55%" stopColor="var(--color-accent)" stopOpacity={0} />
-            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.18} />
+            <stop offset="60%" stopColor="var(--color-accent)" stopOpacity={0} />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.16} />
           </radialGradient>
         </defs>
 
-        {/* The ship */}
-        <circle cx={C} cy={C} r={SHIP_R + 14} className="fill-none stroke-border" strokeDasharray="2 5" />
-        <circle cx={C} cy={C} r={SHIP_R} className="fill-surface-2" />
-        <image href={view.ship.render} x={C - SHIP_R} y={C - SHIP_R} width={SHIP_R * 2} height={SHIP_R * 2} clipPath={`url(#${id}-ship)`} preserveAspectRatio="xMidYMid slice" />
-        <circle cx={C} cy={C} r={SHIP_R} fill={`url(#${id}-glow)`} className="stroke-accent/50" strokeWidth={1.5} />
-
-        {/* Slot arcs and their labels */}
-        {groups.map(({ slot, count }) => {
-          const as = angles(slot, count);
-          const from = as[0] - 9;
-          const to = as[as.length - 1] + 9;
-          const label = point(from - 4, ORBIT + 30);
-          return (
-            <g key={`arc-${slot}`}>
-              <path d={arc(from, to, ORBIT)} className="fill-none stroke-border-strong" strokeWidth={SOCKET * 2 + 8} strokeLinecap="round" opacity={0.35} />
-              <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" className="fill-subtle" fontSize={9} letterSpacing={1.5}>
-                {LABEL[slot].toUpperCase()}
-              </text>
-            </g>
-          );
+        {/* The ring: one band all the way round, each rack's room a little brighter */}
+        <circle cx={C} cy={C} r={ORBIT} className="fill-none stroke-surface-2" strokeWidth={BAND} />
+        <circle cx={C} cy={C} r={ORBIT + BAND / 2} className="fill-none stroke-border" />
+        <circle cx={C} cy={C} r={ORBIT - BAND / 2} className="fill-none stroke-border" />
+        {RACKS.map(([slot]) => {
+          const [a, b] = SECTORS[slot];
+          return <path key={`rack-${slot}`} d={arc(a + 1, b - 1, ORBIT)} className="fill-none stroke-border-strong" strokeWidth={BAND - 6} opacity={0.22} />;
         })}
 
-        {/* Sockets */}
+        {/* The ship */}
+        <circle cx={C} cy={C} r={SHIP_R} className="fill-surface-2" />
+        <image href={view.ship.render} x={C - SHIP_R} y={C - SHIP_R} width={SHIP_R * 2} height={SHIP_R * 2} clipPath={`url(#${id}-ship)`} preserveAspectRatio="xMidYMid slice" />
+        <circle cx={C} cy={C} r={SHIP_R} fill={`url(#${id}-glow)`} className="stroke-border" />
+
+        {/* Inside the ring: hardpoints and resources */}
+        <HardpointPips used={view.hardpoints_used.turrets} total={view.slots.turrets} side={-1} kind="turret" />
+        <HardpointPips used={view.hardpoints_used.launchers} total={view.slots.launchers} side={1} kind="launcher" />
+        {view.resources.map((r) => <Gauge key={r.key} id={id} resource={r} />)}
+
+        {/* Slots */}
         {groups.map(({ slot, count, items }) =>
           angles(slot, count).map((angle, pos) => {
             const item = items.find((i) => i.position === pos);
             const p = point(angle, ORBIT);
-            const out = point(angle, ORBIT + SOCKET * 0.85);
+            const q = point(angle, CHARGE_R);
             const isActive = !!item && active === item;
+            const half = CELL / 2;
             return (
               <g
                 key={`${slot}-${pos}`}
-                transform={`translate(${p.x} ${p.y})`}
                 tabIndex={item ? 0 : undefined}
                 onMouseEnter={() => item && setActive(item)}
                 onMouseLeave={() => setActive(null)}
@@ -124,28 +171,23 @@ export function FittingRing({ view }: { view: FitView }) {
                 onBlur={() => setActive(null)}
                 className={cn(item && "cursor-default outline-none")}
               >
-                {item && <title>{describe(item)}</title>}
-                <circle
-                  r={SOCKET}
+                <title>{item ? describe(item) : `Empty ${LABEL[slot].toLowerCase()} slot`}</title>
+                <rect
+                  x={p.x - half} y={p.y - half} width={CELL} height={CELL} rx={3}
                   className={cn(item ? "fill-surface-3" : "fill-surface", isActive ? "stroke-accent" : item ? "stroke-border-strong" : "stroke-border")}
                   strokeWidth={isActive ? 2 : 1}
-                  strokeDasharray={item?.offline ? "3 3" : item ? undefined : "2 3"}
+                  strokeDasharray={item?.offline ? "3 2" : item ? undefined : "2 2"}
                 />
                 {item ? (
-                  <image href={item.type.icon} x={-SOCKET + 3} y={-SOCKET + 3} width={(SOCKET - 3) * 2} height={(SOCKET - 3) * 2}
-                    clipPath={`url(#${id}-icon)`} opacity={item.offline ? 0.35 : 1} />
+                  <image href={item.type.icon} x={p.x - half + 1.5} y={p.y - half + 1.5} width={CELL - 3} height={CELL - 3} opacity={item.offline ? 0.3 : 1} />
                 ) : (
-                  <circle r={2.5} className="fill-border-strong" />
+                  <circle cx={p.x} cy={p.y} r={2} className="fill-border-strong" />
                 )}
                 {item?.charge && (
-                  <g transform={`translate(${out.x - p.x} ${out.y - p.y})`}>
-                    <circle r={8.5} className="fill-surface stroke-accent/70" />
-                    <image href={item.charge.icon} x={-7} y={-7} width={14} height={14} clipPath={`url(#${id}-icon)`} />
+                  <g>
+                    <rect x={q.x - 9} y={q.y - 9} width={18} height={18} rx={2} className="fill-surface stroke-border-strong" />
+                    <image href={item.charge.icon} x={q.x - 8} y={q.y - 8} width={16} height={16} />
                   </g>
-                )}
-                {item && (item.turret || item.launcher) && (
-                  <rect x={-3} y={-SOCKET - 6} width={6} height={6} transform={`rotate(45 0 ${-SOCKET - 3})`}
-                    className={item.turret ? "fill-accent" : "fill-info"} />
                 )}
               </g>
             );
@@ -169,21 +211,6 @@ export function FittingRing({ view }: { view: FitView }) {
         )}
       </div>
     </div>
-  );
-}
-
-function Hardpoints({ label, used, total, right }: { label: string; used: number; total: number; right?: boolean }) {
-  if (!total && !used) return <span />;
-  return (
-    <span className={cn("flex items-center gap-2", right && "flex-row-reverse")}>
-      <span>{label}</span>
-      <span className="flex gap-1">
-        {Array.from({ length: Math.max(total, used) }, (_, i) => (
-          <span key={i} className={cn("size-2 rotate-45", i < used ? (label === "Turrets" ? "bg-accent" : "bg-info") : "ring-1 ring-inset ring-border-strong",
-            i >= total && "bg-danger")} />
-        ))}
-      </span>
-    </span>
   );
 }
 
@@ -216,21 +243,29 @@ export function Bays({ view }: { view: FitView }) {
 }
 
 export function Resources({ view }: { view: FitView }) {
+  const [skills, setSkills] = useState<"v" | "none">("v");
   return (
     <div className="space-y-3">
+      <Segmented size="sm" value={skills} onChange={setSkills} aria-label="Fitting skills"
+        options={[{ value: "v", label: "Skills at V" }, { value: "none", label: "No skills" }]} />
       {view.resources.filter((r) => r.total > 0 || r.used > 0).map((r) => {
-        const share = r.total ? r.used / r.total : 1;
+        const [used, total] = skills === "v" ? [r.used, r.total] : [r.base_used, r.base_total];
+        const share = total ? used / total : 1;
         return (
           <Meter
             key={r.key}
             label={r.label}
             value={Math.min(1, share)}
             tone={share > 1 ? "danger" : share > 0.9 ? "warning" : "accent"}
-            valueText={`${num(Math.round(r.used * 10) / 10)} / ${num(r.total)}${r.unit ? ` ${r.unit}` : ""}`}
+            valueText={`${num(Math.round(used * 10) / 10)} / ${num(total)}${r.unit ? ` ${r.unit}` : ""}`}
           />
         );
       })}
-      <p className="text-xs text-subtle">Base values: fitting skills and modules that add CPU or powergrid aren't counted.</p>
+      <p className="text-xs text-subtle">
+        {skills === "v"
+          ? "CPU Management, Power Grid Management, Weapon Upgrades and Advanced Weapon Upgrades at V. Other modules' own fitting skills and modules that add CPU or powergrid aren't counted."
+          : "The ship's and modules' base values, without any skills."}
+      </p>
     </div>
   );
 }
@@ -285,7 +320,7 @@ export function FitList({ view }: { view: FitView }) {
 export function FitDisplay({ view }: { view: FitView }) {
   const [mode, setMode] = useState<"ring" | "list">("ring");
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <Card className="p-card">
         <div className="mb-3 flex items-center justify-between gap-3">
           <Segmented

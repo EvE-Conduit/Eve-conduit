@@ -9,15 +9,18 @@ SCOPE_WORDS = {"main": "the main character", "any": "any character", "all": "eve
 def _fit_choices():
     from conduit.sde.models import ItemType
 
-    from .models import DoctrineFit
+    from .models import DoctrineFit, Fit
 
     rows = list(DoctrineFit.objects.select_related("doctrine", "fit").order_by("doctrine__name", "order"))
-    ships = dict(ItemType.objects.filter(pk__in={e.fit.ship_type_id for e in rows}).values_list("id", "name"))
+    loose = list(Fit.objects.filter(entries__isnull=True))
+    ships = dict(ItemType.objects.filter(pk__in={e.fit.ship_type_id for e in rows} | {f.ship_type_id for f in loose}).values_list("id", "name"))
     seen, out = set(), []
     for e in rows:
         if e.fit_id not in seen:
             seen.add(e.fit_id)
             out.append((str(e.fit_id), f"{e.doctrine.name} – {e.fit.name} ({ships.get(e.fit.ship_type_id, 'ship')})"))
+    # Fits that aren't in a doctrine.
+    out += [(str(f.pk), f"{f.name} ({ships.get(f.ship_type_id, 'ship')})") for f in loose]
     return out
 
 

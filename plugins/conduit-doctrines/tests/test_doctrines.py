@@ -193,7 +193,8 @@ def test_managing_needs_the_permission(people, api_client):
     preview = api_client.call("post", "/api/p/doctrines/parse", {"eft": RIFTER_EFT}).json()
     assert preview["view"]["slots"]["hi"] == 4 and preview["view"]["hardpoints_used"]["turrets"] == 2
     cpu = next(r for r in preview["view"]["resources"] if r["key"] == "cpu")
-    assert cpu == {"key": "cpu", "label": "CPU", "used": 28, "total": 130, "unit": "tf"}  # the offline afterburner doesn't count
+    # With fitting skills at V (the guns' CPU -25%, the ship's +25%); the offline afterburner doesn't count.
+    assert cpu == {"key": "cpu", "label": "CPU", "used": 26, "total": 162.5, "unit": "tf", "base_used": 28, "base_total": 130}
 
     api_client.force_login(people["pilot"])
     overview = api_client.call("get", "/api/p/doctrines").json()
@@ -317,3 +318,19 @@ def test_pasted_fits_cannot_stall_the_server(sde):
     assert eft._quantity("Hobgoblin II x5") == ("Hobgoblin II", 5) and eft._quantity("Hobgoblin II x" + "9" * 5000) is None
     assert eft._offline("Damage Control II /OFFLINE") == ("Damage Control II", True)
     assert eft._header("[Rifter, My Rifter]") == ("Rifter", "My Rifter") and eft._header("[, x]") is None
+
+
+def test_fits_without_a_doctrine_are_shown(people, api_client):
+    fit = save_fit(api_client, people["fc"])
+    assert fit["doctrines"] == []
+    api_client.force_login(people["pilot"])
+    overview = api_client.call("get", "/api/p/doctrines").json()
+    assert overview["doctrines"] == [] and [f["id"] for f in overview["fits"]] == [fit["id"]]
+    assert overview["fits"][0]["best"]["status"] == "unknown"
+    tab = api_client.call("get", "/api/p/doctrines/characters/90000002").json()
+    assert tab == [{"id": None, "name": "Other fits", "fits": [tab[0]["fits"][0]]}] and tab[0]["fits"][0]["id"] == fit["id"]
+    assert (str(fit["id"]), "Rifter Fleet (Rifter)") in rules.RULE_TYPES["doctrine_can_fly"].params[0].options()
+    # Once it's in a doctrine it's listed there instead.
+    d = Doctrine.objects.create(name="Rifters")
+    DoctrineFit.objects.create(doctrine=d, fit_id=fit["id"])
+    assert api_client.call("get", "/api/p/doctrines").json()["fits"] == []

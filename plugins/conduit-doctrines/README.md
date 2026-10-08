@@ -3,14 +3,17 @@
 Your fleet doctrines and their fits, shown like the in-game fitting window, ready to copy into the game, with which
 of your characters can fly each fit and what they're missing.
 
-- **Doctrines** (everyone): a card per doctrine with its ships and how many of its fits you can fly. A doctrine
+- **Doctrines** (everyone): a card per doctrine with its ships and how many of its fits you can fly, and below them
+  **Other fits**: fits that aren't in any doctrine, each with your best character's status. A doctrine
   lists its fits by role (DPS, Logistics, Tackle...), each with your best character's status: **Ready** (required and
   recommended skills), **Can fly** (required skills) or how many skills are missing and how long they take to train.
-- **A fit** shows the ship in the middle of a fitting ring like the game's fitting window: high slots across the top,
-  mid slots down the right, low slots along the bottom, rigs and subsystems on the left, loaded ammunition on each
-  module, turret and launcher hardpoints, offline modules dimmed and empty slots shown. Point at a module for its name.
-  Beside it: CPU, powergrid and calibration use (base values, without skills), the drone bay and cargo, and the
-  estimated value. There's a plain list view too.
+- **A fit** shows the ship in the middle of a fitting ring like the game's fitting window: each rack has its own place
+  in the ring whatever the ship has (high slots across the top, mid slots down the right, low slots along the bottom,
+  rigs lower left, subsystems upper left), loaded ammunition just outside its module, turret and launcher hardpoints
+  under the high slots and CPU, powergrid and calibration gauges inside the ring, offline modules dimmed and empty
+  slots shown. Point at a module for its name. Beside it: CPU, powergrid and calibration use with the fitting skills
+  at V (CPU Management, Power Grid Management, Weapon Upgrades, Advanced Weapon Upgrades) or without skills, the drone
+  bay and cargo, and the estimated value. There's a plain list view too.
   - **Copy to paste in game** copies the fit in the game's own text format: in the game, open the Fitting window and
     press **Import from clipboard**. It works in Pyfa too.
   - **Save to my fittings in EVE** adds the fit to one of your characters' saved fittings in the game (needs
@@ -23,12 +26,13 @@ of your characters can fly each fit and what they're missing.
   or Pyfa, or start from one of your characters' saved in-game fittings. Modules go in the right slots whatever order
   they're pasted in, and the fit is checked against the ship's slots, hardpoints (Strategic Cruisers count their
   subsystems) and rig size. Lines nobody recognises are listed and left out. Set the name, role, notes and
-  recommended skills, and which doctrines it's in. Doctrines have a description, picture, order, their fits in order,
+  recommended skills, and which doctrines it's in (if any: a fit doesn't have to be in one). Doctrines have a description, picture, order, their fits in order,
   and can be retired.
 - **Who can fly it** (permission `doctrines.view_readiness`, or managing): every member against every fit of a
   doctrine with their best character for each, and a CSV.
-- **Character sheet:** a Doctrines tab lists the fits that character can fly, for anyone who may see the sheet.
-- **Group rule** "Can fly doctrine fit": a fit, required or required + recommended skills, on the main, any or every
+- **Character sheet:** a Doctrines tab lists the fits that character can fly (by doctrine, then the other fits), for
+  anyone who may see the sheet.
+- **Group rule** "Can fly doctrine fit": a fit (in a doctrine or not), required or required + recommended skills, on the main, any or every
   character. Use it for group requirements and smart groups (e.g. a Discord role for pilots who can fly the doctrine).
 - Ctrl+K finds doctrines and fits by name or ship, and a dashboard widget shows how many doctrine fits you can fly.
 
