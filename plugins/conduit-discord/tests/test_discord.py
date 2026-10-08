@@ -141,6 +141,19 @@ def test_group_changes_sync_roles_and_keep_hand_given_ones(setup, discord, api_c
     assert discord.members[ME]["roles"] == [R_HAND]
 
 
+def test_removing_a_mapping_takes_its_role_away(setup, discord, api_client, admin_user, django_capture_on_commit_callbacks):
+    pilot, caps = setup
+    add_member(pilot, caps, "admin")
+    link(api_client, pilot)
+    discord.members[ME]["roles"].append(R_HAND)
+    assert sorted(discord.members[ME]["roles"]) == sorted([R_CAPS, R_HAND])
+    api_client.force_login(admin_user)
+    with django_capture_on_commit_callbacks(execute=True):
+        assert api_client.call("put", "/api/p/discord/admin/mappings", {"mappings": []}).status_code == 200
+    assert discord.members[ME]["roles"] == [R_HAND]
+    assert DiscordAccount.objects.get().roles == []
+
+
 def test_losing_access_strips_roles_or_kicks(setup, discord, api_client):
     pilot, caps = setup
     add_member(pilot, caps, "admin")
