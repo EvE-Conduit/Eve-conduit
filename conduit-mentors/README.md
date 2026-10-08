@@ -14,7 +14,9 @@ New members get a mentor to show them the ropes, with goals to work through toge
   for the mentor (a setting, on by default; every look is in the snooper log). The mentor **graduates** them (they're
   congratulated, `mentors.graduated`) or **ends** it with a reason. The page suggests graduating once every goal is
   done. Mentees can withdraw while they're still waiting, and ask again after a mentorship is over.
-- **Goals** are the same for every mentee. A goal with a group rule set ticks itself as soon as the rules pass:
+- **Goals** are for every mentee, or only for mentees focusing on certain areas: a goal set to PvP and Faction
+  warfare is on the list of those who asked for help with either, and nobody else's. A goal with a group rule set
+  ticks itself as soon as the rules pass:
   skill points, fleets flown (Fleets plugin), a skill plan finished (Skill Plans), a doctrine they can fly
   (Doctrines), Discord linked, or any other rule. The others are ticked by the mentor, or by the mentee if the goal
   allows it. A new site starts with a few: meeting your mentor on comms, setting your home station and clone, your

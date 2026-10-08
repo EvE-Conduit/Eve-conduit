@@ -184,6 +184,33 @@ def test_seeded_goals_and_ticking(people, api_client):
     assert c.call("post", f"{BASE}/m/{m.pk}/goals/{meet.pk}", {"done": False}).json()["goals"][0]["done"] is False
 
 
+def test_goals_by_focus_area(people, api_client):
+    services.goals()
+    Goal.objects.all().delete()
+    c = login(api_client, people["manager"])
+    everyone = c.call("post", f"{BASE}/program/goals", {"title": "Meet your mentor"}).json()
+    assert everyone["focus"] == []
+    pvp = c.call("post", f"{BASE}/program/goals", {"title": "Fit a frigate", "focus": ["pvp", "Nonsense"]}).json()
+    assert pvp["focus"] == ["PvP"]  # only the program's focus areas, spelled the program's way
+    industry = c.call("post", f"{BASE}/program/goals", {"title": "Build a module", "focus": ["Industry", "Mining"]}).json()
+    assert [g["focus"] for g in c.call("get", f"{BASE}/program").json()["goals"]] == [[], ["PvP"], ["Industry", "Mining"]]
+
+    newbro, mentor = people["newbro"], people["mentor"]
+    m = services.assign(services.request_mentor(newbro, focus=["Mining"]), mentor, mentor)
+    c = login(api_client, mentor)
+    out = c.call("get", f"{BASE}/m/{m.pk}").json()
+    assert [g["title"] for g in out["goals"]] == ["Meet your mentor", "Build a module"] and out["progress"]["total"] == 2
+    assert c.call("post", f"{BASE}/m/{m.pk}/goals/{pvp['id']}", {"done": True}).status_code == 400
+    assert c.call("post", f"{BASE}/m/{m.pk}/goals/{industry['id']}", {"done": True}).status_code == 200
+    # No focus given: only the goals for everyone.
+    other = services.assign(services.request_mentor(people["stranger"]), mentor, mentor)
+    assert [g["title"] for g in c.call("get", f"{BASE}/m/{other.pk}").json()["goals"]] == ["Meet your mentor"]
+    # Clearing a goal's focus areas makes it everyone's.
+    c = login(api_client, people["manager"])
+    c.call("put", f"{BASE}/program/goals/{pvp['id']}", {"title": "Fit a frigate", "focus": []})
+    assert c.call("get", f"{BASE}/m/{other.pk}").json()["progress"]["total"] == 2
+
+
 def test_graduation_and_ending(people, api_client, monkeypatch):
     emitted = []
     monkeypatch.setattr(bus, "emit", lambda name, **kw: name.startswith("mentors.") and emitted.append(name))
