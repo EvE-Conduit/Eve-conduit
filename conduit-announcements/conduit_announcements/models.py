@@ -16,6 +16,8 @@ class Announcement(models.Model):
     body = models.TextField(blank=True)
     tone = models.CharField(max_length=10, choices=Tone.choices, default=Tone.INFO)
     pinned = models.BooleanField(default=False)
+    #: Also posted in the Bulletin on the landing page (/home), for everyone who can see it.
+    on_landing = models.BooleanField(default=True)
     #: Who sees it: users in any of these states or groups. Both empty means everyone.
     states = models.ManyToManyField("access.State", blank=True, related_name="+")
     groups = models.ManyToManyField("auth.Group", blank=True, related_name="+")

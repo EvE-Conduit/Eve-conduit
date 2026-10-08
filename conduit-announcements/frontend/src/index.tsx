@@ -2,6 +2,7 @@ import { api, Badge, definePlugin, Skeleton, timeAgo } from "@conduit/sdk";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 
+import { BulletinSection } from "./bulletin";
 import { FeedPage, TONE } from "./feed";
 import { BASE, type Feed } from "./types";
 
@@ -40,4 +41,6 @@ function LatestWidget() {
 export default definePlugin({
   routes: [{ path: "", Component: FeedPage }],
   widgets: [{ id: "latest", title: "Announcements", Component: LatestWidget, size: "md", order: 5 }],
+  // Needs EvE Conduit 0.5.18; older versions ignore it.
+  landingSections: [{ id: "bulletin", title: "Bulletin (latest announcements)", Component: BulletinSection, placement: "top", order: 10 }],
 });

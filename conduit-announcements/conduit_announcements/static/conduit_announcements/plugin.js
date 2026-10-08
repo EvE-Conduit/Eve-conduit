@@ -36,21 +36,21 @@ var I = (e) => /* @__PURE__ */ P(F, {
 }), B = (e) => /* @__PURE__ */ P(F, {
 	...e,
 	children: [/* @__PURE__ */ N("path", { d: "M5 12h14" }), /* @__PURE__ */ N("path", { d: "M12 5v14" })]
-}), ee = (e) => /* @__PURE__ */ P(F, {
+}), V = (e) => /* @__PURE__ */ P(F, {
 	...e,
 	children: [/* @__PURE__ */ N("circle", {
 		cx: "12",
 		cy: "12",
 		r: "10"
 	}), /* @__PURE__ */ N("path", { d: "M12 6v6l4 2" })]
-}), te = (e) => /* @__PURE__ */ P(F, {
+}), H = (e) => /* @__PURE__ */ P(F, {
 	...e,
 	children: [/* @__PURE__ */ N("path", { d: "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" }), /* @__PURE__ */ N("circle", {
 		cx: "12",
 		cy: "12",
 		r: "3"
 	})]
-}), ne = (e) => /* @__PURE__ */ P(F, {
+}), ee = (e) => /* @__PURE__ */ P(F, {
 	...e,
 	children: [
 		/* @__PURE__ */ N("circle", {
@@ -69,13 +69,13 @@ var I = (e) => /* @__PURE__ */ P(F, {
 			r: "1"
 		})
 	]
-}), V = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
-function H(e) {
+}), te = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+function ne(e) {
 	return e.startsWith("https://") || e.startsWith("/") && !e.startsWith("//") ? e : null;
 }
 function U(e, t) {
 	let n = [], r = 0, i = 0;
-	for (let a of e.matchAll(V)) {
+	for (let a of e.matchAll(te)) {
 		let o = a[0], s = a.index ?? 0;
 		s > r && n.push(e.slice(r, s));
 		let c = `${t}-${i++}`;
@@ -88,7 +88,7 @@ function U(e, t) {
 			children: o.slice(1, -1)
 		}, c));
 		else if (o.startsWith("[")) {
-			let [, e, t] = o.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/) ?? [], r = t ? H(t) : null;
+			let [, e, t] = o.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/) ?? [], r = t ? ne(t) : null;
 			n.push(r ? /* @__PURE__ */ N("a", {
 				href: r,
 				className: "text-accent-ink underline underline-offset-4 hover:no-underline",
@@ -146,7 +146,7 @@ function q(e) {
 function J(e) {
 	return e ? new Date(e).toISOString() : null;
 }
-function Y({ announcement: e, onClose: t }) {
+function re({ announcement: e, onClose: t }) {
 	let r = D(), { data: i } = E({
 		queryKey: ["announcements", "audience"],
 		queryFn: () => y.get(`${K}/audience`)
@@ -155,6 +155,7 @@ function Y({ announcement: e, onClose: t }) {
 		body: e?.body ?? "",
 		tone: e?.tone ?? "info",
 		pinned: e?.pinned ?? !1,
+		on_landing: e?.on_landing ?? !0,
 		notify: e?.notify ?? !0,
 		states: e?.states?.map((e) => e.id) ?? [],
 		groups: e?.groups?.map((e) => e.id) ?? [],
@@ -235,7 +236,7 @@ function Y({ announcement: e, onClose: t }) {
 						}, {
 							value: "preview",
 							label: "Preview",
-							icon: /* @__PURE__ */ N(te, {})
+							icon: /* @__PURE__ */ N(H, {})
 						}]
 					})]
 				}), c === "write" ? /* @__PURE__ */ P(M, { children: [/* @__PURE__ */ N(v, {
@@ -298,7 +299,7 @@ function Y({ announcement: e, onClose: t }) {
 						}),
 						/* @__PURE__ */ N("div", {
 							className: "flex flex-wrap gap-1.5",
-							children: (i?.states ?? []).map((e) => /* @__PURE__ */ N(X, {
+							children: (i?.states ?? []).map((e) => /* @__PURE__ */ N(Y, {
 								on: o.states.includes(e.id),
 								onClick: () => d("states", e.id),
 								color: e.color,
@@ -307,7 +308,7 @@ function Y({ announcement: e, onClose: t }) {
 						}),
 						(i?.groups.length ?? 0) > 0 && /* @__PURE__ */ N("div", {
 							className: "mt-2 flex flex-wrap gap-1.5",
-							children: i.groups.map((e) => /* @__PURE__ */ N(X, {
+							children: i.groups.map((e) => /* @__PURE__ */ N(Y, {
 								on: o.groups.includes(e.id),
 								onClick: () => d("groups", e.id),
 								children: e.name
@@ -316,17 +317,26 @@ function Y({ announcement: e, onClose: t }) {
 					] }),
 					/* @__PURE__ */ P("div", {
 						className: "divide-y divide-border border border-border px-3",
-						children: [/* @__PURE__ */ N(_, {
-							label: "Pin to the top",
-							checked: o.pinned,
-							onCheckedChange: (e) => u({ pinned: e })
-						}), /* @__PURE__ */ N(_, {
-							label: "Notify people",
-							description: b ? "Already sent; editing doesn't send it again." : "Under the bell, and through webhooks such as Discord.",
-							checked: o.notify,
-							disabled: b,
-							onCheckedChange: (e) => u({ notify: e })
-						})]
+						children: [
+							/* @__PURE__ */ N(_, {
+								label: "Pin to the top",
+								checked: o.pinned,
+								onCheckedChange: (e) => u({ pinned: e })
+							}),
+							/* @__PURE__ */ N(_, {
+								label: "Post to the landing page",
+								description: "In the Bulletin on the home page, for the people it's meant for.",
+								checked: o.on_landing,
+								onCheckedChange: (e) => u({ on_landing: e })
+							}),
+							/* @__PURE__ */ N(_, {
+								label: "Notify people",
+								description: b ? "Already sent; editing doesn't send it again." : "Under the bell, and through webhooks such as Discord.",
+								checked: o.notify,
+								disabled: b,
+								onCheckedChange: (e) => u({ notify: e })
+							})
+						]
 					}),
 					/* @__PURE__ */ N(f, {
 						label: "Publish at",
@@ -352,7 +362,7 @@ function Y({ announcement: e, onClose: t }) {
 		})
 	});
 }
-function X({ on: e, onClick: t, color: n, children: r }) {
+function Y({ on: e, onClick: t, color: n, children: r }) {
 	return /* @__PURE__ */ P("button", {
 		type: "button",
 		"aria-pressed": e,
@@ -366,7 +376,7 @@ function X({ on: e, onClick: t, color: n, children: r }) {
 }
 //#endregion
 //#region src/feed.tsx
-var Z = {
+var X = {
 	info: {
 		label: "News",
 		badge: "info",
@@ -383,7 +393,7 @@ var Z = {
 		stripe: "bg-danger"
 	}
 };
-function Q(e = !1) {
+function ie(e = !1) {
 	return E({
 		queryKey: [
 			"announcements",
@@ -393,8 +403,8 @@ function Q(e = !1) {
 		queryFn: () => y.get(`${K}${e ? "?all=true" : ""}`)
 	});
 }
-function re() {
-	let e = D(), [t, a] = j("live"), { data: o, isLoading: s } = Q(t === "all"), [c, l] = j(null), [u, f] = j(null), p = () => e.invalidateQueries({ queryKey: ["announcements"] }), _ = o?.unread ?? 0;
+function ae() {
+	let e = D(), [t, a] = j("live"), { data: o, isLoading: s } = ie(t === "all"), [c, l] = j(null), [u, f] = j(null), p = () => e.invalidateQueries({ queryKey: ["announcements"] }), _ = o?.unread ?? 0;
 	A(() => {
 		if (!_) return;
 		let t = setTimeout(() => {
@@ -460,7 +470,7 @@ function re() {
 		}) }) : /* @__PURE__ */ P("div", {
 			className: "mx-auto max-w-4xl space-y-4",
 			children: [
-				S.map((e) => /* @__PURE__ */ N($, {
+				S.map((e) => /* @__PURE__ */ N(Z, {
 					a: e,
 					canPost: o.can_post,
 					onEdit: () => l(e),
@@ -471,7 +481,7 @@ function re() {
 					className: "h-px bg-border",
 					"aria-hidden": !0
 				}),
-				C.map((e) => /* @__PURE__ */ N($, {
+				C.map((e) => /* @__PURE__ */ N(Z, {
 					a: e,
 					canPost: o.can_post,
 					onEdit: () => l(e),
@@ -480,7 +490,7 @@ function re() {
 				}, e.id))
 			]
 		}),
-		c && /* @__PURE__ */ N(Y, {
+		c && /* @__PURE__ */ N(re, {
 			announcement: c === "new" ? null : c,
 			onClose: () => l(null)
 		}),
@@ -495,8 +505,8 @@ function re() {
 		})
 	] });
 }
-function $({ a: i, canPost: a, onEdit: d, onPin: f, onDelete: p }) {
-	let m = Z[i.tone], h = [...(i.states ?? []).map((e) => e.name), ...(i.groups ?? []).map((e) => e.name)];
+function Z({ a: i, canPost: a, onEdit: d, onPin: f, onDelete: p }) {
+	let m = X[i.tone], h = [...(i.states ?? []).map((e) => e.name), ...(i.groups ?? []).map((e) => e.name)];
 	return /* @__PURE__ */ P(r, {
 		id: `a${i.id}`,
 		className: b("relative overflow-hidden scroll-mt-24", i.status !== "live" && "opacity-70"),
@@ -528,7 +538,7 @@ function $({ a: i, canPost: a, onEdit: d, onPin: f, onDelete: p }) {
 								i.status === "scheduled" && /* @__PURE__ */ P(t, {
 									tone: "info",
 									children: [
-										/* @__PURE__ */ N(ee, { className: "size-3" }),
+										/* @__PURE__ */ N(V, { className: "size-3" }),
 										" Goes out ",
 										x(i.publish_at)
 									]
@@ -573,7 +583,7 @@ function $({ a: i, canPost: a, onEdit: d, onPin: f, onDelete: p }) {
 						variant: "ghost",
 						size: "icon-sm",
 						"aria-label": `Options for ${i.title}`,
-						children: /* @__PURE__ */ N(ne, {})
+						children: /* @__PURE__ */ N(ee, {})
 					})
 				}), /* @__PURE__ */ P(o, {
 					align: "end",
@@ -606,8 +616,193 @@ function $({ a: i, canPost: a, onEdit: d, onPin: f, onDelete: p }) {
 	});
 }
 //#endregion
+//#region src/bulletin.tsx
+var Q = "/p/announcements";
+function oe(e, t = 180) {
+	let n = e.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/^\s*(#{1,3}|[-*]|\d+\.|>)\s+/gm, "").replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
+	return n.length > t ? `${n.slice(0, t).trimEnd()}…` : n;
+}
+function se({ a: t }) {
+	return /* @__PURE__ */ P("div", {
+		className: "flex items-center gap-2 text-xs text-subtle",
+		children: [
+			t.author && /* @__PURE__ */ N(e, {
+				src: t.author.portrait ?? void 0,
+				name: t.author.name,
+				size: "xs"
+			}),
+			/* @__PURE__ */ N("span", { children: t.author?.name ?? "Leadership" }),
+			/* @__PURE__ */ N("span", {
+				"aria-hidden": !0,
+				children: "·"
+			}),
+			/* @__PURE__ */ N("time", {
+				dateTime: t.publish_at,
+				title: x(t.publish_at),
+				children: C(t.publish_at)
+			})
+		]
+	});
+}
+function ce({ a: e }) {
+	return /* @__PURE__ */ P("div", {
+		className: "flex flex-wrap items-center gap-1.5",
+		children: [
+			/* @__PURE__ */ N(t, {
+				tone: X[e.tone].badge,
+				children: X[e.tone].label
+			}),
+			e.pinned && /* @__PURE__ */ P(t, { children: [/* @__PURE__ */ N(L, { className: "size-3" }), " Pinned"] }),
+			e.unread && /* @__PURE__ */ N(t, {
+				tone: "success",
+				children: "New"
+			})
+		]
+	});
+}
+function le({ a: e, preview: t }) {
+	let n = e.body.length > 700 || e.body.split("\n").length > 12;
+	return /* @__PURE__ */ P("article", {
+		className: "panel relative flex flex-col overflow-hidden p-6 animate-fade-up sm:p-8",
+		children: [
+			/* @__PURE__ */ N("span", {
+				className: b("absolute inset-y-0 left-0 w-1", X[e.tone].stripe),
+				"aria-hidden": !0
+			}),
+			/* @__PURE__ */ N(ce, { a: e }),
+			/* @__PURE__ */ N("h3", {
+				className: "mt-4 text-2xl font-semibold leading-tight text-text sm:text-[1.7rem]",
+				children: e.title
+			}),
+			/* @__PURE__ */ N("div", {
+				className: "mt-3",
+				children: /* @__PURE__ */ N(se, { a: e })
+			}),
+			e.body && /* @__PURE__ */ P("div", {
+				className: b("relative mt-5", n && "max-h-64 overflow-hidden"),
+				children: [/* @__PURE__ */ N(G, {
+					text: e.body,
+					className: "text-[15px]"
+				}), n && /* @__PURE__ */ N("div", {
+					className: "pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-surface to-transparent",
+					"aria-hidden": !0
+				})]
+			}),
+			/* @__PURE__ */ N($, {
+				id: e.id,
+				preview: t,
+				className: "mt-5 self-start text-sm font-medium text-accent-ink hover:underline",
+				children: "Read the full announcement →"
+			})
+		]
+	});
+}
+function ue({ a: e, preview: t, index: n }) {
+	return /* @__PURE__ */ P($, {
+		id: e.id,
+		preview: t,
+		className: "group panel panel-quiet relative block overflow-hidden p-4 pl-5 transition-colors animate-fade-up hover:border-accent",
+		style: { animationDelay: `${80 + n * 60}ms` },
+		children: [
+			/* @__PURE__ */ N("span", {
+				className: b("absolute inset-y-0 left-0 w-0.5", X[e.tone].stripe),
+				"aria-hidden": !0
+			}),
+			/* @__PURE__ */ P("div", {
+				className: "flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-subtle",
+				children: [
+					/* @__PURE__ */ N("span", { children: X[e.tone].label }),
+					/* @__PURE__ */ N("span", {
+						"aria-hidden": !0,
+						children: "·"
+					}),
+					/* @__PURE__ */ N("time", {
+						dateTime: e.publish_at,
+						children: C(e.publish_at)
+					}),
+					e.unread && /* @__PURE__ */ N("span", {
+						className: "ml-auto size-1.5 rotate-45 bg-success",
+						"aria-label": "New"
+					})
+				]
+			}),
+			/* @__PURE__ */ N("div", {
+				className: "mt-1.5 font-medium text-text group-hover:text-accent-ink",
+				children: e.title
+			}),
+			e.body && /* @__PURE__ */ N("p", {
+				className: "mt-1 line-clamp-2 text-sm text-muted",
+				children: oe(e.body)
+			})
+		]
+	});
+}
+function $({ id: e, preview: t, className: n, style: r, children: i }) {
+	return t ? /* @__PURE__ */ N("div", {
+		className: n,
+		style: r,
+		children: i
+	}) : /* @__PURE__ */ N(O, {
+		to: `${Q}#a${e}`,
+		className: n,
+		style: r,
+		children: i
+	});
+}
+function de({ preview: e }) {
+	let { data: t, isLoading: n } = E({
+		queryKey: ["announcements", "bulletin"],
+		queryFn: () => y.get(`${K}/bulletin?limit=4`),
+		refetchInterval: 3e5
+	}), r = t?.announcements ?? [];
+	if (n) return /* @__PURE__ */ N(g, { className: "h-64" });
+	if (!t || r.length === 0 && !e) return null;
+	let [i, ...a] = r;
+	return /* @__PURE__ */ P("section", { children: [/* @__PURE__ */ P("div", {
+		className: "mb-4 flex items-center gap-4",
+		children: [
+			/* @__PURE__ */ N("span", {
+				className: "size-2 rotate-45 bg-accent",
+				"aria-hidden": !0
+			}),
+			/* @__PURE__ */ N("h2", {
+				className: "hud-label text-text",
+				children: "Bulletin"
+			}),
+			/* @__PURE__ */ N("span", {
+				className: "h-px flex-1 bg-border",
+				"aria-hidden": !0
+			}),
+			e ? /* @__PURE__ */ N("span", {
+				className: "text-xs text-subtle",
+				children: "All announcements →"
+			}) : /* @__PURE__ */ N(O, {
+				to: Q,
+				className: "text-xs text-subtle hover:text-accent-ink",
+				children: t.more > 0 ? `${t.more} more announcement${t.more === 1 ? "" : "s"} →` : "All announcements →"
+			})
+		]
+	}), i ? /* @__PURE__ */ P("div", {
+		className: b("grid grid-cols-1 gap-4", a.length > 0 && "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"),
+		children: [/* @__PURE__ */ N(le, {
+			a: i,
+			preview: e
+		}), a.length > 0 && /* @__PURE__ */ N("div", {
+			className: "flex flex-col gap-3",
+			children: a.map((t, n) => /* @__PURE__ */ N(ue, {
+				a: t,
+				preview: e,
+				index: n
+			}, t.id))
+		})]
+	}) : /* @__PURE__ */ P("div", {
+		className: "flex items-center gap-3 border border-dashed border-border-strong p-6 text-sm text-muted",
+		children: [/* @__PURE__ */ N(I, { className: "size-5 shrink-0 text-subtle" }), "Announcements posted to the landing page show here, the newest (or pinned) one as the lead story."]
+	})] });
+}
+//#endregion
 //#region src/index.tsx
-function ie() {
+function fe() {
 	let { data: e, isLoading: n } = E({
 		queryKey: ["announcements", "widget"],
 		queryFn: () => y.get(K),
@@ -634,7 +829,7 @@ function ie() {
 				className: "flex items-center gap-3 py-2 hover:text-text",
 				children: [
 					/* @__PURE__ */ N("span", {
-						className: `h-8 w-0.5 shrink-0 ${Z[e.tone].stripe}`,
+						className: `h-8 w-0.5 shrink-0 ${X[e.tone].stripe}`,
 						"aria-hidden": !0
 					}),
 					/* @__PURE__ */ P("span", {
@@ -660,20 +855,27 @@ function ie() {
 		})]
 	});
 }
-var ae = S({
+var pe = S({
 	routes: [{
 		path: "",
-		Component: re
+		Component: ae
 	}],
 	widgets: [{
 		id: "latest",
 		title: "Announcements",
-		Component: ie,
+		Component: fe,
 		size: "md",
 		order: 5
+	}],
+	landingSections: [{
+		id: "bulletin",
+		title: "Bulletin (latest announcements)",
+		Component: de,
+		placement: "top",
+		order: 10
 	}]
 });
 //#endregion
-export { ae as default };
+export { pe as default };
 
-export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","absolute","accent","action","actions","align","all","already","alreadyOut","an","and","announcement","announcements","anything","are","aria-hidden","aria-label","aria-pressed","as","at","audience","author","autoFocus","back","background","badge","be","bg-accent","bg-accent-soft","bg-bg/40","bg-border","bg-danger","bg-hover","bg-success","bg-warning","blank","block","blocks","body","border","border-accent/50","border-accent/60","border-border","border-l-2","browser","builds","but","button","can","canPost","can_post","center","checked","children","chosen","className","code","color","confirmLabel","const","counts","covers","currentColor","cx","cy","d","danger","data","dateTime","datetime-local","default","del","deleted","deleting","description","disabled","disappears","divide-border","divide-y","doctrine","doesn","down","edited","editing","editor","elements","else","end","ended","even","everyone","expired","expires_at","export","eyebrow","feed","few","fill","first","fleet","flex","flex-1","flex-wrap","font-medium","font-mono","font-semibold","footer","for","from","function","gap-1.5","gap-2","gap-3","gap-6","get","ghost","grid","groups","h-24","h-40","h-8","h-px","hasn","heading","here","hint","hover:border-border-strong","hover:no-underline","hover:text-text","href","icon","icon-sm","icons","id","if","import","important","in","index","info","injects","inline","inline-flex","input","inset-y-0","interface","is","isLoading","iso","it","italic","items","items-center","items-start","justify-between","k","key","label","last","latest","leading-relaxed","leading-snug","left-0","length","let","lg:grid-cols-[1fr_280px]","line","link","list","list-decimal","list-disc","live","loading","m","m3","marks","max-w-4xl","maxLength","mb-1.5","mb-2","md","means","members","min-h-[280px]","min-w-0","moon","mr-auto","mt-1.5","mt-2","mt-4","must","mutationFn","muted","mx-auto","n","name","never","new","news","next","none","noreferrer","not","notify","null","of","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDelete","onEdit","onError","onOpenChange","onPin","onSelect","onSuccess","once","one","ones","opacity-70","open","options","or","order","orders","out","overflow-hidden","p-4","p-card","pad","page","patch","path","people","picked","pin","pinned","pl-3","pl-5","pl-6","placeholder","portrait","post","posted","preview","primary","publish_at","put","px-1","px-2","px-3","py-0.5","py-1","py-2","qc","queryFn","queryKey","react","react-router","reading","refetchInterval","refresh","rel","relative","renderer","rest","results","return","rotate-45","round","routes","rows","run","s","safe","save","scheduled","scroll","scroll-mt-24","see","sees","self-center","send","sent","set","setDeleting","setEditing","setForm","setTab","setView","should","shrink-0","site","size","size-1.5","size-3","size-4","sm","sm:p-6","sm:pl-8","sm:text-xl","so","space-y-1","space-y-3","space-y-4","space-y-5","src","starts","states","status","stay","straight","string","stripe","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","success","such","t","target","tax","text","text-[0.9em]","text-[13px]","text-accent-ink","text-base","text-lg","text-muted","text-sm","text-subtle","text-text","text-warning-fg","text-xs","the","then","there","they","this","through","time","timeAgo","title","to","toast","toggle","token","tone","top","tracking-[0.12em]","transition-colors","truncate","type","undefined","underline","underline-offset-4","unread","until","up","updated","updated_at","uppercase","urgent","useQuery","useQueryClient","useState","used","v","value","variant","viewBox","void","w-0.5","w-1","w-full","warning","webhooks","what","whatever","who","widget","widgets","will","write","written","x","xl","xs","yet"];
+export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","absolute","accent","action","actions","align","all","already","alreadyOut","an","and","animate-fade-up","animationDelay","announcement","announcements","anything","are","aria-hidden","aria-label","aria-pressed","as","at","audience","author","autoFocus","back","background","badge","be","beside","bg-accent","bg-accent-soft","bg-bg/40","bg-border","bg-danger","bg-hover","bg-linear-to-t","bg-success","bg-warning","blank","block","blocks","body","boolean","border","border-accent/50","border-accent/60","border-border","border-border-strong","border-dashed","border-l-2","bottom-0","browser","builds","bulletin","but","button","can","canPost","can_post","center","checked","children","chosen","className","click","code","color","confirmLabel","const","counts","covers","currentColor","cut","cx","cy","d","danger","data","dateTime","datetime-local","default","del","deleted","deleting","description","disabled","disappears","divide-border","divide-y","doctrine","doesn","don","down","edited","editing","editor","elements","else","end","ended","even","everyone","expired","expires_at","export","eyebrow","faded","feed","few","fill","first","fleet","flex","flex-1","flex-col","flex-wrap","font-medium","font-mono","font-semibold","footer","for","from","from-surface","full","function","gap-1.5","gap-2","gap-3","gap-4","gap-6","get","ghost","go","grid","grid-cols-1","group","group-hover:text-accent-ink","groups","h-16","h-24","h-40","h-64","h-8","h-px","hasn","heading","here","hint","home","hover:border-accent","hover:border-border-strong","hover:no-underline","hover:text-accent-ink","hover:text-text","hover:underline","how","href","hud-label","icon","icon-sm","icons","id","if","ignore","import","important","in","index","info","injects","inline","inline-flex","input","inset-x-0","inset-y-0","interface","is","isLoading","iso","it","italic","items","items-center","items-start","its","justify-between","k","key","label","laid","landing","landingSections","last","latest","lead","leading-relaxed","leading-snug","leading-tight","left-0","length","let","lg:grid-cols-[1fr_280px]","lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]","like","line","line-clamp-2","link","list","list-decimal","list-disc","live","loading","long","m","m3","many","marks","max-h-64","max-w-4xl","maxLength","mb-1.5","mb-2","mb-4","md","means","meant","members","message","messages","min-h-[280px]","min-w-0","ml-auto","moon","more","mr-auto","ms","mt-1","mt-1.5","mt-2","mt-3","mt-4","mt-5","must","mutationFn","muted","mx-auto","n","name","never","new","newest","news","next","none","noreferrer","not","notify","null","number","of","off","older","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDelete","onEdit","onError","onOpenChange","onPin","onSelect","onSuccess","on_landing","once","one","ones","opacity-70","open","options","or","order","orders","out","overflow-hidden","p-4","p-6","p-card","pad","page","panel","panel-quiet","patch","path","people","picked","pin","pinned","pl-3","pl-5","pl-6","placeholder","placement","plain","pointer-events-none","portrait","post","posted","preview","primary","publish_at","put","px-1","px-2","px-3","py-0.5","py-1","py-2","qc","queryFn","queryKey","react","react-router","reading","refetchInterval","refresh","rel","relative","renderer","rest","results","return","rotate-45","round","routes","rows","run","s","safe","save","scheduled","scroll","scroll-mt-24","see","sees","self-center","self-start","send","sent","set","setDeleting","setEditing","setForm","setTab","setView","should","show","shrink-0","site","size","size-1.5","size-2","size-3","size-4","size-5","sm","sm:p-6","sm:p-8","sm:pl-8","sm:text-[1.7rem]","sm:text-xl","smaller","so","space-y-1","space-y-3","space-y-4","space-y-5","src","starts","states","status","stay","stories","story","straight","string","stripe","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","success","such","t","target","tax","text","text-2xl","text-[0.9em]","text-[11px]","text-[13px]","text-[15px]","text-accent-ink","text-base","text-lg","text-muted","text-sm","text-subtle","text-text","text-warning-fg","text-xs","the","then","there","they","this","through","time","timeAgo","title","to","to-transparent","toast","toggle","token","tone","top","tracking-[0.12em]","tracking-[0.14em]","transition-colors","truncate","type","undefined","underline","underline-offset-4","unread","until","up","updated","updated_at","uppercase","urgent","useQuery","useQueryClient","useState","used","v","value","variant","versions","viewBox","void","w-0.5","w-1","w-full","warning","webhooks","what","whatever","who","whole","widget","widgets","will","with","write","written","x","xl","xs","yet"];
