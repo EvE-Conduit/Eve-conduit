@@ -38,10 +38,11 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      // A FormData body (a file upload) sets its own multipart Content-Type.
+      ...(body !== undefined && !(body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
       ...(method !== "GET" ? { "X-CSRFToken": csrfToken() } : {}),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
   let data: unknown = null;
@@ -64,4 +65,10 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body ?? {}),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
+  /** POST a file as multipart form data, under the field name `file`. */
+  upload: <T>(path: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<T>("POST", path, form);
+  },
 };

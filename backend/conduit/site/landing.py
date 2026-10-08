@@ -74,9 +74,11 @@ class HeroIn(Schema):
     @field_validator("image_url")
     @classmethod
     def _image(cls, v):
+        from .images import is_image_url
+
         v = v.strip()
-        if v and not v.startswith("https://"):
-            raise ValueError("the hero image must be an https:// URL")
+        if v and not v.startswith("https://") and not is_image_url(v):
+            raise ValueError("the hero image must be an https:// URL or an uploaded image")
         return v
 
 
