@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class DiscordPlugin(Plugin):
     id = "discord"
     name = "Discord"
-    version = "1.1.2"
+    version = "1.1.3"
     description = "Members link their Discord account and join your server; roles and nicknames follow their groups and state."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-discord"

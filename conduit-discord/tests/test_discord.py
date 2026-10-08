@@ -263,14 +263,15 @@ def test_mappings_api(setup, api_client, admin_user):
     assert services.desired_roles(pilot) == {R_MEMBER}
 
 
-def test_every_state_may_link_discord_by_default(db):
+def test_every_state_may_link_discord_by_default(db, django_capture_on_commit_callbacks):
     import importlib
 
     from django.apps import apps
 
     from conduit.access.models import State
 
-    new = State.objects.create(name="Blue", priority=5)
+    with django_capture_on_commit_callbacks(execute=True):
+        new = State.objects.create(name="Blue", priority=5)
     assert new.permissions.filter(codename="access_discord").exists()
 
     old = State.objects.create(name="Old", priority=6)
@@ -280,6 +281,16 @@ def test_every_state_may_link_discord_by_default(db):
     old.permissions.clear()
     old.save()  # taking it away sticks: only new states get it
     assert not old.permissions.filter(codename="access_discord").exists()
+
+
+def test_a_state_made_in_administration_may_link_discord(db, api_client, admin_user, django_capture_on_commit_callbacks):
+    from conduit.access.models import State
+
+    api_client.force_login(admin_user)
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = api_client.call("post", "/api/admin/states", {"name": "Member", "priority": 10, "permissions": []})
+    assert resp.status_code == 200
+    assert State.objects.get(name="Member").permissions.filter(codename="access_discord").exists()
 
 
 def test_admins_see_mains_and_the_alts_they_may_see(setup, api_client, corp):
