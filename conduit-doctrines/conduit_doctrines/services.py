@@ -26,6 +26,9 @@ WRITE_SCOPE = "esi-fittings.write_fittings.v1"
 ROLES = ("DPS", "Logistics", "Tackle", "Ewar", "Support", "Booster", "Scout", "Command")
 #: How good a status is, for picking a member's best character.
 RANK = {"ready": 3, "can_fly": 2, "missing": 1, "unknown": 0}
+#: Fitting skills at V: CPU Management and Power Grid Management (+5% ship output a level), Weapon Upgrades (-5% CPU
+#: of turrets and launchers a level) and Advanced Weapon Upgrades (-2% their powergrid a level).
+OUTPUT_BONUS, WEAPON_CPU, WEAPON_POWER = 1.25, 0.75, 0.9
 
 
 class DoctrineError(Exception):
@@ -130,6 +133,9 @@ def fit_brief(fit: Fit, types) -> dict:
 def overview(user) -> dict:
     doctrines = list(Doctrine.objects.prefetch_related("entries__fit"))
     fits = {e.fit_id: e.fit for d in doctrines for e in d.entries.all()}
+    #: Fits that aren't in any doctrine are shown on their own, below the doctrines.
+    loose = list(Fit.objects.filter(entries__isnull=True))
+    fits |= {f.pk: f for f in loose}
     types = _types({f.ship_type_id for f in fits.values()} | {d.icon_type_id for d in doctrines})
     sk = Skills(fits.values())
     chars = list(Character.objects.filter(user=user))
@@ -150,7 +156,10 @@ def overview(user) -> dict:
             "ships": ships[:8], "fits": len(entries),
             "flyable": sum(1 for e in entries if mine.get(e.fit_id) and mine[e.fit_id]["status"] in ("ready", "can_fly")),
         })
-    return {"doctrines": out, "can_manage": can_manage(user), "can_see_readiness": can_see_readiness(user), "roles": ROLES}
+    prices = prices_by_type(set().union(*(fit_type_ids(f) for f in loose)) if loose else set())
+    other = [{**fit_brief(f, types), "value": fit_value(f, prices), "best": mine.get(f.pk)} for f in loose]
+    return {"doctrines": out, "fits": other, "can_manage": can_manage(user), "can_see_readiness": can_see_readiness(user),
+            "roles": ROLES}
 
 
 def doctrine_detail(d: Doctrine, user) -> dict:
@@ -192,16 +201,21 @@ def fit_view(fit: Fit) -> dict:
     prices = prices_by_type(fit_type_ids(fit))
     sf = (ship.fitting if ship else None) or {}
     used = {"cpu": 0.0, "power": 0.0, "calibration": 0.0}
+    base_used = dict(used)
     turrets = launchers = 0
     items = []
     for i in sorted(fit.items, key=lambda i: (i["slot"], i["position"])):
         t = types.get(i["type_id"])
         f = (t.fitting if t else None) or {}
         if i["slot"] in eft.SLOTS:
+            weapon = f.get("turret") or f.get("launcher")
             if not i.get("offline"):
-                used["cpu"] += f.get("cpu", 0)
-                used["power"] += f.get("power", 0)
+                base_used["cpu"] += f.get("cpu", 0)
+                base_used["power"] += f.get("power", 0)
+                used["cpu"] += f.get("cpu", 0) * (WEAPON_CPU if weapon else 1)
+                used["power"] += f.get("power", 0) * (WEAPON_POWER if weapon else 1)
             used["calibration"] += f.get("calibration", 0)
+            base_used["calibration"] += f.get("calibration", 0)
             turrets += bool(f.get("turret"))
             launchers += bool(f.get("launcher"))
         items.append({**i, "type": _type_brief(i["type_id"], types), "charge": _type_brief(i.get("charge_id"), types),
@@ -213,10 +227,12 @@ def fit_view(fit: Fit) -> dict:
         "known": ship is not None and ship.fitting is not None,
         "items": items,
         "hardpoints_used": {"turrets": turrets, "launchers": launchers},
+        # With the fitting skills at V, like the game shows a fit for a trained pilot; base_* without any skills.
         "resources": [
-            {"key": "cpu", "label": "CPU", "used": round(used["cpu"], 2), "total": sf.get("cpu", 0), "unit": "tf"},
-            {"key": "power", "label": "Powergrid", "used": round(used["power"], 2), "total": sf.get("power", 0), "unit": "MW"},
-            {"key": "calibration", "label": "Calibration", "used": round(used["calibration"], 2), "total": sf.get("calibration", 0), "unit": ""},
+            {"key": key, "label": label, "unit": unit, "used": round(used[key], 2), "total": round(sf.get(key, 0) * bonus, 2),
+             "base_used": round(base_used[key], 2), "base_total": sf.get(key, 0)}
+            for key, label, unit, bonus in (("cpu", "CPU", "tf", OUTPUT_BONUS), ("power", "Powergrid", "MW", OUTPUT_BONUS),
+                                            ("calibration", "Calibration", "", 1))
         ],
         "value": fit_value(fit, prices),
     }
@@ -284,9 +300,11 @@ def plan_text(fit: Fit, character_id: int | None, user) -> str:
 
 
 def character_fits(character: Character) -> list[dict]:
-    """Every doctrine fit and whether this character can fly it (for the character sheet tab)."""
+    """Every fit and whether this character can fly it (for the character sheet tab): by doctrine, then the fits
+    that aren't in one under ``id`` None."""
     entries = list(DoctrineFit.objects.select_related("doctrine", "fit").order_by("doctrine__name", "order"))
-    fits = {e.fit_id: e.fit for e in entries}
+    loose = list(Fit.objects.filter(entries__isnull=True))
+    fits = {e.fit_id: e.fit for e in entries} | {f.pk: f for f in loose}
     sk = Skills(fits.values())
     types = _types({f.ship_type_id for f in fits.values()})
     state = training.character_state([character.pk])[character.pk]
@@ -295,7 +313,10 @@ def character_fits(character: Character) -> list[dict]:
     for e in entries:
         names[e.doctrine_id] = e.doctrine.name
         out[e.doctrine_id].append({**fit_brief(e.fit, types), **sk.status(e.fit_id, state)})
-    return [{"id": did, "name": names[did], "fits": rows} for did, rows in out.items()]
+    groups = [{"id": did, "name": names[did], "fits": rows} for did, rows in out.items()]
+    if loose:
+        groups.append({"id": None, "name": "Other fits", "fits": [{**fit_brief(f, types), **sk.status(f.pk, state)} for f in loose]})
+    return groups
 
 
 def my_summary(user) -> dict:

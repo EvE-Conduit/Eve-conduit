@@ -43,12 +43,16 @@ function CharacterDoctrines({ characterId }: { characterId: number }) {
     queryFn: () => api.get<CharacterDoctrine[]>(`${BASE}/characters/${characterId}`),
   });
   if (isLoading) return <Skeleton className="h-40" />;
-  if (!data?.length) return <EmptyState icon={<Swords />} title="No doctrines yet" />;
+  if (!data?.length) return <EmptyState icon={<Swords />} title="No doctrines or fits yet" />;
   return (
     <div className="space-y-6">
       {data.map((d) => (
-        <section key={d.id}>
-          <Link to={`/p/doctrines/${d.id}`} className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle hover:text-text">{d.name}</Link>
+        <section key={d.id ?? "other"}>
+          {d.id === null ? (
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle">{d.name}</div>
+          ) : (
+            <Link to={`/p/doctrines/${d.id}`} className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle hover:text-text">{d.name}</Link>
+          )}
           <ul className="divide-y divide-border border border-border">
             {d.fits.map((f) => (
               <li key={f.id}>
