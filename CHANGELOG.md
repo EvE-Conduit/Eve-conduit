@@ -3,6 +3,15 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.23
+
+### Added
+- **Every plugin has its own log.** Administration → Plugins has a **Logs** button on each plugin, with how many
+  errors and warnings it logged in the last day. It lists when the plugin was installed, updated and switched on or
+  off, plus everything the plugin logs itself, normal activity included (from `INFO` up; set
+  `CONDUIT_PLUGIN_LOG_LEVEL` to change that). New plugins get one automatically: anything they log with
+  `logging.getLogger(__name__)` lands there. The service log under Administration → Logs can be filtered by plugin.
+
 ## 0.5.22
 
 ### Added
