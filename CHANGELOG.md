@@ -3,6 +3,19 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.22
+
+### Added
+- **Merging accounts can bring the person's records along.** When every character of an account moves (Administration
+  → Members → Move characters), tick **Also move their records** (on by default): SRP requests, skill plans,
+  recruitment applications, mentoring, moon invoices, notifications and whatever else plugins keep for them move to
+  the main account. Where only one is allowed per member (a moon invoice for the same month, preferences, a Discord
+  link) and the main account already has one, the old one stays behind and you're told which. It works for every
+  plugin without changes; the site's owner is never moved.
+
+### Plugins
+- **Discord 1.1.2:** gives the main account its roles when its Discord link moved with the records.
+
 ## 0.5.21
 
 ### Added
