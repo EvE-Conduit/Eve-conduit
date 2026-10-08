@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class MentorsPlugin(Plugin):
     id = "mentors"
     name = "Mentoring"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "New members ask for a mentor; mentors guide them through goals that tick themselves, with a thread, notes and graduation."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-mentors"
@@ -15,8 +15,8 @@ class MentorsPlugin(Plugin):
     frontend = "conduit_mentors/plugin.js"
     # Every member sees it: new members ask for a mentor there, mentors (mentors.mentor) get their mentees.
     nav = (
-        NavItem("Mentoring", "", "life-buoy"),
-        NavItem("Mentoring program", "program", "wrench", permission="mentors.manage_program"),
+        NavItem("Mentoring", "", "compass"),
+        NavItem("Settings", "program", "wrench", permission="mentors.manage_program"),
     )
     # "Mentoring status" and "Is an active mentor", e.g. for a New bro role on Discord.
     group_rules = ("conduit_mentors.rules",)
