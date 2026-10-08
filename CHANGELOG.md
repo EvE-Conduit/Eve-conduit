@@ -3,6 +3,18 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.15
+
+### Changed
+- **Plugin settings sit under the plugin in the sidebar.** A plugin with more than one page in the sidebar now has
+  one entry, and its other pages (such as Settings) are listed under it while you're on the plugin's pages. Ctrl+K
+  finds them as "Recruitment › Settings".
+
+### Plugins
+- **Recruitment 1.1.3:** Recruitment settings is now Recruitment → Settings.
+- **Mentoring 1.0.1:** the Mentoring program page is now Mentoring → Settings, and Mentoring has its own compass icon
+  (Ship Replacement uses the life buoy).
+
 ## 0.5.14
 
 ### Added
