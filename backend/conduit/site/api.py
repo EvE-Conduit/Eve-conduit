@@ -8,7 +8,7 @@ from django.middleware.csrf import get_token
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.security import django_auth
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from conduit import __version__
 from conduit.audit.services import record
@@ -19,7 +19,7 @@ from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
 from conduit.updates.services import progress as update_progress
 
-from .landing import DEFAULT_LANDING, LandingIn, landing_content
+from .landing import DEFAULT_LANDING, ICONS, LandingIn, _link, landing_content
 from .models import SiteSettings
 
 router = Router(tags=["core"])
@@ -39,6 +39,9 @@ class SiteOut(Schema):
     django_admin: bool
     #: Where people land after signing in ("" = the dashboard).
     start_page: str = ""
+    #: Extra sidebar links admins added ({label, url, icon}); only sent to people who are signed in.
+    nav_links: list[dict] = []
+    nav_links_title: str = "Links"
     #: Newest available version, only for people who can install it.
     update_available: str | None = None
     #: Set while the updater is installing a release or plugins (the site restarts at the end).
@@ -96,6 +99,8 @@ def site_out(site: SiteSettings) -> dict:
         "maintenance": {"enabled": site.maintenance_mode, "message": site.maintenance_message},
         "django_admin": settings.CONDUIT_DJANGO_ADMIN,
         "start_page": site.start_page,
+        "nav_links": site.nav_links,
+        "nav_links_title": site.nav_links_title,
         "updating": update_progress(),
     }
 
@@ -163,6 +168,9 @@ def bootstrap(request):
                     }
                 )
     out = {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
+    if not request.user.is_authenticated:
+        # Sidebar links may point at members-only places (a Discord invite, the wiki); keep them off the login page.
+        out["site"]["nav_links"] = []
     if request.user.is_authenticated and request.user.has_perm("site.manage_site"):
         from conduit.updates.services import newest_for_bootstrap, pending_for_bootstrap
 
@@ -237,6 +245,32 @@ def complete_setup(request):
 # --- admin: site settings ----------------------------------------------------
 
 
+class NavLinkIn(Schema):
+    label: str = Field(..., min_length=1, max_length=40)
+    url: str = Field(..., min_length=1, max_length=500)
+    icon: str = "globe"
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("every link needs a label")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, v):
+        if not _link(v):
+            raise ValueError("every link needs an address")
+        return _link(v)
+
+    @field_validator("icon")
+    @classmethod
+    def _icon(cls, v):
+        return v if v in ICONS else "globe"
+
+
 class SiteIn(Schema):
     name: str
     tagline: str = ""
@@ -245,6 +279,24 @@ class SiteIn(Schema):
     maintenance_mode: bool = False
     maintenance_message: str = ""
     start_page: str = ""
+    nav_links: list[NavLinkIn] = Field(default_factory=list, max_length=20)
+    nav_links_title: str = "Links"
+
+    @field_validator("nav_links")
+    @classmethod
+    def _nav_links(cls, v):
+        urls = [link.url for link in v]
+        if len(set(urls)) != len(urls):
+            raise ValueError("each sidebar link needs its own address")
+        return v
+
+    @field_validator("nav_links_title")
+    @classmethod
+    def _nav_links_title(cls, v):
+        v = v.strip() or "Links"
+        if len(v) > 40:
+            raise ValueError("the sidebar links heading must be at most 40 characters")
+        return v
 
     @field_validator("start_page")
     @classmethod

@@ -1,4 +1,4 @@
-import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronRight, ExternalLink, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useState } from "react";
 import { matchPath, NavLink, useLocation } from "react-router";
 
@@ -70,20 +70,38 @@ function NavEntry({
   nested?: boolean;
   dimmed?: boolean;
 }) {
-  const link = (
+  const className = (isActive: boolean) =>
+    cn(
+      "group relative flex items-center font-medium tracking-[0.06em] transition-colors",
+      nested ? "text-[13px]" : "text-sm",
+      collapsed ? (nested ? "mx-auto size-8 justify-center" : "size-10 justify-center") : nested ? "gap-2.5 px-2.5 py-1.5" : "gap-3 px-3 py-2",
+      isActive && !dimmed ? "bg-hover-strong text-text" : isActive ? "text-text hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
+    );
+  const link = item.external ? (
+    // Another website, set up by an admin: opens in a new tab so the site stays open here.
+    <a
+      href={item.to}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onNavigate}
+      aria-label={collapsed ? `${item.label} (opens in a new tab)` : undefined}
+      className={className(false)}
+    >
+      <item.icon className={cn("shrink-0 text-subtle transition-colors group-hover:text-muted", nested ? "size-4" : "size-[18px]")} />
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          <ExternalLink className="size-3.5 shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-label="opens in a new tab" />
+        </>
+      )}
+    </a>
+  ) : (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onNavigate}
       aria-label={collapsed ? item.label : undefined}
-      className={({ isActive }) =>
-        cn(
-          "group relative flex items-center font-medium tracking-[0.06em] transition-colors",
-          nested ? "text-[13px]" : "text-sm",
-          collapsed ? (nested ? "mx-auto size-8 justify-center" : "size-10 justify-center") : nested ? "gap-2.5 px-2.5 py-1.5" : "gap-3 px-3 py-2",
-          isActive && !dimmed ? "bg-hover-strong text-text" : isActive ? "text-text hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
-        )
-      }
+      className={({ isActive }) => className(isActive)}
     >
       {({ isActive }) => {
         const current = isActive && !dimmed;
@@ -110,7 +128,7 @@ function NavEntry({
     </NavLink>
   );
   return collapsed ? (
-    <Tooltip content={item.badge ? `${item.label} (${item.badge})` : item.label} side="right">
+    <Tooltip content={item.badge ? `${item.label} (${item.badge})` : item.external ? `${item.label} ↗` : item.label} side="right">
       {link}
     </Tooltip>
   ) : (
@@ -147,7 +165,7 @@ export function Sidebar({
           // The icon rail always shows everything: it has no titles to unfold with.
           const isFolded = !collapsed && !!section.collapsible && folded.includes(section.title);
           // A folded section still shows the page you're on, so you never lose your place.
-          const items = isFolded ? section.items.filter((i) => matchPath({ path: i.to, end: !!i.end }, pathname)) : section.items;
+          const items = isFolded ? section.items.filter((i) => !i.external && matchPath({ path: i.to, end: !!i.end }, pathname)) : section.items;
           const hiddenBadges = isFolded ? section.items.filter((i) => !items.includes(i)).reduce((n, i) => n + (i.badge ?? 0), 0) : 0;
           const listId = `nav-${section.title.toLowerCase().replace(/\W+/g, "-")}`;
           return (
@@ -171,7 +189,7 @@ export function Sidebar({
               )}
               <ul id={listId} className="space-y-0.5">
                 {items.map((item) => {
-                  const inside = !!matchPath({ path: `${item.to}/*`, end: false }, pathname);
+                  const inside = !item.external && !!matchPath({ path: `${item.to}/*`, end: false }, pathname);
                   // Nested pages show while you're in that part of the site; the icon rail shows them as icons.
                   const children = inside ? (item.children ?? []) : [];
                   const childActive = children.some((c) => matchPath({ path: c.to, end: false }, pathname));

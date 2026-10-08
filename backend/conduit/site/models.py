@@ -23,6 +23,9 @@ class SiteSettings(models.Model):
     start_page = models.CharField(max_length=200, blank=True, default="/home")
     # The landing page at /home (see landing.py). Empty means the built-in default.
     landing = models.JSONField(default=dict, blank=True)
+    # Extra sidebar links admins add, e.g. the alliance wiki or killboard: [{label, url, icon}].
+    nav_links = models.JSONField(default=list, blank=True)
+    nav_links_title = models.CharField(max_length=40, default="Links")
 
     class Meta:
         verbose_name_plural = "site settings"

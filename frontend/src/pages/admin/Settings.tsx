@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Construction, DoorOpen, Palette, PencilLine, Search, Settings2, ShieldPlus, UserMinus } from "lucide-react";
+import { ArrowDown, ArrowUp, Construction, DoorOpen, Link2, Palette, PencilLine, Plus, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -16,13 +16,19 @@ import { PageHeader } from "@/components/ui/page";
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
 import { applyBranding, useBootstrap, useRefreshBootstrap } from "@/lib/bootstrap";
-import type { Bootstrap, CharacterBrief } from "@/lib/types";
+import type { Bootstrap, CharacterBrief, SiteNavLink } from "@/lib/types";
 import { timeAgo } from "@/lib/utils";
+
+import { IconPicker } from "./LandingEditor";
+
+const MAX_NAV_LINKS = 20;
 
 interface Values extends BrandingValues {
   maintenance_mode: boolean;
   maintenance_message: string;
   start_page: string;
+  nav_links: SiteNavLink[];
+  nav_links_title: string;
 }
 
 export function AdminSettings() {
@@ -36,6 +42,8 @@ export function AdminSettings() {
     maintenance_mode: site.maintenance.enabled,
     maintenance_message: site.maintenance.message,
     start_page: site.start_page,
+    nav_links: site.nav_links ?? [],
+    nav_links_title: site.nav_links_title ?? "Links",
   };
   const [values, setValues] = useState<Values>(initial);
   const [confirmMaintenance, setConfirmMaintenance] = useState(false);
@@ -62,7 +70,7 @@ export function AdminSettings() {
         eyebrow="Administration"
         title="Settings"
         icon={<Settings2 />}
-        description="How your site looks, where members land after signing in, who the administrators are, and maintenance mode."
+        description="How your site looks, where members land after signing in, sidebar links, who the administrators are, and maintenance mode."
         actions={
           <>
             <Button variant="ghost" disabled={!dirty} onClick={discard}>
@@ -112,6 +120,12 @@ export function AdminSettings() {
             </Field>
           </CardBody>
         </Card>
+
+        <SidebarLinks
+          title={values.nav_links_title}
+          links={values.nav_links}
+          onChange={(patch) => setValues({ ...values, ...patch })}
+        />
 
         {user?.is_admin && <Administrators />}
 
@@ -172,6 +186,74 @@ function startPages(plugins: Bootstrap["plugins"], current: string) {
   ];
   if (current && !pages.some((p) => p.value === current)) pages.push({ value: current, label: `${current} (plugin not enabled)` });
   return pages;
+}
+
+/** Extra links in everyone's sidebar, e.g. the alliance wiki, killboard or Discord invite. */
+function SidebarLinks({
+  title,
+  links,
+  onChange,
+}: {
+  title: string;
+  links: SiteNavLink[];
+  onChange: (patch: { nav_links_title?: string; nav_links?: SiteNavLink[] }) => void;
+}) {
+  const set = (next: SiteNavLink[]) => onChange({ nav_links: next });
+  const update = (i: number, patch: Partial<SiteNavLink>) => set(links.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const move = (i: number, d: -1 | 1) => {
+    const next = [...links];
+    [next[i], next[i + d]] = [next[i + d]!, next[i]!];
+    set(next);
+  };
+  return (
+    <Card>
+      <CardHeader
+        icon={<Link2 />}
+        title="Sidebar links"
+        description="Extra links in everyone's sidebar, like your wiki, killboard or Discord invite. Other websites open in a new tab."
+        actions={
+          <Button
+            size="sm"
+            variant="subtle"
+            disabled={links.length >= MAX_NAV_LINKS}
+            onClick={() => set([...links, { label: "", url: "https://", icon: "globe" }])}
+          >
+            <Plus /> Add link
+          </Button>
+        }
+      />
+      <CardBody className="space-y-4">
+        <Field label="Section heading" hint="Shown above the links in the sidebar.">
+          <Input value={title} maxLength={40} onChange={(e) => onChange({ nav_links_title: e.target.value })} placeholder="Links" className="max-w-sm" />
+        </Field>
+        {!links.length && <p className="text-sm text-subtle">No links yet. The section stays hidden until you add one.</p>}
+        {links.map((link, i) => (
+          <div key={i} className="flex gap-3 border border-border p-4">
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.5fr_200px]">
+              <Field label="Label">
+                <Input value={link.label} maxLength={40} onChange={(e) => update(i, { label: e.target.value })} placeholder="Alliance wiki" />
+              </Field>
+              <Field label="Address" hint="An https:// address, or a page on this site like /p/timers.">
+                <Input value={link.url} maxLength={500} onChange={(e) => update(i, { url: e.target.value })} placeholder="https://wiki.example.com" />
+              </Field>
+              <IconPicker value={link.icon} onChange={(icon) => update(i, { icon })} />
+            </div>
+            <div className="flex shrink-0 flex-col gap-1">
+              <Button size="icon-xs" variant="ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
+                <ArrowUp />
+              </Button>
+              <Button size="icon-xs" variant="ghost" aria-label="Move down" disabled={i === links.length - 1} onClick={() => move(i, 1)}>
+                <ArrowDown />
+              </Button>
+              <Button size="icon-xs" variant="ghost" aria-label="Remove" className="hover:text-danger-fg" onClick={() => set(links.filter((_, j) => j !== i))}>
+                <Trash2 />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardBody>
+    </Card>
+  );
 }
 
 interface AdminUser {

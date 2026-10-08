@@ -333,7 +333,7 @@ function ListCard<T>({
   );
 }
 
-function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const Icon = iconFor(value);
   return (
     <Field label="Icon">

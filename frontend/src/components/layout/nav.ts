@@ -2,7 +2,7 @@ import { Building2, Crown, Download, HeartPulse, Home, Layers, ShieldAlert, Webh
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { iconFor } from "@/lib/icons";
-import type { CurrentUser, PluginEntry } from "@/lib/types";
+import type { CurrentUser, PluginEntry, SiteNavLink } from "@/lib/types";
 
 export interface NavLinkItem {
   label: string;
@@ -13,6 +13,8 @@ export interface NavLinkItem {
   badge?: number;
   /** Sub-pages listed under this entry while you're in its part of the site (a plugin's settings, say). */
   children?: NavLinkItem[];
+  /** `to` is an https:// address on another website; it opens in a new tab. */
+  external?: boolean;
 }
 
 export interface NavSection {
@@ -26,7 +28,12 @@ function can(user: CurrentUser, perm: string) {
   return user.is_admin || user.permissions.includes(perm);
 }
 
-export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvailable?: string | null): NavSection[] {
+export function buildNav(
+  user: CurrentUser,
+  plugins: PluginEntry[],
+  updateAvailable?: string | null,
+  links: { title: string; items: SiteNavLink[] } = { title: "Links", items: [] },
+): NavSection[] {
   const sections: NavSection[] = [
     {
       title: "Overview",
@@ -53,6 +60,10 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvaila
     return main ? [{ ...main, children: rest.length ? rest : undefined }] : [];
   });
   if (pluginItems.length) sections.push({ title: "Plugins", items: pluginItems });
+
+  // Links admins added under Administration > Settings, e.g. the alliance wiki or killboard.
+  const extra = links.items.map((l): NavLinkItem => ({ label: l.label, to: l.url, icon: iconFor(l.icon), external: l.url.startsWith("https://") }));
+  if (extra.length) sections.push({ title: links.title || "Links", items: extra, collapsible: true });
 
   const admin: NavLinkItem[] = [];
   if (can(user, "site.view_members")) admin.push({ label: "Members", to: "/admin/members", icon: Users });
