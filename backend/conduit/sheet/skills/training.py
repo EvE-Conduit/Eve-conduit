@@ -167,7 +167,32 @@ def meets(levels: dict[int, int], need: dict[int, int]) -> bool:
 
 # --- text in and out (the in-game skill plan / skill queue clipboard format) --------------------------------------
 
-_LINE = re.compile(r"^\s*(?:\d+[.)]\s+)?(?P<name>.+?)[\s:]+(?:level\s*|L)?(?P<level>[1-5]|i{1,3}|iv|v)\s*$", re.IGNORECASE)
+_NUMBERED = re.compile(r"^\d+[.)]\s+")
+LEVELS = {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5, **FROM_ROMAN}
+#: No skill name is near this long; longer lines aren't skills (and are skipped without any work).
+MAX_LINE = 150
+
+
+def _read_line(line: str) -> tuple[str, int] | None:
+    """``("Gunnery", 4)`` from ``Gunnery 4``, ``Gunnery IV``, ``Gunnery: level 4``, ``Gunnery L4`` or ``3. Gunnery 4``.
+
+    Split on whitespace rather than matched with one regular expression: pasted text comes from members, and a
+    backtracking pattern can be made to take minutes on one long line.
+    """
+    if len(line) > MAX_LINE:
+        return None
+    words = _NUMBERED.sub("", line, count=1).replace(":", " ").split()
+    if len(words) < 2:
+        return None
+    level = words[-1].upper()
+    if level not in LEVELS and level.startswith("L") and level[1:] in LEVELS:
+        level = level[1:]
+    if level not in LEVELS:
+        return None
+    name = words[:-1]
+    if len(name) > 1 and name[-1].lower() == "level":
+        name = name[:-1]
+    return " ".join(name), LEVELS[level]
 
 
 def skills_by_name(names: Iterable[str]) -> dict[str, int]:
@@ -190,12 +215,11 @@ def parse_text(text: str) -> tuple[list[Step], list[str]]:
         line = raw.strip()
         if not line or line.startswith(("#", "//")):
             continue
-        m = _LINE.match(line)
-        if not m:
-            problems.append(line)
+        read = _read_line(line)
+        if read is None:
+            problems.append(line[:MAX_LINE])
             continue
-        level = m["level"].upper()
-        parsed.append((m["name"].strip(), int(level) if level.isdigit() else FROM_ROMAN[level], line))
+        parsed.append((*read, line))
     names = skills_by_name(n for n, _, _ in parsed)
     steps = []
     for name, level, line in parsed:

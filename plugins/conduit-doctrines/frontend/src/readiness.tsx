@@ -62,7 +62,7 @@ export function ReadinessPage() {
                       const cell = m.cells[String(f.id)];
                       return (
                         <Td key={f.id}>
-                          <Tooltip content={cell ? cell.character : "No characters"} disabled={!cell}>
+                          <Tooltip content={cell ? cell.character ?? "Their best character (you can't open their character sheets)" : "No characters"} disabled={!cell}>
                             <span><StatusBadge status={cell} /></span>
                           </Tooltip>
                         </Td>

@@ -69,6 +69,9 @@ def test_render_formats():
     assert discord["embeds"][0]["description"] == "Pilot joined Caps"
     assert discord["embeds"][0]["url"].endswith("/groups")
     assert "Pilot joined Caps" in render("slack", event)["text"]
+    # Text people typed can't ping the channel or hide a link in Slack.
+    sneaky = {**event, "data": {"title": "<!channel> <https://evil.example|Fix your fit>", "summary": "a & b"}}
+    assert render("slack", sneaky)["text"] == "*&lt;!channel&gt; &lt;https://evil.example|Fix your fit&gt;*\na &amp; b"
     assert render("json", event) == event
 
 

@@ -486,8 +486,11 @@ cmd_ip_cert() {
     UV_PYTHON_INSTALL_DIR="$CONDUIT_HOME/python" "$uv" venv -q --clear --python 3.12 "$CONDUIT_HOME/certbot"
     "$uv" pip install -q -p "$CONDUIT_HOME/certbot/bin/python" 'certbot>=5.4'
   fi
-  local -a cb=("$certbot" --config-dir "$CONDUIT_ETC/letsencrypt" --work-dir "$CONDUIT_STATE/letsencrypt"
-    --logs-dir "$CONDUIT_LOG/letsencrypt")
+  # certbot runs as root (here and from cron), so everything it writes lives in root-only directories: never in ones
+  # the service user owns, where a compromised service could plant symlinks for root to follow.
+  local work=${CERTBOT_STATE:-/var/lib/conduit-certbot} logs=${CERTBOT_LOG:-/var/log/conduit-certbot}
+  install -d -m 0700 "$CONDUIT_ETC/letsencrypt" "$work" "$logs"
+  local -a cb=("$certbot" --config-dir "$CONDUIT_ETC/letsencrypt" --work-dir "$work" --logs-dir "$logs")
 
   # Let's Encrypt fetches a file from /.well-known/acme-challenge/ over port 80 (configs before 0.5.17 lack it).
   install -d -m 0755 "$CONDUIT_WWW/acme"

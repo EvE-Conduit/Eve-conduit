@@ -121,6 +121,35 @@ def test_sheet_access_only_while_active(people):
     assert not can_view(mentor, char)
 
 
+def test_taking_the_mentor_permission_away_ends_sheet_access(people):
+    """Removed from the mentors before anyone reassigned their mentees: no more reading their sheets."""
+    mentor, newbro = people["mentor"], people["newbro"]
+    services.assign(services.request_mentor(newbro), mentor, mentor)
+    assert can_view(mentor, newbro.main_character)
+    mentor.user_permissions.clear()
+    mentor = type(mentor).objects.get(pk=mentor.pk)
+    assert not can_view(mentor, newbro.main_character)
+
+
+def test_alts_stay_private_from_mentors_who_dont_mentor_them(people, api_client):
+    from conduit.accounts.models import Character
+
+    mentor, newbro = people["mentor"], people["newbro"]
+    Character.objects.create(id=90000021, name="Secret Alt", owner_hash="alt", user=newbro)
+    m = services.request_mentor(newbro)
+    # A waiting request: mentors see the main character only, and can't find it by the alt's name.
+    view = login(api_client, people["other"]).call("get", f"{BASE}/m/{m.pk}").json()
+    assert [c["name"] for c in view["characters"]] == ["New Bro"]
+    assert services.search(people["other"], "Secret", 10) == [] and services.search(people["other"], "New Bro", 10) == [m]
+    # Their own active mentee: every character.
+    m = services.assign(m, mentor, mentor)
+    assert {c["name"] for c in login(api_client, mentor).call("get", f"{BASE}/m/{m.pk}").json()["characters"]} == {"New Bro", "Secret Alt"}
+    assert services.search(mentor, "Secret", 10) == [m]
+    # Once it's over, back to the main character.
+    services.graduate(m, mentor, "Well done")
+    assert [c["name"] for c in login(api_client, mentor).call("get", f"{BASE}/m/{m.pk}").json()["characters"]] == ["New Bro"]
+
+
 def test_seeded_goals_and_ticking(people, api_client):
     goals = services.goals()
     titles = [g.title for g in goals]

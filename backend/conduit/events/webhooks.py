@@ -48,8 +48,14 @@ def render(kind: str, event: dict) -> dict:
         if link:
             embed["url"] = site + link if link.startswith("/") else link
         return {"username": "EvE Conduit", "embeds": [embed]}
-    # slack
+    # slack: <...> makes pings (<!channel>) and disguised links, and titles can be text people typed (a fit's or an
+    # announcement's name), so escape the three characters Slack asks for.
+    title, text = _slack_escape(title), _slack_escape(text)
     return {"text": f"*{title}*\n{text}" if text else f"*{title}*"}
+
+
+def _slack_escape(value: str) -> str:
+    return (value or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def sign(secret: str, body: bytes) -> str:

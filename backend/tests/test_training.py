@@ -67,3 +67,13 @@ def test_text_round_trip(skills):
     assert steps == [(SPACESHIP, 1), (FRIGATE, 4), (GUNNERY, 2)]
     assert problems == ["Garbage", "Not A Skill 3"]
     assert training.format_text([(SPACESHIP, 1), (FRIGATE, 2)]) == "Spaceship Command 1\nMinmatar Frigate 2"
+
+
+def test_pasted_text_cannot_stall_the_server(skills):
+    """One huge line used to make the old regular expression backtrack for minutes."""
+    import time
+
+    started = time.monotonic()
+    steps, problems = training.parse_text("a" + " " * 100_000 + "b\nGunnery: 3\nGunnery L4")
+    assert time.monotonic() - started < 1
+    assert steps == [(GUNNERY, 3), (GUNNERY, 4)] and len(problems) == 1 and len(problems[0]) <= training.MAX_LINE

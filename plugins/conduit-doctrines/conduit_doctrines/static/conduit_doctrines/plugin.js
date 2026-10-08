@@ -1932,7 +1932,7 @@ function qe() {
 		}) }), l.fits.map((e) => {
 			let n = t.cells[String(e.id)];
 			return /* @__PURE__ */ R(b, { children: /* @__PURE__ */ R(C, {
-				content: n ? n.character : "No characters",
+				content: n ? n.character ?? "Their best character (you can't open their character sheets)" : "No characters",
 				disabled: !n,
 				children: /* @__PURE__ */ R("span", { children: /* @__PURE__ */ R(Q, { status: n }) })
 			}) }, e.id);

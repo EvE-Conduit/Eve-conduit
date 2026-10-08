@@ -175,6 +175,11 @@ def members(request, plan_id: int):
     return {"plan": services.plan_brief(plan), "members": services.members_progress(plan)}
 
 
+def _csv_row(cells) -> list[str]:
+    """Spreadsheets run cells starting with = + - @ as formulas; quote those."""
+    return ["'" + str(c) if str(c)[:1] in ("=", "+", "-", "@", "\t", "\r") else str(c) for c in cells]
+
+
 @router.get("/plans/{plan_id}/members.csv")
 def members_csv(request, plan_id: int):
     plan = _progress_plan(request, plan_id)
@@ -183,5 +188,5 @@ def members_csv(request, plan_id: int):
     out = csv.writer(resp)
     out.writerow(["Member", "Best character", "Percent", "Complete", "Hours left"])
     for m in services.members_progress(plan):
-        out.writerow([m["name"], m["character"], m["percent"], "yes" if m["complete"] else "no", round(m["seconds_left"] / 3600, 1)])
+        out.writerow(_csv_row([m["name"], m["character"], m["percent"], "yes" if m["complete"] else "no", round(m["seconds_left"] / 3600, 1)]))
     return resp
