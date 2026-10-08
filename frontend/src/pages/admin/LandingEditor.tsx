@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Eye, Home, LayoutGrid, Link2, PencilLine, Plus, RotateCcw, Sparkles, Text, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Home, LayoutGrid, Link2, PencilLine, Plus, Puzzle, RotateCcw, Sparkles, Text, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SwitchRow } from "@/components/ui/switch";
 import { LandingView } from "@/features/landing/LandingView";
+import { usePluginLandingSections } from "@/features/landing/PluginSections";
 import { api } from "@/lib/api";
 import { useBootstrap } from "@/lib/bootstrap";
 import { iconFor, ICON_NAMES } from "@/lib/icons";
@@ -24,6 +25,7 @@ const LINK_HINT = "A page on this site, like /groups, or an https:// address (me
 
 /** Administration > Settings > Landing page: edit /home, with a live preview. */
 export function LandingEditor() {
+  const pluginSections = usePluginLandingSections();
   const qc = useQueryClient();
   const { site } = useBootstrap();
   const { data } = useQuery(landingQuery);
@@ -177,6 +179,28 @@ export function LandingEditor() {
               />
             </CardBody>
           </Card>
+
+          {pluginSections.length > 0 && (
+            <Card>
+              <CardHeader icon={<Puzzle />} title="From plugins" description="Sections your plugins add to the page. New ones show until you switch them off." />
+              <CardBody className="space-y-4">
+                {pluginSections.map((section) => {
+                  const hidden = draft.hidden_plugin_sections ?? [];
+                  return (
+                    <SwitchRow
+                      key={section.key}
+                      label={section.title}
+                      description={`${section.pluginName} · ${(section.placement ?? "top") === "top" ? "under the hero" : "at the bottom"}`}
+                      checked={!hidden.includes(section.key)}
+                      onCheckedChange={(on) =>
+                        set({ hidden_plugin_sections: on ? hidden.filter((k) => k !== section.key) : [...hidden, section.key] })
+                      }
+                    />
+                  );
+                })}
+              </CardBody>
+            </Card>
+          )}
 
           <ListCard
             icon={<LayoutGrid />}

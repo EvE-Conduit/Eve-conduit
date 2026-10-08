@@ -120,6 +120,13 @@ class LandingIn(Schema):
     cards_title: str = Field("", max_length=60)
     cards: list[CardIn] = Field(default_factory=list, max_length=12)
     sections: list[SectionIn] = Field(default_factory=list, max_length=10)
+    #: Plugin sections ("<plugin id>:<section id>") switched off; plugins' new sections show until then.
+    hidden_plugin_sections: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("hidden_plugin_sections")
+    @classmethod
+    def _keys(cls, v):
+        return [k[:100] for k in dict.fromkeys(v) if k]
 
 
 def landing_content(site) -> dict:

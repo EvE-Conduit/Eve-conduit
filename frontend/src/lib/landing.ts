@@ -9,6 +9,8 @@ export interface LandingContent {
   cards_title: string;
   cards: { icon: string; title: string; text: string; link: string }[];
   sections: { title: string; body: string }[];
+  /** Plugin sections ("<plugin id>:<section id>") the admin switched off; new ones show until then. */
+  hidden_plugin_sections?: string[];
 }
 
 export interface LandingResponse {

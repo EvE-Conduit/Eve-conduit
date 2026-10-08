@@ -8,6 +8,7 @@ export interface Announcement {
   body: string;
   tone: Tone;
   pinned: boolean;
+  on_landing: boolean;
   publish_at: string;
   expires_at: string | null;
   edited: boolean;
@@ -26,6 +27,12 @@ export interface Feed {
   announcements: Announcement[];
   unread: number;
   can_post: boolean;
+}
+
+/** The landing page's Bulletin: the latest announcements posted there, and how many more there are. */
+export interface Bulletin {
+  announcements: Announcement[];
+  more: number;
 }
 
 export interface Audience {

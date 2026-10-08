@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class AnnouncementsPlugin(Plugin):
     id = "announcements"
     name = "Announcements"
-    version = "1.0.1"
+    version = "1.1.0"
     description = "News from leadership for everyone or chosen states and groups, with pinning, scheduling and notifications."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-announcements"

@@ -11,7 +11,7 @@
  */
 export { api, ApiError, request } from "@/lib/api";
 export { definePlugin } from "@/lib/plugins";
-export type { CharacterTab, DashboardWidget, PluginFrontend, ModuleRoute } from "@/lib/plugins";
+export type { CharacterTab, DashboardWidget, LandingSection, PluginFrontend, ModuleRoute } from "@/lib/plugins";
 export { useBootstrap, useCurrentUser, useHasPerm } from "@/lib/bootstrap";
 export type * from "@/lib/types";
 export { cn, timeAgo } from "@/lib/utils";

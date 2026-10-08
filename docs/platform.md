@@ -96,6 +96,23 @@ def find(request, q, limit):
 Only return what the user may see. A hit has an `image` URL or an `icon` (a Lucide icon name); `url` is a path
 on the site or an `https://` URL.
 
+## Landing page sections
+
+Plugins can add sections to the landing page (`/home`), like dashboard widgets. Admins switch each one off or on
+under Administration → Settings → Landing page → From plugins; new ones show until switched off.
+
+```tsx
+export default definePlugin({
+  landingSections: [{ id: "bulletin", title: "Bulletin", Component: Bulletin, placement: "top", order: 10 }],
+});
+
+function Bulletin({ preview }: { preview: boolean }) { ... }
+```
+
+`placement` is `"top"` (under the hero and status strip) or `"bottom"` (after the page's own text sections).
+`preview` is true in the landing page editor: show a placeholder when there's nothing yet, and don't change anything
+(such as marking things read). Return `null` to show nothing. A section that crashes is left out, not the page.
+
 ## Group rules with changing choices
 
 A rule parameter of type `choice` takes fixed `choices`, or a function returning them, for lists that change

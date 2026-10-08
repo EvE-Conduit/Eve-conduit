@@ -70,6 +70,7 @@ def out(a: Announcement, read_ids: set[int], editor: bool) -> dict:
         "body": a.body,
         "tone": a.tone,
         "pinned": a.pinned,
+        "on_landing": a.on_landing,
         "publish_at": a.publish_at.isoformat(),
         "expires_at": a.expires_at.isoformat() if a.expires_at else None,
         "edited": a.edited_by_id is not None,
@@ -101,6 +102,15 @@ def feed(user, include_all: bool = False) -> dict:
     return {"announcements": [out(a, read_ids, editor) for a in rows], "unread": unread, "can_post": editor}
 
 
+def bulletin(user, limit: int = 4) -> dict:
+    """The landing page's Bulletin: live announcements posted there that ``user`` may see, pinned first, then newest."""
+    qs = visible_to(user).filter(on_landing=True).select_related("author__main_character")
+    rows = list(qs.order_by("-pinned", "-publish_at")[:limit])
+    read_ids = set(AnnouncementRead.objects.filter(user=user, announcement__in=rows).values_list("announcement_id", flat=True))
+    total = visible_to(user).filter(on_landing=True).count()
+    return {"announcements": [out(a, read_ids, editor=False) for a in rows], "more": max(0, total - len(rows))}
+
+
 def mark_read(user, ids: list[int] | None = None) -> int:
     qs = visible_to(user).exclude(reads__user=user)
     if ids is not None:
@@ -114,7 +124,7 @@ def mark_read(user, ids: list[int] | None = None) -> int:
 
 
 def save(a: Announcement | None, by, *, title: str, body: str, tone: str, pinned: bool, states: list[int], groups: list[int],
-         publish_at, expires_at, notify: bool) -> Announcement:
+         publish_at, expires_at, notify: bool, on_landing: bool = True) -> Announcement:
     title = title.strip()
     if not title:
         raise AnnouncementError("Give it a title")
@@ -131,7 +141,7 @@ def save(a: Announcement | None, by, *, title: str, body: str, tone: str, pinned
         a = Announcement(author=by)
     else:
         a.edited_by = by
-    a.title, a.body, a.tone, a.pinned, a.notify = title[:200], body.strip()[:20000], tone, pinned, notify
+    a.title, a.body, a.tone, a.pinned, a.notify, a.on_landing = title[:200], body.strip()[:20000], tone, pinned, notify, on_landing
     # No time given: now, except that an edit leaves an already published announcement's date alone.
     a.publish_at = publish_at or (a.publish_at if not new and a.publish_at <= timezone.now() else timezone.now())
     a.expires_at = expires_at

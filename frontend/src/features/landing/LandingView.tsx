@@ -19,8 +19,12 @@ import type { MyGroup } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { myCharactersQuery } from "@/pages/Characters";
 
+import { PluginSections, usePluginLandingSections } from "./PluginSections";
+
 /** The landing page. Also used, with `preview`, by the editor (links don't navigate there). */
 export function LandingView({ content, preview = false }: { content: LandingContent; preview?: boolean }) {
+  const pluginSections = usePluginLandingSections();
+  const hidden = content.hidden_plugin_sections ?? [];
   const { user, site } = useBootstrap();
   const t = (s: string) => fill(s, user, site.name);
   const { hero } = content;
@@ -117,6 +121,8 @@ export function LandingView({ content, preview = false }: { content: LandingCont
 
       {content.show_status && <StatusStrip preview={preview} />}
 
+      <PluginSections sections={pluginSections} hidden={hidden} placement="top" preview={preview} />
+
       {content.cards.length > 0 && (
         <section>
           {content.cards_title && <SectionHeading>{t(content.cards_title)}</SectionHeading>}
@@ -161,6 +167,8 @@ export function LandingView({ content, preview = false }: { content: LandingCont
           ))}
         </div>
       )}
+
+      <PluginSections sections={pluginSections} hidden={hidden} placement="bottom" preview={preview} />
     </div>
   );
 }

@@ -119,3 +119,23 @@ def test_search(people, api_client):
     hits = api_client.call("get", "/api/search?q=moon").json()
     group = next(g for g in hits["groups"] if g["key"] == "announcements")
     assert group["hits"][0]["title"] == "Moon tax change"
+
+
+def test_bulletin_on_the_landing_page(people, api_client):
+    """The Bulletin shows what was posted to the landing page and meant for the viewer, pinned first, then newest."""
+    old = post(api_client, people["writer"], title="Old news")
+    Announcement.objects.filter(pk=old["id"]).update(publish_at=timezone.now() - timedelta(days=3))
+    post(api_client, people["writer"], title="Fresh news")
+    post(api_client, people["writer"], title="Pinned rules", pinned=True)
+    post(api_client, people["writer"], title="Feed only", on_landing=False)
+    post(api_client, people["writer"], title="Members only", states=[people["member"].pk])
+    api_client.force_login(people["officer"])  # not in the Member state
+    bulletin = api_client.call("get", "/api/p/announcements/bulletin").json()
+    assert [a["title"] for a in bulletin["announcements"]] == ["Pinned rules", "Fresh news", "Old news"]
+    assert bulletin["more"] == 0 and bulletin["announcements"][0]["unread"]
+    assert "Feed only" in [a["title"] for a in api_client.call("get", "/api/p/announcements").json()["announcements"]]
+    api_client.force_login(people["pilot"])
+    bulletin = api_client.call("get", "/api/p/announcements/bulletin?limit=2").json()
+    assert [a["title"] for a in bulletin["announcements"]] == ["Pinned rules", "Members only"] and bulletin["more"] == 2
+    api_client.force_login(people["guest"])
+    assert api_client.call("get", "/api/p/announcements/bulletin").status_code == 403

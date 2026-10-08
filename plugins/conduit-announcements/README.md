@@ -8,6 +8,11 @@ News and orders from leadership, on a page of its own and on the dashboard.
   *italic*, `code`, links, lists, headings and quotes, with a preview), News / Important / Urgent, pinning, and who
   sees it (any mix of states and groups; nothing picked means everyone). Announcements can be scheduled for later
   and taken down at a set time. Writers can switch to "Everything" to see scheduled and ended ones.
+- **Bulletin on the landing page:** announcements are also posted to the home page (`/home`) as a newsletter: the
+  pinned or newest one as the lead story with its full text, and the next three beside it. Each member only sees
+  what's meant for them. Switch "Post to the landing page" off for announcements that should stay on this page, and
+  hide the whole Bulletin under Administration → Settings → Landing page → From plugins. Needs EvE Conduit 0.5.18 or
+  newer (older versions just don't show it).
 - **Telling people:** when an announcement goes out, everyone who can see it gets a notification (urgent ones even
   if they muted announcements), and the `announcements.published` event fires, so a Discord webhook under
   Administration → Integrations can post it to a channel.

@@ -27,6 +27,7 @@ export function Editor({ announcement: a, onClose }: { announcement: Announcemen
     body: a?.body ?? "",
     tone: (a?.tone ?? "info") as Tone,
     pinned: a?.pinned ?? false,
+    on_landing: a?.on_landing ?? true,
     notify: a?.notify ?? true,
     states: a?.states?.map((s) => s.id) ?? [],
     groups: a?.groups?.map((g) => g.id) ?? [],
@@ -142,6 +143,12 @@ export function Editor({ announcement: a, onClose }: { announcement: Announcemen
 
           <div className="divide-y divide-border border border-border px-3">
             <SwitchRow label="Pin to the top" checked={form.pinned} onCheckedChange={(pinned) => set({ pinned })} />
+            <SwitchRow
+              label="Post to the landing page"
+              description="In the Bulletin on the home page, for the people it's meant for."
+              checked={form.on_landing}
+              onCheckedChange={(on_landing) => set({ on_landing })}
+            />
             <SwitchRow
               label="Notify people"
               description={alreadyOut ? "Already sent; editing doesn't send it again." : "Under the bell, and through webhooks such as Discord."}
