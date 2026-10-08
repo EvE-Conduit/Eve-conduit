@@ -69,7 +69,8 @@ def hook_out(h: Webhook, with_secret: bool = False) -> dict:
 @router.get("/events")
 @require_perm("site.manage_api")
 def event_types(request):
-    return [{"name": e.name, "label": e.label, "description": e.description, "plugin": e.plugin} for e in bus.EVENT_TYPES.values()]
+    return [{"name": e.name, "label": e.label, "description": e.description, "plugin": e.plugin, "private": e.private}
+            for e in bus.EVENT_TYPES.values()]
 
 
 @router.get("/webhooks")

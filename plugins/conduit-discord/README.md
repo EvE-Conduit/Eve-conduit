@@ -5,11 +5,14 @@ groups, state and main character.
 
 - **Discord** (permission `discord.access_discord`): "Link Discord and join" signs them in with Discord and puts
   them on the server with their roles and nickname (`[TCORP] Pilot One` by default). Afterwards the page shows
-  their roles, a "Fix my roles" button, and unlinking. There's also a dashboard widget.
+  their roles, a "Fix my roles" button (once every 30 seconds), and unlinking. Unlinking only forgets the account
+  once Discord has taken the roles away; if Discord can't be reached it stays linked and says so. There's also a
+  dashboard widget.
 - **Server setup** (permission `discord.manage_discord`): step-by-step setup of the Discord application, the bot and
   the server, with a connection check that lists anything in the way (missing bot permissions, roles above the
   bot's own). Map groups and states to Discord roles, and see every linked member with their roles and the last
-  sync result, with sync, unlink and kick.
+  sync result, with sync, unlink and kick (an administrator can force an unlink while Discord is unreachable; the
+  roles then stay on Discord).
 
 How syncing works:
 

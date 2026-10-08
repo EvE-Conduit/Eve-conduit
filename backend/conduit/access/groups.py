@@ -94,10 +94,12 @@ def eligible(user, profile: GroupProfile) -> bool:
 
 
 def _may_grant_admin(via: str, request=None, actor=None) -> bool:
-    """Groups carrying administrator permissions are only filled by people who manage access."""
-    if via == "admin":
-        return True  # the admin endpoints already require site.manage_access
-    approver = actor or (request.user if via == "leader" and request is not None else None)
+    """Groups carrying administrator permissions are only filled by people who manage access.
+
+    Always checked against the person doing it, never trusted from ``via``: plugins call ``add_member`` too (e.g.
+    Recruitment accepting an applicant into a form's groups) without the admin endpoints' permission check.
+    """
+    approver = actor or (request.user if via in ("admin", "leader") and request is not None else None)
     return bool(approver is not None and approver.has_perm("site.manage_access"))
 
 

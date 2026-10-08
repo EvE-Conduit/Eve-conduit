@@ -68,7 +68,8 @@ def _queue(event: bus.Event):
 
     data = event.as_dict()
     for hook_id, events in Webhook.objects.filter(enabled=True).values_list("pk", "events"):
-        if not events or event.name in events:
+        # "Every event" leaves out private ones (one member's notifications, leadership-only announcements).
+        if (not events and not bus.is_private(event.name)) or event.name in events:
             deliver.delay(hook_id, data)
 
 

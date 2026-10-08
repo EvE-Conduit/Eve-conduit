@@ -35,6 +35,8 @@ interface EventType {
   label: string;
   description: string;
   plugin: string | null;
+  /** Only sent when picked by name, never with "Every event". */
+  private?: boolean;
 }
 
 interface Delivery {
@@ -311,6 +313,11 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
               <Switch checked={all} onCheckedChange={setAll} /> Every event
             </label>
           </div>
+          {all && (
+            <p className="text-xs text-muted">
+              Except private events (members' own notifications, announcements for some groups only): pick those one by one, for a channel only the right people can read.
+            </p>
+          )}
           {!all && (
             <div className="max-h-72 space-y-4 overflow-y-auto rounded-lg border border-border p-3">
               {grouped.map(([group, list]) => (
@@ -327,7 +334,10 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
                       >
                         <input type="checkbox" checked={selected.has(e.name)} onChange={() => flip(e.name)} className="mt-0.5 accent-[var(--site-accent)]" />
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium">{e.label}</span>
+                          <span className="block text-sm font-medium">
+                            {e.label}
+                            {e.private && <span className="ml-1.5 text-[11px] font-normal uppercase tracking-wider text-warning-fg">private</span>}
+                          </span>
                           <span className="block text-xs text-muted">{e.description}</span>
                         </span>
                       </label>

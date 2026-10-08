@@ -412,3 +412,20 @@ def test_asset_rules(corp, admin_user, api_client):
     assert [o["name"] for o in api_client.call("get", "/api/admin/rules/options?type=ship_group&q=dread").json()] == ["Dreadnought"]
     keys = {t["key"] for t in api_client.call("get", "/api/admin/rules/types").json()}
     assert {"has_ship", "has_ship_class", "has_item"} <= keys
+
+
+@pytest.mark.django_db
+def test_only_access_managers_fill_groups_with_admin_permissions(admin_user):
+    """Plugins call add_member too (Recruitment accepting an applicant), so "admin" isn't taken on trust."""
+    from django.contrib.auth.models import Permission
+
+    admins = Group.objects.create(name="Admins")
+    admins.permissions.add(Permission.objects.get(codename="manage_access"))
+    recruiter = make_user(90000050, "Recruiter")
+    alt = make_user(90000051, "Alt")
+    with pytest.raises(groups.GroupError):
+        groups.add_member(alt, admins, "admin", actor=recruiter)
+    with pytest.raises(groups.GroupError):
+        groups.add_member(alt, admins, "admin")  # nobody vouching for it
+    assert not alt.groups.filter(pk=admins.pk).exists()
+    assert groups.add_member(alt, admins, "admin", actor=admin_user)

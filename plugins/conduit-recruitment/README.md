@@ -11,7 +11,9 @@ Application forms, a review queue, and accepting people into groups.
   character sheets. They write internal notes for each other or messages to the applicant, take the application,
   and accept or reject it with a message. Accepting adds the applicant to the form's groups.
 - **Forms** (permission `recruit.manage_forms`): any number, e.g. one per corporation. Questions can be short or
-  long answers, yes/no or pick-one, and required or not. Close a form to stop new applications.
+  long answers, yes/no or pick-one, and required or not. Close a form to stop new applications. A group that
+  carries administrator permissions can only be put on a form, and applicants only accepted into it, by someone with
+  `site.manage_access`: otherwise a recruiter could make their own alt an administrator.
 - **Require Discord** (Recruitment → Settings, permission `recruit.manage_forms`; off by default): applicants must link their
   Discord account and be on your server before they can send an application. The apply page tells them what's
   missing and links to the Discord page; Discord is asked live when they apply. **Needs the

@@ -223,8 +223,13 @@ def _forget(acct: DiscordAccount, summary: str) -> None:
     acct.delete()
 
 
-def unlink(user, *, kick: bool | None = None, reason: str = "", notify_user: bool = True) -> None:
-    """Take the managed roles away (or remove them from the server) and forget the link."""
+def unlink(user, *, kick: bool | None = None, reason: str = "", notify_user: bool = True, force: bool = False) -> None:
+    """Take the managed roles away (or remove them from the server) and forget the link.
+
+    If Discord can't be reached to do that, the link is kept and LinkError raised: once forgotten, nothing would ever
+    take those roles away again (the periodic sync only knows linked accounts). Only an administrator's ``force``
+    forgets it anyway.
+    """
     from conduit.notify.services import notify
 
     acct = DiscordAccount.objects.filter(user=user).first()
@@ -244,6 +249,9 @@ def unlink(user, *, kick: bool | None = None, reason: str = "", notify_user: boo
                     api.modify_member(s.bot_token, s.guild_id, acct.discord_id, roles=sorted(set(member["roles"]) - managed))
         except api.DiscordError as exc:
             log.warning("Couldn't clean up Discord account %s of %s: %s", acct.discord_id, user, exc)
+            if not force:
+                raise LinkError(f"Couldn't take the roles off on Discord ({explain(exc)}), so the account stays linked; "
+                                "try again in a minute", 502) from None
     _forget(acct, f"{user.display_name} unlinked Discord account {acct.username}" + (f" ({reason})" if reason else ""))
     if notify_user and reason:
         notify(user, "Your Discord account was unlinked", reason, link="/p/discord", level="warning", category="p.discord")
