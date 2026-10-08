@@ -18,5 +18,8 @@ def grant_to_new_state(sender, instance, created, raw=False, **kwargs):
         return
     from django.contrib.auth.models import Permission
     from django.contrib.contenttypes.models import ContentType
+    from django.db import transaction
 
-    instance.permissions.add(access_permission(Permission, ContentType))
+    # After the save is done: Administration → Access saves the state, then sets its permissions to the ones ticked
+    # in the form, which would take this away again straight away.
+    transaction.on_commit(lambda: instance.permissions.add(access_permission(Permission, ContentType)))
