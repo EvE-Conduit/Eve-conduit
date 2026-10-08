@@ -1,7 +1,7 @@
 """Linking Discord accounts and keeping each member's roles and nickname in step with the site.
 
-The bot only touches roles that are mapped to a group or state ("managed" roles). Roles given by hand in Discord
-stay as they are. A member gets the managed roles of every group they're in and of their state, as long as they
+The bot only touches roles that are mapped to a group or state ("managed" roles), and the ones it gave a member
+before (so a role whose mapping was removed is taken away again). Roles given by hand in Discord stay as they are. A member gets the managed roles of every group they're in and of their state, as long as they
 have ``discord.access_discord``; without it they lose the managed roles, or are removed from the server when the
 admins chose that.
 """
@@ -135,7 +135,8 @@ def sync_user(user, s: DiscordSettings | None = None, mappings: list[RoleMapping
         return ""
     if mappings is None:
         mappings = list(RoleMapping.objects.all())
-    managed = {m.role_id for m in mappings}
+    # Also the roles given at the last sync: their mapping may have been removed since.
+    managed = {m.role_id for m in mappings} | set(acct.roles)
     try:
         member = api.member(s.bot_token, s.guild_id, acct.discord_id)
         if member is None:
@@ -275,7 +276,7 @@ def unlink(user, *, kick: bool | None = None, reason: str = "", notify_user: boo
                 api.kick(s.bot_token, s.guild_id, acct.discord_id)
             else:
                 member = api.member(s.bot_token, s.guild_id, acct.discord_id)
-                managed = set(RoleMapping.objects.values_list("role_id", flat=True))
+                managed = set(RoleMapping.objects.values_list("role_id", flat=True)) | set(acct.roles)
                 if member is not None and managed & set(member.get("roles", [])):
                     api.modify_member(s.bot_token, s.guild_id, acct.discord_id, roles=sorted(set(member["roles"]) - managed))
         except api.DiscordError as exc:
