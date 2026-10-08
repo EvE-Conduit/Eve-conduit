@@ -11,6 +11,8 @@ export interface NavLinkItem {
   end?: boolean;
   /** Count shown next to the label (e.g. pending requests); hidden when 0. */
   badge?: number;
+  /** Sub-pages listed under this entry while you're in its part of the site (a plugin's settings, say). */
+  children?: NavLinkItem[];
 }
 
 export interface NavSection {
@@ -45,9 +47,11 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvaila
     sections[0]!.items.splice(2, 0, { label: "Corporations", to: "/corporations", icon: Building2 });
   }
 
-  const pluginItems = plugins.flatMap((m) =>
-    m.nav.map((n) => ({ label: n.label, to: `/p/${m.id}${n.path ? `/${n.path.replace(/^\//, "")}` : ""}`, icon: iconFor(n.icon) })),
-  );
+  // A plugin is one entry in the sidebar: its first nav item, with any others nested under it.
+  const pluginItems = plugins.flatMap((m): NavLinkItem[] => {
+    const [main, ...rest] = m.nav.map((n) => ({ label: n.label, to: `/p/${m.id}${n.path ? `/${n.path.replace(/^\//, "")}` : ""}`, icon: iconFor(n.icon) }));
+    return main ? [{ ...main, children: rest.length ? rest : undefined }] : [];
+  });
   if (pluginItems.length) sections.push({ title: "Plugins", items: pluginItems });
 
   const admin: NavLinkItem[] = [];
@@ -65,4 +69,9 @@ export function buildNav(user: CurrentUser, plugins: PluginEntry[], updateAvaila
   if (admin.length) sections.push({ title: "Administration", items: admin, collapsible: true });
 
   return sections;
+}
+
+/** Every entry including nested ones ("Recruitment › Settings"), e.g. for the command palette. */
+export function flatItems(items: NavLinkItem[]): NavLinkItem[] {
+  return items.flatMap((i) => [i, ...(i.children ?? []).map((c) => ({ ...c, label: `${i.label} › ${c.label}` }))]);
 }

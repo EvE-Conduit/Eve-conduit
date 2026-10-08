@@ -9,7 +9,7 @@ import { useBootstrap } from "@/lib/bootstrap";
 import { cn } from "@/lib/utils";
 
 import { Brand, BrandMark } from "./Brand";
-import type { NavSection } from "./nav";
+import type { NavLinkItem, NavSection } from "./nav";
 
 const COLLAPSE_KEY = "conduit:sidebar-collapsed";
 
@@ -54,6 +54,68 @@ function useFolded() {
       return next;
     });
   return [folded, toggle] as const;
+}
+
+/** One sidebar link. `dimmed`: a page nested under it is the one you're on, so it doesn't show as current too. */
+function NavEntry({
+  item,
+  collapsed,
+  onNavigate,
+  nested = false,
+  dimmed = false,
+}: {
+  item: NavLinkItem;
+  collapsed: boolean;
+  onNavigate?: () => void;
+  nested?: boolean;
+  dimmed?: boolean;
+}) {
+  const link = (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      onClick={onNavigate}
+      aria-label={collapsed ? item.label : undefined}
+      className={({ isActive }) =>
+        cn(
+          "group relative flex items-center font-medium tracking-[0.06em] transition-colors",
+          nested ? "text-[13px]" : "text-sm",
+          collapsed ? (nested ? "mx-auto size-8 justify-center" : "size-10 justify-center") : nested ? "gap-2.5 px-2.5 py-1.5" : "gap-3 px-3 py-2",
+          isActive && !dimmed ? "bg-hover-strong text-text" : isActive ? "text-text hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
+        )
+      }
+    >
+      {({ isActive }) => {
+        const current = isActive && !dimmed;
+        return (
+          <>
+            {current && <span className="absolute inset-y-0 left-0 w-[2px] bg-accent" />}
+            <item.icon
+              className={cn(
+                "shrink-0 transition-colors",
+                nested ? "size-4" : "size-[18px]",
+                current ? "text-accent-ink" : isActive ? "text-muted" : "text-subtle group-hover:text-muted",
+              )}
+            />
+            {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+            {!!item.badge &&
+              (collapsed ? (
+                <span className="absolute right-1.5 top-1.5 size-2 rotate-45 bg-warning" />
+              ) : (
+                <span className="font-mono text-[12px] font-semibold text-warning-fg tabular-nums">{item.badge > 99 ? "99+" : item.badge}</span>
+              ))}
+          </>
+        );
+      }}
+    </NavLink>
+  );
+  return collapsed ? (
+    <Tooltip content={item.badge ? `${item.label} (${item.badge})` : item.label} side="right">
+      {link}
+    </Tooltip>
+  ) : (
+    link
+  );
 }
 
 /**
@@ -109,45 +171,21 @@ export function Sidebar({
               )}
               <ul id={listId} className="space-y-0.5">
                 {items.map((item) => {
-                  const link = (
-                    <NavLink
-                      to={item.to}
-                      end={item.end}
-                      onClick={onNavigate}
-                      aria-label={collapsed ? item.label : undefined}
-                      className={({ isActive }) =>
-                        cn(
-                          "group relative flex items-center text-sm font-medium tracking-[0.06em] transition-colors",
-                          collapsed ? "size-10 justify-center" : "gap-3 px-3 py-2",
-                          isActive ? "bg-hover-strong text-text" : "text-muted hover:bg-hover hover:text-text",
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && <span className="absolute inset-y-0 left-0 w-[2px] bg-accent" />}
-                          <item.icon className={cn("size-[18px] shrink-0 transition-colors", isActive ? "text-accent-ink" : "text-subtle group-hover:text-muted")} />
-                          {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
-                          {!!item.badge &&
-                            (collapsed ? (
-                              <span className="absolute right-1.5 top-1.5 size-2 rotate-45 bg-warning" />
-                            ) : (
-                              <span className="font-mono text-[12px] font-semibold text-warning-fg tabular-nums">
-                                {item.badge > 99 ? "99+" : item.badge}
-                              </span>
-                            ))}
-                        </>
-                      )}
-                    </NavLink>
-                  );
+                  const inside = !!matchPath({ path: `${item.to}/*`, end: false }, pathname);
+                  // Nested pages show while you're in that part of the site; the icon rail shows them as icons.
+                  const children = inside ? (item.children ?? []) : [];
+                  const childActive = children.some((c) => matchPath({ path: c.to, end: false }, pathname));
                   return (
                     <li key={item.to}>
-                      {collapsed ? (
-                        <Tooltip content={item.badge ? `${item.label} (${item.badge})` : item.label} side="right">
-                          {link}
-                        </Tooltip>
-                      ) : (
-                        link
+                      <NavEntry item={item} collapsed={collapsed} onNavigate={onNavigate} dimmed={childActive} />
+                      {children.length > 0 && (
+                        <ul className={cn("mt-0.5 space-y-0.5", !collapsed && "ml-5 border-l border-border pl-2")}>
+                          {children.map((child) => (
+                            <li key={child.to}>
+                              <NavEntry item={child} collapsed={collapsed} onNavigate={onNavigate} nested />
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </li>
                   );

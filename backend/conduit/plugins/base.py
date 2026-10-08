@@ -56,7 +56,8 @@ class Plugin:
     requires: tuple[str, ...] = ()
     #: ESI scopes characters must grant for this plugin to work.
     esi_scopes: tuple[str, ...] = ()
-    #: Sidebar entries (the frontend bundle can add richer UI on top).
+    #: Sidebar entries (the frontend bundle can add richer UI on top). The first is the plugin's entry; any others
+    #: (e.g. a settings page with a ``permission``) are listed under it while people are on the plugin's pages.
     nav: tuple[NavItem, ...] = ()
     #: Celery beat entries, merged into ``CELERY_BEAT_SCHEDULE``.
     periodic_tasks: dict = {}

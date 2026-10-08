@@ -12,5 +12,5 @@ def find(request, q, limit):
 
     hits = [{"id": f"mentorship:{m.pk}", "title": m.mentee.display_name,
              "subtitle": f"{Mentorship.Status(m.status).label}" + (f" · mentor {m.mentor.display_name}" if m.mentor else ""),
-             "icon": "life-buoy", "url": f"/p/mentors/m/{m.pk}"} for m in search(user, q.strip(), limit)]
+             "icon": "compass", "url": f"/p/mentors/m/{m.pk}"} for m in search(user, q.strip(), limit)]
     return {"key": "mentors", "label": "Mentoring", "hits": hits}
