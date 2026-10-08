@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Construction, DoorOpen, Link2, Palette, PencilLine, Plus, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
+import { ArrowDown, ArrowUp, Construction, DoorOpen, Link2, Palette, PencilLine, Plus, Save, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -59,6 +59,9 @@ export function AdminSettings() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Turning maintenance mode on locks members out, so that asks first.
+  const submit = () => (values.maintenance_mode && !initial.maintenance_mode ? setConfirmMaintenance(true) : save.mutate(values));
+
   const discard = () => {
     setValues(initial);
     applyBranding(site);
@@ -80,7 +83,7 @@ export function AdminSettings() {
               variant="primary"
               disabled={!dirty}
               loading={save.isPending}
-              onClick={() => (values.maintenance_mode && !initial.maintenance_mode ? setConfirmMaintenance(true) : save.mutate(values))}
+              onClick={submit}
             >
               Save changes
             </Button>
@@ -125,6 +128,9 @@ export function AdminSettings() {
           title={values.nav_links_title}
           links={values.nav_links}
           onChange={(patch) => setValues({ ...values, ...patch })}
+          dirty={dirty}
+          saving={save.isPending}
+          onSave={submit}
         />
 
         {user?.is_admin && <Administrators />}
@@ -193,10 +199,17 @@ function SidebarLinks({
   title,
   links,
   onChange,
+  dirty,
+  saving,
+  onSave,
 }: {
   title: string;
   links: SiteNavLink[];
   onChange: (patch: { nav_links_title?: string; nav_links?: SiteNavLink[] }) => void;
+  /** Saves the whole page, like the button at the top. */
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => void;
 }) {
   const set = (next: SiteNavLink[]) => onChange({ nav_links: next });
   const update = (i: number, patch: Partial<SiteNavLink>) => set(links.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -212,14 +225,19 @@ function SidebarLinks({
         title="Sidebar links"
         description="Extra links in everyone's sidebar, like your wiki, killboard or Discord invite. Other websites open in a new tab."
         actions={
-          <Button
-            size="sm"
-            variant="subtle"
-            disabled={links.length >= MAX_NAV_LINKS}
-            onClick={() => set([...links, { label: "", url: "https://", icon: "globe" }])}
-          >
-            <Plus /> Add link
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="subtle"
+              disabled={links.length >= MAX_NAV_LINKS}
+              onClick={() => set([...links, { label: "", url: "https://", icon: "globe" }])}
+            >
+              <Plus /> Add link
+            </Button>
+            <Button size="sm" variant="primary" disabled={!dirty} loading={saving} onClick={onSave}>
+              <Save /> Save settings
+            </Button>
+          </>
         }
       />
       <CardBody className="space-y-4">
