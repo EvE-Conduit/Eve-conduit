@@ -5,6 +5,7 @@ import { AreaChart } from "@/components/AreaChart";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { isSitePath } from "@/lib/externalLinks";
 import { clock, duration, isk, ROMAN, sp } from "@/lib/format";
 import { useNotifications } from "@/lib/notifications";
 
@@ -98,7 +99,7 @@ export function CommsWidget() {
       {data.items.map((n) => (
         <Link
           key={n.id}
-          to={n.link && n.link.startsWith("/") && !n.link.startsWith("//") ? n.link : "/notifications"}
+          to={n.link && isSitePath(n.link) ? n.link : "/notifications"}
           className="flex gap-3 border-t border-hairline py-2 first:border-t-0 first:pt-0 hover:bg-hover"
         >
           <span className="w-12 shrink-0 text-subtle">{clock(new Date(n.created_at))}</span>

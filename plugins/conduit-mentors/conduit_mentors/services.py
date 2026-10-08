@@ -57,8 +57,9 @@ def _person(user) -> dict | None:
 
 
 def mentor_can_view(user, character) -> bool:
-    """Mentors may read their active mentees' character sheets (Plugin.sheet_access), if the program allows it."""
-    return (Program.load().sheet_access
+    """Mentors may read their active mentees' character sheets (Plugin.sheet_access), if the program allows it, and only
+    while they still hold the mentor permission (taking it away ends their access even before anyone reassigns)."""
+    return (Program.load().sheet_access and is_mentor(user)
             and Mentorship.objects.filter(mentor=user, mentee_id=character.user_id, status=Mentorship.Status.ACTIVE).exists())
 
 
@@ -295,7 +296,9 @@ def assign(m: Mentorship, mentor, by, request=None) -> Mentorship:
     if m.mentor_id == mentor.pk:
         raise MentorError(f"{mentor.display_name} is already the mentor")
     if not can_manage(by):
-        profile = profile_for(mentor)
+        profile_for(mentor)
+        # Lock the mentor's profile so claims sent at the same moment can't all pass the capacity check.
+        profile = MentorProfile.objects.select_for_update().get(user=mentor)
         if not profile.active:
             raise MentorError("Your mentor profile is paused; switch it on to take mentees")
         if mentor_loads().get(mentor.pk, 0) >= profile.capacity:
@@ -462,11 +465,16 @@ def detail(m: Mentorship, viewer) -> dict:
     if m.mentor_id:
         p = MentorProfile.objects.filter(user_id=m.mentor_id).first()
         out["mentor_profile"] = {"bio": p.bio, "play_time": p.play_time, "focus": p.focus} if p else None
-    if staff or r == "candidate":
-        # Only the mentor gets in through this plugin; managers need the core sheet permissions.
-        out["sheet_access"] = Program.load().sheet_access and m.status == Mentorship.Status.ACTIVE and m.mentor_id == viewer.pk
-        out["characters"] = characters_out(m.mentee)
     active = m.status == Mentorship.Status.ACTIVE
+    if r == "manager" or (r == "mentor" and active):
+        # Only the mentor gets in through this plugin; managers need the core sheet permissions.
+        out["sheet_access"] = Program.load().sheet_access and active and m.mentor_id == viewer.pk
+        out["characters"] = characters_out(m.mentee)
+    elif r == "candidate" or r == "mentor":
+        # Mentors deciding whether to take someone, or whose mentorship is over, see the main character only: not
+        # every alt, and not the alts made after it ended.
+        out["sheet_access"] = False
+        out["characters"] = characters_out(m.mentee, main_only=True)
     out["can"] = {
         "message": m.is_open and r in ("mentee", "mentor", "manager"),
         "private_notes": m.is_open and staff,
@@ -480,8 +488,10 @@ def detail(m: Mentorship, viewer) -> dict:
     return out
 
 
-def characters_out(user) -> list[dict]:
+def characters_out(user, main_only: bool = False) -> list[dict]:
     chars = Character.objects.filter(user=user).select_related("corporation", "skill_summary").order_by("name")
+    if main_only:
+        chars = chars.filter(pk=user.main_character_id)
     out = []
     for c in chars:
         skills = getattr(c, "skill_summary", None)
@@ -546,7 +556,13 @@ def stats() -> dict:
 
 
 def search(user, q: str, limit: int) -> list[Mentorship]:
-    qs = Mentorship.objects.filter(mentee__characters__name__icontains=q).distinct().select_related("mentee", "mentor")
-    if not can_manage(user):
-        qs = qs.filter(Q(mentor=user) | Q(status=Mentorship.Status.WAITING))
+    qs = Mentorship.objects.select_related("mentee", "mentor")
+    if can_manage(user):
+        qs = qs.filter(mentee__characters__name__icontains=q)
+    else:
+        # Mentors find their active mentees by any character, and other mentees only by their main: searching an
+        # alt's name mustn't reveal whose alt it is.
+        qs = qs.filter(Q(mentor=user, status=Mentorship.Status.ACTIVE, mentee__characters__name__icontains=q)
+                       | Q(Q(mentor=user) | Q(status=Mentorship.Status.WAITING), mentee__main_character__name__icontains=q))
+    qs = qs.distinct()
     return list(qs[:limit])

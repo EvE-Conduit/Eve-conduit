@@ -7,7 +7,8 @@ const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\
 
 function safeHref(href: string): string | null {
   if (href.startsWith("https://")) return href;
-  if (href.startsWith("/") && !href.startsWith("//")) return href;
+  // "//host" and "/\host" are other sites to a browser.
+  if (href.startsWith("/") && !href.startsWith("//") && !href.includes("\\")) return href;
   return null;
 }
 

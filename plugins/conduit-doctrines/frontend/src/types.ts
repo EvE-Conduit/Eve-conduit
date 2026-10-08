@@ -143,7 +143,7 @@ export interface ParseResult {
 export interface Readiness {
   doctrine: { id: number; name: string };
   fits: FitBrief[];
-  members: { id: number; name: string; portrait: string | null; flyable: number; cells: Record<string, (FlyStatus & { character: string }) | null> }[];
+  members: { id: number; name: string; portrait: string | null; flyable: number; cells: Record<string, (FlyStatus & { character: string | null }) | null> }[];
   totals: Record<string, number>;
 }
 

