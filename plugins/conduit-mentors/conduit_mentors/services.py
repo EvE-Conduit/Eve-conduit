@@ -441,6 +441,32 @@ def end(m: Mentorship, by, reason: str, request=None) -> Mentorship:
     return m
 
 
+@transaction.atomic
+def reopen(m: Mentorship, by, request=None) -> Mentorship:
+    """Program managers take a graduated or ended mentorship up again: back with its mentor if they still mentor,
+    otherwise back on the waiting list. Ticked goals and the thread are kept."""
+    m = Mentorship.objects.select_for_update().select_related("mentee", "mentor").get(pk=m.pk)
+    if role(m, by) != "manager":
+        raise MentorError("Only program managers can reopen a mentorship", 403)
+    if m.is_open:
+        raise MentorError("This mentorship is still open")
+    if Mentorship.objects.filter(mentee=m.mentee, status__in=Mentorship.OPEN).exists():
+        raise MentorError(f"{m.mentee.display_name} already has another mentorship open")
+    mentor = m.mentor if m.mentor and is_mentor(m.mentor) else None
+    m.status = Mentorship.Status.ACTIVE if mentor else Mentorship.Status.WAITING
+    m.mentor = mentor
+    m.ended_at, m.ended_by, m.end_reason = None, None, ""
+    m.save(update_fields=["status", "mentor", "ended_at", "ended_by", "end_reason"])
+    _event(m, by, "Reopened", "reopened")
+    notify(m.mentee_id, "Your mentorship is open again", f"{by.display_name} reopened it.", link=_link(m), category=CATEGORY)
+    if mentor and mentor.pk != by.pk:
+        notify(mentor, f"You're mentoring {m.mentee.display_name} again", f"{by.display_name} reopened the mentorship.", link=_link(m),
+               category=CATEGORY)
+    record("mentors.reopened", f"reopened {m.mentee.display_name}'s mentorship", request=request, actor=by, target=m.mentee,
+           details={"mentorship_id": m.pk})
+    return m
+
+
 # --- what pages show -----------------------------------------------------------------------------------------------
 
 
@@ -497,6 +523,7 @@ def detail(m: Mentorship, viewer) -> dict:
         "end": m.is_open and staff,
         "withdraw": m.status == Mentorship.Status.WAITING and r == "mentee",
         "tick": active and staff,
+        "reopen": not m.is_open and r == "manager" and not open_mentorship(m.mentee),
     }
     return out
 

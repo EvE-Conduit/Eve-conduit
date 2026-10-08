@@ -23,7 +23,9 @@ New members get a mentor to show them the ropes, with goals to work through toge
   first fleet (ticks itself with the Fleets plugin) and 5 million skill points.
 - **Settings** (Mentoring → Settings, permission `mentors.manage_program`): every mentorship by status, mentors and their load, average
   wait and time to graduate, assigning or handing a mentee to another mentor (also over their limit), goals and
-  focus areas. Setting a goal's rules, or **Who counts as new** (members who match and never had a mentor are invited
+  focus areas. **Graduates** lists who graduated, when, with whom and after how long. **Reopen** (there or on the
+  mentorship) takes a graduated or ended mentorship up again with its goals and thread: back with its mentor if they
+  still mentor, otherwise on the waiting list; not while the mentee has another one open. Setting a goal's rules, or **Who counts as new** (members who match and never had a mentor are invited
   on the dashboard), uses the group rule editor and so needs `site.manage_access` as well.
 
 Group rules for smart groups and Discord roles: **Mentoring status** (being mentored, waiting for a mentor or
