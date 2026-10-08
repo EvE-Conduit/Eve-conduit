@@ -45,7 +45,10 @@ def lose(character, ship=RIFTER, value=10_000_000.0, days_ago=1, km_id=None):
 def pilot(db, corp, ships):
     sync_installed()
     set_enabled("srp", True)
-    return make_user(90000001, "Pilot One", corporation=corp)
+    user = make_user(90000001, "Pilot One", corporation=corp)
+    # Linked long before any loss in these tests (losses from before a character was linked can't be claimed).
+    Character.objects.filter(user=user).update(added_at=timezone.now() - timedelta(days=365))
+    return user
 
 
 def grant(user, *codenames):
@@ -140,7 +143,8 @@ def test_cant_claim_someone_elses_loss(pilot):
 
 
 def test_claim_from_kill_link(pilot, monkeypatch):
-    alt = Character.objects.create(id=90000002, name="Pilot Alt", owner_hash="alt", user=pilot, corporation=pilot.main_character.corporation)
+    alt = Character.objects.create(id=90000002, name="Pilot Alt", owner_hash="alt", user=pilot, corporation=pilot.main_character.corporation,
+                                   added_at=timezone.datetime(2026, 9, 1, tzinfo=timezone.UTC))
 
     class Resp:
         data = {"killmail_time": "2026-10-01T12:00:00Z", "solar_system_id": 30000142, "attackers": [{"character_id": 5, "final_blow": True}],
@@ -188,7 +192,7 @@ def test_claim_from_zkillboard_link(pilot, monkeypatch):
     # A loss that already synced doesn't ask zKillboard at all.
     km = lose(pilot.main_character, km_id=557)
     seen.clear()
-    assert services.killmail_from_link("https://zkillboard.com/kill/557/") == km and seen == []
+    assert services.killmail_from_link("https://zkillboard.com/kill/557/", pilot) == km and seen == []
 
 
 def test_zkillboard_without_the_killmail(pilot, monkeypatch):
@@ -196,10 +200,10 @@ def test_zkillboard_without_the_killmail(pilot, monkeypatch):
 
     monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(200, json=[], request=httpx.Request("GET", url)))
     with pytest.raises(services.SrpError, match="doesn't know"):
-        services.killmail_from_link("https://zkillboard.com/kill/999/")
+        services.killmail_from_link("https://zkillboard.com/kill/999/", pilot)
     monkeypatch.setattr(httpx, "get", lambda url, **kw: (_ for _ in ()).throw(httpx.ConnectError("down")))
     with pytest.raises(services.SrpError, match="didn't answer"):
-        services.killmail_from_link("https://zkillboard.com/kill/999/")
+        services.killmail_from_link("https://zkillboard.com/kill/999/", pilot)
 
 
 def test_rules_api(pilot, api_client, admin_user):
@@ -271,3 +275,45 @@ def test_payout_csv_cannot_run_formulas(pilot, api_client):
     api_client.force_login(reviewer)
     csv = api_client.call("get", "/api/p/srp/queue.csv").content.decode()
     assert "'=HYPERLINK" in csv
+
+
+def test_only_the_members_own_losses_are_fetched_or_claimed(pilot, monkeypatch):
+    """Someone else's loss is refused before anything is stored; so is a loss from before the character was linked
+    (a character that changed hands is linked afresh); and pasting links is limited."""
+    other = make_user(90000009, "Someone Else")
+    victim = {"character_id": other.main_character.pk, "corporation_id": None, "ship_type_id": RIFTER, "items": []}
+
+    class FakeEsi:
+        def get(self, path, **kw):
+            class Resp:
+                data = {"killmail_time": "2026-10-01T12:00:00Z", "solar_system_id": 30000142, "attackers": [], "victim": victim}
+            return Resp()
+
+    monkeypatch.setattr("conduit.esi.client.esi", lambda: FakeEsi())
+    monkeypatch.setattr(services, "ensure_eve_names", lambda ids: None)
+    monkeypatch.setattr(services.timezone, "now", lambda: timezone.datetime(2026, 10, 2, tzinfo=timezone.UTC))
+    link = f"https://esi.evetech.net/latest/killmails/600/{'d' * 40}/"
+    with pytest.raises(services.SrpError, match="isn't one of your characters"):
+        services.submit(pilot, link=link, fleet="CTA")
+    assert not Killmail.objects.filter(pk=600).exists()
+
+    # The pilot's own character, but bought (linked) after the loss: refused.
+    bought = Character.objects.create(id=90000003, name="Bought Toon", owner_hash="new", user=pilot,
+                                      added_at=timezone.datetime(2026, 10, 1, 18, tzinfo=timezone.UTC))
+    victim["character_id"] = bought.pk
+    with pytest.raises(services.SrpError, match="isn't one of your characters"):
+        services.submit(pilot, link=f"https://esi.evetech.net/latest/killmails/601/{'d' * 40}/", fleet="CTA")
+    # Already synced (e.g. through the corporation's killmails): refused with the reason.
+    km = lose(bought, km_id=602)
+    Killmail.objects.filter(pk=602).update(time=timezone.datetime(2026, 10, 1, 12, tzinfo=timezone.UTC))
+    with pytest.raises(services.SrpError, match="before the character was linked"):
+        services.submit(pilot, killmail_id=km.pk, fleet="CTA")
+    assert km.pk not in [k["id"] for k in services.claimable(pilot)]
+
+    # Ten pasted links in ten minutes, then a pause.
+    for _ in range(services.LINK_LOOKUPS - 2):  # two were used above
+        with pytest.raises(services.SrpError):
+            services.submit(pilot, link=link, fleet="CTA")
+    with pytest.raises(services.SrpError) as exc:
+        services.submit(pilot, link=link, fleet="CTA")
+    assert exc.value.status == 429
