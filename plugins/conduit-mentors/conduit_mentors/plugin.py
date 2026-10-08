@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class MentorsPlugin(Plugin):
     id = "mentors"
     name = "Mentoring"
-    version = "1.0.2"
+    version = "1.0.3"
     description = "New members ask for a mentor; mentors guide them through goals that tick themselves, with a thread, notes and graduation."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-mentors"
@@ -14,6 +14,8 @@ class MentorsPlugin(Plugin):
     api = "conduit_mentors.api:router"
     frontend = "conduit_mentors/plugin.js"
     # Every member sees it: new members ask for a mentor there, mentors (mentors.mentor) get their mentees.
+    # Where its permissions show in Administration's permission picker (EvE Conduit 0.5.19+).
+    permission_tiers = {"mentor": "hr", "manage_program": "hr"}
     nav = (
         NavItem("Mentoring", "", "compass"),
         NavItem("Settings", "program", "wrench", permission="mentors.manage_program"),

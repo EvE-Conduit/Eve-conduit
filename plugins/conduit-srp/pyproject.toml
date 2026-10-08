@@ -1,6 +1,6 @@
 [project]
 name = "conduit-srp"
-version = "1.0.2"
+version = "1.0.3"
 description = "Ship replacement: members claim their losses from synced killmails, reviewers approve a payout and mark it paid."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

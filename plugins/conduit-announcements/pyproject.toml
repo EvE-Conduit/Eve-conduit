@@ -1,6 +1,6 @@
 [project]
 name = "conduit-announcements"
-version = "1.1.0"
+version = "1.1.1"
 description = "Announcements: news from leadership for everyone or chosen states and groups, with pinning, scheduling, notifications and a dashboard widget."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

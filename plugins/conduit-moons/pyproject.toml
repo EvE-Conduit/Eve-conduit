@@ -1,6 +1,6 @@
 [project]
 name = "conduit-moons"
-version = "1.1.0"
+version = "1.1.1"
 description = "Moon mining ledger: who mined what from your moons each month, what it's worth, and moon tax with payments."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

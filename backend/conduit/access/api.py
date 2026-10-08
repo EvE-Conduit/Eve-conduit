@@ -432,24 +432,31 @@ class PermissionOut(Schema):
     name: str
     label: str
     app: str
+    #: member, hr, director or admin (see access/permission_tiers.py); None when nobody said.
+    tier: str | None = None
 
 
 @router.get("/permissions", response=list[PermissionOut])
 @require_perm("site.manage_access")
 def list_permissions(request):
-    """Permissions worth granting: the site's own and every plugin's, not Django internals."""
-    from django.apps import apps
+    """Permissions worth granting: the site's own and every plugin's, not Django internals, each with the tier it's
+    meant for (``permission_tiers``) so the picker can group them."""
+    from .permission_tiers import plugin_tiers, tier_of
 
     hidden = {"admin", "auth", "contenttypes", "sessions"}
-    core = {a.label for a in apps.get_app_configs() if a.name.startswith("conduit.")}
-    # Core apps only expose their deliberate permissions, not Django's automatic add/change/delete/view ones.
     qs = Permission.objects.select_related("content_type").exclude(content_type__app_label__in=hidden)
+    declared = plugin_tiers()
 
     def automatic(p):
-        return p.content_type.app_label in core and p.codename in {f"{a}_{p.content_type.model}" for a in ("add", "change", "delete", "view")}
+        # Django's add/change/delete/view permission for every table: nothing on this site checks them (the back-office
+        # needs staff status and lists no plugin tables), so they'd only bury the real ones. A plugin that does use one
+        # lists it in Plugin.permission_tiers.
+        name = f"{p.content_type.app_label}.{p.codename}"
+        return name not in declared and p.codename in {f"{a}_{p.content_type.model}" for a in ("add", "change", "delete", "view")}
 
     return [
-        {"name": f"{p.content_type.app_label}.{p.codename}", "label": p.name, "app": p.content_type.app_label}
+        {"name": f"{p.content_type.app_label}.{p.codename}", "label": p.name, "app": p.content_type.app_label,
+         "tier": tier_of(f"{p.content_type.app_label}.{p.codename}", declared)}
         for p in qs.order_by("content_type__app_label", "codename")
         if not automatic(p)
     ]

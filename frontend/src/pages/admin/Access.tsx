@@ -43,9 +43,34 @@ interface PermissionOption {
   name: string;
   label: string;
   app: string;
+  /** Who it's meant for; null when the plugin didn't say. */
+  tier: "member" | "hr" | "director" | "admin" | null;
 }
 
-const APP_LABELS: Record<string, string> = { site: "Site administration", sheet: "Character sheet access" };
+/** The permission picker's sections, in order. */
+const TIERS: { key: PermissionOption["tier"]; title: string; hint: string }[] = [
+  { key: "member", title: "Regular users", hint: "Everyday things any member may do." },
+  { key: "hr", title: "HR staff", hint: "Recruiting, mentoring and looking after members and their characters." },
+  { key: "director", title: "Directors", hint: "Running the corporation or alliance: finances, fleets, doctrines, payouts." },
+  { key: "admin", title: "Admins", hint: "Running the site itself. Give these to very few people." },
+  { key: null, title: "Other", hint: "Plugins that don't say who these are for." },
+];
+
+const APP_LABELS: Record<string, string> = {
+  site: "Site",
+  sheet: "Character sheets",
+  corp: "Corporation sheets",
+  access: "Access",
+  announcements: "Announcements",
+  discord: "Discord",
+  doctrines: "Doctrines",
+  fleets: "Fleets",
+  mentors: "Mentoring",
+  moons: "Moon mining",
+  recruit: "Recruitment",
+  skillplans: "Skill Plans",
+  srp: "Ship replacement",
+};
 
 export const COLORS = ["#64748b", "#22d3ee", "#38bdf8", "#818cf8", "#a78bfa", "#f472b6", "#f43f5e", "#fb923c", "#fbbf24", "#34d399"];
 
@@ -345,31 +370,50 @@ export function ToggleRow({ title, description, checked, onChange }: { title: Re
 
 export function PermissionPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const { data } = useQuery({ queryKey: ["admin", "permissions"], queryFn: () => api.get<PermissionOption[]>("/api/admin/permissions") });
-  const byApp = Object.groupBy(data ?? [], (p) => p.app);
+  const known = new Set((data ?? []).map((p) => p.name));
+  // Granted earlier but no longer offered (e.g. Django's automatic table permissions, which nothing here uses).
+  const unlisted = data ? value.filter((v) => !known.has(v)) : [];
+  const toggle = (name: string) => onChange(value.includes(name) ? value.filter((v) => v !== name) : [...value, name]);
   return (
     <div className="space-y-2">
       <span className="text-[13px] font-medium">Permissions</span>
-      <div className="max-h-72 space-y-3 overflow-y-auto rounded-xl border border-border bg-surface-2 p-3">
-        {Object.entries(byApp).map(([app, perms]) => (
-          <div key={app}>
-            <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-subtle">{APP_LABELS[app] ?? app}</div>
-            {perms?.map((p) => {
-              const on = value.includes(p.name);
-              return (
+      <div className="max-h-96 space-y-4 overflow-y-auto rounded-xl border border-border bg-surface-2 p-3">
+        {TIERS.map((tier) => {
+          const perms = (data ?? []).filter((p) => (p.tier ?? null) === tier.key);
+          if (!perms.length) return null;
+          const on = perms.filter((p) => value.includes(p.name)).length;
+          return (
+            <section key={tier.key ?? "other"}>
+              <div className="mb-1.5 flex items-baseline gap-2">
+                <span className={cn("text-[10.5px] font-semibold uppercase tracking-[0.14em]", tier.key === "admin" ? "text-warning-fg" : "text-subtle")}>
+                  {tier.title}
+                </span>
+                {on > 0 && <span className="text-[10.5px] text-muted">{on} on</span>}
+              </div>
+              <p className="mb-1 px-1.5 text-xs text-muted">{tier.hint}</p>
+              {perms.map((p) => (
                 <label key={p.name} className="flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm hover:bg-hover">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => onChange(on ? value.filter((v) => v !== p.name) : [...value, p.name])}
-                    className="size-4 rounded accent-[var(--site-accent)]"
-                  />
+                  <input type="checkbox" checked={value.includes(p.name)} onChange={() => toggle(p.name)} className="size-4 rounded accent-[var(--site-accent)]" />
                   <span className="flex-1">{p.label}</span>
+                  <span className="hidden text-[10.5px] text-subtle sm:inline">{APP_LABELS[p.app] ?? p.app}</span>
                   <code className="font-mono text-[10px] text-subtle">{p.name}</code>
                 </label>
-              );
-            })}
-          </div>
-        ))}
+              ))}
+            </section>
+          );
+        })}
+        {unlisted.length > 0 && (
+          <section>
+            <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-subtle">Granted, no longer offered</div>
+            <p className="mb-1 px-1.5 text-xs text-muted">Not offered in the list any more (usually Django's automatic table permissions); untick to remove them.</p>
+            {unlisted.map((name) => (
+              <label key={name} className="flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm hover:bg-hover">
+                <input type="checkbox" checked onChange={() => toggle(name)} className="size-4 rounded accent-[var(--site-accent)]" />
+                <code className="flex-1 font-mono text-xs">{name}</code>
+              </label>
+            ))}
+          </section>
+        )}
         {!data?.length && <div className="text-xs text-subtle">No permissions available.</div>}
       </div>
     </div>

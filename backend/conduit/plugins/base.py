@@ -70,6 +70,11 @@ class Plugin:
     #: Dotted paths to ``fn(user, character) -> bool`` that let more people read a character's sheet, e.g.
     #: recruiters looking at an applicant. Asked only when the core rules say no, and only while enabled.
     sheet_access: tuple[str, ...] = ()
+    #: Who each of the plugin's permissions is meant for, so Administration groups them in the permission picker:
+    #: ``{"review_applications": "hr", "manage_forms": "hr"}``. Tiers: ``member`` (regular users), ``hr`` (HR staff),
+    #: ``director`` (directors) and ``admin``. Unlisted ones show under "Other". Django's automatic add/change/delete/
+    #: view permissions are hidden from the picker unless listed here.
+    permission_tiers: dict = {}
     #: Only members may use it: people whose state isn't the public (Guest) fallback, and administrators.
     #: Others don't get its pages, API or search results. Set False for plugins guests need, e.g. applying.
     members_only: bool = True

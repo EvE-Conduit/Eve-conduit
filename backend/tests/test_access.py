@@ -103,3 +103,26 @@ def test_permission_list_hides_automatic_core_permissions(admin_user, api_client
     assert {"site.manage_access", "sheet.view_all_characters", "sheet.view_corporation_characters"} <= names
     assert not any(n.split(".")[1].startswith(("add_", "change_", "delete_", "view_wallet")) for n in names if n.split(".")[0] in {"wallet", "site", "sheet"})
     assert "sample.add_thing" not in names  # (sample plugin has no models; plugin permissions would be kept)
+
+
+@pytest.mark.django_db
+def test_permissions_are_grouped_by_who_they_are_for(admin_user, api_client, monkeypatch):
+    """Regular users, HR staff, directors, admins; plugins say where theirs go, the rest show under Other."""
+    from django.contrib.auth.models import Permission
+    from django.contrib.contenttypes.models import ContentType
+
+    from tests.sample_plugin.plugin import SamplePlugin
+
+    thing = ContentType.objects.create(app_label="sample", model="thing")
+    for codename in ("do_things", "add_thing", "change_thing", "odd_one"):
+        Permission.objects.create(content_type=thing, codename=codename, name=codename)
+    monkeypatch.setattr(SamplePlugin, "permission_tiers", {"do_things": "director", "add_thing": "hr", "odd_one": "nonsense"}, raising=False)
+    api_client.force_login(admin_user)
+    tiers = {p["name"]: p["tier"] for p in api_client.call("get", "/api/admin/permissions").json()}
+    assert tiers["site.manage_access"] == "admin" and tiers["site.view_logs"] == "admin"
+    assert tiers["sheet.view_all_characters"] == "hr" and tiers["corp.view_corporation_wallets"] == "director"
+    assert tiers["sheet.refresh_characters"] == "member"
+    assert tiers["sample.do_things"] == "director"
+    assert tiers["sample.add_thing"] == "hr"  # an automatic one the plugin listed is offered
+    assert "sample.change_thing" not in tiers  # automatic and unlisted: hidden
+    assert tiers["sample.odd_one"] is None  # an unknown tier: Other
