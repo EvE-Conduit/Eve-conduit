@@ -76,9 +76,18 @@ def unlink(request):
     return me(request)
 
 
+#: Seconds between "Fix my roles" presses per member.
+SYNC_COOLDOWN = 30
+
+
 @router.post("/sync")
 def sync_me(request):
     """Fix my roles now (e.g. after rejoining the server)."""
+    from django.core.cache import cache
+
+    # Each press calls Discord with the bot's token; don't let anyone hammer it (and get the bot rate limited).
+    if not cache.add(f"discord:sync:{request.user.pk}", True, timeout=SYNC_COOLDOWN):
+        raise HttpError(429, f"Your roles were just checked; try again in {SYNC_COOLDOWN} seconds")
     error = services.sync_user(request.user)
     if error:
         raise HttpError(400, error)
@@ -246,10 +255,12 @@ def sync_member(request, user_id: int):
 
 @router.delete("/admin/members/{user_id}")
 @require_perm("discord.manage_discord")
-def remove_member(request, user_id: int, kick: bool = False):
+def remove_member(request, user_id: int, kick: bool = False, force: bool = False):
+    """``force``: forget the link even if Discord can't be reached to take the roles away (they stay on Discord then)."""
     user = _member(user_id)
     name = user.discord.username
-    _run(services.unlink, user, kick=kick, reason="An administrator " + ("removed you from the Discord server." if kick else "unlinked your Discord account."))
+    _run(services.unlink, user, kick=kick, force=force,
+         reason="An administrator " + ("removed you from the Discord server." if kick else "unlinked your Discord account."))
     record("discord.unlink", f"{'kicked' if kick else 'unlinked'} {user.display_name}'s Discord account {name}", request=request, target=user,
            details={"plugin": "discord", "kick": kick})
     return {"ok": True}

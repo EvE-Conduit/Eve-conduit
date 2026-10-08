@@ -69,7 +69,7 @@ export function RequestPage() {
             {decidable && (data.status === "approved" || data.status === "rejected") && <Button variant="ghost" onClick={() => setDialog("reopen")}><Undo /> Reopen</Button>}
             {decidable && data.status !== "paid" && data.status !== "rejected" && <Button variant="danger" onClick={() => setDialog("reject")}><X /> Reject</Button>}
             {decidable && (data.status === "pending" || data.status === "rejected") && <Button variant="success" onClick={() => setDialog("approve")}><Check /> Approve</Button>}
-            {data.can_pay && data.status === "approved" && <Button variant="primary" onClick={() => setDialog("pay")}><Coins /> Mark paid</Button>}
+            {data.can_pay && !data.mine && data.status === "approved" && <Button variant="primary" onClick={() => setDialog("pay")}><Coins /> Mark paid</Button>}
           </div>
         }
       />

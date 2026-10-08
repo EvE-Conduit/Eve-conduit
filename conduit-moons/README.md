@@ -10,6 +10,11 @@ Who mined what from your corporations' moon drills each month, what it's worth, 
   they come in. A month can be reopened while nobody has paid.
 - **My moon mining**: every member sees their own mining and what they owe, plus a dashboard widget.
 
+**Which corporations:** the ledger follows the corporation sheet's permissions. Someone with `moons.view_ledger`
+sees the mining of the corporations whose sheet they may open (their own with "view own corporation", the alliance's
+with "view alliance corporations", or all). Closing or reopening a month and changing the settings cover every
+corporation at once, so they need access to all corporations with mining in it.
+
 The data comes from the corporation sheet's mining section, which needs a director's or accountant's login for
 the corporation (moon drill observers). Values use CCP's average market prices.
 

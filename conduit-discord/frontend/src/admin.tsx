@@ -1,6 +1,6 @@
 // Server setup (discord.manage_discord): the Discord application and bot, role mapping, and linked members.
 import {
-  Alert, api, Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, cn, ConfirmDialog, DropdownContent, DropdownItem, DropdownMenu,
+  Alert, api, ApiError, Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, cn, ConfirmDialog, DropdownContent, DropdownItem, DropdownMenu,
   DropdownSeparator, DropdownTrigger, EmptyState, Field, Input, PageHeader, SearchInput, Select, Skeleton, StatCard, SwitchRow, Table, TableToolbar,
   TabPanel, Tabs, Td, Th, THead, timeAgo, toast, Tr,
 } from "@conduit/sdk";
@@ -368,9 +368,18 @@ function MembersTab() {
     onError: (e: Error) => toast.error(e.message),
   });
   const unlink = useMutation({
-    mutationFn: ({ id, kick }: { id: number; kick: boolean }) => api.delete(`${BASE}/admin/members/${id}?kick=${kick}`),
+    mutationFn: ({ id, kick, force = false }: { id: number; kick: boolean; force?: boolean }) =>
+      api.delete(`${BASE}/admin/members/${id}?kick=${kick}${force ? "&force=true" : ""}`),
     onSuccess: () => { toast.success("Unlinked"); refresh(); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error, vars) => {
+      // Discord couldn't take the roles away, so the link was kept. Forgetting it anyway leaves the roles on Discord.
+      if (e instanceof ApiError && e.status === 502 && !vars.force) {
+        toast.error(e.message, {
+          action: { label: "Forget anyway", onClick: () => unlink.mutate({ ...vars, force: true }) },
+          description: "Forgetting it leaves their roles on Discord; take them off there by hand.",
+        });
+      } else toast.error(e.message);
+    },
   });
 
   if (isLoading || !data) return <Skeleton className="h-64" />;

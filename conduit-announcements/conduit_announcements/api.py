@@ -106,6 +106,7 @@ def pin(request, announcement_id: int, payload: PinIn):
     a = _get(announcement_id)
     a.pinned = payload.pinned
     a.save(update_fields=["pinned"])
+    record("announcements.pin", f"{'pinned' if a.pinned else 'unpinned'} the announcement \"{a.title}\"", request=request, target=a)
     return _one(request, a)
 
 

@@ -9,9 +9,10 @@ Members claim ships they lost on fleet; reviewers check the loss, approve a payo
 - **Queue** (permission `srp.review_requests`): pending, approved, rejected and paid requests with the pilot, ship,
   system, fleet, loss value and payout. Each request shows the full fitting and cargo (destroyed or dropped), the
   victim's corporation and the final blow, and how many requests the member had approved or rejected before.
-  Approve with the suggested payout or another amount, or reject with a reason. Nobody decides their own request.
+  Approve with the suggested payout or another amount, or reject with a reason. Nobody decides (or reopens) their own
+  request, administrators included.
 - **Payouts** (permission `srp.pay_requests`): a CSV of everything approved and not paid yet, and marking requests
-  paid one by one or in bulk.
+  paid one by one or in bulk. Payers can't mark their own requests paid; someone else sends that ISK.
 - **Rules** (permission `srp.manage_srp`): a payout per ship or per ship group (fixed ISK, a % of the loss, or not
   covered), a default % for everything else (or nothing: "only ships with a rule"), how long losses can be
   claimed, whether the fleet is required, which corporations' losses count, and a text explaining your SRP policy.

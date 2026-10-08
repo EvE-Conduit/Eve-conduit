@@ -139,3 +139,30 @@ def test_bulletin_on_the_landing_page(people, api_client):
     assert [a["title"] for a in bulletin["announcements"]] == ["Pinned rules", "Members only"] and bulletin["more"] == 2
     api_client.force_login(people["guest"])
     assert api_client.call("get", "/api/p/announcements/bulletin").status_code == 403
+
+
+def test_restricted_announcements_get_their_own_webhook_event(people, api_client, monkeypatch, django_capture_on_commit_callbacks):
+    """A webhook into a public channel mustn't post an announcement meant for one state or group."""
+    from conduit.events import bus
+
+    sent = []
+    monkeypatch.setattr(bus, "emit", lambda name, **payload: sent.append((name, payload)))
+    post(api_client, people["writer"], title="For everyone")
+    post(api_client, people["writer"], title="Members only", states=[people["member"].pk])
+    assert [(n, p["title"], p["audience"]) for n, p in sent if n.startswith("announcements.")] == [
+        ("announcements.published", "For everyone", "everyone"),
+        ("announcements.published_restricted", "Members only", {"states": ["Member"], "groups": []}),
+    ]
+
+
+def test_pinning_is_audited_and_bodies_cannot_stall_the_server(people, api_client):
+    import time
+
+    from conduit.audit.models import AuditEvent
+
+    a = post(api_client, people["writer"])
+    assert api_client.call("post", f"/api/p/announcements/{a['id']}/pin", {"pinned": True}).status_code == 200
+    assert AuditEvent.objects.filter(action="announcements.pin").exists()
+    started = time.monotonic()
+    services._plain("[" * 20000 + "](" * 5000)
+    assert time.monotonic() - started < 0.5

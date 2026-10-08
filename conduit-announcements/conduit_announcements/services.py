@@ -168,8 +168,14 @@ def announce(a: Announcement) -> bool:
         if users:
             notify(users, a.title, _plain(a.body)[:300], link="/p/announcements", level=NOTIFY_LEVEL.get(a.tone, "info"),
                    category="p.announcements", force=a.tone == "urgent")
-    bus.emit("announcements.published", announcement_id=a.pk, title=a.title, summary=_plain(a.body)[:500],
-             author=a.author.display_name if a.author else None, link="/p/announcements", level=NOTIFY_LEVEL.get(a.tone, "info"))
+    # Webhooks often post to channels everyone can read, so announcements for some states or groups only go out as
+    # their own event: admins send that one to a leadership channel, or nowhere.
+    states, groups = list(a.states.values_list("name", flat=True)), list(a.groups.values_list("name", flat=True))
+    restricted = bool(states or groups)
+    bus.emit("announcements.published_restricted" if restricted else "announcements.published", announcement_id=a.pk,
+             title=a.title, summary=_plain(a.body)[:500], author=a.author.display_name if a.author else None,
+             audience={"states": states, "groups": groups} if restricted else "everyone",
+             link="/p/announcements", level=NOTIFY_LEVEL.get(a.tone, "info"))
     return True
 
 
@@ -182,7 +188,8 @@ def _plain(md: str) -> str:
     """The body without Markdown marks, for notifications and webhooks."""
     import re
 
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", md)
+    # Bounded, so a body full of brackets can't make the pattern backtrack for long.
+    text = re.sub(r"\[([^\]\n]{1,200})\]\([^)\s]{1,2000}\)", r"\1", md)
     text = re.sub(r"[*_`#>]+", "", text)
     return " ".join(text.split())
 

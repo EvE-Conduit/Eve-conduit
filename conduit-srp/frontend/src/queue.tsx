@@ -31,11 +31,12 @@ export function QueuePage() {
     placeholderData: (prev) => prev,
   });
   const pay = useMutation({
-    mutationFn: (ids: number[]) => api.post<{ paid: number }>(`${BASE}/paid`, { ids }),
+    mutationFn: (ids: number[]) => api.post<{ paid: number; skipped_own?: number }>(`${BASE}/paid`, { ids }),
     onSuccess: (r) => {
       setPicked(new Set());
       qc.invalidateQueries({ queryKey: ["srp"] });
       toast.success(`${r.paid} request${r.paid === 1 ? "" : "s"} marked paid`);
+      if (r.skipped_own) toast.warning(`${r.skipped_own} of them ${r.skipped_own === 1 ? "is" : "are"} your own; someone else has to pay ${r.skipped_own === 1 ? "it" : "them"}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });

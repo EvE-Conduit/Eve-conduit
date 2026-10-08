@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 import time
 from urllib.parse import urlencode
@@ -26,6 +28,19 @@ BOT_PERMISSIONS = CREATE_INSTANT_INVITE | KICK_MEMBERS | MANAGE_NICKNAMES | MANA
 
 #: Longest wait for a rate limit before giving up on a call.
 MAX_WAIT = 10.0
+#: Whether a rate-limited call may sleep and retry. Only background tasks do (see ``allow_waiting``): sleeping in a web
+#: request would let anyone tie up the site's web workers by making Discord rate limit us.
+_may_wait = contextvars.ContextVar("discord_may_wait", default=False)
+
+
+@contextlib.contextmanager
+def allow_waiting():
+    """Let calls inside wait out Discord's rate limits (for Celery tasks, never for web requests)."""
+    token = _may_wait.set(True)
+    try:
+        yield
+    finally:
+        _may_wait.reset(token)
 
 
 class DiscordError(Exception):
@@ -40,7 +55,8 @@ def _client() -> httpx.Client:
 
 
 def call(method: str, path: str, *, bot_token: str | None = None, bearer: str | None = None, json=None, data=None):
-    """Call the API, waiting out rate limits a few times. Returns the JSON body, or None for 204."""
+    """Call the API. Returns the JSON body, or None for 204. Rate limits are waited out a few times inside
+    ``allow_waiting()`` (background tasks); elsewhere they fail straight away."""
     headers = {}
     if bot_token:
         headers["Authorization"] = f"Bot {bot_token}"
@@ -54,6 +70,8 @@ def call(method: str, path: str, *, bot_token: str | None = None, bearer: str | 
                 raise DiscordError(0, f"Couldn't reach Discord: {exc.__class__.__name__}") from None
             if resp.status_code == 429:
                 wait = _retry_after(resp)
+                if not _may_wait.get():
+                    raise DiscordError(429, "Discord is rate limiting this site right now; try again in a minute")
                 if wait > MAX_WAIT:
                     raise DiscordError(429, f"Discord asked us to wait {wait:.0f} s; try again later")
                 time.sleep(wait)
