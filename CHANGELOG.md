@@ -3,6 +3,47 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.18
+
+### Security
+A review of EvE Conduit and every official plugin. Update soon, and update your plugins (Administration → Plugins).
+- **Administrator groups:** a group carrying administrator permissions can only be filled by someone who manages
+  access, whatever adds the member. Recruitment could otherwise make an accepted applicant an administrator.
+- **Private webhook events:** members' own notifications and announcements for some groups only are no longer sent to
+  webhooks set to "every event"; pick them by name for a channel only the right people can read.
+- **Slack webhooks** escape `< > &`, so text people typed can't ping a channel or hide a link.
+- **Pasted text** (skill lists, fits, announcements) is read without patterns a crafted line could stall the server
+  with.
+- **Linux, IP address installs:** `conduit ip-cert` keeps certbot's working files in root-only folders.
+
+### Added
+- **Plugins can add sections to the landing page**, like dashboard widgets. Administration → Settings → Landing
+  page → From plugins switches each one off or on.
+
+### Plugins
+- **Recruitment 1.1.4:** only people who manage access can put an administrator group on a form or accept anyone into
+  one. Closed applications take no more messages, and live character data is only shown while an application is open.
+- **Announcements 1.1.0:** a **Bulletin** on the landing page: the newest (or pinned) announcement as the lead story
+  and the next three beside it, only what each member may see. Each announcement has a "Post to the landing page"
+  switch. Announcements for some states or groups fire a separate, private webhook event. Pinning is audited.
+- **Moons 1.1.0:** the ledger only shows corporations whose mining the viewer may open on the corporation sheet (moon
+  officers without a corporation permission see an empty ledger until they get one), and closing a month needs every
+  corporation in it.
+- **SRP 1.0.2:** only the member's own losses, from after the character was linked to their account, can be claimed;
+  pasted links for anyone else's loss are refused before anything is stored, 10 per 10 minutes. Nobody, superusers
+  included, decides, reopens or pays their own request. The payout CSV can't run spreadsheet formulas.
+- **Fleets 1.0.1:** fleets are tracked only with your own character. FATs an FC adds by hand for their own characters
+  don't count, the Fleet attendance rule can require a minimum number of pilots, and only managers change an ended
+  fleet's type.
+- **Discord 1.0.3:** "Fix my roles" has a 30 second cooldown and pages no longer wait on Discord's rate limit.
+  Unlinking keeps the link (and says so) when Discord can't take the roles away.
+- **Mentoring 1.0.2:** a mentor who loses the mentor permission can't open their mentees' character sheets any more;
+  mentors only see the main character of members they don't mentor.
+- **Doctrines 1.0.2:** readiness only names a member's character to people who may open its sheet; the CSV can't run
+  formulas.
+- **Skill Plans 1.0.1:** the members CSV can't run formulas.
+- **Example 0.1.2:** errors aren't passed to the browser; the template explains which checks a plugin must do itself.
+
 ## 0.5.17
 
 ### Added
