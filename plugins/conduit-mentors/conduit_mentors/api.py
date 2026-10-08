@@ -196,6 +196,7 @@ class GoalIn(Schema):
     description: str = ""
     rules: dict = {}
     mentee_can_tick: bool = False
+    focus: list[str] = []
 
 
 @router.post("/program/goals")

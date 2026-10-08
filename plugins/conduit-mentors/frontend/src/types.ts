@@ -111,6 +111,7 @@ export interface Goal {
   rules: RuleSet;
   rules_text: string;
   mentee_can_tick: boolean;
+  focus: string[];
   order: number;
 }
 

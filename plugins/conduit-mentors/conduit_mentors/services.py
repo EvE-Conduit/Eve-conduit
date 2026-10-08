@@ -3,7 +3,8 @@
 People with ``mentors.mentor`` keep a mentor profile (active or paused, how many mentees, focus areas) and see the
 waiting list. New members ask for a mentor, by name or anyone. While a mentorship is active the mentor and mentee
 talk in a thread (mentors can also keep private notes), work through the program's goals and, at the end, the
-mentor graduates them. Goals with a group rule set tick themselves; the rest are ticked by hand.
+mentor graduates them. Goals with a group rule set tick themselves; the rest are ticked by hand. A goal can be for
+mentees with certain focus areas only (PvP, Industry...); the others are for everyone.
 ``mentors.manage_program`` runs the program: goals, focus areas, assigning and every mentorship.
 """
 
@@ -132,6 +133,7 @@ def save_goal(goal: Goal | None, data: dict, by, request=None) -> Goal:
     goal.title = title
     goal.description = str(data.get("description", "")).strip()[:2000]
     goal.mentee_can_tick = bool(data.get("mentee_can_tick")) and not goal.rules
+    goal.focus = _focus(data.get("focus"))
     goal.save()
     record("mentors.goal_saved", f"saved the mentoring goal \"{goal.title}\"", request=request, actor=by, target_type="plugin",
            details={"goal_id": goal.pk})
@@ -145,7 +147,14 @@ def reorder_goals(ids: list[int]):
 
 def goal_out(g: Goal) -> dict:
     return {"id": g.pk, "title": g.title, "description": g.description, "rules": g.rules, "rules_text": rules.describe_ruleset(g.rules),
-            "mentee_can_tick": g.mentee_can_tick, "order": g.order}
+            "mentee_can_tick": g.mentee_can_tick, "focus": g.focus, "order": g.order}
+
+
+def applies(goal: Goal, m: Mentorship) -> bool:
+    """A goal without focus areas is for every mentee; one with them only for mentees who asked for one of them."""
+    if not goal.focus:
+        return True
+    return bool({a.lower() for a in goal.focus} & {a.lower() for a in m.focus or []})
 
 
 def save_program(data: dict, by, request=None) -> Program:
@@ -343,6 +352,8 @@ def goal_status(m: Mentorship, goal_list: list[Goal] | None = None) -> list[dict
     checks = {c.goal_id: c for c in m.checks.select_related("done_by")}
     out = []
     for g in goal_list:
+        if not applies(g, m):
+            continue
         check = checks.get(g.pk)
         auto = bool((g.rules or {}).get("rules"))
         parts = rules.check_ruleset(m.mentee, g.rules) if auto else []
@@ -361,6 +372,8 @@ def tick(m: Mentorship, goal: Goal, user, done: bool) -> None:
     r = role(m, user)
     if m.status != Mentorship.Status.ACTIVE:
         raise MentorError("Goals can only be ticked while the mentorship is active")
+    if not applies(goal, m):
+        raise MentorError("That goal isn't one of this mentee's")
     allowed = r in ("mentor", "manager") or (r == "mentee" and goal.mentee_can_tick and not (goal.rules or {}).get("rules"))
     if not allowed:
         raise MentorError("Your mentor ticks this goal" if r == "mentee" else "You can't tick goals here", 403)

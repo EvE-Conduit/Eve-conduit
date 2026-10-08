@@ -1144,7 +1144,7 @@ function ke() {
 			eyebrow: "Mentoring",
 			title: "Program",
 			icon: /* @__PURE__ */ V(q, {}),
-			description: "Every mentorship, how busy the mentors are, the goals every mentee works through, and settings."
+			description: "Every mentorship, how busy the mentors are, the goals mentees work through, and settings."
 		}),
 		r || !n ? /* @__PURE__ */ V(_, { className: "h-96" }) : /* @__PURE__ */ H("div", {
 			className: "space-y-6",
@@ -1226,6 +1226,7 @@ function ke() {
 						className: "pt-4",
 						children: /* @__PURE__ */ V(Me, {
 							goals: n.goals,
+							focusAreas: n.settings.focus_areas,
 							canEditRules: n.can_edit_rules
 						})
 					}),
@@ -1309,24 +1310,25 @@ var je = {
 	title: "",
 	description: "",
 	rules: {},
-	mentee_can_tick: !1
+	mentee_can_tick: !1,
+	focus: []
 };
-function Me({ goals: e, canEditRules: t }) {
-	let a = I(), [c, u] = z(null), [d, f] = z(null), p = () => a.invalidateQueries({ queryKey: ["mentors"] }), m = P({
+function Me({ goals: e, focusAreas: t, canEditRules: a }) {
+	let c = I(), [u, d] = z(null), [f, p] = z(null), m = () => c.invalidateQueries({ queryKey: ["mentors"] }), h = P({
 		mutationFn: (e) => O.post(`${J}/program/goals/order`, { ids: e }),
-		onSuccess: p,
+		onSuccess: m,
 		onError: (e) => N.error(e.message)
-	}), h = (t, n) => {
+	}), g = (t, n) => {
 		let r = e.map((e) => e.id);
-		[r[t], r[t + n]] = [r[t + n], r[t]], m.mutate(r);
+		[r[t], r[t + n]] = [r[t + n], r[t]], h.mutate(r);
 	};
 	return /* @__PURE__ */ H(i, { children: [
 		/* @__PURE__ */ V(o, {
 			title: "Goals",
-			description: "What every mentee works through, in this order. Goals with rules tick themselves.",
+			description: "What mentees work through, in this order. Goals with rules tick themselves; goals with focus areas are only for mentees who asked for one of them.",
 			actions: /* @__PURE__ */ H(r, {
 				variant: "primary",
-				onClick: () => u("new"),
+				onClick: () => d("new"),
 				children: [/* @__PURE__ */ V(se, {}), " Add goal"]
 			})
 		}),
@@ -1345,14 +1347,14 @@ function Me({ goals: e, canEditRules: t }) {
 							variant: "ghost",
 							size: "icon-xs",
 							disabled: i === 0,
-							onClick: () => h(i, -1),
+							onClick: () => g(i, -1),
 							"aria-label": "Move up",
 							children: /* @__PURE__ */ V(le, {})
 						}), /* @__PURE__ */ V(r, {
 							variant: "ghost",
 							size: "icon-xs",
 							disabled: i === e.length - 1,
-							onClick: () => h(i, 1),
+							onClick: () => g(i, 1),
 							"aria-label": "Move down",
 							children: /* @__PURE__ */ V(ue, {})
 						})]
@@ -1362,13 +1364,20 @@ function Me({ goals: e, canEditRules: t }) {
 						children: [
 							/* @__PURE__ */ H("div", {
 								className: "flex flex-wrap items-center gap-2",
-								children: [/* @__PURE__ */ V("span", {
-									className: "font-medium",
-									children: t.title
-								}), t.rules_text ? /* @__PURE__ */ V(n, {
-									tone: "info",
-									children: "ticks itself"
-								}) : t.mentee_can_tick ? /* @__PURE__ */ V(n, { children: "mentee ticks" }) : /* @__PURE__ */ V(n, { children: "mentor ticks" })]
+								children: [
+									/* @__PURE__ */ V("span", {
+										className: "font-medium",
+										children: t.title
+									}),
+									t.rules_text ? /* @__PURE__ */ V(n, {
+										tone: "info",
+										children: "ticks itself"
+									}) : t.mentee_can_tick ? /* @__PURE__ */ V(n, { children: "mentee ticks" }) : /* @__PURE__ */ V(n, { children: "mentor ticks" }),
+									t.focus.length > 0 ? t.focus.map((e) => /* @__PURE__ */ V(n, {
+										tone: "accent",
+										children: e
+									}, e)) : /* @__PURE__ */ V(n, { children: "every mentee" })
+								]
 							}),
 							t.description && /* @__PURE__ */ V("p", {
 								className: "text-xs text-muted",
@@ -1383,71 +1392,73 @@ function Me({ goals: e, canEditRules: t }) {
 					/* @__PURE__ */ V(r, {
 						variant: "ghost",
 						size: "icon-sm",
-						onClick: () => u(t),
+						onClick: () => d(t),
 						"aria-label": `Edit ${t.title}`,
 						children: /* @__PURE__ */ V(fe, {})
 					}),
 					/* @__PURE__ */ V(r, {
 						variant: "ghost",
 						size: "icon-sm",
-						onClick: () => f(t),
+						onClick: () => p(t),
 						"aria-label": `Delete ${t.title}`,
 						children: /* @__PURE__ */ V(ce, {})
 					})
 				]
 			}, t.id))
 		}),
-		c && /* @__PURE__ */ V(Ne, {
-			goal: c === "new" ? null : c,
-			canEditRules: t,
-			onClose: () => u(null)
+		u && /* @__PURE__ */ V(Ne, {
+			goal: u === "new" ? null : u,
+			focusAreas: t,
+			canEditRules: a,
+			onClose: () => d(null)
 		}),
 		/* @__PURE__ */ V(s, {
-			open: d !== null,
-			onOpenChange: (e) => !e && f(null),
-			title: `Delete “${d?.title}”?`,
+			open: f !== null,
+			onOpenChange: (e) => !e && p(null),
+			title: `Delete “${f?.title}”?`,
 			description: "It goes from every mentorship, with whatever was ticked.",
 			confirmLabel: "Delete",
 			danger: !0,
-			onConfirm: () => O.delete(`${J}/program/goals/${d.id}`).then(p, (e) => {
+			onConfirm: () => O.delete(`${J}/program/goals/${f.id}`).then(m, (e) => {
 				throw N.error(e.message), e;
 			})
 		})
 	] });
 }
-function Ne({ goal: t, canEditRules: n, onClose: i }) {
-	let a = I(), [o, s] = z(t ?? {
+function Ne({ goal: t, focusAreas: n, canEditRules: i, onClose: a }) {
+	let o = I(), [s, l] = z(t ?? {
 		...je,
 		rules_text: ""
-	}), l = (o.rules.rules ?? []).length > 0, f = P({
+	}), f = (s.rules.rules ?? []).length > 0, p = P({
 		mutationFn: () => {
 			let e = {
-				title: o.title,
-				description: o.description,
-				rules: o.rules,
-				mentee_can_tick: o.mentee_can_tick && !l
+				title: s.title,
+				description: s.description,
+				rules: s.rules,
+				mentee_can_tick: s.mentee_can_tick && !f,
+				focus: s.focus
 			};
 			return t ? O.put(`${J}/program/goals/${t.id}`, e) : O.post(`${J}/program/goals`, e);
 		},
 		onSuccess: () => {
-			a.invalidateQueries({ queryKey: ["mentors"] }), N.success("Goal saved"), i();
+			o.invalidateQueries({ queryKey: ["mentors"] }), N.success("Goal saved"), a();
 		},
 		onError: (e) => N.error(e.message)
 	});
 	return /* @__PURE__ */ V(c, {
 		open: !0,
 		size: "lg",
-		onOpenChange: (e) => !e && i(),
+		onOpenChange: (e) => !e && a(),
 		title: t ? "Edit goal" : "New goal",
 		footer: /* @__PURE__ */ H(B, { children: [/* @__PURE__ */ V(r, {
 			variant: "ghost",
-			onClick: i,
+			onClick: a,
 			children: "Cancel"
 		}), /* @__PURE__ */ V(r, {
 			variant: "primary",
-			loading: f.isPending,
-			disabled: !o.title.trim(),
-			onClick: () => f.mutate(),
+			loading: p.isPending,
+			disabled: !s.title.trim(),
+			onClick: () => p.mutate(),
 			children: "Save"
 		})] }),
 		children: /* @__PURE__ */ H("div", {
@@ -1457,9 +1468,9 @@ function Ne({ goal: t, canEditRules: n, onClose: i }) {
 					label: "Title",
 					required: !0,
 					children: /* @__PURE__ */ V(d, {
-						value: o.title,
-						onChange: (e) => s({
-							...o,
+						value: s.title,
+						onChange: (e) => l({
+							...s,
 							title: e.target.value
 						}),
 						maxLength: 150,
@@ -1470,20 +1481,32 @@ function Ne({ goal: t, canEditRules: n, onClose: i }) {
 					label: "Description",
 					children: /* @__PURE__ */ V(T, {
 						rows: 2,
-						value: o.description,
-						onChange: (e) => s({
-							...o,
+						value: s.description,
+						onChange: (e) => l({
+							...s,
 							description: e.target.value
+						})
+					})
+				}),
+				/* @__PURE__ */ V(u, {
+					label: "For mentees focusing on",
+					hint: "Pick none for a goal every mentee works through, or the focus areas it's for: a mentee gets it if they asked for help with any of them.",
+					children: /* @__PURE__ */ V(Z, {
+						areas: [...n, ...s.focus.filter((e) => !n.includes(e))],
+						value: s.focus,
+						onChange: (e) => l({
+							...s,
+							focus: e
 						})
 					})
 				}),
 				/* @__PURE__ */ V(u, {
 					label: "Ticks itself when",
 					hint: "Any group rule: skill points, fleets flown, a skill plan done, a doctrine they can fly, Discord linked… Leave it empty to tick it by hand.",
-					children: n ? /* @__PURE__ */ V(m, {
-						value: o.rules,
-						onChange: (e) => s({
-							...o,
+					children: i ? /* @__PURE__ */ V(m, {
+						value: s.rules,
+						onChange: (e) => l({
+							...s,
 							rules: e
 						}),
 						emptyText: "No rules: the mentor ticks it by hand."
@@ -1495,12 +1518,12 @@ function Ne({ goal: t, canEditRules: n, onClose: i }) {
 						})]
 					})
 				}),
-				!l && /* @__PURE__ */ H("label", {
+				!f && /* @__PURE__ */ H("label", {
 					className: "flex items-center gap-3 text-sm",
 					children: [/* @__PURE__ */ V(y, {
-						checked: o.mentee_can_tick,
-						onCheckedChange: (e) => s({
-							...o,
+						checked: s.mentee_can_tick,
+						onCheckedChange: (e) => l({
+							...s,
 							mentee_can_tick: e
 						})
 					}), "The mentee may tick it themselves"]
@@ -1720,4 +1743,4 @@ var Ie = j({
 //#endregion
 export { Ie as default };
 
-export const classes = ["!data","!hasRules","!o","@conduit/sdk","@tanstack/react-query","a","about","accent","access","action","actions","active","add","again","align","allDone","also","alt","an","and","another","any","anyway","are","areas","aria-label","aria-pressed","as","ask","asked","asking","assign","assigned","assigned_at","async","at","author","author_id","auto","average","avg_days_to_graduate","avg_days_waiting","await","badges","be","been","before","between","bg-accent-soft","bg-border","bg-border-strong","bg-success","bg-surface-2/60","bg-surface-3","bg-warning-soft/60","big","bio","block","body","boolean","border","border-accent","border-b","border-border","border-border-strong","border-success","border-t","border-warning/30","busy","but","button","by","by_rules","can","canEditRules","canTick","can_edit_rules","can_manage","candidate","capacity","catch","changed","character","characters","checked","checklist","checks","children","chips","claim","className","close","confirmLabel","congratulated","const","corporation","count","counts","created_at","ctrlKey","current","currentColor","cursor-default","cursor-pointer","cx","cy","d","danger","dashboard","data","days","default","defaultValue","description","disabled","divide-border","divide-y","do","doctrine","does","doesn","done","done!","done_at","done_by","down","each","earlier","early","empty","emptyText","end","end_reason","ended","ended_at","error","evenings","event","every","everyone","everything","experienced","export","extends","eyebrow","false","feet","few","fill","finally","find","first","fitting","fleet","fleets","flex","flex-1","flex-col","flex-wrap","fly","focus","focus_areas","following","font-medium","font-mono","font-semibold","footer","for","for_me","found","free","from","function","gap-1","gap-1.5","gap-2","gap-3","gap-4","gap-5","gap-6","get","ghost","given","goal","goals","goes","graduate","graduated","grid","grid-cols-2","group","h-16","h-96","h-px","had","hand","has","hasRules","have","height","help","helps","here","hint","home","hover:bg-hover","hover:border-accent","hover:text-danger-fg","hover:text-text","how","icon","icon-sm","icon-xs","icons","id","ids","if","import","in","info","inline","inline-flex","instanceof","interactive","interface","invited","is","isLoading","isPending","is_mentor","it","italic","items","items-center","items-end","items-start","itself","justify-between","justify-center","justify-end","key","label","leave","left","length","lg","lg:grid-cols-2","like","line-clamp-2","list","little","ll","loading","look","m","m12","m18","m21.854","m6","main","making","manage","manager","managers","match","matches","matching","max","max-w-sm","maxLength","may","mb-4","md","member","members","mentee","mentee_can_tick","mentees","mentor","mentor_id","mentor_profile","mentored","mentoring","mentors","mentorship","mentorships","message","messages","min","min-w-0","min-w-48","mine","ml-auto","most","mostly","move","mt-0.5","mt-1","mt-1.5","mt-4","mutationFn","my","name","navigate","neutral","never","new","no","nobody","none","not","note","notes","notification","now","null","number","object-cover","of","ok","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDone","onError","onKeyDown","onOpenChange","onSelect","onSend","onSuccess","onTick","one","only","open","options","or","order","others","over","overview","own","p-3","pages","pair","passes","past","patch","path","paused","people","pick","placeholder","places","plain","plan","play","play_time","played","plugin","portrait","post","preview","primary","priv","private","private_notes","profile","program","progress","pt-4","put","px-2","px-2.5","px-card","py-1","py-3","qc","queryFn","queryKey","re","react","react-router","read","ready","refetchInterval","refresh","request","requested","requested_mentor","rest","return","right","role","round","routes","rows","rule","rules","rules_text","rx","ry","s","save","saved","secondary","see","sees","selected","send","sends","set","setArea","setAreas","setBusy","setClosing","setDeleting","setEditing","setFocus","setForm","setMatching","setMentor","setNote","setPlayTime","setPriv","setStatus","setSuggest","setText","settings","several","sheet","sheet_access","sheets","should","show","showMentor","shown","shrink-0","since","site","size","size-1.5","size-10","size-3","size-3.5","size-4","size-5","size-full","skill","sm","sm:grid-cols-2","small-gang","snooper","so","solidDanger","someone","space-y-0.5","space-y-1","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","src","staff","state","stats","status","stays","still","straight","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subtitle","success","suggest","suggest_rules","suggest_text","suggested","t","tabular-nums","take","takes","target","text","text-3xl","text-[11px]","text-base","text-center","text-left","text-lg","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-white","text-xs","that","the","their","them","themselves","these","they","this","thread","through","throw","tick","tickable","ticks","time","title","to","toast","toggle","told","tone","total","total_sp","transition-colors","truncate","try","type","undefined","under","up","update","us","useNavigate","useParams","useQuery","useQueryClient","useState","used","usually","value","variant","ve","viewBox","void","w-48","wait","waiting","want","warfare","warning","was","what","whatever","when","whether","while","whitespace-pre-line","who","whoever","widget","widgets","width","will","with","withdraw","withdrawn","withdrew","work","works","would","write","x","xl:col-span-2","xl:grid-cols-2","xl:grid-cols-3","xl:grid-cols-4","xl:grid-cols-[1fr_400px]","yet","you","your","zone"];
+export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","about","accent","access","action","actions","active","add","again","align","allDone","also","alt","an","and","another","any","anyway","are","areas","aria-label","aria-pressed","as","ask","asked","asking","assign","assigned","assigned_at","async","at","author","author_id","auto","average","avg_days_to_graduate","avg_days_waiting","await","badges","be","been","before","between","bg-accent-soft","bg-border","bg-border-strong","bg-success","bg-surface-2/60","bg-surface-3","bg-warning-soft/60","big","bio","block","body","boolean","border","border-accent","border-b","border-border","border-border-strong","border-success","border-t","border-warning/30","busy","but","button","by","by_rules","can","canEditRules","canTick","can_edit_rules","can_manage","candidate","capacity","catch","changed","character","characters","checked","checklist","checks","children","chips","claim","className","close","confirmLabel","congratulated","const","corporation","count","counts","created_at","ctrlKey","current","currentColor","cursor-default","cursor-pointer","cx","cy","d","danger","dashboard","data","days","default","defaultValue","description","disabled","divide-border","divide-y","do","doctrine","does","doesn","done","done!","done_at","done_by","down","each","earlier","early","empty","emptyText","end","end_reason","ended","ended_at","error","evenings","event","every","everyone","everything","experienced","export","extends","eyebrow","feet","few","fill","finally","find","first","fitting","fleet","fleets","flex","flex-1","flex-col","flex-wrap","fly","focus","focusAreas","focus_areas","focusing","following","font-medium","font-mono","font-semibold","footer","for","for_me","found","free","from","function","gap-1","gap-1.5","gap-2","gap-3","gap-4","gap-5","gap-6","get","gets","ghost","given","goal","goals","goes","graduate","graduated","grid","grid-cols-2","group","h-16","h-96","h-px","had","hand","has","hasRules","have","height","help","helps","here","hint","home","hover:bg-hover","hover:border-accent","hover:text-danger-fg","hover:text-text","how","icon","icon-sm","icon-xs","icons","id","ids","if","import","in","info","inline","inline-flex","instanceof","interactive","interface","invited","is","isLoading","isPending","is_mentor","it","italic","items","items-center","items-end","items-start","itself","justify-between","justify-center","justify-end","key","label","leave","left","length","lg","lg:grid-cols-2","like","line-clamp-2","list","little","ll","loading","look","m","m12","m18","m21.854","m6","main","making","manage","manager","managers","match","matches","matching","max","max-w-sm","maxLength","may","mb-4","md","member","members","mentee","mentee_can_tick","mentees","mentor","mentor_id","mentor_profile","mentored","mentoring","mentors","mentorship","mentorships","message","messages","min","min-w-0","min-w-48","mine","ml-auto","most","mostly","move","mt-0.5","mt-1","mt-1.5","mt-4","mutationFn","my","name","navigate","neutral","never","new","no","nobody","none","not","note","notes","notification","now","null","number","object-cover","of","ok","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDone","onError","onKeyDown","onOpenChange","onSelect","onSend","onSuccess","onTick","one","only","open","options","or","order","others","over","overview","own","p-3","pages","pair","passes","past","patch","path","paused","people","pick","placeholder","places","plain","plan","play","play_time","played","plugin","portrait","post","preview","primary","priv","private","private_notes","profile","program","progress","pt-4","put","px-2","px-2.5","px-card","py-1","py-3","qc","queryFn","queryKey","re","react","react-router","read","ready","refetchInterval","refresh","request","requested","requested_mentor","rest","return","right","role","round","routes","rows","rule","rules","rules_text","rx","ry","s","save","saved","secondary","see","sees","selected","send","sends","set","setArea","setAreas","setBusy","setClosing","setDeleting","setEditing","setFocus","setForm","setMatching","setMentor","setNote","setPlayTime","setPriv","setStatus","setSuggest","setText","settings","several","sheet","sheet_access","sheets","should","show","showMentor","shown","shrink-0","since","site","size","size-1.5","size-10","size-3","size-3.5","size-4","size-5","size-full","skill","sm","sm:grid-cols-2","small-gang","snooper","so","solidDanger","someone","space-y-0.5","space-y-1","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","src","staff","state","stats","status","stays","still","straight","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subtitle","success","suggest","suggest_rules","suggest_text","suggested","t","tabular-nums","take","takes","target","text","text-3xl","text-[11px]","text-base","text-center","text-left","text-lg","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-white","text-xs","that","the","their","them","themselves","these","they","this","thread","through","throw","tick","tickable","ticks","time","title","to","toast","toggle","told","tone","total","total_sp","transition-colors","truncate","try","type","undefined","under","up","update","us","useNavigate","useParams","useQuery","useQueryClient","useState","used","usually","value","variant","ve","viewBox","void","w-48","wait","waiting","want","warfare","warning","was","what","whatever","when","whether","while","whitespace-pre-line","who","whoever","widget","widgets","width","will","with","withdraw","withdrawn","withdrew","work","works","would","write","x","xl:col-span-2","xl:grid-cols-2","xl:grid-cols-3","xl:grid-cols-4","xl:grid-cols-[1fr_400px]","yet","you","your","zone"];

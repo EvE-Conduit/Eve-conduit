@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { MentorshipTable } from "./home";
+import { FocusChips } from "./shared";
 import { Back, Down, Pencil, Plus, Settings, Trash, Up, X } from "./icons";
 import { BASE, type Goal, type Program, type ProgramSettings } from "./types";
 
@@ -25,7 +26,7 @@ export function ProgramPage() {
   return (
     <>
       <Link to="/p/mentors" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text"><Back /> Mentoring</Link>
-      <PageHeader eyebrow="Mentoring" title="Program" icon={<Settings />} description="Every mentorship, how busy the mentors are, the goals every mentee works through, and settings." />
+      <PageHeader eyebrow="Mentoring" title="Program" icon={<Settings />} description="Every mentorship, how busy the mentors are, the goals mentees work through, and settings." />
       {isLoading || !data ? (
         <Skeleton className="h-96" />
       ) : (
@@ -58,7 +59,7 @@ export function ProgramPage() {
               </Card>
             </TabPanel>
             <TabPanel value="mentors" className="pt-4"><Mentors data={data} /></TabPanel>
-            <TabPanel value="goals" className="pt-4"><Goals goals={data.goals} canEditRules={data.can_edit_rules} /></TabPanel>
+            <TabPanel value="goals" className="pt-4"><Goals goals={data.goals} focusAreas={data.settings.focus_areas} canEditRules={data.can_edit_rules} /></TabPanel>
             <TabPanel value="settings" className="pt-4"><SettingsForm settings={data.settings} canEditRules={data.can_edit_rules} /></TabPanel>
           </Tabs>
         </div>
@@ -110,9 +111,9 @@ function Mentors({ data }: { data: Program }) {
   );
 }
 
-const EMPTY: Omit<Goal, "id" | "order" | "rules_text"> = { title: "", description: "", rules: {}, mentee_can_tick: false };
+const EMPTY: Omit<Goal, "id" | "order" | "rules_text"> = { title: "", description: "", rules: {}, mentee_can_tick: false, focus: [] };
 
-function Goals({ goals, canEditRules }: { goals: Goal[]; canEditRules: boolean }) {
+function Goals({ goals, focusAreas, canEditRules }: { goals: Goal[]; focusAreas: string[]; canEditRules: boolean }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Goal | "new" | null>(null);
   const [deleting, setDeleting] = useState<Goal | null>(null);
@@ -127,7 +128,7 @@ function Goals({ goals, canEditRules }: { goals: Goal[]; canEditRules: boolean }
     <Card>
       <CardHeader
         title="Goals"
-        description="What every mentee works through, in this order. Goals with rules tick themselves."
+        description="What mentees work through, in this order. Goals with rules tick themselves; goals with focus areas are only for mentees who asked for one of them."
         actions={<Button variant="primary" onClick={() => setEditing("new")}><Plus /> Add goal</Button>}
       />
       {goals.length === 0 ? (
@@ -144,6 +145,7 @@ function Goals({ goals, canEditRules }: { goals: Goal[]; canEditRules: boolean }
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{g.title}</span>
                   {g.rules_text ? <Badge tone="info">ticks itself</Badge> : g.mentee_can_tick ? <Badge>mentee ticks</Badge> : <Badge>mentor ticks</Badge>}
+                  {g.focus.length > 0 ? g.focus.map((a) => <Badge key={a} tone="accent">{a}</Badge>) : <Badge>every mentee</Badge>}
                 </div>
                 {g.description && <p className="text-xs text-muted">{g.description}</p>}
                 {g.rules_text && <p className="mt-1 text-xs text-subtle">{g.rules_text}</p>}
@@ -154,7 +156,7 @@ function Goals({ goals, canEditRules }: { goals: Goal[]; canEditRules: boolean }
           ))}
         </ol>
       )}
-      {editing && <GoalDialog goal={editing === "new" ? null : editing} canEditRules={canEditRules} onClose={() => setEditing(null)} />}
+      {editing && <GoalDialog goal={editing === "new" ? null : editing} focusAreas={focusAreas} canEditRules={canEditRules} onClose={() => setEditing(null)} />}
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -173,13 +175,13 @@ function Goals({ goals, canEditRules }: { goals: Goal[]; canEditRules: boolean }
   );
 }
 
-function GoalDialog({ goal, canEditRules, onClose }: { goal: Goal | null; canEditRules: boolean; onClose: () => void }) {
+function GoalDialog({ goal, focusAreas, canEditRules, onClose }: { goal: Goal | null; focusAreas: string[]; canEditRules: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState(goal ?? { ...EMPTY, rules_text: "" });
   const hasRules = (form.rules.rules ?? []).length > 0;
   const save = useMutation({
     mutationFn: () => {
-      const body = { title: form.title, description: form.description, rules: form.rules, mentee_can_tick: form.mentee_can_tick && !hasRules };
+      const body = { title: form.title, description: form.description, rules: form.rules, mentee_can_tick: form.mentee_can_tick && !hasRules, focus: form.focus };
       return goal ? api.put<Goal>(`${BASE}/program/goals/${goal.id}`, body) : api.post<Goal>(`${BASE}/program/goals`, body);
     },
     onSuccess: () => {
@@ -208,6 +210,9 @@ function GoalDialog({ goal, canEditRules, onClose }: { goal: Goal | null; canEdi
         </Field>
         <Field label="Description">
           <Textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </Field>
+        <Field label="For mentees focusing on" hint="Pick none for a goal every mentee works through, or the focus areas it's for: a mentee gets it if they asked for help with any of them.">
+          <FocusChips areas={[...focusAreas, ...form.focus.filter((a) => !focusAreas.includes(a))]} value={form.focus} onChange={(focus) => setForm({ ...form, focus })} />
         </Field>
         <Field label="Ticks itself when" hint="Any group rule: skill points, fleets flown, a skill plan done, a doctrine they can fly, Discord linked… Leave it empty to tick it by hand.">
           {canEditRules ? (
