@@ -32,6 +32,9 @@ def follow_merge(event):
     source, target = event.payload.get("from_user_id"), event.payload.get("to_user_id")
     acct = DiscordAccount.objects.filter(user_id=source).select_related("user").first()
     if acct is None:
+        # Moved along with the rest of their records (EvE Conduit 0.5.22+): give the roles of the main account.
+        if event.payload.get("records_moved") and DiscordAccount.objects.filter(user_id=target).exists():
+            services.sync_user(User.objects.get(pk=target))
         return
     if DiscordAccount.objects.filter(user_id=target).exists():
         try:
