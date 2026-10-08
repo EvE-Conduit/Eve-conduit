@@ -166,3 +166,25 @@ def test_pinning_is_audited_and_bodies_cannot_stall_the_server(people, api_clien
     started = time.monotonic()
     services._plain("[" * 20000 + "](" * 5000)
     assert time.monotonic() - started < 0.5
+
+
+def test_merging_accounts_moves_reads_but_never_duplicates_them(people, api_client):
+    """A member's second account merged with "move records": its read marks move, except where the main account had
+    read the same announcement already (one read per member)."""
+    from conduit.accounts.models import Character
+    from conduit.accounts.services import move_characters
+    from conduit_announcements.models import AnnouncementRead
+
+    both = post(api_client, people["writer"], title="Both read it")
+    only = post(api_client, people["writer"], title="Only the alt read it")
+    main, second = people["pilot"], people["officer"]
+    for a in (both, only):
+        AnnouncementRead.objects.create(announcement_id=a["id"], user=second)
+    AnnouncementRead.objects.create(announcement_id=both["id"], user=main)
+    admin = make_user(90000099, "Admin")
+    admin.is_superuser = True
+    admin.save()
+    out = move_characters(admin, second, main, list(Character.objects.filter(user=second).values_list("pk", flat=True)),
+                          move_records_too=True)
+    assert out["records"]["moved"]["announcement reads"] == 1 and out["records"]["kept"]["announcement reads"] == 1
+    assert set(AnnouncementRead.objects.filter(user=main).values_list("announcement_id", flat=True)) == {both["id"], only["id"]}

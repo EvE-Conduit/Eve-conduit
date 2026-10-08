@@ -37,7 +37,7 @@ def test_moving_every_character_merges_the_accounts(accounts, api_client, django
         out = api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
                               {"target": main.pk, "characters": [c["id"] for c in chars]}).json()
     bus.off("user.merged", seen.append)
-    assert out == {"moved": ["Pilot Three", "Pilot Two"], "emptied": True}
+    assert out == {"moved": ["Pilot Three", "Pilot Two"], "emptied": True, "records": None}
     assert set(main.characters.values_list("name", flat=True)) == {"Pilot One", "Pilot Two", "Pilot Three"}
     assert Token.objects.get(character_id=90000002).character.user_id == main.pk  # the login moved with it
     second.refresh_from_db()
@@ -80,3 +80,34 @@ def test_moves_cant_be_used_to_take_over_accounts(accounts, api_client, admin_us
     # An administrator may.
     api_client.force_login(admin_user)
     assert api_client.call("post", url, {"target": main.pk, "characters": [90000002]}).status_code == 200
+
+
+def test_merging_can_bring_the_records_along(accounts, api_client):
+    """With "move records": everything that belonged to the old account points at the main one, unless the main
+    already has its own (one-per-member things stay behind)."""
+    from conduit.accounts.models import UserPreferences
+    from conduit.notify.models import Notification
+
+    main, second, officer = accounts
+    Notification.objects.create(user=second, title="SRP approved")
+    UserPreferences.objects.create(user=second, theme="light")
+    UserPreferences.objects.create(user=main, theme="dark")
+    api_client.force_login(officer)
+    out = api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
+                          {"target": main.pk, "characters": [90000002, 90000003], "move_records": True}).json()
+    assert out["emptied"] and out["records"]["moved"].get("notifications") == 1
+    assert out["records"]["kept"].get("user preferences") == 1
+    assert Notification.objects.get(title="SRP approved").user_id == main.pk
+    assert UserPreferences.objects.get(user=main).theme == "dark"
+
+
+def test_records_stay_unless_asked(accounts, api_client):
+    from conduit.notify.models import Notification
+
+    main, second, officer = accounts
+    Notification.objects.create(user=second, title="Hello")
+    api_client.force_login(officer)
+    out = api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
+                          {"target": main.pk, "characters": [90000002, 90000003]}).json()
+    assert out["records"] is None and Notification.objects.get().user_id == second.pk
+    # Only a merge moves records: a partial move ignores the option.
