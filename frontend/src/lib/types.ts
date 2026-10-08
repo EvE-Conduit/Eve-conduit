@@ -103,6 +103,14 @@ export interface UpdateProgress {
   started_at: string;
 }
 
+/** A sidebar link an admin added: a page on this site ("/p/timers") or an https:// address. */
+export interface SiteNavLink {
+  label: string;
+  url: string;
+  /** An icon name from lib/icons. */
+  icon: string;
+}
+
 export interface Bootstrap {
   site: {
     name: string;
@@ -115,6 +123,10 @@ export interface Bootstrap {
     django_admin: boolean;
     /** Where people land after signing in ("" = the dashboard). */
     start_page: string;
+    /** Extra sidebar links admins added; empty for signed-out visitors. */
+    nav_links: SiteNavLink[];
+    /** Heading of the sidebar section holding them. */
+    nav_links_title: string;
     /** Newest available EvE Conduit version; only sent to people who can manage the site. */
     update_available?: string | null;
     /** Set while the updater installs a release or plugins; the site restarts at the end. */

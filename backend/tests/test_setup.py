@@ -125,3 +125,42 @@ def test_existing_sites_find_their_owner(admin_user, user):
     AuditEvent.objects.create(action="setup.admin_claimed", summary="claimed", actor_type="user", actor_id=user.pk, actor_name=user.display_name)
     owner_migration.find_owner(apps, None)
     assert SiteSettings.load().owner_id == user.pk
+
+
+def test_sidebar_links(admin_user, api_client, client):
+    api_client.force_login(admin_user)
+    base = {"name": "Brave Auth", "accent": "#f59e0b"}
+    links = [
+        {"label": "Wiki", "url": "https://wiki.example.com", "icon": "book-open"},
+        {"label": "Fleet timers", "url": "/p/timers", "icon": "not-an-icon"},
+    ]
+    resp = api_client.call("put", "/api/admin/site", {**base, "nav_links": links, "nav_links_title": " Alliance "})
+    assert resp.status_code == 200
+    site = api_client.call("get", "/api/core/bootstrap").json()["site"]
+    assert site["nav_links_title"] == "Alliance"
+    assert site["nav_links"] == [links[0], {**links[1], "icon": "globe"}]
+    # Signed-out visitors don't see them.
+    assert client.get("/api/core/bootstrap").json()["site"]["nav_links"] == []
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        {"label": "Evil", "url": "javascript:alert(1)"},
+        {"label": "Plain", "url": "http://example.com"},
+        {"label": "Other site", "url": "//evil.example"},
+        {"label": "", "url": "https://example.com"},
+        {"label": "Blank", "url": "   "},
+    ],
+)
+def test_sidebar_links_validation(admin_user, api_client, link):
+    api_client.force_login(admin_user)
+    resp = api_client.call("put", "/api/admin/site", {"name": "Brave Auth", "accent": "#f59e0b", "nav_links": [link]})
+    assert resp.status_code in (400, 422)
+
+
+def test_sidebar_links_must_differ(admin_user, api_client):
+    api_client.force_login(admin_user)
+    twice = [{"label": "A", "url": "https://a.example"}, {"label": "B", "url": "https://a.example"}]
+    resp = api_client.call("put", "/api/admin/site", {"name": "Brave Auth", "accent": "#f59e0b", "nav_links": twice})
+    assert resp.status_code in (400, 422)

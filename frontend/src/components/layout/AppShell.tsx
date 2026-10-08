@@ -36,7 +36,10 @@ export function AppShell() {
   const [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [maintenance, setMaintenance] = useState<string | null>(null);
-  const sections = useMemo(() => (user ? buildNav(user, plugins, site.update_available) : []), [user, plugins, site.update_available]);
+  const sections = useMemo(
+    () => (user ? buildNav(user, plugins, site.update_available, { title: site.nav_links_title, items: site.nav_links ?? [] }) : []),
+    [user, plugins, site.update_available, site.nav_links_title, site.nav_links],
+  );
   const theme = useToggleTheme();
 
   useEffect(() => {
