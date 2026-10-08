@@ -1,6 +1,6 @@
 [project]
 name = "conduit-skillplans"
-version = "1.0.0"
+version = "1.0.1"
 description = "Skill plans: shared and personal plans with every character's progress and training time, copied straight into the game, and a group rule for finished plans."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

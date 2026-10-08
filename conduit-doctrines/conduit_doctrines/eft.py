@@ -25,9 +25,35 @@ FLAG_PREFIX = {"hi": "HiSlot", "med": "MedSlot", "low": "LoSlot", "rig": "RigSlo
 BAY_FLAG = {"drone": "DroneBay", "fighter": "FighterBay", "cargo": "Cargo"}
 SHIP_CATEGORY, DRONE_CATEGORY, FIGHTER_CATEGORY = 6, 18, 87
 
-_HEADER = re.compile(r"^\[\s*(?P<ship>[^,\]]+?)\s*(?:,\s*(?P<name>.*?))?\s*\]$")
-_QUANTITY = re.compile(r"^(?P<name>.+?)\s+x(?P<qty>\d+)$", re.IGNORECASE)
-_OFFLINE = re.compile(r"\s*/\s*offline$", re.IGNORECASE)
+# Pasted fits are read with plain string handling, not regular expressions: the text comes from people, and a
+# backtracking pattern can be made to take minutes on one crafted line. These limits are far above any real fit.
+MAX_TEXT, MAX_LINES, MAX_LINE = 20_000, 600, 300
+
+
+def _header(line: str) -> tuple[str, str] | None:
+    """``("Rifter", "My Rifter")`` from ``[Rifter, My Rifter]``."""
+    if not (line.startswith("[") and line.endswith("]")):
+        return None
+    ship, _, name = line[1:-1].partition(",")
+    ship = ship.strip()
+    return (ship, name.strip()) if ship and "]" not in ship else None
+
+
+def _offline(line: str) -> tuple[str, bool]:
+    """The line without a trailing ``/OFFLINE``, and whether it had one."""
+    if line.lower().endswith("offline"):
+        head = line[:-7].rstrip()
+        if head.endswith("/"):
+            return head[:-1].rstrip(), True
+    return line, False
+
+
+def _quantity(line: str) -> tuple[str, int] | None:
+    """``("Hobgoblin II", 5)`` from ``Hobgoblin II x5``."""
+    parts = line.rsplit(None, 1)
+    if len(parts) == 2 and parts[1][:1] in "xX" and parts[1][1:].isdigit() and len(parts[1]) <= 8:
+        return parts[0].strip(), int(parts[1][1:])
+    return None
 
 
 class FitError(ValueError):
@@ -89,26 +115,33 @@ def check(ship: ItemType, items: list[dict], types: dict[int, ItemType]) -> list
 def parse(text: str) -> dict:
     """Read an EFT fit. Raises ``FitError`` if there's no ship; returns the fit with any ``unknown`` lines and
     ``problems`` (things that stop it being fitted)."""
+    if len(text or "") > MAX_TEXT:
+        raise FitError("That's far too long for a fit")
     lines = [line.strip() for line in (text or "").replace("\r", "").split("\n")]
     lines = [line for line in lines if line]
     if not lines:
         raise FitError("Paste a fit: the first line looks like [Rifter, My Rifter]")
-    header = _HEADER.match(lines[0])
-    if not header:
+    if len(lines) > MAX_LINES:
+        raise FitError("That has far too many lines for a fit")
+    head = _header(lines[0]) if len(lines[0]) <= MAX_LINE else None
+    if not head:
         raise FitError("The first line must be the ship and fit name, like [Rifter, My Rifter]")
+    header = {"ship": head[0], "name": head[1]}
 
     entries = []  # (name, charge, quantity or None, offline, line)
     unknown = []
     for line in lines[1:]:
+        if len(line) > MAX_LINE:
+            unknown.append(line[:MAX_LINE])
+            continue
         if line.startswith("["):
             if not line.lower().startswith("[empty"):
                 unknown.append(line)
             continue
-        offline = bool(_OFFLINE.search(line))
-        line_clean = _OFFLINE.sub("", line)
-        qty = _QUANTITY.match(line_clean)
+        line_clean, offline = _offline(line)
+        qty = _quantity(line_clean)
         if qty:
-            entries.append((qty["name"].strip(), None, int(qty["qty"]), offline, line))
+            entries.append((qty[0], None, qty[1], offline, line))
         else:
             name, _, charge = line_clean.partition(",")
             entries.append((name.strip(), charge.strip() or None, None, offline, line))

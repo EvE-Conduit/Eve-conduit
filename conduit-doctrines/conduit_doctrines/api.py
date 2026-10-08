@@ -7,6 +7,7 @@ from django.http import HttpResponse
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.security import django_auth
+from pydantic import Field
 
 from conduit.audit.services import record
 from conduit.permissions import require_perm
@@ -95,7 +96,7 @@ def character_tab(request, character_id: int):
 
 
 class ParseIn(Schema):
-    eft: str
+    eft: str = Field(..., max_length=eft.MAX_TEXT)
 
 
 def _draft(parsed: dict) -> Fit:
@@ -150,12 +151,12 @@ def all_fits(request):
 
 
 class FitIn(Schema):
-    eft: str
-    name: str = ""
-    role: str = ""
-    notes: str = ""
-    recommended: list[list[int]] = []
-    doctrines: list[int] = []
+    eft: str = Field(..., max_length=eft.MAX_TEXT)
+    name: str = Field("", max_length=200)
+    role: str = Field("", max_length=200)
+    notes: str = Field("", max_length=8000)
+    recommended: list[list[int]] = Field(default_factory=list, max_length=200)
+    doctrines: list[int] = Field(default_factory=list, max_length=200)
 
 
 def _apply_fit(f: Fit, payload: FitIn) -> list[str]:
@@ -222,13 +223,13 @@ def delete_fit(request, fit_id: int):
 
 
 class DoctrineIn(Schema):
-    name: str
-    description: str = ""
-    icon_type_id: int | None = None
-    order: int = 0
+    name: str = Field(..., max_length=200)
+    description: str = Field("", max_length=8000)
+    icon_type_id: int | None = Field(None, ge=1, le=2_000_000_000)
+    order: int = Field(0, ge=-10_000, le=10_000)
     active: bool = True
     #: Fit ids in the order they're shown.
-    fits: list[int] = []
+    fits: list[int] = Field(default_factory=list, max_length=500)
 
 
 def _apply_doctrine(d: Doctrine, payload: DoctrineIn):
@@ -241,7 +242,8 @@ def _apply_doctrine(d: Doctrine, payload: DoctrineIn):
     d.order, d.active = payload.order, payload.active
     with transaction.atomic():
         d.save()
-        fits = [fid for fid in dict.fromkeys(payload.fits) if Fit.objects.filter(pk=fid).exists()]
+        known = set(Fit.objects.filter(pk__in=payload.fits).values_list("pk", flat=True))
+        fits = [fid for fid in dict.fromkeys(payload.fits) if fid in known]
         DoctrineFit.objects.filter(doctrine=d).exclude(fit_id__in=fits).delete()
         for order, fid in enumerate(fits):
             DoctrineFit.objects.update_or_create(doctrine=d, fit_id=fid, defaults={"order": order})
@@ -286,21 +288,26 @@ def _can_see_readiness(request):
 @router.get("/doctrines/{doctrine_id}/readiness")
 def readiness(request, doctrine_id: int):
     _can_see_readiness(request)
-    return services.readiness(_doctrine(doctrine_id))
+    return services.readiness(_doctrine(doctrine_id), request.user)
+
+
+def _csv_row(cells) -> list[str]:
+    """Spreadsheets run cells starting with = + - @ as formulas; fit names are free text, so quote those."""
+    return ["'" + str(c) if str(c)[:1] in ("=", "+", "-", "@", "\t", "\r") else str(c) for c in cells]
 
 
 @router.get("/doctrines/{doctrine_id}/readiness.csv")
 def readiness_csv(request, doctrine_id: int):
     _can_see_readiness(request)
-    data = services.readiness(_doctrine(doctrine_id))
+    data = services.readiness(_doctrine(doctrine_id), request.user)
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="doctrine-{doctrine_id}-readiness.csv"'
     out = csv.writer(resp)
-    out.writerow(["Member", *(f"{f['name']} ({f['ship']['name']})" for f in data["fits"]), "Fits they can fly"])
+    out.writerow(_csv_row(["Member", *(f"{f['name']} ({f['ship']['name']})" for f in data["fits"]), "Fits they can fly"]))
     for m in data["members"]:
         cells = []
         for f in data["fits"]:
             c = m["cells"][str(f["id"])]
-            cells.append(f"{STATUS_WORDS[c['status']]} ({c['character']})" if c else "No characters")
-        out.writerow([m["name"], *cells, m["flyable"]])
+            cells.append((f"{STATUS_WORDS[c['status']]} ({c['character']})" if c["character"] else STATUS_WORDS[c["status"]]) if c else "No characters")
+        out.writerow(_csv_row([m["name"], *cells, m["flyable"]]))
     return resp

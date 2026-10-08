@@ -311,24 +311,41 @@ def my_summary(user) -> dict:
 # --- readiness -----------------------------------------------------------------------------------------------------
 
 
-def readiness(doctrine: Doctrine) -> dict:
-    """Every member against every fit of a doctrine: their best character for it."""
+def readiness(doctrine: Doctrine, viewer=None) -> dict:
+    """Every member against every fit of a doctrine: their best character for it.
+
+    The character's name is only given when ``viewer`` may read that character's sheet anyway (the core sheet
+    permissions): readiness alone mustn't reveal who owns which alt.
+    """
     from conduit.access.services import site_members
+    from conduit.sheet.access import can_view
+
+    visible: dict[int, bool] = {}
+
+    def shown(c) -> str | None:
+        if viewer is None:
+            return c.name
+        if c.pk not in visible:
+            visible[c.pk] = can_view(viewer, c)
+        return c.name if visible[c.pk] else None
 
     fits = [e.fit for e in doctrine.entries.select_related("fit")]
     types = _types({f.ship_type_id for f in fits})
     sk = Skills(fits)
     users = list(site_members().select_related("main_character").order_by("main_character__name"))
     chars = defaultdict(list)
-    for c in Character.objects.filter(user__in=users).only("id", "name", "user_id"):
+    for c in Character.objects.filter(user__in=users).only("id", "name", "user_id", "corporation_id", "alliance_id"):
         chars[c.user_id].append(c)
     states = training.character_state(c.pk for cs in chars.values() for c in cs)
     members = []
     for u in users:
         cells = {}
         for f in fits:
-            options = [{**sk.status(f.pk, states[c.pk]), "character": c.name} for c in chars[u.pk]]
-            cells[str(f.pk)] = best(options)
+            options = [{**sk.status(f.pk, states[c.pk]), "_character": c} for c in chars[u.pk]]
+            cell = best(options)
+            if cell:
+                cell = {k: v for k, v in cell.items() if k != "_character"} | {"character": shown(cell["_character"])}
+            cells[str(f.pk)] = cell
         members.append({"id": u.pk, "name": u.display_name, "portrait": u.main_character.portrait if u.main_character else None,
                         "cells": cells, "flyable": sum(1 for c in cells.values() if c and c["status"] in ("ready", "can_fly"))})
     totals = {str(f.pk): sum(1 for m in members if m["cells"][str(f.pk)] and m["cells"][str(f.pk)]["status"] in ("ready", "can_fly"))
