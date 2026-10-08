@@ -1,5 +1,23 @@
 # CONDUIT_DOMAIN=auth.example.com gives automatic HTTPS; the default ":80" serves plain HTTP.
+# CONDUIT_DOMAIN=203.0.113.7 (a public IPv4 address) gets a Let's Encrypt IP address certificate: caddy-entrypoint.sh
+# sets CONDUIT_TLS=ip, which picks the snippet below.
+
+# A domain: Caddy's automatic HTTPS as usual.
+(tls-auto) {
+}
+
+# An IP address: Caddy would use its own self-signed certificate. Let's Encrypt issues IP certificates only with
+# its six-day "shortlived" profile; Caddy renews them by itself.
+(tls-ip) {
+	tls {
+		issuer acme {
+			profile shortlived
+		}
+	}
+}
+
 {$CONDUIT_DOMAIN::80} {
+	import tls-{$CONDUIT_TLS:auto}
 	encode zstd gzip
 
 	@backend path /api/* /sso/* /django-admin* /static/*

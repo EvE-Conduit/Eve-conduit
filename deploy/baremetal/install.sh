@@ -6,8 +6,11 @@
 #   tar -xzf eve-conduit-X.Y.Z.tar.gz && cd eve-conduit-X.Y.Z
 #   sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example.com
 #
+# No domain? Pass the server's public IPv4 address instead (--domain 203.0.113.7): Let's Encrypt issues an IP
+# address certificate (valid six days, renewed automatically). The address must not change.
+#
 # Options:
-#   --domain NAME        public hostname (required)
+#   --domain NAME        public hostname, or public IPv4 address (required)
 #   --email ADDRESS      contact for Let's Encrypt and CCP's ESI user agent (required)
 #   --db postgres|mariadb   database to install and use (default: postgres)
 #   --esi-client-id ID   EVE application client ID (can be added to the config later)
@@ -44,7 +47,24 @@ step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo $0 ...)"
-[[ -n "$DOMAIN" ]] || die "--domain is required"
+[[ -n "$DOMAIN" ]] || die "--domain is required (a domain name, or the server's public IPv4 address)"
+DOMAIN=${DOMAIN#*://}
+DOMAIN=${DOMAIN%%/*}
+# A public IPv4 address instead of a domain name gets a Let's Encrypt IP address certificate.
+IP_SITE=0
+if [[ "$DOMAIN" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+  IFS=. read -r o1 o2 o3 o4 <<<"$DOMAIN"
+  for o in "$o1" "$o2" "$o3" "$o4"; do (( 10#$o <= 255 )) || die "$DOMAIN isn't a valid IP address"; done
+  IP_SITE=1
+  if [[ $TLS -eq 1 ]] && { (( o1 == 0 || o1 == 10 || o1 == 127 )) || (( o1 == 169 && o2 == 254 )) || (( o1 == 172 && o2 >= 16 && o2 <= 31 )) ||
+      (( o1 == 192 && o2 == 168 )) || (( o1 == 100 && o2 >= 64 && o2 <= 127 )); }; then
+    die "$DOMAIN is a private address, which can't get an HTTPS certificate. Use the server's public IP address or a domain name, or --no-tls for a local network."
+  fi
+elif [[ "$DOMAIN" == *:* ]]; then
+  die "--domain $DOMAIN: IPv6 addresses and ports aren't supported; use a domain name or the server's IPv4 address"
+elif [[ ! "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
+  die "--domain $DOMAIN doesn't look like a domain name or IP address"
+fi
 [[ -n "$EMAIL" ]] || die "--email is required (Let's Encrypt and CCP's ESI contact)"
 [[ "$DB" == postgres || "$DB" == mariadb ]] || die "--db must be postgres or mariadb"
 [[ -f "$RELEASE_SRC/VERSION" && -d "$RELEASE_SRC/web" ]] || die "run this from an unpacked release (see docs/install-baremetal.md)"
@@ -65,8 +85,12 @@ case "$ID:$MAJOR" in
 esac
 
 echo "Installing EvE Conduit $VERSION on $PRETTY_NAME"
-echo "  site:     https://$DOMAIN"
+echo "  site:     $([[ $TLS -eq 1 ]] && echo https || echo http)://$DOMAIN"
 echo "  database: $DB"
+if [[ $IP_SITE -eq 1 && $TLS -eq 1 ]]; then
+  echo "  No domain: Let's Encrypt issues an IP certificate, valid six days and renewed automatically. The address"
+  echo "  must not change (the EVE login and the certificate are tied to it), and port 80 must be reachable."
+fi
 if [[ $ASSUME_YES -eq 0 ]]; then
   read -r -p "Continue? [y/N] " answer
   [[ "$answer" =~ ^[Yy]$ ]] || exit 1
@@ -103,7 +127,7 @@ id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$CONDUIT_HOME
 install -d -o root -g "$SERVICE_USER" -m 0755 "$CONDUIT_HOME" "$CONDUIT_HOME/releases"
 install -d -o root -g "$SERVICE_USER" -m 0750 "$CONDUIT_ETC"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_LOG"
-install -d -o root -g root -m 0755 "$CONDUIT_WWW" "$CONDUIT_WWW/web"
+install -d -o root -g root -m 0755 "$CONDUIT_WWW" "$CONDUIT_WWW/web" "$CONDUIT_WWW/acme"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_WWW/static"
 # Writable state (the scheduler's bookkeeping) lives outside the code.
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 /var/lib/conduit
@@ -235,7 +259,13 @@ nginx -t
 systemctl enable --now nginx
 systemctl reload nginx
 
-if [[ $TLS -eq 1 ]]; then
+if [[ $TLS -eq 1 && $IP_SITE -eq 1 ]]; then
+  step "Requesting a Let's Encrypt IP address certificate"
+  if ! /usr/local/bin/conduit ip-cert; then
+    echo "The certificate request failed (is port 80 open to the internet, and is $DOMAIN this server's public address?)."
+    echo "Fix that, then run: sudo conduit ip-cert"
+  fi
+elif [[ $TLS -eq 1 ]]; then
   step "Requesting a Let's Encrypt certificate"
   if ! certbot --nginx -d "$DOMAIN" -m "$EMAIL" --agree-tos --non-interactive --redirect; then
     echo "certbot failed (is DNS for $DOMAIN pointing here and port 80 open?)."

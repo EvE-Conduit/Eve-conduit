@@ -20,7 +20,9 @@
     See windows\README.md for what each step does and how to do it by hand.
 
 .PARAMETER Domain
-    Public hostname. Use with a DNS record pointing at this machine for automatic HTTPS.
+    Public hostname. Use with a DNS record pointing at this machine for automatic HTTPS. Without a domain, give the
+    machine's public IPv4 address (e.g. 203.0.113.7): Let's Encrypt issues IP certificates too (valid six days,
+    renewed automatically). The address must stay the same.
 .PARAMETER Email
     Contact address for Let's Encrypt and CCP's ESI user agent.
 .PARAMETER Database
@@ -157,7 +159,8 @@ if (-not (Test-Path (Join-Path $releaseDir 'web\index.html'))) { throw 'Run this
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'EvE Conduit needs 64-bit Windows.' }
 if ([Environment]::OSVersion.Version.Build -lt 17763) { throw 'EvE Conduit needs Windows 10 1809 / Windows Server 2019 or newer.' }
 $Domain = $Domain.Trim() -replace '^[A-Za-z]+://', '' -replace '/+$', ''   # accept a pasted URL
-if ($Domain -notmatch '^[A-Za-z0-9.-]+$') { throw "'$Domain' doesn't look like a hostname. Pass just the name, e.g. -Domain auth.example.com (no https://, port or path)." }
+$addressProblem = Get-SiteAddressProblem -Address $Domain -NoTls:$NoTls
+if ($addressProblem) { throw "-Domain: $addressProblem" }
 if (Get-Service -Name 'conduit-web' -ErrorAction SilentlyContinue) {
     throw "EvE Conduit is already installed on this machine (service conduit-web exists). Use 'conduit upgrade <zip>' instead."
 }
@@ -233,6 +236,13 @@ if ($customWeb) {
     }
 }
 $siteUrl = Get-PublicSiteUrl -Domain $Domain -HttpPort $ports.Http -HttpsPort $ports.Https -NoTls:$NoTls -StandardPublicPorts:$standardPublic
+if ((Test-IpAddressHost $Domain) -and -not $NoTls) {
+    Write-Host ''
+    Write-Host "No domain: the site uses the IP address $Domain." -ForegroundColor Cyan
+    Write-Host "  Let's Encrypt issues an IP certificate, valid six days and renewed automatically. The address must not"
+    Write-Host '  change (ask your provider for a static IP): the EVE login and the certificate are tied to it. Port 80'
+    Write-Host '  or 443 must be reachable from the internet.'
+}
 if ($customWeb -and -not $NoTls -and -not $standardPublic -and $ports.Http -ne 80 -and $ports.Https -ne 443) {
     Write-Warning ("Let's Encrypt checks your domain on public port 80 or 443. With neither reachable it can't " +
         'issue a certificate. Forward one of them, or use -NoTls behind another proxy.')

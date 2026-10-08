@@ -8,7 +8,7 @@
 }
 {{REDIRECT_BLOCK}}
 {{SITE_ADDRESS}} {
-	encode zstd gzip
+{{SITE_TLS}}	encode zstd gzip
 
 	header {
 		X-Content-Type-Options nosniff

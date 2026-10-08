@@ -32,7 +32,9 @@ the folder added to the system PATH (for the `conduit` command), the tray panel'
 - 4 GB RAM (8 GB recommended), and 5 GB free on the drive you install to
 - Internet access during installation (downloads about 500 MB of components)
 - A domain pointing at this machine, with the web ports reachable from the internet (router port
-  forwarding at home)
+  forwarding at home). **No domain?** Enter the machine's public IPv4 address instead (e.g. `203.0.113.7`, or
+  `-Domain 203.0.113.7`): Let's Encrypt issues an IP address certificate, valid six days and renewed automatically
+  by Caddy. The address must not change (ask your provider for a static IP): the EVE login's callback URL and the certificate are tied to it. Private addresses (192.168.x.x, 10.x.x.x) and connections behind carrier-grade NAT can't get a certificate; use plain HTTP for a site that's only on your local network.
 
 ## Quick install
 

@@ -24,7 +24,11 @@ Releases are built with `scripts/build-release.sh`, which produces `dist/eve-con
 
 ## Running it (Docker)
 
-You need Docker with Compose and a domain pointing at the server.
+You need Docker with Compose and a domain pointing at the server, or a server with a fixed public IPv4 address.
+
+**No domain?** Use the IP address everywhere the steps say domain (`CONDUIT_DOMAIN=203.0.113.7`,
+`CONDUIT_SITE_URL=https://203.0.113.7`, callback `https://203.0.113.7/sso/callback`). Caddy then gets a Let's Encrypt
+IP address certificate, valid six days and renewed automatically. The address must not change (ask your provider for a static IP): the EVE login's callback URL and the certificate are tied to it. Private addresses (192.168.x.x, 10.x.x.x) and connections behind carrier-grade NAT can't get a certificate; use plain HTTP for a site that's only on your local network.
 
 1. Create an application at <https://developers.eveonline.com/applications> with the callback URL `https://<your-domain>/sso/callback`.
 2. Configure and start the stack:

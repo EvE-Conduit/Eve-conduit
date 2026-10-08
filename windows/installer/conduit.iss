@@ -258,9 +258,10 @@ begin
   ExtractTemporaryFile('Conduit.psm1');
 
   SitePage := CreateInputQueryPage(wpSelectDir, 'Your site', 'Where will members reach EvE Conduit?',
-    'Enter the domain name that points at this machine (a DNS record for it must exist), and an email ' +
-    'address. The email is used for the HTTPS certificate (Let''s Encrypt) and as the contact CCP sees for ESI.');
-  SitePage.Add('Domain name, e.g. auth.example.com:', False);
+    'Enter the domain name that points at this machine (a DNS record for it must exist), or without a domain ' +
+    'this machine''s public IP address (it must not change), and an email address. The email is used for the ' +
+    'HTTPS certificate (Let''s Encrypt) and as the contact CCP sees for ESI.');
+  SitePage.Add('Domain name or public IP address, e.g. auth.example.com or 203.0.113.7:', False);
   SitePage.Add('Email address:', False);
   SitePage.Values[0] := ExpandConstant('{param:Domain|}');
   SitePage.Values[1] := ExpandConstant('{param:Email|}');
@@ -411,7 +412,7 @@ begin
   begin
     if not ValidDomain(CleanDomain()) then
     begin
-      MsgBox('Enter just the domain name, e.g. auth.example.com (no https://, port or path).', mbError, MB_OK);
+      MsgBox('Enter just the domain name or IP address, e.g. auth.example.com or 203.0.113.7 (no https://, port or path).', mbError, MB_OK);
       Result := False;
     end
     else if (Pos('@', SitePage.Values[1]) < 2) or (Pos('.', SitePage.Values[1]) = 0) then

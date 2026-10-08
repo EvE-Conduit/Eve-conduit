@@ -389,6 +389,42 @@ function ConvertFrom-ExcludedPortRange {
     return , $ranges
 }
 
+function Test-IpAddressHost {
+    <# Whether the site address is an IPv4 address (203.0.113.7) rather than a domain name. #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Name)
+    if ($Name -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return $false }
+    return -not ($Name.Split('.') | Where-Object { [int]$_ -gt 255 })
+}
+
+function Test-PrivateIpAddress {
+    <# LAN, loopback, link-local and carrier-grade NAT addresses: no public certificate can be issued for them. #>
+    param([Parameter(Mandatory)][string]$Address)
+    $o = [int[]]$Address.Split('.')
+    return $o[0] -in @(0, 10, 127) -or ($o[0] -eq 169 -and $o[1] -eq 254) -or ($o[0] -eq 172 -and $o[1] -ge 16 -and $o[1] -le 31) -or
+        ($o[0] -eq 192 -and $o[1] -eq 168) -or ($o[0] -eq 100 -and $o[1] -ge 64 -and $o[1] -le 127)
+}
+
+function Get-SiteAddressProblem {
+    <#
+      Why the site address (a domain name, or a public IPv4 address when there's no domain) can't be used, or ''.
+      HTTPS on an IP address uses Let's Encrypt's IP certificates, which only exist for public addresses.
+    #>
+    param([AllowEmptyString()][string]$Address, [switch]$NoTls)
+    if (-not $Address) { return 'Enter the domain name or public IP address of the site, e.g. auth.example.com or 203.0.113.7.' }
+    if ($Address -match '^[0-9A-Fa-f:]+$' -and $Address.Contains(':')) {
+        return "$Address is an IPv6 address, which isn't supported; use a domain name or the machine's IPv4 address."
+    }
+    if ($Address -notmatch '^[A-Za-z0-9.-]+$') {
+        return "'$Address' doesn't look like a domain name or IP address (just the name: no https://, port or path)."
+    }
+    if ($Address -match '^[\d.]+$' -and -not (Test-IpAddressHost $Address)) { return "'$Address' isn't a valid IP address." }
+    if ((Test-IpAddressHost $Address) -and -not $NoTls -and (Test-PrivateIpAddress $Address)) {
+        return ("$Address is a private address, which can't get an HTTPS certificate. Use this machine's public IP address " +
+            'or a domain name, or plain HTTP if the site is only for your local network.')
+    }
+    return ''
+}
+
 function Get-PublicSiteUrl {
     <#
       The address members use. Ports are left out when they're the standard ones, or when the router
@@ -416,6 +452,7 @@ function New-ConduitCaddyfile {
         * other local ports, router forwards public 80/443 to them: redirect to https://domain (no port).
         * other ports used as-is publicly: redirect to https://domain:port.
         * -NoTls: plain HTTP on the chosen port.
+        * an IPv4 address instead of a domain: a Let's Encrypt IP certificate.
     #>
     param(
         [Parameter(Mandatory)][string]$Template,
@@ -431,6 +468,12 @@ function New-ConduitCaddyfile {
     $globalExtra = ''
     $redirect = ''
     $site = $Domain
+    $siteTls = ''
+    if (-not $NoTls -and (Test-IpAddressHost $Domain)) {
+        # For an IP address Caddy would use its own self-signed certificate. Let's Encrypt issues IP certificates
+        # only with its six-day "shortlived" profile; Caddy renews them by itself.
+        $siteTls = "`ttls {`n`t`tissuer acme {`n`t`t`tprofile shortlived`n`t`t}`n`t}`n`n"
+    }
     if ($NoTls) {
         $site = "http://$Domain"
     }
@@ -448,6 +491,7 @@ function New-ConduitCaddyfile {
             GLOBAL_EXTRA   = $globalExtra
             REDIRECT_BLOCK = $redirect
             SITE_ADDRESS   = $site
+            SITE_TLS       = $siteTls
             APP_PORT       = $AppPort
             ROOT_FWD       = ConvertTo-ForwardSlashPath $Root
         })

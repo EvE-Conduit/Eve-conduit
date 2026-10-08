@@ -11,7 +11,9 @@ Server (see the [notes at the end](#windows-server)).
 - Windows 11, or Windows 10 22H2, 64-bit
 - Hardware virtualisation enabled in the BIOS/UEFI (usually called Intel VT-x or AMD-V/SVM)
 - 8 GB RAM or more, 20 GB free disk
-- A domain name pointing at your public IP, and ports **80** and **443** forwarded from your router to this PC
+- A domain name pointing at your public IP, and ports **80** and **443** forwarded from your router to this PC.
+  No domain? Use your public IPv4 address as the domain (see the main [README](../README.md#running-it-docker)); it
+  must not change.
 - Docker Desktop is free for personal use and small organisations. Check
   [Docker's licence terms](https://www.docker.com/pricing/) if your organisation is larger.
 
