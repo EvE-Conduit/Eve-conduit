@@ -83,3 +83,95 @@ def remove_character(user: User, character_id: int):
     if user.main_character_id == character.pk:
         raise ValueError("Choose a different main character before removing this one")
     character.delete()
+
+
+# --- moving characters between accounts ----------------------------------------------------------------------------
+
+
+class MoveError(Exception):
+    def __init__(self, message: str, status: int = 400):
+        super().__init__(message)
+        self.status = status
+
+
+def can_move_characters(actor: User, source: User, target: User) -> str | None:
+    """None if ``actor`` may move characters from ``source`` to ``target``, otherwise why not.
+
+    Whoever owns a character can sign in with it, into the account that holds it, so moving a character into an
+    account is like handing out that account: as with signing in as someone, nobody may move characters into an
+    account that has permissions they don't hold themselves, and only administrators touch administrators' accounts.
+    """
+    if not actor.has_perm("site.manage_access"):
+        return "You don't have permission to move characters between accounts"
+    if source.pk == target.pk:
+        return "Pick a different account to move them to"
+    if not target.is_active:
+        return "That account is switched off"
+    if (source.is_superuser or target.is_superuser) and not actor.is_superuser:
+        return "Only administrators can move characters to or from an administrator's account"
+    if not actor.is_superuser:
+        extra = sorted(set(target.get_all_permissions()) - set(actor.get_all_permissions()))
+        if extra:
+            return (f"{target.display_name} has permissions you don't ({', '.join(extra[:5])}); whoever owns the "
+                    "characters could sign in as them, so an administrator has to do this")
+    return None
+
+
+@transaction.atomic
+def move_characters(actor: User, source: User, target: User, character_ids: list[int], request=None) -> dict:
+    """Move characters (with their logins and everything synced for them) from ``source`` to ``target``, e.g. when
+    someone signed up twice instead of adding an alt. An account left without characters is switched off (it can't
+    sign in any more) and leaves its groups; its history (requests, applications...) stays with it for the record.
+    """
+    from conduit.audit.services import record
+
+    problem = can_move_characters(actor, source, target)
+    if problem:
+        raise MoveError(problem, 403)
+    ids = {int(i) for i in character_ids}
+    chars = list(Character.objects.select_for_update().filter(user=source, pk__in=ids))
+    if not ids or len(chars) != len(ids):
+        raise MoveError("Pick characters of that account")
+    Character.objects.filter(pk__in=ids).update(user=target)
+    moved_main = source.main_character_id in ids
+    remaining = list(Character.objects.filter(user=source).order_by("name"))
+    emptied = not remaining
+    fields = []
+    if moved_main:
+        source.main_character = remaining[0] if remaining else None
+        fields.append("main_character")
+    if emptied:
+        source.is_active = False
+        fields.append("is_active")
+    if fields:
+        source.save(update_fields=fields)
+    if emptied:
+        source.groups.clear()
+    if target.main_character_id is None:
+        target.main_character = chars[0]
+        target.save(update_fields=["main_character"])
+
+    names = sorted(c.name for c in chars)
+    for c in chars:
+        bus.emit("character.moved", character_id=c.pk, character=c.name, from_user_id=source.pk, to_user_id=target.pk,
+                 user_id=target.pk, user=target.display_name, summary=f"{c.name} moved to {target.display_name}'s account")
+    if emptied:
+        bus.emit("user.merged", from_user_id=source.pk, to_user_id=target.pk, user_id=target.pk, user=target.display_name,
+                 summary=f"{source.display_name}'s account was merged into {target.display_name}'s")
+    record("account.characters_moved", f"moved {', '.join(names)} from {source.display_name} to {target.display_name}"
+           + (" (the old account is now switched off)" if emptied else ""), request=request, actor=actor, target=target,
+           details={"characters": [c.pk for c in chars], "from_user_id": source.pk, "to_user_id": target.pk, "emptied": emptied})
+
+    for user in (source, target):
+        if user.is_active:
+            recompute_user_state(user)
+
+    def recheck():
+        from conduit.access.tasks import update_user_groups
+
+        update_user_groups.delay(target.pk)
+        if not emptied:
+            update_user_groups.delay(source.pk)
+
+    transaction.on_commit(recheck)
+    return {"moved": names, "emptied": emptied}

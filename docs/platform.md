@@ -25,7 +25,8 @@ Payload values must be JSON. `title`, `summary`, `level` (`info`/`success`/`warn
 when an event is shown to people, e.g. in a Discord embed.
 
 Core events: `user.created`, `user.state_changed`, `character.added`, `character.removed`,
-`character.main_changed`, `token.invalid`, `group.joined`, `group.left` (both with `via`: `self`, `request`,
+`character.main_changed`, `character.moved`, `user.merged` (an administrator moved every character of an
+account into another; `from_user_id`, `to_user_id`: move what your plugin keeps per user), `token.invalid`, `group.joined`, `group.left` (both with `via`: `self`, `request`,
 `admin`, `auto` or `state`), `group.request_created`, `group.request_decided`, `sync.failed`,
 `compliance.changed`, `notification.created`. Plugins add their own.
 
