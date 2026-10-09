@@ -105,3 +105,14 @@ def test_character_sheet_lists_the_owners_alts(people, client):
     alts = client.get("/api/characters/90000022").json()["alts"]
     assert [(a["name"], a["is_main"], a["viewable"]) for a in alts] == [("Line One", True, True), ("Alt Out Of Corp", False, False)]
     assert alts[1]["corporation"]["ticker"] == "OTHER"
+
+
+@pytest.mark.django_db
+def test_search_logging_ignores_other_sites_and_long_queries(people, client):
+    auditor, *_ = people
+    grant(auditor, "use_member_audit", "view_all_characters")
+    client.force_login(auditor)
+    client.get("/api/member-audit/mail?q=planted", HTTP_SEC_FETCH_SITE="cross-site")  # a link on another site
+    assert not AuditEvent.objects.filter(action="member_audit.search").exists()
+    client.get("/api/member-audit/mail?q=" + "x" * 5000, HTTP_SEC_FETCH_SITE="same-origin")
+    assert len(AuditEvent.objects.get(action="member_audit.search").details["q"]) == 200

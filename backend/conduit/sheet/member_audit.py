@@ -22,6 +22,7 @@ from .models import SyncStatus
 
 PERM = "sheet.use_member_audit"
 SEARCH_DEDUPE_SECONDS = 600  # the same viewer and search is recorded once per 10 minutes
+MAX_QUERY = 200  # longer searches are cut, so they can't bloat the audit log
 
 router = Router(tags=["member audit"])
 
@@ -34,6 +35,10 @@ def _characters(request, corporation: int | None = None):
 
 
 def _note_search(request, what: str, q: str):
+    # Searches are GETs, so a link on another site could open one in an auditor's browser and put words in their
+    # mouth in the audit log. Browsers mark such requests; only the site's own pages are recorded.
+    if request.META.get("HTTP_SEC_FETCH_SITE", "same-origin") not in {"same-origin", "none"}:
+        return
     if cache.add(f"member_audit:{request.user.pk}:{what}:{q.lower()}", 1, SEARCH_DEDUPE_SECONDS):
         record("member_audit.search", f"searched members' {what} in Member Audit for “{q}”"[:300], request=request, details={"section": what, "q": q})
 
@@ -66,7 +71,7 @@ def mail(request, q: str = "", corporation: int | None = None, sender: int | Non
     member character that has it under ``held_by``. ``q`` matches the subject, text and sender's name."""
     chars = _characters(request, corporation).values("pk")
     qs = Mail.objects.filter(character__in=chars)
-    q = q.strip()
+    q = q.strip()[:MAX_QUERY]
     if q:
         senders = EveName.objects.filter(name__icontains=q).values("id")
         qs = qs.filter(Q(subject__icontains=q) | Q(body__icontains=q) | Q(sender_id__in=senders))
