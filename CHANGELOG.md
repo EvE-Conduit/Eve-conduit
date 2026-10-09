@@ -3,6 +3,13 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.27
+
+### Fixed
+- **The SeAT import program reads more kinds of dump.** Exports from phpMyAdmin, HeidiSQL and similar tools (which
+  put each row on its own line) stopped it with "substring not found"; so did a dump saved by PowerShell's `>`.
+  If a dump still can't be read, it now says at which line. The window's title shows its version.
+
 ## 0.5.26
 
 ### Added
