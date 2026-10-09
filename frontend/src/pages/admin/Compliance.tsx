@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
+import { MissingScopes } from "@/components/MissingScopes";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { Segmented, TabPanel, Tabs } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { useHasPerm } from "@/lib/bootstrap";
-import type { CharacterBrief, Entity, StateBrief } from "@/lib/types";
+import type { CharacterBrief, Entity, MissingScope, StateBrief } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
 
 interface ComplianceRow {
@@ -54,6 +55,7 @@ interface CharacterCompliance {
   corporation: { id: number; name: string; ticker: string } | null;
   token_valid: boolean;
   missing_scopes: string[];
+  missing_detail?: MissingScope[];
   failing_sections: { section: string; label: string; message: string; failures: number }[];
   stale_sections: { section: string; label: string; last_success: string }[];
   problems: string[];
@@ -212,16 +214,32 @@ export function AdminCompliance() {
   );
 }
 
-function StatusBadge({ compliant }: { compliant: boolean | null }) {
+function StatusBadge({ compliant, problems = [] }: { compliant: boolean | null; problems?: string[] }) {
   if (compliant === null) return <Badge size="xs">Not checked</Badge>;
   return compliant ? (
     <Badge tone="success" size="xs">
       <CheckCircle2 className="size-3" /> Compliant
     </Badge>
   ) : (
-    <Badge tone="warning" size="xs">
-      <AlertTriangle className="size-3" /> Needs attention
-    </Badge>
+    <Tooltip
+      disabled={!problems.length}
+      content={
+        <div className="space-y-1 py-0.5">
+          <ul className="space-y-0.5">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+          <div className="text-subtle">Open the row to see each missing scope and what needs it.</div>
+        </div>
+      }
+    >
+      <span className="inline-flex">
+        <Badge tone="warning" size="xs">
+          <AlertTriangle className="size-3" /> Needs attention
+        </Badge>
+      </span>
+    </Tooltip>
   );
 }
 
@@ -267,7 +285,7 @@ function MembersTable({ rows }: { rows: ComplianceRow[] }) {
                   )}
                 </Td>
                 <Td>
-                  <StatusBadge compliant={r.compliant} />
+                  <StatusBadge compliant={r.compliant} problems={r.problems} />
                 </Td>
                 <Td className="hidden max-w-sm lg:table-cell">
                   <span className="line-clamp-1 text-xs text-muted">
@@ -329,7 +347,15 @@ function UserDetail({ userId }: { userId: number }) {
                 {!c.token_valid && <li className="text-danger-fg">Login stopped working: needs to log in again</li>}
                 {c.missing_scopes.length > 0 && (
                   <li className="text-warning-fg">
-                    <Tooltip content={<span className="font-mono text-[11px]">{c.missing_scopes.join(", ")}</span>}>
+                    <Tooltip
+                      content={
+                        c.missing_detail?.length ? (
+                          <MissingScopes missing={c.missing_detail} />
+                        ) : (
+                          <span className="font-mono text-[11px]">{c.missing_scopes.join(", ")}</span>
+                        )
+                      }
+                    >
                       <span className="cursor-help underline decoration-dotted">Missing {c.missing_scopes.length} ESI scopes</span>
                     </Tooltip>
                   </li>

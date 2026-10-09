@@ -93,3 +93,25 @@ def required_scopes() -> list[str]:
         if mid in enabled_ids():
             scopes.update(mod.esi_scopes)
     return sorted(scopes)
+
+
+def scope_sources() -> dict[str, list[str]]:
+    """What wants each required ESI scope: ``"Character sheet: Mail"`` or an enabled plugin's name."""
+    from conduit.sheet.registry import ordered
+
+    out: dict[str, list[str]] = {}
+    for section in ordered():
+        for scope in section.scopes:
+            out.setdefault(scope, []).append(f"Character sheet: {section.label}")
+    on = enabled_ids()
+    for mid, mod in registry.installed().items():
+        if mid in on:
+            for scope in mod.esi_scopes:
+                out.setdefault(scope, []).append(mod.name or mid)
+    return {scope: list(dict.fromkeys(names)) for scope, names in out.items()}
+
+
+def describe_missing(missing, sources: dict[str, list[str]] | None = None) -> list[dict]:
+    """``[{"scope", "needed_by"}]`` for missing scopes, so people can see why a login needs redoing."""
+    sources = scope_sources() if sources is None else sources
+    return [{"scope": s, "needed_by": sources.get(s, [])} for s in missing]

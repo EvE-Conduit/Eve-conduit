@@ -1,6 +1,8 @@
 import { AlertTriangle, Crown, KeyRound, MoreHorizontal, Star, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 
+import { MissingScopes } from "@/components/MissingScopes";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
@@ -10,8 +12,14 @@ import { cn } from "@/lib/utils";
 
 export function tokenProblem(c: MyCharacter): string | null {
   if (!c.token || !c.token.valid) return "Login expired. Re-authorise this character.";
-  if (c.token.missing_scopes.length) return `Missing ${c.token.missing_scopes.length} permission${c.token.missing_scopes.length === 1 ? "" : "s"} that enabled plugins need.`;
+  if (c.token.missing_scopes.length) return `Missing ${c.token.missing_scopes.length} ESI scope${c.token.missing_scopes.length === 1 ? "" : "s"}.`;
   return null;
+}
+
+/** The tooltip for "Needs attention": which scopes are missing and which plugin or sheet section wants each. */
+function problemDetail(c: MyCharacter, problem: string): ReactNode {
+  if (!c.token?.valid || !c.token.missing?.length) return problem;
+  return <MissingScopes missing={c.token.missing} title={`${problem} Log in again to grant them.`} />;
 }
 
 export function CharacterCard({
@@ -61,7 +69,7 @@ export function CharacterCard({
 
       <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
         {problem ? (
-          <Tooltip content={problem}>
+          <Tooltip content={problemDetail(c, problem)}>
             <a href={`/sso/add-character?next=/characters`} className="flex items-center gap-1.5 text-xs text-warning-fg hover:underline">
               <AlertTriangle className="size-3.5" /> Needs attention
             </a>
