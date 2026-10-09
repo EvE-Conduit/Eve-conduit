@@ -113,7 +113,7 @@ def test_verify_refreshes_each_token_once(client, key, monkeypatch):
 
     def fake_refresh(data):
         if data["refresh_token"] == "rt-91000002":
-            raise TokenInvalid("revoked")
+            raise TokenInvalid("revoked", oauth_error="invalid_grant")
         return {"access_token": "new-access", "refresh_token": "rotated", "expires_in": 1199}
 
     monkeypatch.setattr("conduit.esi.tokens._token_request", fake_refresh)

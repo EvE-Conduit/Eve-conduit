@@ -1,5 +1,6 @@
 from django.db import transaction
 
+from conduit.rows import replace_rows
 from conduit.sheet.util import parse_dt
 
 from .models import CharacterSkill, SkillQueueItem, SkillSummary
@@ -27,16 +28,20 @@ def sync(character, esi):
                 "remap_available_date": parse_dt(attributes.get("accrued_remap_cooldown_date")),
             },
         )
-        CharacterSkill.objects.filter(character=character).delete()
-        CharacterSkill.objects.bulk_create(
-            CharacterSkill(
-                character=character,
-                skill_id=s["skill_id"],
-                active_level=s["active_skill_level"],
-                trained_level=s["trained_skill_level"],
-                skillpoints=s["skillpoints_in_skill"],
-            )
-            for s in skills.get("skills", [])
+        replace_rows(
+            CharacterSkill.objects.filter(character=character),
+            (
+                CharacterSkill(
+                    character=character,
+                    skill_id=s["skill_id"],
+                    active_level=s["active_skill_level"],
+                    trained_level=s["trained_skill_level"],
+                    skillpoints=s["skillpoints_in_skill"],
+                )
+                for s in skills.get("skills", [])
+            ),
+            "skill_id",
+            ["active_level", "trained_level", "skillpoints"],
         )
         if queue is not None:
             SkillQueueItem.objects.filter(character=character).delete()

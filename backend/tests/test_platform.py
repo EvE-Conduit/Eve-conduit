@@ -195,7 +195,7 @@ def test_lost_token_notifies_owner(user, monkeypatch, django_capture_on_commit_c
     token.save()
 
     def refused(data):
-        raise TokenInvalid("invalid_grant")
+        raise TokenInvalid("invalid_grant", oauth_error="invalid_grant")
 
     monkeypatch.setattr(tokens, "_token_request", refused)
     events = []
@@ -208,6 +208,29 @@ def test_lost_token_notifies_owner(user, monkeypatch, django_capture_on_commit_c
     assert Notification.objects.filter(user=user, category="tokens").count() == 1
     assert events[0]["character"] == "Pilot One"
 
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("error, invalidated", [("invalid_grant", True), ("invalid_client", False), (None, False)])
+def test_only_invalid_grant_invalidates_a_token(user, monkeypatch, error, invalidated):
+    """A broken EVE application (invalid_client) must not log every character out."""
+    from datetime import timedelta
+
+    import httpx
+    from django.utils import timezone
+
+    from conduit.esi import tokens
+    from conduit.esi.exceptions import SsoRefused, TokenInvalid
+
+    token = user.main_character.token
+    token.expires_at = timezone.now() - timedelta(minutes=1)
+    token.save()
+    body = {"error": error} if error else None
+    monkeypatch.setattr(tokens.httpx, "post", lambda *a, **k: httpx.Response(400, json=body, request=httpx.Request("POST", tokens.TOKEN_URL)))
+    with pytest.raises(TokenInvalid if invalidated else SsoRefused):
+        tokens.get_access_token(user.main_character)
+    token.refresh_from_db()
+    assert token.valid is not invalidated
 
 # --- preferences ------------------------------------------------------------------
 

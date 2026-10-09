@@ -204,6 +204,19 @@ def test_purge_respects_retention(settings):
     assert list(AuditEvent.objects.all()) == [new] and not AuditEvent.objects.filter(pk=old.pk).exists()
 
 
+@pytest.mark.django_db
+def test_purge_deletes_in_batches(settings, monkeypatch):
+    from conduit.audit import tasks
+
+    monkeypatch.setattr(tasks, "PURGE_BATCH", 2)
+    settings.CONDUIT_AUDIT_LOG_DAYS = 30
+    for _ in range(5):
+        AuditEvent.objects.create(action="x", summary="old", at=timezone.now() - timedelta(days=31))
+    keep = AuditEvent.objects.create(action="x", summary="new")
+    assert tasks.purge_logs()["AuditEvent"] == 5
+    assert list(AuditEvent.objects.all()) == [keep]
+
+
 # --- admin endpoints --------------------------------------------------------------
 
 

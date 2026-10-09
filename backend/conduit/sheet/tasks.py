@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
 
+from conduit import sync_queue
 from conduit.esi.calllog import esi_source
 from conduit.esi.client import esi
 from conduit.esi.exceptions import EsiBackoff, EsiError, TokenInvalid
@@ -22,31 +24,35 @@ SYNC_FAILED_AFTER = 3
 
 
 @shared_task
-def schedule_syncs(limit: int = 500) -> int:
-    """Queue every section that is due. Runs every couple of minutes from beat."""
+def schedule_syncs() -> int:
+    """Queue the sections that are due, oldest first, as many as the sync queue has room for.
+    Runs every couple of minutes from beat."""
     from conduit.accounts.models import Character
 
     now = timezone.now()
-    queued = 0
-    characters = Character.objects.filter(token__valid=True).values_list("pk", flat=True)
-    existing = set(SyncStatus.objects.filter(character_id__in=characters).values_list("character_id", "section"))
-    SyncStatus.objects.bulk_create(
-        [
-            SyncStatus(character_id=c, section=key, next_due=now)
-            for c in characters
-            for key in registry.synced()
-            if (c, key) not in existing
-        ],
-        ignore_conflicts=True,
+    keys = list(registry.synced())
+    live = Character.objects.filter(token__valid=True)
+    for key in keys:  # rows for newly linked characters and newly installed sections
+        missing = live.exclude(sync_statuses__section=key).values_list("pk", flat=True)
+        SyncStatus.objects.bulk_create(
+            [SyncStatus(character_id=c, section=key, next_due=now) for c in missing], ignore_conflicts=True, batch_size=1000
+        )
+    due = list(
+        SyncStatus.objects.filter(next_due__lte=now, character__token__valid=True, section__in=keys)
+        .order_by("next_due")
+        .values_list("pk", "character_id", "section")[: sync_queue.room()]
     )
-    due = SyncStatus.objects.filter(next_due__lte=now, character__token__valid=True, section__in=list(registry.synced()))
-    for status in due.order_by("next_due")[:limit]:
-        # Push next_due forward now so the next scheduler run doesn't queue it twice.
-        status.next_due = now + timedelta(seconds=registry.SECTIONS[status.section].interval)
-        status.save(update_fields=["next_due"])
-        sync_section.delay(status.character_id, status.section)
-        queued += 1
-    return queued
+    # Push next_due forward first so the next scheduler run doesn't queue them twice.
+    by_section = defaultdict(list)
+    for pk, _, key in due:
+        by_section[key].append(pk)
+    for key, pks in by_section.items():
+        next_due = now + timedelta(seconds=registry.SECTIONS[key].interval)
+        for i in range(0, len(pks), 1000):
+            SyncStatus.objects.filter(pk__in=pks[i : i + 1000]).update(next_due=next_due)
+    for _, character_id, key in due:
+        sync_section.delay(character_id, key)
+    return len(due)
 
 
 @shared_task(bind=True, max_retries=3)
@@ -115,7 +121,8 @@ def sync_now(character, sections: list[str] | None = None):
     """Queue an immediate sync, e.g. right after a character is linked."""
     for key in sections or registry.synced():
         SyncStatus.objects.update_or_create(character=character, section=key, defaults={"next_due": timezone.now()})
-        sync_section.delay(character.pk, key)
+        # The default queue, so someone waiting for it doesn't queue behind the routine syncs.
+        sync_section.apply_async((character.pk, key), queue="default")
 
 
 @shared_task(time_limit=None, soft_time_limit=None)

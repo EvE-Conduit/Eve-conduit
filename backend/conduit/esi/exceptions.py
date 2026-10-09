@@ -20,3 +20,16 @@ class EsiRateLimited(EsiBackoff):
 
 class TokenInvalid(Exception):
     """The character's refresh token was revoked or expired; they must log in again."""
+
+    def __init__(self, message: str = "", oauth_error: str = ""):
+        super().__init__(message)
+        #: EVE SSO's OAuth error code when it refused the token (``invalid_grant`` for a dead token).
+        self.oauth_error = oauth_error
+
+
+class SsoRefused(EsiError):
+    """EVE SSO refused a token refresh for a reason that isn't the token's fault (e.g. ``invalid_client``
+    after the application's id or secret changed). The token stays valid; an admin has to fix the app."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(status, f"EVE SSO refused the refresh: {message}")

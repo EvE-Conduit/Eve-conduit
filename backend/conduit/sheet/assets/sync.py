@@ -1,6 +1,7 @@
 from django.db import transaction
 
 from conduit.esi.exceptions import EsiError
+from conduit.rows import replace_rows
 from conduit.sde.models import ItemType
 from conduit.sheet.locations import resolve
 
@@ -8,6 +9,11 @@ from .models import Asset
 
 SHIP_CATEGORY = 6
 CONTAINER_GROUPS = {12, 340, 448, 649}  # cargo, secure, audit-log and freight containers
+#: What a re-sync compares (and updates) on each item; corporation assets use the same.
+ASSET_FIELDS = [
+    "type_id", "quantity", "location_id", "location_type", "location_flag", "is_singleton", "is_blueprint_copy", "name",
+    "root_location_id",
+]
 
 
 def root_locations(rows: list[dict]) -> dict[int, int]:
@@ -45,8 +51,8 @@ def sync(character, esi):
             break  # names are nice to have
 
     with transaction.atomic():
-        Asset.objects.filter(character=character).delete()
-        Asset.objects.bulk_create(
+        replace_rows(
+            Asset.objects.filter(character=character),
             (
                 Asset(
                     character=character,
@@ -63,6 +69,7 @@ def sync(character, esi):
                 )
                 for r in rows
             ),
-            batch_size=2000,
+            "item_id",
+            ASSET_FIELDS,
         )
     resolve(set(roots.values()), character=character, client=esi)

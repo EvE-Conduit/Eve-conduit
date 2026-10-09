@@ -2,7 +2,8 @@ from django.db import transaction
 
 from conduit.esi.exceptions import EsiError
 from conduit.sde.models import ItemType
-from conduit.sheet.assets.sync import CONTAINER_GROUPS, SHIP_CATEGORY, root_locations
+from conduit.rows import replace_rows
+from conduit.sheet.assets.sync import ASSET_FIELDS, CONTAINER_GROUPS, SHIP_CATEGORY, root_locations
 from conduit.sheet.locations import resolve
 
 from ..models import CorpAsset
@@ -26,8 +27,8 @@ def sync(corporation, character, esi):
         except EsiError:
             break
     with transaction.atomic():
-        CorpAsset.objects.filter(corporation=corporation).delete()
-        CorpAsset.objects.bulk_create(
+        replace_rows(
+            CorpAsset.objects.filter(corporation=corporation),
             (
                 CorpAsset(
                     corporation=corporation, item_id=r["item_id"], type_id=r["type_id"], quantity=r["quantity"],
@@ -37,7 +38,8 @@ def sync(corporation, character, esi):
                 )
                 for r in rows
             ),
-            batch_size=2000,
+            "item_id",
+            ASSET_FIELDS,
         )
     # Office folders sit "in" the station; anything else that isn't an item is a real location.
     resolve(set(roots.values()), character=character, client=esi)

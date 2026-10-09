@@ -50,6 +50,7 @@ def _celery() -> dict:
     if settings.CELERY_TASK_ALWAYS_EAGER:
         return {"mode": "inline", "ok": True, "workers": [], "queue_length": 0, "heartbeat_age": None,
                 "detail": "No REDIS_URL: background jobs run inline and there is no scheduler"}
+    from conduit import sync_queue
     from conduit.celery import app
 
     out = {"mode": "workers", "workers": [], "queue_length": None, "heartbeat_age": None, "detail": ""}
@@ -60,7 +61,8 @@ def _celery() -> dict:
         out["detail"] = f"Could not reach workers: {exc}"[:200]
     try:
         with app.connection_for_read() as conn:
-            out["queue_length"] = conn.default_channel.client.llen(settings.CELERY_TASK_DEFAULT_QUEUE)
+            redis = conn.default_channel.client
+            out["queue_length"] = redis.llen(settings.CELERY_TASK_DEFAULT_QUEUE) + redis.llen(sync_queue.QUEUE)
     except Exception:
         pass
     beat = cache.get(HEARTBEAT_KEY)
@@ -76,15 +78,14 @@ def _celery() -> dict:
 
 
 def _esi() -> dict:
-    from conduit.esi.calllog import LAST_LIMIT_KEY
+    from conduit.esi.calllog import LAST_LIMIT_KEY, counts
     from conduit.esi.client import ERROR_PAUSE_KEY
     from conduit.esi.models import EsiCall
     from conduit.esi.tokens import sso_configured
 
-    since = timezone.now() - timedelta(hours=1)
-    recent = EsiCall.objects.filter(at__gte=since)
-    failed = recent.filter(outcome__in=[EsiCall.Outcome.ERROR, EsiCall.Outcome.RATE_LIMITED, EsiCall.Outcome.NETWORK]).count()
-    total = recent.count()
+    recent = counts(2)  # this clock hour and the last; the counters see calls the ESI log may not record
+    failed = sum(recent[o] for o in (EsiCall.Outcome.ERROR, EsiCall.Outcome.RATE_LIMITED, EsiCall.Outcome.NETWORK))
+    total = sum(recent.values())
     limit = cache.get(LAST_LIMIT_KEY)
     paused = cache.get(ERROR_PAUSE_KEY)
     paused = paused if paused and paused > time.time() else None

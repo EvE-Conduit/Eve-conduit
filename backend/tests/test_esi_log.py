@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from conduit.esi.calllog import esi_source
+from conduit.esi.calllog import counts, esi_source
 from conduit.esi.client import EsiClient
 from conduit.esi.exceptions import EsiBackoff, EsiError
 from conduit.esi.models import EsiCall
@@ -11,6 +11,11 @@ from conduit.external.models import ApiKey
 
 def client_with(handler):
     return EsiClient(transport=httpx.MockTransport(handler))
+
+
+@pytest.fixture(autouse=True)
+def record_everything(settings):
+    settings.CONDUIT_ESI_LOG = "all"  # the default is errors only; most of these tests look at successful calls
 
 
 @pytest.mark.django_db
@@ -47,6 +52,21 @@ def test_errors_only_mode(settings):
     esi = client_with(lambda r: httpx.Response(200, json={}))
     esi.get("/status")
     assert EsiCall.objects.count() == 0
+    assert counts()["ok"] == 1  # still counted for Health and the summary
+
+
+@pytest.mark.django_db
+def test_summary_shows_how_close_each_rate_limit_group_came(api_client, admin_user, user):
+    remaining = iter([140, 7])
+    esi = client_with(lambda r: httpx.Response(
+        200, json={}, headers={"X-Ratelimit-Group": "char-wallet", "X-Ratelimit-Limit": "150/15m", "X-Ratelimit-Remaining": str(next(remaining))}
+    ))
+    esi.get("/characters/1/wallet")
+    esi.get(f"/characters/{user.main_character_id}/wallet", character=user.main_character)
+    api_client.force_login(admin_user)
+    (wallet,) = api_client.call("get", "/api/admin/esi/summary").json()["rate_limits"]
+    assert wallet == {"group": "char-wallet", "limit": "150/15m", "calls": 2, "lowest": 7, "rate_limited": 0,
+                      "lowest_character": {"id": user.main_character_id, "name": user.main_character.name}}
 
 
 @pytest.mark.django_db

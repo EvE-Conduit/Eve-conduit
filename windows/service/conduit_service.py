@@ -79,7 +79,8 @@ def run_celery(root: Path, kind: str) -> None:
         argv = [
             "worker",
             "--pool=threads",  # prefork doesn't work on Windows
-            f"--concurrency={os.environ.get('WORKER_CONCURRENCY', '4')}",
+            f"--concurrency={os.environ.get('WORKER_CONCURRENCY', '16')}",
+            "--queues=default,sync",
             "--loglevel=INFO",
             "--hostname=conduit@%h",
         ]

@@ -511,6 +511,16 @@ interface EsiSummary {
   routes: (EsiGroupRow & { route: string })[];
   sources: (EsiGroupRow & { source: string })[];
   timeline: { hour: string; calls: number; errors: number }[];
+  rate_limits: EsiRateLimitRow[];
+}
+
+interface EsiRateLimitRow {
+  group: string;
+  limit: string;
+  calls: number;
+  lowest: number | null;
+  lowest_character: { id: number; name: string } | null;
+  rate_limited: number;
 }
 
 const OUTCOMES: Record<EsiOutcome, { label: string; color: string }> = {
@@ -548,9 +558,8 @@ function Esi() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
           Every request this server sent to ESI. Answers still fresh in the local cache are reused without asking ESI, so they aren't listed.
-          {s && s.mode !== "all" && (
-            <span className="text-warning-fg"> Recording: {s.mode === "off" ? "off" : "errors only"} (CONDUIT_ESI_LOG).</span>
-          )}
+          {s?.mode === "errors" && <span> Only failed calls are listed (CONDUIT_ESI_LOG=errors); the totals count every call.</span>}
+          {s?.mode === "off" && <span className="text-warning-fg"> Recording is off (CONDUIT_ESI_LOG); the totals still count every call.</span>}
         </p>
         <div className="flex gap-1.5">
           {(["24", "168"] as const).map((h) => (
@@ -604,6 +613,8 @@ function Esi() {
             </div>
           </Card>
 
+          <EsiRateLimits rows={s.rate_limits} />
+
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <EsiGroupCard title="Busiest routes" rows={s.routes.map((r) => ({ ...r, name: r.route }))} mono />
             <EsiGroupCard title="Who's calling" rows={s.sources.map((r) => ({ ...r, name: r.source || "unknown" }))} />
@@ -631,6 +642,50 @@ function EsiGroupCard({ title, rows, mono }: { title: string; rows: (EsiGroupRow
     <Card className="overflow-hidden">
       <CardHeader title={title} />
       <DataTable rows={rows} columns={columns} rowKey={(r) => r.name} empty={{ icon: <RadioTower />, title: "No calls in this period" }} />
+    </Card>
+  );
+}
+
+/** Tokens in a limit like "150/15m". */
+function limitTokens(limit: string) {
+  const n = parseInt(limit, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function EsiRateLimits({ rows }: { rows: EsiRateLimitRow[] }) {
+  const columns: Column<EsiRateLimitRow>[] = [
+    { header: "Group", cell: (r) => <span className="font-mono text-xs">{r.group}</span> },
+    { header: "Limit", cell: (r) => <span className="whitespace-nowrap font-mono text-xs text-muted">{r.limit || "–"}</span> },
+    { header: "Calls", className: "text-right", cell: (r) => <span className="font-mono tabular-nums">{num(r.calls)}</span> },
+    {
+      header: "Fewest left",
+      className: "text-right",
+      cell: (r) => {
+        if (r.lowest === null) return <span className="text-subtle">–</span>;
+        const tokens = limitTokens(r.limit);
+        const low = tokens !== null && r.lowest < tokens * 0.1;
+        return (
+          <span className="whitespace-nowrap" title={r.lowest_character ? `${r.lowest_character.name || r.lowest_character.id}'s bucket` : "shared bucket (public route)"}>
+            <span className={cn("font-mono tabular-nums", low ? "text-warning-fg" : "text-muted")}>{num(r.lowest)}</span>
+            {r.lowest_character && <span className="ml-2 text-xs text-subtle">{r.lowest_character.name || r.lowest_character.id}</span>}
+          </span>
+        );
+      },
+    },
+    {
+      header: "Refused (429)",
+      className: "text-right",
+      cell: (r) => <span className={cn("font-mono tabular-nums", r.rate_limited ? "text-danger-fg" : "text-subtle")}>{num(r.rate_limited)}</span>,
+    },
+  ];
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader
+        title="Rate limits"
+        icon={<Gauge />}
+        description="Per route group: ESI's limit (tokens per window, per character or per server for public routes), the fewest tokens any bucket had left, and requests ESI refused. Calls pause on their own before a bucket runs dry."
+      />
+      <DataTable rows={rows} columns={columns} rowKey={(r) => r.group} empty={{ icon: <Gauge />, title: "No rate-limited routes called in this period" }} />
     </Card>
   );
 }
