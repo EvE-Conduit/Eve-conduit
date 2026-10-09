@@ -22,7 +22,7 @@ export function Avatar({
 }) {
   const [failed, setFailed] = useState(false);
   // HUD look: large faces are hexagons, small ones square.
-  const shape = rounded === "full" ? "rounded-full" : size === "xl" || size === "lg" ? "hex" : "rounded-none";
+  const shape = rounded === "full" ? "rounded-full" : size === "xl" || size === "lg" ? "hex" : "rounded-control";
   const face = (
     <span
       className={cn(

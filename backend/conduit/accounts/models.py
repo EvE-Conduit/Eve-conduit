@@ -76,6 +76,8 @@ class UserPreferences(models.Model):
         SYSTEM = "system"
         DARK = "dark"
         LIGHT = "light"
+        SAKURA = "sakura"
+        NEO_TOKYO = "neotokyo"
 
     class Density(models.TextChoices):
         COMFORTABLE = "comfortable"

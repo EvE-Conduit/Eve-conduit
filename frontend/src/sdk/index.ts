@@ -7,7 +7,8 @@
  *
  * Styling: use the theme tokens (bg-surface, text-muted, border-border, bg-accent, text-accent-ink,
  * bg-success-soft text-success-fg, bg-hover, shadow-e2, p-card ...) rather than fixed colours, so
- * pages work in the dark, light and high-contrast themes. See theme.css for the full list.
+ * pages work in every theme (dark, light, Sakura, Neo Tokyo) and high contrast. Use rounded-control for
+ * buttons and inputs so they follow each theme's corners. See theme.css for the full list.
  */
 export { api, ApiError, request } from "@/lib/api";
 export { definePlugin } from "@/lib/plugins";

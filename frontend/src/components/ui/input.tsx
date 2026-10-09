@@ -4,7 +4,7 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTML
 import { cn } from "@/lib/utils";
 
 export const inputBase =
-  "w-full rounded-none border border-border-strong bg-bg px-3 text-sm text-text placeholder:text-subtle transition-[border-color,box-shadow] hover:border-accent/60 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger";
+  "w-full rounded-control border border-border-strong bg-bg px-3 text-sm text-text placeholder:text-subtle transition-[border-color,box-shadow] hover:border-accent/60 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(inputBase, "h-9", className)} {...props} />;

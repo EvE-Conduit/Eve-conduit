@@ -272,7 +272,7 @@ def get_preferences(request):
 @router.put("/preferences", response=PreferencesIO)
 def put_preferences(request, payload: PreferencesIO):
     if payload.theme not in UserPreferences.Theme.values:
-        raise HttpError(400, "theme must be system, dark or light")
+        raise HttpError(400, "theme must be one of: " + ", ".join(UserPreferences.Theme.values))
     if payload.density not in UserPreferences.Density.values:
         raise HttpError(400, "density must be comfortable or compact")
     if payload.timezone not in available_timezones():

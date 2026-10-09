@@ -37,7 +37,7 @@ export function Badge({
     <span
       style={style}
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-none font-semibold uppercase tracking-[0.08em] ring-1 ring-inset",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-control font-semibold uppercase tracking-[0.08em] ring-1 ring-inset",
         size === "xs" ? "px-1.5 text-[10.5px] leading-[18px]" : "px-2 py-0.5 text-[11px] leading-5",
         color
           ? variant === "outline"
