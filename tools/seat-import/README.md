@@ -1,6 +1,12 @@
 # SeAT import
 
-Moves a SeAT install's users, characters, SSO tokens and squads into EvE Conduit. Usually you take a dump of
+Moves a SeAT install into EvE Conduit in two steps:
+
+1. **Accounts:** users, characters, SSO tokens and squads, with the import program described below.
+2. **Character data:** everything SeAT kept for every character (wallet history, mail, killmails, skills,
+   assets and the rest), with a command on the Conduit server. See [3. Character data](#3-character-data).
+
+Step 1 in detail: Usually you take a dump of
 SeAT's database, copy it to any Windows PC and import it with **EvE-Conduit-SeAT-Import.exe**: a window where
 you pick the dump, tick the users to bring over, preview and import. It talks to Conduit through its API, so
 the PC only needs to reach Conduit's address.
@@ -75,6 +81,48 @@ first and import the rest later.
 Manual and hidden squads become closed groups, with SeAT's squad moderators as group leaders. Members are
 only added to a group if they're among the users you imported. Automatic squads are skipped; rebuild them as
 smart groups, or tick *Import automatic squads* to copy today's members into a closed group.
+
+## 3. Character data
+
+Once the accounts are in, bring over everything SeAT holds for each character. EVE only serves the last month
+or so of wallet, mining and similar history, and nothing at all for characters whose tokens are gone, so SeAT's
+copy is the only one.
+
+This step needs a **full** dump of SeAT's database, not just the six tables above. On the SeAT server:
+
+```bash
+docker compose exec mariadb mariadb-dump -u seat -p --single-transaction --result-file=/tmp/seat-full.sql seat
+docker compose cp mariadb:/tmp/seat-full.sql ./seat-full.sql
+docker compose exec mariadb rm /tmp/seat-full.sql
+```
+
+It can be several GB. Copy it to the Conduit server, then run:
+
+| Install | Command |
+|---|---|
+| Windows | `conduit manage import_seat_history C:\path\to\seat-full.sql` (in an administrator PowerShell) |
+| Linux (bare metal) | `conduit manage import_seat_history /path/to/seat-full.sql` |
+| Docker | `docker compose cp seat-full.sql web:/tmp/` then `docker compose exec web python manage.py import_seat_history /tmp/seat-full.sql` (and `docker compose exec web rm /tmp/seat-full.sql` after) |
+
+It goes through every character that is both in the dump and in Conduit:
+
+- **History is added** to what Conduit has: wallet journal and transactions, mining, mail, killmails, contracts,
+  industry jobs, market orders, notifications and calendar. Entries are matched by EVE's ids, so nothing is
+  doubled and nothing Conduit already has is changed.
+- **Current state** (skills, assets, blueprints, contacts, standings, loyalty points, planets, research, fittings,
+  location and clones) comes from SeAT only where Conduit hasn't synced that part from EVE yet. Characters
+  whose tokens are gone keep SeAT's last copy; live characters get EVE's own, newer data as usual.
+- Sections filled from SeAT say so on the character sheet ("From SeAT, data as of ..."), so nobody mistakes an
+  old copy for live data.
+
+Nothing is sent to EVE while it runs, apart from looking up names SeAT didn't have, once at the end (`--no-names`
+skips that). It loads the dump into a temporary working file first; allow free disk space of about the dump's
+size. Running it again is safe: it adds only what's missing.
+
+Useful options: `--section wallet` (repeatable) to import only some sections, `--character <id>` to try one
+character first, `--report summary.json` to keep the results.
+
+Delete the dump on every machine when you're done.
 
 ## What it never does
 
