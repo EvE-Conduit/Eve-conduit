@@ -124,6 +124,16 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
         {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"}
     )
     DATABASES["default"]["TEST"] = {"CHARSET": "utf8mb4", "COLLATION": "utf8mb4_unicode_ci"}
+if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql" and env_bool("CONDUIT_DB_POOL", True):
+    # One connection pool per process: a connection goes back to the pool when a request or background job
+    # ends, so Postgres sees as many connections as are in use, not one per worker thread ever started.
+    # Each worker thread holds one while its job runs, hence the size. (A pool needs CONN_MAX_AGE 0.)
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
+    DATABASES["default"].setdefault("OPTIONS", {})["pool"] = {
+        "min_size": 1,
+        "max_size": int(env("CONDUIT_DB_POOL_SIZE", str(int(env("WORKER_CONCURRENCY", "16")) + 4))),
+        "timeout": 30,
+    }
 
 REDIS_URL = env("REDIS_URL")
 if REDIS_URL:
@@ -166,7 +176,8 @@ ESI_CLIENT_ID = env("ESI_CLIENT_ID", "")
 ESI_SECRET_KEY = env("ESI_SECRET_KEY", "")
 ESI_CALLBACK_URL = env("ESI_CALLBACK_URL", f"{SITE_URL}/sso/callback")
 ESI_BASE_URL = env("ESI_BASE_URL", "https://esi.evetech.net")
-# ESI behaviour is pinned to this date; bump it deliberately after testing.
+# ESI behaviour is pinned to this date; bump it deliberately after testing, and rerun
+# scripts/esi-rate-groups.py so conduit/esi/rate_groups.py matches.
 ESI_COMPATIBILITY_DATE = env("ESI_COMPATIBILITY_DATE", "2026-08-18")
 # CCP asks for contact details in the User-Agent (an email is strongly preferred).
 ESI_USER_AGENT_CONTACT = env("ESI_USER_AGENT_CONTACT", "")
@@ -187,7 +198,14 @@ CELERY_BROKER_URL = REDIS_URL or "memory://"
 CELERY_RESULT_BACKEND = None
 CELERY_TASK_ALWAYS_EAGER = not REDIS_URL
 CELERY_TASK_DEFAULT_QUEUE = "default"
-CELERY_TASK_ROUTES = {"conduit.*": {"queue": "default"}}
+CELERY_TASK_ROUTES = {
+    # Routine syncs get their own queue (see conduit/sync_queue.py); workers take jobs from both.
+    "conduit.sheet.tasks.sync_section": {"queue": "sync"},
+    "conduit.corp.tasks.sync_section": {"queue": "sync"},
+    "conduit.*": {"queue": "default"},
+}
+# Most routine sync jobs waiting at once. The schedulers top the queue up to this every couple of minutes.
+CONDUIT_SYNC_QUEUE_MAX = int(env("CONDUIT_SYNC_QUEUE_MAX", "20000"))
 CELERY_BEAT_SCHEDULE = {
     "core:update-affiliations": {
         "task": "conduit.eve.tasks.update_affiliations",
@@ -236,7 +254,7 @@ CONDUIT_SERVICE_LOG_DAYS = int(env("CONDUIT_SERVICE_LOG_DAYS", "30"))
 CONDUIT_PLUGIN_LOG_LEVEL = env("CONDUIT_PLUGIN_LOG_LEVEL", "INFO").strip().upper()
 CONDUIT_ESI_LOG_DAYS = int(env("CONDUIT_ESI_LOG_DAYS", "7"))
 # Which ESI calls to record: all, errors (anything but 200/304) or off.
-CONDUIT_ESI_LOG = env("CONDUIT_ESI_LOG", "all").strip().lower()
+CONDUIT_ESI_LOG = env("CONDUIT_ESI_LOG", "errors").strip().lower()
 # --- Updates ----------------------------------------------------------------------------------
 # How this copy was installed: windows, baremetal, docker or dev. Only windows and baremetal installs
 # can download and install releases (through their privileged updater); the others are told how to update.

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -23,8 +24,9 @@ from django.core.cache import cache
 
 from conduit import __version__
 
-from .calllog import record_call
+from .calllog import note_rate_limit, record_call
 from .exceptions import EsiBackoff, EsiError, EsiRateLimited
+from .rate_groups import GROUP_LIMITS, ROUTE_GROUPS
 from .tokens import get_access_token
 
 log = logging.getLogger(__name__)
@@ -111,11 +113,10 @@ class EsiClient:
         until = cache.get(ERROR_PAUSE_KEY)
         if until and until > now:
             raise EsiBackoff(until - now, "ESI error limit nearly reached")
-        group = cache.get(ROUTE_GROUP_KEY.format(route=_route(path)))
-        if group:
-            until = cache.get(RATE_PAUSE_KEY.format(group=group, character=character_id))
-            if until and until > now:
-                raise EsiRateLimited(until - now, group)
+        bucket = _bucket(path)
+        until = cache.get(RATE_PAUSE_KEY.format(group=bucket, character=character_id))
+        if until and until > now:
+            raise EsiRateLimited(until - now, bucket)
 
     def _record_limits(self, path: str, character_id: int | None, resp: httpx.Response):
         remain = resp.headers.get("x-esi-error-limit-remain")
@@ -125,20 +126,24 @@ class EsiClient:
             cache.set(ERROR_PAUSE_KEY, time.time() + int(reset), int(reset) + 1)
 
         group = resp.headers.get("x-ratelimit-group")
+        remaining = _int(resp.headers.get("x-ratelimit-remaining"))
+        limit = resp.headers.get("x-ratelimit-limit") or GROUP_LIMITS.get(group or ROUTE_GROUPS.get(_route(path), ""))
         if group:
             cache.set(ROUTE_GROUP_KEY.format(route=_route(path)), group, 24 * 3600)
-            remaining = resp.headers.get("x-ratelimit-remaining")
-            if remaining is not None and int(remaining) < RATE_LIMIT_RESERVE and resp.status_code != 429:
-                # Leave the bucket a little headroom instead of running it dry.
-                cache.set(RATE_PAUSE_KEY.format(group=group, character=character_id), time.time() + 60, 61)
+            if remaining is not None and remaining < RATE_LIMIT_RESERVE and resp.status_code != 429:
+                # Leave the bucket a little headroom instead of running it dry: wait about as long as the
+                # window takes to hand back enough tokens for the next request.
+                wait = refill_wait(limit, RATE_LIMIT_RESERVE + 2 - remaining)
+                cache.set(RATE_PAUSE_KEY.format(group=group, character=character_id), time.time() + wait, wait + 1)
+        bucket = group or _bucket(path)
+        if group or resp.status_code == 429:
+            note_rate_limit(bucket, limit, remaining, character_id, limited=resp.status_code == 429)
         if resp.status_code == 429:
+            # Some routes are limited inside the game server and answer 429 without rate-limit headers;
+            # pause them under the same key _check_pauses looks at.
             retry = int(resp.headers.get("retry-after", 60))
-            cache.set(
-                RATE_PAUSE_KEY.format(group=group or _route(path), character=character_id),
-                time.time() + retry,
-                retry + 1,
-            )
-            raise EsiRateLimited(retry, group or _route(path))
+            cache.set(RATE_PAUSE_KEY.format(group=bucket, character=character_id), time.time() + retry, retry + 1)
+            raise EsiRateLimited(retry, bucket)
 
     def _request(self, method, path, *, character=None, params=None, body=None) -> EsiResponse:
         character_id = character.pk if character is not None else None
@@ -201,6 +206,34 @@ class EsiClient:
 def _route(path: str) -> str:
     """``/characters/123/wallet`` -> ``/characters/{n}/wallet``, for rate-limit bookkeeping."""
     return "/".join("{n}" if part.isdigit() else part for part in path.split("/"))
+
+
+def _bucket(path: str) -> str:
+    """The rate-limit group a route's pauses are kept under: what ESI last said, else the spec's group
+    (rate_groups.py), else the route itself for routes ESI hasn't put in a group."""
+    route = _route(path)
+    return cache.get(ROUTE_GROUP_KEY.format(route=route)) or ROUTE_GROUPS.get(route) or route
+
+
+LIMIT_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*([smhd])\s*$")
+UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def refill_wait(limit: str | None, tokens: int) -> int:
+    """Seconds for a floating window like ``150/15m`` to hand back ``tokens``, assuming steady use
+    (ESI doesn't say when the tokens in a bucket were spent). 60 when the limit is unknown."""
+    match = LIMIT_RE.match(limit or "")
+    if not match or not int(match[1]):
+        return 60
+    window = int(match[2]) * UNIT_SECONDS[match[3]]
+    return max(1, min(window, math.ceil(max(tokens, 1) * window / int(match[1]))))
+
+
+def _int(value) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _error_text(resp: httpx.Response) -> str:

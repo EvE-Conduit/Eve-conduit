@@ -137,6 +137,23 @@ CREATE DATABASE conduit OWNER conduit ENCODING 'UTF8';
 SQL
 ```
 
+For more than a few hundred members, raise PostgreSQL's stock settings (`/etc/postgresql/*/main/postgresql.conf`
+on Debian/Ubuntu, `/var/lib/pgsql/data/postgresql.conf` on RHEL), then `systemctl restart postgresql`:
+
+```ini
+max_connections = 200            # above WORKER_CONCURRENCY + 4, plus a few for web and beat
+shared_buffers = 4GB             # a quarter of RAM
+effective_cache_size = 12GB      # half to three quarters of RAM
+work_mem = 16MB
+maintenance_work_mem = 256MB
+max_wal_size = 2GB
+random_page_cost = 1.1           # SSD
+autovacuum_naptime = 30s         # syncs rewrite the same tables all day: vacuum little and often
+autovacuum_vacuum_scale_factor = 0.05
+autovacuum_analyze_scale_factor = 0.02
+autovacuum_vacuum_cost_limit = 1000
+```
+
 **MariaDB:**
 
 ```bash

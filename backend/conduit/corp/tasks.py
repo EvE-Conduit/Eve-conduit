@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
 
+from conduit import sync_queue
 from conduit.esi.calllog import esi_source
 from conduit.esi.client import esi
 from conduit.esi.exceptions import EsiBackoff, EsiError, TokenInvalid
@@ -45,23 +47,32 @@ def candidates(corporation_id: int, section: registry.CorpSection, preferred_id:
 
 
 @shared_task
-def schedule_syncs(limit: int = 300) -> int:
-    """Queue every corporation section that is due. Runs every few minutes from beat."""
+def schedule_syncs() -> int:
+    """Queue every corporation section that is due, as many as the sync queue has room for.
+    Runs every few minutes from beat."""
     now = timezone.now()
-    corps = list(tracked_corporations().values_list("pk", flat=True))
-    existing = set(CorpSyncStatus.objects.filter(corporation_id__in=corps).values_list("corporation_id", "section"))
-    CorpSyncStatus.objects.bulk_create(
-        [CorpSyncStatus(corporation_id=c, section=k, next_due=now) for c in corps for k in registry.SECTIONS if (c, k) not in existing],
-        ignore_conflicts=True,
+    corps = tracked_corporations()
+    keys = list(registry.SECTIONS)
+    for key in keys:  # rows for newly tracked corporations and newly installed sections
+        missing = corps.exclude(sync_statuses__section=key).values_list("pk", flat=True)
+        CorpSyncStatus.objects.bulk_create(
+            [CorpSyncStatus(corporation_id=c, section=key, next_due=now) for c in missing], ignore_conflicts=True, batch_size=1000
+        )
+    due = list(
+        CorpSyncStatus.objects.filter(next_due__lte=now, corporation__in=corps, section__in=keys)
+        .order_by("next_due")
+        .values_list("pk", "corporation_id", "section")[: sync_queue.room()]
     )
-    queued = 0
-    due = CorpSyncStatus.objects.filter(next_due__lte=now, corporation_id__in=corps, section__in=list(registry.SECTIONS))
-    for status in due.order_by("next_due")[:limit]:
-        status.next_due = now + timedelta(seconds=registry.SECTIONS[status.section].interval)
-        status.save(update_fields=["next_due"])
-        sync_section.delay(status.corporation_id, status.section)
-        queued += 1
-    return queued
+    by_section = defaultdict(list)
+    for pk, _, key in due:
+        by_section[key].append(pk)
+    for key, pks in by_section.items():
+        next_due = now + timedelta(seconds=registry.SECTIONS[key].interval)
+        for i in range(0, len(pks), 1000):
+            CorpSyncStatus.objects.filter(pk__in=pks[i : i + 1000]).update(next_due=next_due)
+    for _, corporation_id, key in due:
+        sync_section.delay(corporation_id, key)
+    return len(due)
 
 
 @shared_task(bind=True, max_retries=3)
@@ -138,4 +149,4 @@ def _finish(status: CorpSyncStatus, result: str, message: str, failed: bool = Fa
 def sync_now(corporation_id: int, sections: list[str] | None = None):
     for key in sections or registry.SECTIONS:
         CorpSyncStatus.objects.update_or_create(corporation_id=corporation_id, section=key, defaults={"next_due": timezone.now()})
-        sync_section.delay(corporation_id, key)
+        sync_section.apply_async((corporation_id, key), queue="default")  # ahead of the routine syncs

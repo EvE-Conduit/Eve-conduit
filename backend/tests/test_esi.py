@@ -78,6 +78,26 @@ def test_rate_limit_pauses_that_route_group():
     assert len(calls) == 1
 
 
+def test_rate_limit_without_headers_pauses_that_route():
+    """Limiters inside the game server answer 429 with only Retry-After."""
+    esi, calls = client_with(lambda r, n: httpx.Response(429, headers={"Retry-After": "20"}))
+    with pytest.raises(EsiRateLimited):
+        esi.get("/characters/1/search")
+    with pytest.raises(EsiRateLimited):
+        esi.get("/characters/1/search")
+    assert len(calls) == 1
+
+
+def test_rate_limit_pause_covers_group_routes_not_called_yet():
+    """The spec's route groups apply a pause to routes no response has told us about, e.g. after a restart."""
+    esi, calls = client_with(lambda r, n: httpx.Response(429, headers={"Retry-After": "12", "X-Ratelimit-Group": "char-wallet"}))
+    with pytest.raises(EsiRateLimited):
+        esi.get("/characters/1/wallet")
+    with pytest.raises(EsiRateLimited):
+        esi.get("/characters/1/wallet/journal")
+    assert len(calls) == 1
+
+
 def test_get_all_pages():
     def handler(request, n):
         page = int(request.url.params.get("page", 1))
@@ -109,3 +129,30 @@ def test_low_rate_limit_bucket_pauses_group():
     with pytest.raises(EsiRateLimited):
         esi.get("/characters/5/assets", params={"page": 2})
     assert len(calls) == 1
+
+
+def test_low_bucket_pause_is_worked_out_from_the_limit():
+    from conduit.esi.client import refill_wait
+
+    assert refill_wait("150/15m", 4) == 24  # 6 s per token
+    assert refill_wait("3600/15m", 4) == 1
+    assert refill_wait("15/15m", 4) == 240
+    assert refill_wait("15/15m", 100) == 900  # never longer than the window
+    assert refill_wait(None, 4) == refill_wait("nonsense", 4) == 60
+
+
+def test_low_bucket_pause_ends_once_tokens_are_back(monkeypatch):
+    import conduit.esi.client as client
+
+    now = [1000.0]
+    monkeypatch.setattr(client.time, "time", lambda: now[0])
+    esi, calls = client_with(lambda r, n: httpx.Response(
+        200, json=[], headers={"X-Ratelimit-Group": "char-wallet", "X-Ratelimit-Limit": "150/15m", "X-Ratelimit-Remaining": "4"}
+    ))
+    esi.get("/characters/5/wallet/journal", params={"page": 1})
+    with pytest.raises(EsiRateLimited) as exc:
+        esi.get("/characters/5/wallet/journal", params={"page": 2})
+    assert exc.value.retry_after == 24  # (6 reserve + 2 - 4 left) tokens at 6 s each, not a flat minute
+    now[0] += 25
+    esi.get("/characters/5/wallet/journal", params={"page": 2})
+    assert len(calls) == 2

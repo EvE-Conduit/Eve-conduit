@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import time
 from datetime import timedelta
 from functools import cache
@@ -13,7 +14,9 @@ from django.conf import settings
 from django.core.cache import cache as django_cache
 from django.utils import timezone
 
-from .exceptions import TokenInvalid
+from .exceptions import SsoRefused, TokenInvalid
+
+log = logging.getLogger(__name__)
 
 SSO_HOST = "https://login.eveonline.com"
 AUTHORIZE_URL = f"{SSO_HOST}/v2/oauth/authorize"
@@ -39,9 +42,17 @@ def _token_request(data: dict) -> dict:
         timeout=20,
     )
     if resp.status_code in (400, 401):
-        raise TokenInvalid(resp.text[:200])
+        raise TokenInvalid(resp.text[:200], oauth_error=_oauth_error(resp))
     resp.raise_for_status()
     return resp.json()
+
+
+def _oauth_error(resp: httpx.Response) -> str:
+    """The OAuth ``error`` code of a refused token request, e.g. ``invalid_grant``."""
+    try:
+        return str(resp.json().get("error") or "")
+    except (ValueError, AttributeError):
+        return ""
 
 
 def exchange_code(code: str, code_verifier: str) -> dict:
@@ -126,7 +137,12 @@ def get_access_token(character) -> str:
     try:
         try:
             data = _token_request({"grant_type": "refresh_token", "refresh_token": token.refresh_token})
-        except TokenInvalid:
+        except TokenInvalid as exc:
+            if exc.oauth_error != "invalid_grant":
+                # Only invalid_grant means this token is dead. Anything else (invalid_client after the EVE
+                # application's id or secret changed, ...) would otherwise log out every character at once.
+                log.error("EVE SSO refused refreshing %s's token (%s): %s", character, exc.oauth_error or "no error code", exc)
+                raise SsoRefused(400, exc.oauth_error or str(exc)) from exc
             token.valid = False
             token.save(update_fields=["valid"])
             token_lost(character)

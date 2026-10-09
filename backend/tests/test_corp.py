@@ -398,7 +398,7 @@ def test_structure_sync_names_our_structures_for_everyone(people, fake):
 @pytest.mark.django_db
 def test_refreshing_a_corporation_takes_a_permission(people, api_client, monkeypatch):
     queued = []
-    monkeypatch.setattr("conduit.corp.tasks.sync_section.delay", lambda cid, key: queued.append(key))
+    monkeypatch.setattr("conduit.corp.tasks.sync_section.apply_async", lambda args, queue: queued.append(args[1]))
     _, _, line = people
     line = grant(line, "view_own_corporation")
     api_client.force_login(line)

@@ -1,5 +1,6 @@
 from django.db import transaction
 
+from conduit.rows import replace_rows
 from conduit.sheet.assets.models import Asset
 from conduit.sheet.locations import resolve
 
@@ -13,8 +14,8 @@ def sync(character, esi):
         Asset.objects.filter(character=character, item_id__in={r["location_id"] for r in rows}).values_list("item_id", "root_location_id")
     )
     with transaction.atomic():
-        Blueprint.objects.filter(character=character).delete()
-        Blueprint.objects.bulk_create(
+        replace_rows(
+            Blueprint.objects.filter(character=character),
             (
                 Blueprint(
                     character=character,
@@ -30,7 +31,8 @@ def sync(character, esi):
                 )
                 for r in rows
             ),
-            batch_size=2000,
+            "item_id",
+            ["type_id", "location_id", "root_location_id", "location_flag", "quantity", "runs", "material_efficiency", "time_efficiency"],
         )
     resolve(
         set(containers.values()) | {r["location_id"] for r in rows if r["location_id"] not in containers}, character=character, client=esi

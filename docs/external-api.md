@@ -70,12 +70,14 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
   (default `INFO`).
   Elsewhere, set `CONDUIT_LOG_DIR` to the folder holding the log files.
 
-- **ESI call log:** every request the server sends to ESI: route, character, what made the call (e.g.
+- **ESI call log:** requests the server sends to ESI: route, character, what made the call (e.g.
   `sheet:wallet` or `eve.update_affiliations`), status, duration, and the error-limit and rate-limit
-  headers. Calls held back during an error-limit pause are listed too. Answers still fresh in the local
-  cache never reach ESI and aren't listed. The ESI tab adds totals, calls per hour, the busiest routes
-  and callers, and the current error limit. `CONDUIT_ESI_LOG=errors` records only failures; `off` records
-  nothing.
+  headers. By default only failures are recorded (`CONDUIT_ESI_LOG=errors`); `all` records every call, a
+  row each, which adds up fast on a big install; `off` records nothing. Calls held back during a
+  pause are recorded too. Answers still fresh in the local cache never reach ESI and
+  aren't listed. The ESI tab adds totals and calls per hour (counted for every call, whatever is
+  recorded), the busiest routes and callers, the current error limit, and for each rate-limit group its
+  limit, the fewest tokens any bucket had left and how many requests ESI refused with 429.
 
 Admins see all five under **Administration > Logs** (permission `site.view_logs`). Managing keys and
 switching APIs on and off needs `site.manage_api`.

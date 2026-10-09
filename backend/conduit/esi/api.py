@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Avg, Count, Q
-from django.db.models.functions import TruncHour
 from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
@@ -14,9 +13,10 @@ from ninja.errors import HttpError
 from conduit.paging import page
 from conduit.permissions import require_perm
 
-from .calllog import LAST_LIMIT_KEY
+from .calllog import LAST_LIMIT_KEY, counts, hourly_counts, rate_limit_stats
 from .client import ERROR_PAUSE_KEY
 from .models import EsiCall
+from .rate_groups import GROUP_LIMITS
 
 router = Router(tags=["admin"])
 FAILED = Q(outcome__in=[EsiCall.Outcome.ERROR, EsiCall.Outcome.RATE_LIMITED, EsiCall.Outcome.NETWORK])
@@ -43,10 +43,13 @@ def call_out(c: EsiCall, names: dict | None = None) -> dict:
 
 
 def character_names(calls) -> dict:
+    return character_names_by_id({c.character_id for c in calls})
+
+
+def character_names_by_id(ids) -> dict:
     from conduit.accounts.models import Character
 
-    ids = {c.character_id for c in calls if c.character_id}
-    return dict(Character.objects.filter(pk__in=ids).values_list("pk", "name"))
+    return dict(Character.objects.filter(pk__in={i for i in ids if i}).values_list("pk", "name"))
 
 
 def filter_calls(qs, outcome: str = "", route: str = "", source: str = "", character: int | None = None, status: int | None = None):
@@ -84,7 +87,10 @@ def esi_summary(request, hours: int = 24):
     hours = max(1, min(hours, 24 * 30))
     since = timezone.now() - timedelta(hours=hours)
     qs = EsiCall.objects.filter(at__gte=since)
-    by_outcome = dict(qs.values_list("outcome").annotate(n=Count("id")).values_list("outcome", "n"))
+    # Totals come from the hourly counters, which see every call whatever CONDUIT_ESI_LOG records.
+    by_hour = hourly_counts(hours)
+    by_outcome = counts(hours)
+    failed_outcomes = (EsiCall.Outcome.ERROR, EsiCall.Outcome.RATE_LIMITED, EsiCall.Outcome.NETWORK)
     limit = cache.get(LAST_LIMIT_KEY)
     paused_until = cache.get(ERROR_PAUSE_KEY)
 
@@ -97,9 +103,23 @@ def esi_summary(request, hours: int = 24):
         return [{field: r[field], "calls": r["calls"], "errors": r["errors"], "avg_ms": round(r["avg_ms"] or 0)} for r in rows]
 
     timeline = [
-        {"hour": r["hour"].isoformat(), "calls": r["calls"], "errors": r["errors"]}
-        for r in qs.annotate(hour=TruncHour("at")).values("hour")
-        .annotate(calls=Count("id"), errors=Count("id", filter=FAILED)).order_by("hour")
+        {"hour": datetime.fromtimestamp(at, tz=UTC).isoformat(), "calls": sum(n.values()), "errors": sum(n[o] for o in failed_outcomes)}
+        for at, n in by_hour
+        if any(n.values())
+    ]
+    groups = rate_limit_stats(hours)
+    names = character_names_by_id({g["lowest_character"] for g in groups})
+    rate_limits = [
+        {
+            "group": g["group"],
+            "limit": g["limit"] or GROUP_LIMITS.get(g["group"], ""),
+            "calls": g["calls"],
+            "lowest": g["lowest"],
+            "lowest_character": {"id": g["lowest_character"], "name": names.get(g["lowest_character"], "")}
+            if g["lowest_character"] else None,
+            "rate_limited": g["limited"],
+        }
+        for g in groups
     ]
     return {
         "hours": hours,
@@ -119,4 +139,5 @@ def esi_summary(request, hours: int = 24):
         "routes": grouped("route"),
         "sources": grouped("source"),
         "timeline": timeline,
+        "rate_limits": rate_limits,
     }

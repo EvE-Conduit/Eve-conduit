@@ -50,6 +50,33 @@ services:
 
   db:
     image: postgres:17-alpine
+    # Postgres's stock settings suit a laptop. Sized here for a small server; see "Sizing" in .env.example.
+    command:
+      - postgres
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-200}
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-2GB}
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - random_page_cost=1.1
+      # Syncs rewrite the same tables all day: vacuum them little and often.
+      - -c
+      - autovacuum_naptime=30s
+      - -c
+      - autovacuum_vacuum_scale_factor=0.05
+      - -c
+      - autovacuum_analyze_scale_factor=0.02
+      - -c
+      - autovacuum_vacuum_cost_limit=1000
+    shm_size: 256mb
     environment:
       POSTGRES_DB: conduit
       POSTGRES_USER: conduit

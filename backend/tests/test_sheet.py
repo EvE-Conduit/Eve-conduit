@@ -57,6 +57,29 @@ def test_scheduler_queues_due_sections_once(pilot, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_scheduler_only_fills_the_sync_queue_to_its_limit(pilot, monkeypatch, settings):
+    queued = []
+    monkeypatch.setattr("conduit.sheet.tasks.sync_section.delay", lambda *a: queued.append(a))
+    monkeypatch.setattr("conduit.sync_queue.waiting", lambda: 3)
+    settings.CONDUIT_SYNC_QUEUE_MAX = 5
+    assert schedule_syncs() == 2  # 3 already waiting
+    monkeypatch.setattr("conduit.sync_queue.waiting", lambda: None)  # can't see the queue: add nothing
+    assert schedule_syncs() == 0
+    monkeypatch.setattr("conduit.sync_queue.waiting", lambda: 0)
+    assert schedule_syncs() == 5
+    assert len(queued) == len(set(queued)) == 7  # oldest first, none twice
+
+
+def test_routine_syncs_have_their_own_queue():
+    from conduit.celery import app
+    from conduit.sheet.tasks import sync_now  # noqa: F401  (registers the tasks)
+
+    assert app.amqp.router.route({}, "conduit.sheet.tasks.sync_section")["queue"].name == "sync"
+    assert app.amqp.router.route({}, "conduit.corp.tasks.sync_section")["queue"].name == "sync"
+    assert app.amqp.router.route({}, "conduit.sheet.tasks.schedule_syncs")["queue"].name == "default"
+
+
+@pytest.mark.django_db
 def test_missing_scope_is_recorded_not_fetched(pilot, fake):
     Token.objects.filter(character_id=CID).update(scopes="publicData")
     assert run("wallet") == SyncStatus.Result.MISSING_SCOPES
@@ -224,7 +247,7 @@ def test_refused_structure_is_not_asked_again_with_the_same_character(pilot):
 def test_refreshing_takes_a_permission(pilot, client, monkeypatch):
     """ESI is called on schedule; asking for fresh data now is for people given sheet.refresh_characters."""
     queued = []
-    monkeypatch.setattr("conduit.sheet.tasks.sync_section.delay", lambda cid, key: queued.append(key))
+    monkeypatch.setattr("conduit.sheet.tasks.sync_section.apply_async", lambda args, queue: queued.append(args[1]))
     client.force_login(pilot)
     assert client.get(f"/api/characters/{CID}").json()["can_refresh"] is False
     assert client.post(f"/api/characters/{CID}/refresh").status_code == 403 and not queued
@@ -237,3 +260,21 @@ def test_refreshing_takes_a_permission(pilot, client, monkeypatch):
     officer.user_permissions.add(*Permission.objects.filter(codename__in=["refresh_characters", "view_all_characters"]))
     client.force_login(officer)
     assert client.post(f"/api/characters/{CID}/refresh").status_code == 200  # any character they can view
+
+
+@pytest.mark.django_db
+def test_replace_rows_writes_only_what_changed(pilot):
+    from conduit.rows import replace_rows
+    from conduit.sheet.assets.models import Asset
+
+    def asset(item_id, quantity):
+        return Asset(character_id=CID, item_id=item_id, type_id=587, quantity=quantity, location_id=60003760,
+                     location_type="station", location_flag="Hangar", is_singleton=False, root_location_id=60003760)
+
+    fields = ["quantity"]
+    assert replace_rows(Asset.objects.filter(character_id=CID), [asset(1, 1), asset(2, 5), asset(3, 9)], "item_id", fields) == (3, 0, 0)
+    before = dict(Asset.objects.values_list("item_id", "pk"))
+    assert replace_rows(Asset.objects.filter(character_id=CID), [asset(1, 1), asset(2, 6), asset(4, 1)], "item_id", fields) == (1, 1, 1)
+    after = dict(Asset.objects.values_list("item_id", "quantity"))
+    assert after == {1: 1, 2: 6, 4: 1}
+    assert Asset.objects.get(item_id=1).pk == before[1] and Asset.objects.get(item_id=2).pk == before[2]  # kept, not re-inserted
