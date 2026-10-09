@@ -3,6 +3,20 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.26
+
+### Added
+- **Move from SeAT.** A new SeAT import brings a SeAT install's users, characters, SSO tokens and squads over.
+  Take a dump of SeAT's database, then run **EvE-Conduit-SeAT-Import.exe** (attached to this release) on any
+  Windows PC: pick the dump, search and tick the users to bring over, preview, import. Squads become closed groups
+  with their moderators as leaders, and every imported token is checked with EVE once. Characters already here
+  stay on their account, working tokens are never replaced, and importing again skips what's already there.
+  Tokens keep working only if this site uses SeAT's EVE application; otherwise import without tokens and members
+  log in once to get their characters back. Switch on **SeAT import** under Administration → API and use a key
+  with the `import:seat` scope. There's a command-line version too; see `tools/seat-import/README.md`.
+- **Two new themes, Sakura and Neo Tokyo**, under Settings → Appearance: their own colours and rounder shapes,
+  on a light and a dark base.
+
 ## 0.5.25
 
 ### Added
