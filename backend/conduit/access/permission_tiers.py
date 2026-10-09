@@ -18,6 +18,7 @@ CORE = {
     "sheet.view_corporation_characters": "hr",
     "sheet.view_alliance_characters": "hr",
     "sheet.view_all_characters": "hr",
+    "sheet.use_member_audit": "hr",
     "corp.view_own_corporation": "director",
     "corp.view_alliance_corporations": "director",
     "corp.view_all_corporations": "director",

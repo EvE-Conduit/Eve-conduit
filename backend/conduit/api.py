@@ -26,6 +26,7 @@ from conduit.site.api import router as core_router
 from conduit.site.api import setup_router
 from conduit.sheet.api import me_router as sheet_me_router
 from conduit.sheet.api import router as sheet_router
+from conduit.sheet.member_audit import router as member_audit_router
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ api.add_router("/me", me_router, auth=django_auth)
 api.add_router("/me", sheet_me_router, auth=django_auth)
 api.add_router("/me", notify_router, auth=django_auth)
 api.add_router("/characters", sheet_router, auth=django_auth)
+api.add_router("/member-audit", member_audit_router, auth=django_auth)
 api.add_router("/groups", group_leader_router, auth=django_auth)
 api.add_router("/corporations", corp_router, auth=django_auth)
 api.add_router("/admin", admin_site_router, auth=django_auth)

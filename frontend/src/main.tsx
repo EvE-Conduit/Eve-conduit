@@ -26,6 +26,7 @@ import { AdminHealth } from "@/pages/admin/Health";
 import { LandingEditor } from "@/pages/admin/LandingEditor";
 import { AdminIntegrations } from "@/pages/admin/Integrations";
 import { AdminLogs } from "@/pages/admin/Logs";
+import { AdminMemberAudit } from "@/pages/admin/MemberAudit";
 import { AdminMembers } from "@/pages/admin/Members";
 import { AdminPlugins } from "@/pages/admin/Plugins";
 import { AdminSettings } from "@/pages/admin/Settings";
@@ -105,6 +106,7 @@ async function start() {
         { path: "notifications", element: <Notifications /> },
         { path: "settings", element: <UserSettings /> },
         { path: "admin/members", element: <AdminMembers /> },
+        { path: "admin/member-audit", element: <AdminMemberAudit /> },
         { path: "admin/access", element: <AdminAccess /> },
         { path: "admin/groups", element: <AdminGroups /> },
         { path: "admin/compliance", element: <AdminCompliance /> },

@@ -75,12 +75,29 @@ def character_header(request, character_id: int):
     return {
         **character_brief(character),
         "owner": {"id": character.user_id, "name": character.user.display_name},
+        "alts": _alts(request, character),
         "is_mine": character.user_id == request.user.pk,
         "is_main": character.user.main_character_id == character.pk,
         "token_valid": bool(token and token.valid),
         "can_refresh": request.user.has_perm(REFRESH_PERM),
         "sections": [section_out(s) for s in registry.ordered()],
     }
+
+
+def _alts(request, character: Character) -> list[dict]:
+    """The owner's other characters, main first. Each says whether the viewer may open its sheet."""
+    main_id = character.user.main_character_id
+    alts = Character.objects.filter(user_id=character.user_id).exclude(pk=character.pk).select_related("corporation", "alliance", "token")
+    out = []
+    for alt in sorted(alts, key=lambda a: (a.pk != main_id, a.name.lower())):
+        token = getattr(alt, "token", None)
+        out.append({
+            **character_brief(alt),
+            "is_main": alt.pk == main_id,
+            "token_valid": bool(token and token.valid),
+            "viewable": can_view(request.user, alt),
+        })
+    return out
 
 
 @router.post("/{character_id}/refresh")
