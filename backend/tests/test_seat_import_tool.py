@@ -72,9 +72,10 @@ def bridge(client):
     """urlopen for the tool, answered by Django's test client."""
     def opener(req, timeout=None):
         path = req.full_url.replace("http://testserver", "")
+        extra = {"HTTP_CONTENT_ENCODING": req.get_header("Content-encoding")} if req.get_header("Content-encoding") else {}
         resp = getattr(client, req.get_method().lower())(
             path, data=req.data or None, content_type="application/json",
-            HTTP_AUTHORIZATION=req.get_header("Authorization"))
+            HTTP_AUTHORIZATION=req.get_header("Authorization"), **extra)
         if resp.status_code >= 400:
             raise urllib.error.HTTPError(req.full_url, resp.status_code, "error", {}, io.BytesIO(resp.content))
         return io.BytesIO(resp.content)
@@ -409,10 +410,10 @@ def test_window_loads_selects_previews_and_imports(client, key, tmp_path, instan
 
     app.preview()
     assert "Importing would create 1 accounts" in drain(app)
-    answers += [True, False]  # import? yes; delete the dump? no
+    answers += [True]  # import? yes
     app.do_import()
     log = drain(app)
-    assert "Done. Report" in log and "Remember to delete" in log
+    assert "Done. Report" in log and "Import character data" in log
     assert User.objects.get(main_character_id=91000001).characters.count() == 2
     assert Token.objects.get(character_id=91000001).refresh_token == "rotated"
     assert dump.exists()
@@ -484,3 +485,140 @@ def test_both_copies_of_the_dump_reader_are_identical():
     backend = Path(__file__).resolve().parents[1] / "conduit" / "sheet" / "seat" / "dump.py"
     assert (TOOL.parent / "seat_dump.py").read_text() == backend.read_text(), \
         "tools/seat-import/seat_dump.py and conduit/sheet/seat/dump.py must stay identical"
+
+
+
+# --- character data through the program ---------------------------------------------
+
+HISTORY_DUMP = DUMP + """CREATE TABLE `character_wallet_journals` (
+  `character_id` bigint(20) NOT NULL,
+  `id` bigint(20) NOT NULL,
+  `date` datetime NOT NULL,
+  `ref_type` varchar(255) NOT NULL,
+  `first_party_id` bigint(20) DEFAULT NULL,
+  `second_party_id` bigint(20) DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `balance` double DEFAULT NULL,
+  `reason` text DEFAULT NULL,
+  `tax_receiver_id` bigint(20) DEFAULT NULL,
+  `tax` double DEFAULT NULL,
+  `context_id` bigint(20) DEFAULT NULL,
+  `context_id_type` varchar(40) DEFAULT NULL,
+  `description` varchar(255) NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO `character_wallet_journals` VALUES (91000001,1,'2019-05-01 10:00:00','player_donation',2112,91000001,100,1000,'thanks',NULL,NULL,NULL,NULL,'Donation'),(91000001,2,'2019-06-01 10:00:00','player_donation',2112,91000001,-50,950,NULL,NULL,NULL,NULL,NULL,'Donation'),(91000005,3,'2018-01-01 00:00:00','bounty_prizes',1000125,91000005,10,10,NULL,NULL,NULL,NULL,NULL,'Bounty');
+"""
+
+
+@pytest.fixture
+def history_dir(tmp_path, settings, monkeypatch):
+    from conduit.eve import tasks
+
+    settings.CONDUIT_SEAT_IMPORT_DIR = str(tmp_path / "runs")
+    monkeypatch.setattr(tool, "HISTORY_POLL", 0)
+    # The run looks names up with EVE at the end; keep tests offline.
+    monkeypatch.setattr(tasks, "ensure_names", lambda **kw: None)
+    monkeypatch.setattr(tasks, "ensure_eve_names", lambda ids: None)
+    return tmp_path / "runs"
+
+
+def _post_rows(client, key, run_id, body: dict, gz=False):
+    import gzip as gz_
+
+    raw = json.dumps(body).encode()
+    extra = {"HTTP_CONTENT_ENCODING": "gzip"} if gz else {}
+    return client.post(f"/api/v1/import/seat/history/{run_id}/rows", data=gz_.compress(raw) if gz else raw,
+                       content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {key}", **extra)
+
+
+@pytest.mark.django_db
+def test_history_api_takes_pieces_once_and_imports_them(client, key, history_dir):
+    from conduit.sheet.wallet.models import JournalEntry
+
+    make_user(91000001, "Seat Pilot")
+    from .test_external import call
+
+    run_id = call(client, "post", "/api/v1/import/seat/history", key).json()["run_id"]
+    tokens = {"table": "refresh_tokens", "columns": ["character_id", "updated_at"],
+              "rows": [[91000001, "2025-03-01 12:00:00"]], "seq": 0}
+    journal = {"table": "character_wallet_journals",
+               "columns": ["character_id", "id", "date", "ref_type", "amount", "description"],
+               "rows": [[91000001, 7, "2019-01-01 00:00:00", "player_donation", 5.0, "x"]], "seq": 1}
+    assert _post_rows(client, key, run_id, tokens).json() == {"added": 1}
+    assert _post_rows(client, key, run_id, journal, gz=True).json() == {"added": 1}
+    assert _post_rows(client, key, run_id, journal, gz=True).json() == {"added": 0}  # sent again: ignored
+    bad = dict(journal, table="users", seq=2)
+    assert _post_rows(client, key, run_id, bad).status_code == 409  # not a table the import reads
+
+    started = call(client, "post", f"/api/v1/import/seat/history/{run_id}/start", key, data={})
+    assert started.status_code == 200, started.content
+    state = call(client, "get", f"/api/v1/import/seat/history/{run_id}", key).json()
+    assert state["status"] == "finished" and state["summary"]["characters"] == 1
+    assert JournalEntry.objects.filter(character_id=91000001, ref_id=7).count() == 1
+    assert not list(history_dir.glob("*.sqlite3"))  # the working file is gone
+    assert _post_rows(client, key, run_id, dict(journal, seq=5)).status_code == 409  # finished: no more rows
+
+
+@pytest.mark.django_db
+def test_history_api_needs_the_scope(client, history_dir):
+    from .test_external import call
+
+    on("import")
+    _, other = make_key(["directory:read"])
+    assert call(client, "post", "/api/v1/import/seat/history", other).status_code == 403
+
+
+@pytest.mark.django_db
+def test_history_only_from_the_command_line(client, key, tmp_path, history_dir):
+    from conduit.sheet.wallet.models import JournalEntry
+
+    make_user(91000001, "O'Neil")
+    dump = tmp_path / "seat.sql"
+    dump.write_text(HISTORY_DUMP, encoding="utf-8")
+    monkeypatch_pieces = 2
+    tool.PIECE_ROWS, old = monkeypatch_pieces, tool.PIECE_ROWS  # several pieces per table
+    try:
+        args = tool.parser().parse_args(["--conduit", "http://testserver", "--allow-http", "--dump", str(dump),
+                                         "--history-only"])
+        said = []
+        assert tool.run(args, ask=lambda q: "", say=said.append, http=bridge(client), secret=lambda p: key) == 0
+    finally:
+        tool.PIECE_ROWS = old
+    assert set(JournalEntry.objects.filter(character_id=91000001).values_list("ref_id", flat=True)) == {1, 2}
+    assert any("Character data imported for 1 characters" in s for s in said)
+    assert any("2 characters in SeAT aren't in Conduit" in s for s in said), said  # no accounts here
+
+
+@pytest.mark.django_db
+def test_history_needs_a_full_dump(client, key, tmp_path, history_dir):
+    dump = tmp_path / "seat.sql"
+    dump.write_text(DUMP, encoding="utf-8")  # the six account tables only
+    args = tool.parser().parse_args(["--conduit", "http://testserver", "--allow-http", "--dump", str(dump),
+                                     "--history-only"])
+    with pytest.raises(tool.ImportError_, match="full dump"):
+        tool.run(args, ask=lambda q: "", say=lambda s: None, http=bridge(client), secret=lambda p: key)
+    assert not list(history_dir.glob("*.sqlite3"))  # the half upload was thrown away
+
+
+@pytest.mark.django_db
+def test_window_imports_character_data(client, key, tmp_path, gui, history_dir):
+    from conduit.sheet.wallet.models import JournalEntry
+
+    module, app, answers = gui
+    make_user(91000001, "O'Neil")
+    app.http = bridge(client)
+    dump = tmp_path / "seat.sql"
+    dump.write_text(HISTORY_DUMP, encoding="utf-8")
+    app.dump.set(str(dump))
+    app.url.set("http://testserver")
+    app.key.set(key)
+    answers.append(True)  # plain http
+    app.load()
+    drain(app)
+    app.mark(True)
+    assert str(app.history_button["state"]) == "normal"
+    answers += [True, False]  # bring the data over? yes; delete the dump? no
+    app.do_history()
+    log = drain(app)
+    assert "Character data imported for 1 characters" in log and "Remember to delete" in log
+    assert JournalEntry.objects.filter(character_id=91000001).count() == 2

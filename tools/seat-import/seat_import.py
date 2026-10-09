@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import gzip
 import json
 import os
 import shlex
@@ -247,16 +248,20 @@ class Conduit:
         self.key = key
         self.opener = opener
 
-    def call(self, method: str, path: str, data=None, retry: bool = True):
-        body = None if data is None else json.dumps(data).encode()
+    def call(self, method: str, path: str, data=None, retry: bool = True, gzipped: bool = False):
+        body = None if data is None else json.dumps(data, separators=(",", ":")).encode()
+        headers = {
+            "Authorization": f"Bearer {self.key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "conduit-seat-import",
+        }
+        if gzipped and body is not None:
+            body = gzip.compress(body, compresslevel=6)
+            headers["Content-Encoding"] = "gzip"
         attempts = HTTP_RETRIES if retry else 1
         for attempt in range(1, attempts + 1):
-            req = urllib.request.Request(self.base + path, data=body, method=method, headers={
-                "Authorization": f"Bearer {self.key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "User-Agent": "conduit-seat-import",
-            })
+            req = urllib.request.Request(self.base + path, data=body, method=method, headers=headers)
             try:
                 with self.opener(req, timeout=120) as resp:
                     return json.loads(resp.read() or b"null")
@@ -465,6 +470,18 @@ def run(args, ask=input, say=print, secret=getpass.getpass, http=urllib.request.
     key = os.environ.get("CONDUIT_API_KEY") or secret("Conduit API key (scope import:seat): ")
     conduit, info = connect(args.conduit, key, args.allow_http, http)
     say(f"Conduit {info['version']}, {info['users']} users so far.")
+    if (args.history or args.history_only) and not args.dump:
+        raise ImportError_("Importing character data needs a full dump of SeAT's database: pass --dump FILE.")
+
+    if args.history_only:
+        ids = None
+        if args.select:
+            users, _ = read_dump(args.dump, False)
+            ids = [c.id for u in select_from_file(users, args.select) for c in u.characters]
+        for line in history_lines(upload_history(conduit, args.dump, say, ids)):
+            say(line)
+        say(f"Delete {args.dump} when you're done: it holds working logins for every character in it.")
+        return 0
 
     if with_tokens:
         seat_id = args.seat_client_id or ("" if args.dump else seat_client_id(args.seat_dir))
@@ -505,6 +522,11 @@ def run(args, ask=input, say=print, secret=getpass.getpass, http=urllib.request.
     report["squads"] = import_squads(conduit, squads, chosen, args.include_auto_squads, say)
     if with_tokens:
         report["tokens"] = verify(conduit, chosen, results, say)
+
+    if args.history:
+        report["history"] = upload_history(conduit, args.dump, say, [c.id for u in chosen for c in u.characters])
+        for line in history_lines(report["history"]):
+            say(line)
 
     say(f"\nDone. Report (no tokens in it): {write_report(args.report, report)}")
     if args.dump:
@@ -567,6 +589,91 @@ def verify(conduit: Conduit, chosen: list[User], results: list[dict], say) -> di
     return state
 
 
+# --- character data (SeAT's history) ----------------------------------------------------------------------
+
+#: Rows per upload piece, and the most raw JSON bytes per piece (gzipped, it's a fraction of that).
+PIECE_ROWS = 5000
+PIECE_BYTES = 4 * 1024 * 1024
+#: Seconds between progress polls while Conduit imports.
+HISTORY_POLL = 3
+
+
+def _pieces(dump_path: str, tables):
+    """(table, columns, rows) pieces of the dump's rows for these tables, in file order."""
+    columns: dict = {}
+    table, rows, size = None, [], 0
+    try:
+        for name, row in seat_dump.iter_rows(dump_path, tables, columns):
+            if name != table or len(rows) >= PIECE_ROWS or size >= PIECE_BYTES:
+                if rows:
+                    yield table, cols, rows
+                table, cols, rows, size = name, list(row), [], 0
+            values = [row.get(c) for c in cols]
+            rows.append(values)
+            size += sum(len(v) if isinstance(v, str) else 8 for v in values) + 4 * len(values)
+    except seat_dump.DumpError as exc:
+        raise ImportError_(str(exc)) from None
+    if rows:
+        yield table, cols, rows
+
+
+def upload_history(conduit: Conduit, dump_path: str, say, character_ids=None, sections=None) -> dict:
+    """Send the character data tables of a SeAT dump to Conduit and have it import them. Returns the summary."""
+    wanted = conduit.call("GET", "/import/seat/history/tables")["tables"]
+    run_id = conduit.call("POST", "/import/seat/history", {})["run_id"]
+    say("Sending SeAT's character data to Conduit (only the tables it needs, compressed)...")
+    sent: dict[str, int] = {}
+    total = 0
+    try:
+        for seq, (table, cols, rows) in enumerate(_pieces(dump_path, wanted)):
+            conduit.call("POST", f"/import/seat/history/{run_id}/rows",
+                         {"table": table, "columns": cols, "rows": rows, "seq": seq}, gzipped=True)
+            sent[table] = sent.get(table, 0) + len(rows)
+            total += len(rows)
+            if seq % 20 == 0:
+                say(f"  {total:,} rows sent ({table})")
+        # Tables beyond the account ones and shared lookups: is there any character data at all?
+        history_tables = set(sent) - set(DUMP_TABLES) - {"universe_names", "universe_stations", "universe_structures"}
+        if "refresh_tokens" not in sent:
+            raise ImportError_("The dump has no refresh_tokens rows, so it can't say which characters SeAT had.")
+        if not history_tables:
+            raise ImportError_("This dump has no character data in it (wallets, mail, assets and so on). Make a "
+                               "full dump of SeAT's database for this step; see the README.")
+        say(f"  {total:,} rows from {len(sent)} tables sent. Conduit is importing them now...")
+        conduit.call("POST", f"/import/seat/history/{run_id}/start",
+                     {"character_ids": list(character_ids or []), "sections": list(sections or [])}, retry=False)
+    except BaseException:
+        try:  # don't leave a half upload behind
+            conduit.call("DELETE", f"/import/seat/history/{run_id}", retry=False)
+        except ImportError_:
+            pass
+        raise
+    last = None
+    while True:
+        time.sleep(HISTORY_POLL)
+        state = conduit.call("GET", f"/import/seat/history/{run_id}")
+        summary = state.get("summary") or {}
+        line = f"  {state['status']}: {summary.get('done', 0)}/{summary.get('characters', '?')} characters"
+        if line != last:
+            say(line)
+            last = line
+        if state["status"] == "finished":
+            return summary
+        if state["status"] == "failed":
+            raise ImportError_("Conduit stopped importing the character data: " + state.get("error", "unknown error"))
+
+
+def history_lines(summary: dict) -> list[str]:
+    lines = [f"Character data imported for {summary['characters']} characters."]
+    if summary.get("not_here"):
+        lines.append(f"  {summary['not_here']} characters in SeAT aren't in Conduit (their accounts weren't imported).")
+    for key, c in sorted(summary.get("sections", {}).items()):
+        lines.append(f"  {key:14} {c['imported']:>6} imported  {c['skipped']:>6} already from EVE  {c['errors']:>4} errors")
+    for err in summary.get("errors", [])[:20]:
+        lines.append(f"  ! {err.get('name', err['character'])}: {err['section']}: {err['error']}")
+    return lines
+
+
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Import SeAT users, characters, tokens and squads into EvE Conduit.")
     p.add_argument("--conduit", required=True, help="Conduit's address, e.g. https://auth.example.com")
@@ -584,6 +691,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--include-auto-squads", action="store_true",
                    help="also SeAT's automatic squads, as closed groups with today's members")
     p.add_argument("--select", metavar="FILE", help="users to import, one SeAT id or name per line (no picker)")
+    p.add_argument("--history", action="store_true",
+                   help="after the accounts, bring over the chosen users' character data too (needs a full --dump)")
+    p.add_argument("--history-only", action="store_true",
+                   help="only bring over character data (everyone in Conduit, or --select's users); needs --dump")
     p.add_argument("--dry-run", action="store_true", help="show what would happen and stop")
     p.add_argument("--yes", action="store_true", help="don't ask before importing")
     p.add_argument("--report", help="where to write the report (default seat-import-report-<time>.json)")

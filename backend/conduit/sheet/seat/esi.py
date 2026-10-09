@@ -71,7 +71,10 @@ def esi_dt(value) -> str | None:
         return None
     if isinstance(value, datetime):
         value = value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    return str(value).replace(" ", "T", 1).split(".")[0].rstrip("Z") + "Z"
+    value = str(value).replace(" ", "T", 1).split(".")[0].rstrip("Z")
+    if "T" not in value:  # a bare date ("2010-01-01")
+        value += "T00:00:00"
+    return value + "Z"
 
 
 def drop_none(d: dict) -> dict:

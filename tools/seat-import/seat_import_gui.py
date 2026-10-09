@@ -114,6 +114,8 @@ class App:
         self.preview_button.pack(side="left")
         self.import_button = ttk.Button(buttons, text="Import", command=self.do_import)
         self.import_button.pack(side="left", padx=6)
+        self.history_button = ttk.Button(buttons, text="Import character data", command=self.do_history)
+        self.history_button.pack(side="left")
         self.progress = ttk.Progressbar(buttons, mode="determinate")
         self.progress.pack(side="left", fill="x", expand=True, padx=6)
         self.log = ScrolledText(run, height=9, state="disabled", wrap="word", font="TkDefaultFont")
@@ -178,6 +180,7 @@ class App:
         self.preview_button.configure(state="normal" if ready else "disabled")
         tokens_ok = not self.tokens.get() or self.same_app.get()
         self.import_button.configure(state="normal" if ready and tokens_ok else "disabled")
+        self.history_button.configure(state="normal" if ready else "disabled")
         if self.info:
             self.same_app_box.configure(
                 text=f"SeAT uses the same EVE application as Conduit (client id {self.info['client_id']})")
@@ -312,6 +315,28 @@ class App:
 
         def done(report_path):
             self.say(f"Done. Report (no tokens in it): {report_path}")
+            self.say("Next, 'Import character data' brings over their wallets, mail, skills, assets and the rest "
+                     "(it needs a full dump of SeAT's database). Delete the dump when you're finished.")
+        self.work(job, done)
+
+    def do_history(self):
+        chosen = self.chosen()
+        ids = [c.id for u in chosen for c in u.characters]
+        if not messagebox.askyesno(
+                TITLE, f"Bring over everything SeAT has for the {len(ids)} characters of the {len(chosen)} ticked "
+                       "users: wallet history, mail, killmails, contracts, skills, assets and the rest?\n\n"
+                       "Import their accounts first. This needs a full dump of SeAT's database; the tables Conduit "
+                       "needs are sent to it compressed, which can take a while for a big dump.\n\n"
+                       "Running it again later is safe: nothing is added twice."):
+            return
+        dump = self.dump.get().strip()
+
+        def job(say):
+            return core.upload_history(self.conduit, dump, say, ids)
+
+        def done(summary):
+            for line in core.history_lines(summary):
+                self.say(line)
             self.offer_delete(dump)
         self.work(job, done)
 
@@ -320,7 +345,7 @@ class App:
             return
         if messagebox.askyesno(TITLE, "Import finished.\n\nDelete the SeAT dump now? It holds working logins for "
                                       "every character in it.\n\nKeep it only if you still need to import more "
-                                      "users from it.", icon="warning"):
+                                      "users or character data from it.", icon="warning"):
             try:
                 os.remove(dump)
                 self.say(f"Deleted {dump}.")

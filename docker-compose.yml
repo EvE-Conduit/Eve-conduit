@@ -10,6 +10,10 @@ x-backend: &backend
     REDIS_URL: redis://redis:6379/0
     # Docker installs update with git pull + docker compose up -d --build; the site only shows the changelog.
     CONDUIT_INSTALL_KIND: docker
+    # The SeAT import program uploads through web; the worker imports from the same folder.
+    CONDUIT_SEAT_IMPORT_DIR: /srv/seat-import
+  volumes:
+    - seat_import:/srv/seat-import
   depends_on:
     db:
       condition: service_healthy
@@ -68,3 +72,4 @@ volumes:
   db_data:
   redis_data:
   caddy_data:
+  seat_import:
