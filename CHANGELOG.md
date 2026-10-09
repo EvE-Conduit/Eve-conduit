@@ -3,6 +3,22 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.32
+
+### Added
+- **Member Audit: Counterparties.** Name a character, corporation or alliance to see every member who paid, traded,
+  mailed or contracted with them, or has them as a contact, with ISK sent and received per member.
+- **Member Audit: Wallets.** Every member's wallet journal in one list, filtered by corporation, type, amount
+  (100M, 1B or 10B ISK and up), direction, and **with outsiders only** (players and corporations not registered
+  here). Search covers the reason, description and either party's name.
+- **Member Audit: Contracts.** Every member's contracts, one row per contract with the members holding it, filtered
+  by state, type, value and outsiders only. Search finds titles, items and party names; a contract opens with its
+  items.
+- **Member Audit: Skill check.** Pick ships or items, paste a skill list from the game, or both, to see which
+  members are ready, have the rest in their skill queue, or are missing skills, with time to train.
+- Seeing a character's wallet, contracts or dealings in Member Audit is recorded in the snooper log, like opening
+  that section of their character sheet. Searches and skill checks go in the audit log.
+
 ## 0.5.31
 
 ### Security
