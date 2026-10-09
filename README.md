@@ -81,7 +81,7 @@ python -m pytest                    # tests
 
 Without `REDIS_URL`, the backend uses an in-memory cache and runs Celery tasks inline, so there is nothing else to start. There's no scheduler in that mode, so run `python manage.py sync_characters [--character ID] [--section skills]` to pull character data on demand. For local EVE login, register a second EVE application with the callback `http://localhost:5173/sso/callback`.
 
-Frontend (Node 22+):
+Frontend (Node 24+):
 
 ```sh
 cd frontend
