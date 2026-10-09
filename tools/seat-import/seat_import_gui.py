@@ -6,6 +6,7 @@ import os
 import queue
 import sys
 import threading
+import traceback
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
@@ -41,7 +42,7 @@ class App:
         self.selected: set[int] = set()
         self.shown: list[core.User] = []
 
-        root.title(TITLE)
+        root.title(f"{TITLE} {core.VERSION}")
         self.on, self.off = checkbox(True), checkbox(False)
         root.minsize(860, 640)
         pad = {"padx": 8, "pady": 4}
@@ -144,8 +145,10 @@ class App:
                 self.events.put(("done", done, job(say)))
             except core.ImportError_ as exc:
                 self.events.put(("error", str(exc)))
-            except Exception as exc:  # anything unexpected still ends the job cleanly
-                self.events.put(("error", f"{type(exc).__name__}: {exc}"))
+            except Exception as exc:  # anything unexpected still ends the job cleanly, with where it happened
+                where = traceback.extract_tb(exc.__traceback__)[-1]
+                self.events.put(("error", f"{type(exc).__name__}: {exc} ({os.path.basename(where.filename)} "
+                                          f"line {where.lineno}, version {core.VERSION})"))
         threading.Thread(target=target, daemon=True).start()
 
     def pump(self):

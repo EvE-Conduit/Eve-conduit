@@ -415,3 +415,65 @@ def test_window_loads_selects_previews_and_imports(client, key, tmp_path, instan
     assert User.objects.get(main_character_id=91000001).characters.count() == 2
     assert Token.objects.get(character_id=91000001).refresh_token == "rotated"
     assert dump.exists()
+
+
+def export_style(dump: str, heidi: bool) -> str:
+    """DUMP as phpMyAdmin (or HeidiSQL) exports it: column names in each insert, one row per line after VALUES."""
+    import re
+
+    columns, current, out = {}, None, []
+    for line in dump.split("\n"):
+        m = re.match(r"CREATE TABLE `([^`]+)`", line)
+        if m:
+            current = m.group(1)
+            columns[current] = []
+            line = line.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS") if heidi else line
+        elif current and line.startswith("  `"):
+            columns[current].append(line.split("`")[1])
+            line = "\t" + line.lstrip() if heidi else line
+        elif line.startswith(")"):
+            current = None
+        m = re.match(r"INSERT INTO `([^`]+)` VALUES \((.*)\);$", line)
+        if m and m.group(1) in columns:
+            names = ", ".join(f"`{c}`" for c in columns[m.group(1)])
+            rows = m.group(2).split("),(")
+            indent = "\t" if heidi else ""
+            line = (f"INSERT INTO `{m.group(1)}` ({names}) VALUES\n"
+                    + ",\n".join(f"{indent}({r})" for r in rows) + ";")
+        out.append(line)
+    return "\n".join(out)
+
+
+@pytest.mark.parametrize("heidi", [False, True], ids=["phpmyadmin", "heidisql"])
+def test_reads_exports_with_statements_over_several_lines(tmp_path, heidi):
+    path = tmp_path / "seat.sql"
+    text = export_style(DUMP, heidi)
+    assert "VALUES\n" in text
+    path.write_text(text.replace("\n", "\r\n"), encoding="utf-8")
+    users, squads = tool.read_dump(str(path), with_tokens=True)
+    assert [u.name for u in users] == ['O\'Neil, "Ace"', "Second Pilot"]
+    assert users[0].characters[0].refresh_token == "rt-91000001"
+    assert squads[0].members == [2, 3] and squads[0].moderators == [2]
+
+
+def test_reads_a_utf16_dump_with_spaces_between_values(tmp_path):
+    # What PowerShell's "mariadb-dump ... > seat.sql" writes, with a hand-written insert's spacing.
+    text = DUMP.replace("INSERT INTO `squad_member` VALUES (1,2),(1,3),(2,2);",
+                        "INSERT INTO `squad_member` VALUES ( 1 , 2 ) , (1, 3),\n  (2,2) ;")
+    path = tmp_path / "seat.sql"
+    path.write_text(text.replace("\n", "\r\n"), encoding="utf-16")
+    users, squads = tool.read_dump(str(path), with_tokens=True)
+    assert len(users) == 2 and squads[0].members == [2, 3]
+
+
+def test_a_broken_dump_says_where(tmp_path):
+    path = tmp_path / "seat.sql"
+    path.write_text(DUMP.replace("(2,'O\\'Neil", "(2,'O\\'Neil'oops"))
+    with pytest.raises(tool.ImportError_, match=r"Line \d+: could not read the users rows"):
+        tool.read_dump(str(path), with_tokens=True)
+
+
+def test_tool_version_matches_conduit():
+    from conduit import __version__
+
+    assert tool.VERSION == __version__, "bump VERSION in tools/seat-import/seat_import.py with each release"
