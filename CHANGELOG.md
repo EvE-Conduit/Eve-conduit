@@ -3,6 +3,22 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.30
+
+### Added
+- **Member Audit** (Administration → Member Audit): search the mail of every member character you can see in one
+  place, by subject, text or sender, filtered by corporation. A mail several members received is one row showing
+  who has it and whether they've read it. Access takes the new **Can use Member Audit** permission (HR staff);
+  whose mail is included still follows the character-sheet permissions (every member, alliance or corporation).
+  Opening a mail goes in the snooper log for each character holding it, and searches go in the audit log.
+- **Alts on the character sheet:** the header lists the owner's other characters, main first, with corporation
+  and login status. Ones you aren't allowed to open are shown without a link.
+- **Why a character needs attention:** hovering "Needs attention" on a character card or in Compliance shows
+  each missing ESI scope and which plugin or character-sheet section needs it.
+
+### Updating
+- **Database migration** adds the Member Audit permission; it runs on the usual update.
+
 ## 0.5.29
 
 ### Changed
