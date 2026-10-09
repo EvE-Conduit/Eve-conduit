@@ -3,6 +3,17 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.31
+
+### Security
+- **Member Audit searches opened from another site are no longer logged.** A link elsewhere could open a search in
+  an auditor's browser and put words of the linker's choosing in the audit log under the auditor's name. The
+  results were never readable by the other site. Searches are also cut at 200 characters.
+
+### Changed
+- **The front end is built with Node 24** (the current LTS) instead of Node 22, in Docker and in the release
+  files. Nothing changes for running installs.
+
 ## 0.5.30
 
 ### Added
