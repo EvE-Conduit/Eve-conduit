@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Inbox, Lock, Mail, MailCheck, ScanSearch, UsersRound } from "lucide-react";
+import { Building2, FileText, GraduationCap, Handshake, Inbox, Lock, Mail, MailCheck, ScanSearch, UsersRound, Wallet } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { Link } from "react-router";
 
@@ -8,29 +8,28 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
-import { SearchInput, Select } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/input";
 import { EmptyState, PageHeader, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableToolbar } from "@/components/ui/table";
 import { TabPanel, Tabs } from "@/components/ui/tabs";
-import { Tooltip } from "@/components/ui/tooltip";
+import { ContractAudit } from "@/features/member-audit/Contracts";
+import { CounterpartyAudit } from "@/features/member-audit/Counterparties";
+import { BASE, CorporationFilter, HeldBy, portrait, type Corporation, type Member } from "@/features/member-audit/shared";
+import { SkillCheck } from "@/features/member-audit/SkillCheck";
+import { WalletAudit } from "@/features/member-audit/Wallets";
 import { api } from "@/lib/api";
 import { useHasPerm } from "@/lib/bootstrap";
 import { dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const BASE = "/api/member-audit";
-
 interface Summary {
   characters: number;
   mail_synced: number;
-  corporations: { id: number; name: string; ticker: string; characters: number }[];
+  corporations: Corporation[];
 }
 
-interface Holder {
-  id: number;
-  name: string;
-  owner: string;
+interface Holder extends Member {
   is_read: boolean;
 }
 
@@ -44,12 +43,11 @@ interface AuditMail {
   held_by: Holder[];
 }
 
-const portrait = (id: number) => `https://images.evetech.net/characters/${id}/portrait?size=64`;
-
 export function AdminMemberAudit() {
   const allowed = useHasPerm("sheet.use_member_audit");
   const summary = useQuery({ queryKey: ["member-audit", "summary"], queryFn: () => api.get<Summary>(`${BASE}/summary`), enabled: allowed });
   const s = summary.data;
+  const corporations = s?.corporations ?? [];
 
   return (
     <>
@@ -57,7 +55,7 @@ export function AdminMemberAudit() {
         eyebrow="Administration"
         title="Member Audit"
         icon={<ScanSearch />}
-        description="Look through every member character you can see in one place. Opening a mail is recorded in the snooper log, and searches in the audit log."
+        description="Look through every member character you can see in one place. Characters whose wallet, contracts or dealings you see here, and mail you open, are recorded in the snooper log; searches and skill checks go in the audit log."
       />
       {!allowed ? (
         <Card>
@@ -70,9 +68,31 @@ export function AdminMemberAudit() {
             <StatCard label="Mail synced" value={s?.mail_synced ?? "–"} icon={<MailCheck />} tone={s && s.mail_synced < s.characters ? "warning" : "success"} hint={s ? `of ${s.characters} characters` : undefined} />
             <StatCard label="Corporations" value={s?.corporations.length ?? "–"} icon={<Building2 />} />
           </div>
-          <Tabs variant="pills" listClassName="mb-5" items={[{ value: "mail", label: "Mail", icon: <Mail /> }]}>
+          <Tabs
+            variant="pills"
+            listClassName="mb-5 max-w-full"
+            items={[
+              { value: "mail", label: "Mail", icon: <Mail /> },
+              { value: "counterparties", label: "Counterparties", icon: <Handshake /> },
+              { value: "wallets", label: "Wallets", icon: <Wallet /> },
+              { value: "contracts", label: "Contracts", icon: <FileText /> },
+              { value: "skills", label: "Skill check", icon: <GraduationCap /> },
+            ]}
+          >
             <TabPanel value="mail">
-              <MailAudit corporations={s?.corporations ?? []} />
+              <MailAudit corporations={corporations} />
+            </TabPanel>
+            <TabPanel value="counterparties">
+              <CounterpartyAudit corporations={corporations} />
+            </TabPanel>
+            <TabPanel value="wallets">
+              <WalletAudit corporations={corporations} />
+            </TabPanel>
+            <TabPanel value="contracts">
+              <ContractAudit corporations={corporations} />
+            </TabPanel>
+            <TabPanel value="skills">
+              <SkillCheck corporations={corporations} />
             </TabPanel>
           </Tabs>
         </>
@@ -81,23 +101,7 @@ export function AdminMemberAudit() {
   );
 }
 
-function HeldBy({ holders }: { holders: Holder[] }) {
-  const shown = holders.slice(0, 3);
-  return (
-    <Tooltip content={holders.map((h) => h.name).join(", ")}>
-      <div className="flex items-center gap-2">
-        <div className="flex -space-x-1.5">
-          {shown.map((h) => (
-            <Avatar key={h.id} src={portrait(h.id)} name={h.name} size="xs" rounded="full" className="ring-2 ring-surface" />
-          ))}
-        </div>
-        <span className="truncate text-xs text-muted">{holders.length === 1 ? holders[0]!.name : `${holders.length} characters`}</span>
-      </div>
-    </Tooltip>
-  );
-}
-
-function MailAudit({ corporations }: { corporations: Summary["corporations"] }) {
+function MailAudit({ corporations }: { corporations: Corporation[] }) {
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim());
   const [corporation, setCorporation] = useState("");
@@ -135,16 +139,7 @@ function MailAudit({ corporations }: { corporations: Summary["corporations"] }) 
     <Card>
       <TableToolbar>
         <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search subject, text or sender" className="w-full sm:w-72" aria-label="Search mail" />
-        {corporations.length > 1 && (
-          <Select value={corporation} onChange={(e) => setCorporation(e.target.value)} aria-label="Corporation" className="w-56">
-            <option value="">Every corporation</option>
-            {corporations.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} [{c.ticker}]
-              </option>
-            ))}
-          </Select>
-        )}
+        <CorporationFilter corporations={corporations} value={corporation} onChange={setCorporation} />
       </TableToolbar>
       <PagedTable<AuditMail>
         url={`${BASE}/mail`}
