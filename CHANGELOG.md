@@ -3,6 +3,24 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.28
+
+### Added
+- **Bring every character's data over from SeAT.** After importing the accounts, **Import character data** in the
+  SeAT import program (attached to this release) brings over everything SeAT kept for the ticked users'
+  characters: wallet journal and transactions, mining, mail, killmails, contracts, industry jobs, market orders,
+  notifications and calendar, plus skills, assets, blueprints, planets, contacts, standings, loyalty points,
+  research, fittings, location and clones. History is added to what's here, matched by EVE's ids, so nothing is
+  doubled and nothing EVE gave is changed. Current state comes from SeAT only where a character has never synced
+  that part from EVE, so characters whose tokens are gone keep SeAT's last copy, and sections filled this way say
+  "From SeAT, data as of ...". It needs a full dump of SeAT's database; the program sends Conduit only the tables
+  it needs, compressed, and Conduit imports them in the background. For a very large dump, copy it to the server
+  and run `conduit manage import_seat_history <dump>` instead. See `tools/seat-import/README.md`.
+
+### Changed
+- **Docker:** `docker-compose.yml` adds a `seat_import` volume shared by the web app and the worker, for the
+  character data import. `docker compose up -d --build` after updating creates it.
+
 ## 0.5.27
 
 ### Fixed
