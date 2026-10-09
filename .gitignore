@@ -18,3 +18,7 @@ dist/
 .claude/
 .design-scratch/
 backend/updates/
+
+# SeAT import: dumps hold working logins; reports are per-run
+*.sql
+seat-import-report-*.json

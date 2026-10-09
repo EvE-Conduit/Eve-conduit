@@ -452,6 +452,139 @@ def send_notification(request, payload: NotificationIn):
     return {"sent": len(sent), "recipients": len(ids)}
 
 
+# --- SeAT import (tools/seat-import) ----------------------------------------------
+
+
+class SeatCharacterIn(Schema):
+    id: int
+    name: str
+    owner_hash: str = ""
+    refresh_token: str = ""
+    scopes: list[str] = []
+
+
+class SeatUserIn(Schema):
+    seat_id: int
+    name: str
+    main_character_id: int
+    characters: list[SeatCharacterIn]
+
+
+class SeatUsersIn(Schema):
+    users: list[SeatUserIn]
+
+
+class SeatSquadIn(Schema):
+    name: str
+    description: str = ""
+    hidden: bool = False
+    member_mains: list[int] = []
+    moderator_mains: list[int] = []
+
+
+class SeatVerifyIn(Schema):
+    character_ids: list[int]
+
+
+#: Users per request; the tool sends 25 at a time (with tokens and scopes that stays well under Django's 2.5 MB).
+SEAT_BATCH_MAX = 100
+
+
+def _seat_users(payload: SeatUsersIn):
+    from conduit.accounts.seat_import import SeatCharacter, SeatUser
+
+    if len(payload.users) > SEAT_BATCH_MAX:
+        raise HttpError(400, f"Send at most {SEAT_BATCH_MAX} users per request")
+    return [
+        SeatUser(u.seat_id, u.name, u.main_character_id, [SeatCharacter(**c.dict()) for c in u.characters])
+        for u in payload.users
+    ]
+
+
+@router.get("/import/seat/info", tags=["import"])
+@require_scope("import:seat")
+def seat_import_info(request):
+    """What the tool checks before importing: this site's EVE application and the scopes its features need."""
+    from django.conf import settings
+
+    from conduit.accounts.seat_import import wanted_scopes
+    from conduit.esi.tokens import sso_configured
+
+    return {
+        "version": __version__,
+        "sso_configured": sso_configured(),
+        # Public anyway (it is in every login link); the tool compares it with the one SeAT's tokens were issued to.
+        "client_id": settings.ESI_CLIENT_ID,
+        "wanted_scopes": sorted(wanted_scopes()),
+        "users": User.objects.count(),
+    }
+
+
+@router.post("/import/seat/preview", tags=["import"])
+@require_scope("import:seat")
+def seat_import_preview(request, payload: SeatUsersIn):
+    """What importing these users would do. Changes nothing; the tool sends no tokens here."""
+    from conduit.accounts.seat_import import preview
+
+    return {"users": preview(_seat_users(payload))}
+
+
+@router.post("/import/seat/users", tags=["import"])
+@require_scope("import:seat")
+def seat_import_users(request, payload: SeatUsersIn):
+    """Import a batch of users with their characters and tokens. Characters already here stay where they are."""
+    from conduit.accounts.seat_import import import_user
+
+    results = [import_user(u) for u in _seat_users(payload)]
+    added = sum(1 for r in results for c in r["characters"] if c["status"] == "added")
+    created = sum(1 for r in results if r["created"])
+    record("seat.imported", f"imported {len(results)} SeAT users ({created} new accounts, {added} characters added)",
+           request=request, target_type="import", details={"users": len(results), "created": created, "characters": added})
+    return {"users": results}
+
+
+@router.post("/import/seat/squads", tags=["import"])
+@require_scope("import:seat")
+def seat_import_squad(request, payload: SeatSquadIn):
+    """Turn one SeAT squad into a group, adding the imported members by their SeAT main character."""
+    from conduit.accounts.seat_import import SquadError, import_squad
+
+    if not payload.name.strip():
+        raise HttpError(400, "name is required")
+    try:
+        return import_squad(payload.name.strip(), payload.description, payload.hidden, payload.member_mains,
+                            payload.moderator_mains, request=request)
+    except SquadError as exc:
+        raise HttpError(409, str(exc)) from None
+
+
+@router.post("/import/seat/verify", tags=["import"])
+@require_scope("import:seat")
+def seat_import_verify(request, payload: SeatVerifyIn):
+    """Start refreshing these characters' tokens once, in the background. Poll the returned run for results."""
+    import secrets
+
+    from conduit.accounts.tasks import verify_seat_tokens
+
+    ids = list(Character.objects.filter(pk__in=payload.character_ids).values_list("pk", flat=True))
+    run_id = secrets.token_hex(8)
+    verify_seat_tokens.delay(run_id, ids)
+    return {"run_id": run_id, "total": len(ids)}
+
+
+@router.get("/import/seat/verify/{run_id}", tags=["import"])
+@require_scope("import:seat")
+def seat_import_verify_status(request, run_id: str):
+    from django.core.cache import cache
+
+    from conduit.accounts.tasks import verify_key
+
+    state = cache.get(verify_key(run_id))
+    if state is None:
+        return {"started": False, "finished": False}
+    return {"started": True, **state}
+
+
 external_api.add_router("/", router)
 external_api.add_router("/corporations", corp_external_router)
 
