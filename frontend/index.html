@@ -9,9 +9,13 @@
     <script>
       // Pick the theme before the first paint, so light-theme users don't see a dark flash.
       try {
+        // Named themes (lib/preferences.ts SKINS) sit on a dark or light base.
         var t = localStorage.getItem("conduit:theme");
+        var skins = { sakura: "light", neotokyo: "dark" };
+        var root = document.documentElement;
+        if (skins[t]) { root.dataset.skin = t; t = skins[t]; }
         if (t === "system") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-        if (t === "light") { document.documentElement.dataset.theme = "light"; document.documentElement.className = "light"; }
+        if (t === "light") { root.dataset.theme = "light"; root.className = "light"; }
       } catch (e) {}
     </script>
   </head>

@@ -20,13 +20,28 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dashboard: {},
 };
 
+/**
+ * Named themes beyond plain dark/light. Each sits on a dark or light base (so data-theme, and every
+ * rule keyed on it, still applies) and sets data-skin="<name>" for its own tokens in theme.css.
+ * index.html repeats this map for the first paint.
+ */
+export const SKINS = {
+  sakura: { mode: "light", themeColor: "#fdf1f5" },
+  neotokyo: { mode: "dark", themeColor: "#0d0a1a" },
+} as const;
+
 const THEME_KEY = "conduit:theme";
 const media = typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: light)") : null;
 let current: Preferences = DEFAULT_PREFERENCES;
 
+function skinOf(theme: Preferences["theme"]) {
+  return theme in SKINS ? SKINS[theme as keyof typeof SKINS] : null;
+}
+
+/** The dark or light base a theme sits on. */
 export function resolvedTheme(theme: Preferences["theme"]): "dark" | "light" {
   if (theme === "system") return media?.matches ? "light" : "dark";
-  return theme;
+  return skinOf(theme)?.mode ?? (theme as "dark" | "light");
 }
 
 /** Set the attributes on <html>. Safe to call often. */
@@ -37,11 +52,13 @@ export function applyPreferences(prefs: Partial<Preferences> | null | undefined)
   root.dataset.theme = theme;
   root.classList.toggle("dark", theme === "dark");
   root.classList.toggle("light", theme === "light");
+  const skin = skinOf(current.theme);
+  setAttr("skin", skin ? current.theme : null);
   setAttr("contrast", current.high_contrast ? "high" : null);
   setAttr("density", current.density === "compact" ? "compact" : null);
   setAttr("textScale", current.text_scale ? String(current.text_scale) : null);
   setAttr("motion", current.reduce_motion ? "reduce" : null);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#e9edf0" : "#05080c");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", skin?.themeColor ?? (theme === "light" ? "#e9edf0" : "#05080c"));
   try {
     localStorage.setItem(THEME_KEY, current.theme);
   } catch {
@@ -60,7 +77,7 @@ export function applyStoredTheme() {
   let theme: Preferences["theme"] = "dark";
   try {
     const stored = localStorage.getItem(THEME_KEY);
-    if (stored === "light" || stored === "dark" || stored === "system") theme = stored;
+    if (stored === "light" || stored === "dark" || stored === "system" || (stored && stored in SKINS)) theme = stored as Preferences["theme"];
   } catch {
     // ignore
   }

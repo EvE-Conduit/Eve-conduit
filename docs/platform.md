@@ -66,9 +66,12 @@ The external API offers the same to other services: see [external-api.md](extern
 
 ## Preferences
 
-Each user's theme (dark, light or system), density, text size, high contrast, reduced motion, time zone,
+Each user's theme (dark, light, system, or the named Sakura and Neo Tokyo themes), density, text size, high contrast, reduced motion, time zone,
 12/24-hour clock, muted notification categories and dashboard layout live in `accounts.UserPreferences`,
-come down with `/api/core/bootstrap` and are applied as attributes on `<html>`.
+come down with `/api/core/bootstrap` and are applied as attributes on `<html>`. A named theme sets
+`data-skin` on top of its dark or light base `data-theme`; adding one means a `SKINS` entry in
+`frontend/src/lib/preferences.ts` (and the first-paint map in `index.html`), its tokens in `theme.css`, a
+`UserPreferences.Theme` choice plus migration, and a card in Settings.
 
 Plugins get their own per-user settings slot, any JSON value:
 

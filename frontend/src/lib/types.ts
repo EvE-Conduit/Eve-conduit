@@ -20,7 +20,7 @@ export interface StateBrief {
 }
 
 export interface Preferences {
-  theme: "system" | "dark" | "light";
+  theme: "system" | "dark" | "light" | "sakura" | "neotokyo";
   density: "comfortable" | "compact";
   timezone: string;
   clock_24h: boolean;

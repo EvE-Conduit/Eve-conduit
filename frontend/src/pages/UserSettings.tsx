@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Check, Clock, Monitor, Moon, Palette, SlidersHorizontal, Sun } from "lucide-react";
+import { Bell, Check, Clock, Flower2, Monitor, Moon, Palette, SlidersHorizontal, Sparkles, Sun } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
@@ -67,11 +67,13 @@ export function UserSettings() {
           <Card id="appearance" className="scroll-mt-24">
             <CardHeader icon={<Palette />} title="Appearance" description="Theme, density and readability." />
             <CardBody className="space-y-7">
-              <Row label="Theme" description="System follows your device's light or dark setting.">
-                <div className="grid grid-cols-3 gap-3">
+              <Row label="Theme" description="System follows your device's light or dark setting. Sakura and Neo Tokyo use their own colours and rounder shapes.">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <ThemeCard value="dark" current={prefs.theme} onPick={(theme) => set({ theme })} icon={<Moon />} label="Dark" />
                   <ThemeCard value="light" current={prefs.theme} onPick={(theme) => set({ theme })} icon={<Sun />} label="Light" />
                   <ThemeCard value="system" current={prefs.theme} onPick={(theme) => set({ theme })} icon={<Monitor />} label="System" />
+                  <ThemeCard value="sakura" current={prefs.theme} onPick={(theme) => set({ theme })} icon={<Flower2 />} label="Sakura" />
+                  <ThemeCard value="neotokyo" current={prefs.theme} onPick={(theme) => set({ theme })} icon={<Sparkles />} label="Neo Tokyo" />
                 </div>
               </Row>
               <Row label="Density" description="Compact fits more rows in tables and cards.">
@@ -208,9 +210,14 @@ function Row({ label, description, children }: { label: ReactNode; description?:
   );
 }
 
-const SWATCH = {
+type Swatch = { bg: string; panel: string; line: string; text: string; accent?: string; round?: boolean };
+
+/** Mini previews. Plain dark/light show the install's accent; named themes bring their own. */
+const SWATCH: Record<Exclude<Preferences["theme"], "system">, Swatch> = {
   dark: { bg: "#070a10", panel: "#111824", line: "#2a3342", text: "#edf1f7" },
   light: { bg: "#f3f5f9", panel: "#ffffff", line: "#dde3ec", text: "#0b1220" },
+  sakura: { bg: "#fdf1f5", panel: "#ffffff", line: "#f5cadb", text: "#3a1f2d", accent: "#d63f78", round: true },
+  neotokyo: { bg: "#0d0a1a", panel: "#1b1530", line: "#3a2d5e", text: "#f1ecff", accent: "#ff4fa3", round: true },
 };
 
 function ThemeCard({
@@ -227,17 +234,21 @@ function ThemeCard({
   label: string;
 }) {
   const active = value === current;
-  const Mini = ({ s, className }: { s: (typeof SWATCH)["dark"]; className?: string }) => (
-    <div className={cn("flex h-full gap-1.5 p-2", className)} style={{ background: s.bg }}>
-      <div className="w-1/4 rounded-sm" style={{ background: s.panel, boxShadow: `inset 0 0 0 1px ${s.line}` }} />
-      <div className="flex flex-1 flex-col gap-1.5">
-        <div className="h-2 w-2/3 rounded-none" style={{ background: s.text, opacity: 0.8 }} />
-        <div className="flex-1 rounded-sm" style={{ background: s.panel, boxShadow: `inset 0 0 0 1px ${s.line}` }}>
-          <div className="m-1.5 h-1.5 w-1/3 rounded-none bg-accent" />
+  // Literal radii: the card itself follows the current theme's corners, not the one it previews.
+  const Mini = ({ s, className }: { s: Swatch; className?: string }) => {
+    const r = s.round ? "6px" : "1px";
+    return (
+      <div className={cn("flex h-full gap-1.5 p-2", className)} style={{ background: s.bg }}>
+        <div className="w-1/4" style={{ background: s.panel, boxShadow: `inset 0 0 0 1px ${s.line}`, borderRadius: r }} />
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="h-2 w-2/3" style={{ background: s.text, opacity: 0.8, borderRadius: s.round ? "9999px" : 0 }} />
+          <div className="flex-1" style={{ background: s.panel, boxShadow: `inset 0 0 0 1px ${s.line}`, borderRadius: r }}>
+            <div className={cn("m-1.5 h-1.5 w-1/3", !s.accent && "bg-accent")} style={{ background: s.accent, borderRadius: s.round ? "9999px" : 0 }} />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
   return (
     <button
       type="button"

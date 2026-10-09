@@ -1,5 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+// rounded-control and rounded-pill are theme radii (theme.css), so overrides like rounded-full replace them.
+const twMerge = extendTailwindMerge({ extend: { theme: { radius: ["control", "pill"] } } });
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

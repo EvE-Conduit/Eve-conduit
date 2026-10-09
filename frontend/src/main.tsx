@@ -133,7 +133,7 @@ async function start() {
                 theme="system"
                 position="bottom-right"
                 closeButton
-                toastOptions={{ className: "!bg-surface-raised !border-border-strong !text-text !rounded-none !shadow-e3 !font-sans [&_[data-description]]:!text-muted" }}
+                toastOptions={{ className: "!bg-surface-raised !border-border-strong !text-text !rounded-control !shadow-e3 !font-sans [&_[data-description]]:!text-muted" }}
               />
             </TooltipProvider>
           </PluginsProvider>

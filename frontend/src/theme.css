@@ -5,6 +5,7 @@
  *
  * Attributes on <html> (set by lib/preferences.ts from the user's preferences):
  *   data-theme="dark|light"      resolved theme ("system" is resolved in JS)
+ *   data-skin="sakura|neotokyo"  a named theme on top of its dark/light base (lib/preferences.ts SKINS)
  *   data-contrast="high"         stronger text, borders and focus rings
  *   data-density="compact"       tighter padding in cards and tables
  *   data-text-scale="0|1|2"      100% / 112.5% / 125% root font size
@@ -63,6 +64,22 @@
   --pad-cell-y: 0.625rem;
   --pad-cell-x: 1.25rem;
 
+  --font-ui: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  /* Page ground art; only the named themes draw any. */
+  --bg-art: none;
+  /* Square corners everywhere; rounded-full stays round for status dots. */
+  --r-xs: 0px;
+  --r-sm: 1px;
+  --r-md: 2px;
+  --r-lg: 2px;
+  --r-xl: 2px;
+  --r-2xl: 3px;
+  --r-3xl: 3px;
+  --r-4xl: 4px;
+  /* Buttons, inputs, badges, toasts and small avatars; pills are switches. */
+  --r-control: 0px;
+  --r-pill: 0px;
+
   color-scheme: dark;
 }
 
@@ -109,6 +126,111 @@
   --panel-gradient: var(--surface);
 
   color-scheme: light;
+}
+
+/*
+ * Named themes. They bring their own accent (the install's --brand is not used), soft rounded
+ * corners, a rounded typeface and no HUD corner brackets. Placed before the high-contrast rules so
+ * those still apply on top.
+ */
+:root[data-skin="sakura"],
+:root[data-skin="neotokyo"] {
+  --font-ui: "M PLUS Rounded 1c", ui-rounded, ui-sans-serif, system-ui, sans-serif;
+  --bracket: transparent;
+}
+
+/* Sakura: cherry-blossom pink on a blush ground, white cards, plum ink. Light base. */
+:root[data-skin="sakura"] {
+  --site-accent: #d63f78;
+  --accent-fg: #ffffff;
+  --accent-ink: #b0245a;
+
+  --bg: #fdf1f5;
+  --surface: #ffffff;
+  --surface-2: #fff6f9;
+  --surface-3: #fbe3ec;
+  --surface-raised: #ffffff;
+  --border: rgb(214 63 120 / 0.16);
+  --border-strong: rgb(214 63 120 / 0.3);
+  --hairline: rgb(120 40 80 / 0.08);
+  --text: #3a1f2d;
+  --muted: #6b4558;
+  --subtle: #876475;
+  --hover: rgb(214 63 120 / 0.07);
+  --hover-strong: rgb(214 63 120 / 0.13);
+  --overlay: rgb(58 31 45 / 0.4);
+  --bg-art:
+    radial-gradient(60rem 40rem at 100% -10%, rgb(251 207 232 / 0.55), transparent 70%),
+    radial-gradient(50rem 36rem at -10% 110%, rgb(221 214 254 / 0.5), transparent 70%);
+
+  --chart-1: var(--site-accent);
+  --chart-2: #7c5cd6;
+  --chart-3: #0e9aa7;
+  --chart-4: #d97706;
+  --chart-5: #16a34a;
+  --chart-6: #3b82f6;
+
+  --elev-1: 0 1px 2px rgb(214 63 120 / 0.08), 0 2px 8px rgb(214 63 120 / 0.06);
+  --elev-2: 0 2px 4px rgb(214 63 120 / 0.08), 0 8px 24px rgb(214 63 120 / 0.1);
+  --elev-3: 0 24px 60px -18px rgb(110 30 70 / 0.3);
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
+  --r-3xl: 24px;
+  --r-4xl: 28px;
+  --r-control: 10px;
+  --r-pill: 9999px;
+}
+
+/* Neo Tokyo: neon magenta and cyan over a midnight-indigo city. Dark base. */
+:root[data-skin="neotokyo"] {
+  --site-accent: #ff4fa3;
+  --accent-fg: #1a0614;
+  --accent-ink: #ff8cc4;
+
+  --bg: #0d0a1a;
+  --surface: #161127;
+  --surface-2: #1b1530;
+  --surface-3: #261d42;
+  --surface-raised: #1a142d;
+  --border: rgb(167 139 250 / 0.16);
+  --border-strong: rgb(167 139 250 / 0.3);
+  --hairline: rgb(196 181 253 / 0.08);
+  --text: #f1ecff;
+  --muted: #bab1d8;
+  --subtle: #9389b4;
+  --hover: rgb(255 79 163 / 0.08);
+  --hover-strong: rgb(255 79 163 / 0.14);
+  --overlay: rgb(6 3 14 / 0.75);
+  --bg-art:
+    radial-gradient(60rem 40rem at 100% -10%, rgb(255 79 163 / 0.12), transparent 70%),
+    radial-gradient(50rem 36rem at -10% 110%, rgb(34 211 238 / 0.09), transparent 70%);
+
+  --chart-1: var(--site-accent);
+  --chart-2: #22d3ee;
+  --chart-3: #a78bfa;
+  --chart-4: #fbbf24;
+  --chart-5: #5ee0a0;
+  --chart-6: #60a5fa;
+
+  --elev-1: none;
+  --elev-2: 0 0 0 1px rgb(255 79 163 / 0.08);
+  --elev-3: 0 24px 64px -20px rgb(0 0 0 / 0.9), 0 0 48px -12px rgb(255 79 163 / 0.25);
+
+  --r-xs: 3px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  --r-2xl: 14px;
+  --r-3xl: 16px;
+  --r-4xl: 20px;
+  --r-control: 6px;
+  --r-pill: 9999px;
 }
 
 :root[data-contrast="high"] {
@@ -187,18 +309,19 @@
   --spacing-cell-y: var(--pad-cell-y);
   --spacing-cell-x: var(--pad-cell-x);
 
-  --font-sans: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ui);
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 
-  /* Square corners everywhere; rounded-full stays round for status dots. */
-  --radius-xs: 0px;
-  --radius-sm: 1px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 2px;
-  --radius-2xl: 3px;
-  --radius-3xl: 3px;
-  --radius-4xl: 4px;
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-2xl: var(--r-2xl);
+  --radius-3xl: var(--r-3xl);
+  --radius-4xl: var(--r-4xl);
+  --radius-control: var(--r-control);
+  --radius-pill: var(--r-pill);
 
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
