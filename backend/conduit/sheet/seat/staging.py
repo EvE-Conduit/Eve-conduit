@@ -15,6 +15,13 @@ from .dump import iter_rows
 BATCH = 5000
 
 
+class Row(dict):
+    """A staged row. A column this SeAT version doesn't have reads as None, so older and newer dumps both work."""
+
+    def __missing__(self, key):
+        return None
+
+
 def _q(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
@@ -65,12 +72,27 @@ class Staging:
                     progress(name, counts[name])
         for name in list(pending):
             flush(name)
+        self.index(indexes)
+        return counts
+
+    def append(self, table: str, columns: list[str], rows: list[list]) -> int:
+        """Add rows sent in pieces (by the import program). Columns are fixed by the first piece for a table."""
+        if table not in self.columns:
+            self.db.execute(f"CREATE TABLE {_q(table)} ({', '.join(_q(c) for c in columns)})")
+            self.columns[table] = list(columns)
+        cols = self.columns[table]
+        pos = [columns.index(c) if c in columns else None for c in cols]
+        self.db.executemany(f"INSERT INTO {_q(table)} VALUES ({', '.join('?' * len(cols))})",
+                            [tuple(None if p is None else row[p] for p in pos) for row in rows])
+        self.db.commit()
+        return len(rows)
+
+    def index(self, indexes: dict[str, Iterable[str]]):
         for name, cols in indexes.items():
             for col in cols:
                 if name in self.columns and col in self.columns[name]:
                     self.db.execute(f"CREATE INDEX IF NOT EXISTS {_q(f'ix_{name}_{col}')} ON {_q(name)} ({_q(col)})")
         self.db.commit()
-        return counts
 
     # --- reading --------------------------------------------------------------------------------------------
 
@@ -86,7 +108,7 @@ class Staging:
             sql += " WHERE " + " AND ".join(f"{_q(k)} = ?" for k in where)
         if order:
             sql += f" ORDER BY {order}"
-        return [dict(r) for r in self.db.execute(sql, tuple(where.values()))]
+        return [Row(r) for r in self.db.execute(sql, tuple(where.values()))]
 
     def one(self, table: str, **where) -> dict | None:
         found = self.rows(table, **where)
@@ -101,7 +123,7 @@ class Staging:
         for i in range(0, len(values), 500):
             chunk = values[i:i + 500]
             sql = f"SELECT * FROM {_q(table)} WHERE {_q(column)} IN ({', '.join('?' * len(chunk))})"
-            out += [dict(r) for r in self.db.execute(sql, chunk)]
+            out += [Row(r) for r in self.db.execute(sql, chunk)]
         return out
 
     def character_ids(self) -> set[int]:

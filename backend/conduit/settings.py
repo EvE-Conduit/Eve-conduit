@@ -243,6 +243,8 @@ CONDUIT_ESI_LOG = env("CONDUIT_ESI_LOG", "all").strip().lower()
 CONDUIT_INSTALL_KIND = env("CONDUIT_INSTALL_KIND", "dev").strip().lower()
 # Where downloaded releases and the updater's request/result files live (writable by the app).
 CONDUIT_UPDATES_DIR = env("CONDUIT_UPDATES_DIR", str(BASE_DIR / "updates"))
+# Where the SeAT import program's uploads wait for the worker; both must see it. Default: the system temp folder.
+CONDUIT_SEAT_IMPORT_DIR = env("CONDUIT_SEAT_IMPORT_DIR", "")
 # GitHub repository releases come from, and whether to look for them daily (notify only).
 CONDUIT_UPDATE_REPO = env("CONDUIT_UPDATE_REPO", "EvE-Conduit/Eve-conduit")
 CONDUIT_UPDATE_CHECK = env_bool("CONDUIT_UPDATE_CHECK", True)

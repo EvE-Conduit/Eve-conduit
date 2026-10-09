@@ -585,6 +585,99 @@ def seat_import_verify_status(request, run_id: str):
     return {"started": True, **state}
 
 
+# --- SeAT character data (tools/seat-import uploads it; conduit.sheet.seat imports it) --------------
+
+#: Largest piece of rows accepted once unpacked; the program sends far smaller ones.
+SEAT_ROWS_MAX = 64 * 1024 * 1024
+
+
+class SeatHistoryStartIn(Schema):
+    character_ids: list[int] = []
+    sections: list[str] = []
+
+
+@router.get("/import/seat/history/tables", tags=["import"])
+@require_scope("import:seat")
+def seat_history_tables(request):
+    """The SeAT tables the character data import reads; the program sends only these."""
+    from conduit.sheet.seat import history, runs
+
+    return {"tables": runs.wanted_tables(), "sections": [imp.key for imp in history.plan()]}
+
+
+@router.post("/import/seat/history", tags=["import"])
+@require_scope("import:seat")
+def seat_history_create(request):
+    from conduit.sheet.seat import runs
+
+    return {"run_id": runs.create()}
+
+
+@router.post("/import/seat/history/{run_id}/rows", tags=["import"])
+@require_scope("import:seat")
+def seat_history_rows(request, run_id: str):
+    """Add rows to a run: ``{"table": ..., "columns": [...], "rows": [[...], ...], "seq": n}``, optionally
+    gzipped (``Content-Encoding: gzip``). A piece with a ``seq`` already seen is ignored, so resending is safe."""
+    import gzip
+    import zlib
+
+    from conduit.sheet.seat import runs
+
+    raw = request.body
+    if request.headers.get("Content-Encoding", "").lower() == "gzip":
+        try:
+            unpack = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            raw = unpack.decompress(raw, SEAT_ROWS_MAX)
+            if unpack.unconsumed_tail:
+                raise HttpError(413, "Piece too large once unpacked")
+        except (zlib.error, gzip.BadGzipFile):
+            raise HttpError(400, "Not valid gzip") from None
+    try:
+        data = json.loads(raw)
+        table, columns, rows = data["table"], data["columns"], data["rows"]
+    except (ValueError, KeyError, TypeError):
+        raise HttpError(400, "Send JSON with table, columns and rows") from None
+    try:
+        return {"added": runs.append(run_id, table, columns, rows, data.get("seq"))}
+    except runs.RunError as exc:
+        raise HttpError(409, str(exc)) from None
+
+
+@router.post("/import/seat/history/{run_id}/start", tags=["import"])
+@require_scope("import:seat")
+def seat_history_start(request, run_id: str, payload: SeatHistoryStartIn):
+    """Import the uploaded data in the background. Poll the run for progress."""
+    from conduit.sheet.seat import runs
+
+    try:
+        runs.start(run_id, payload.character_ids, payload.sections)
+    except (runs.RunError, ValueError) as exc:
+        raise HttpError(409, str(exc)) from None
+    record("seat.history", f"started importing SeAT character data (run {run_id})", request=request,
+           target_type="import", details={"run": run_id, "characters": len(payload.character_ids)})
+    return runs.state(run_id)
+
+
+@router.get("/import/seat/history/{run_id}", tags=["import"])
+@require_scope("import:seat")
+def seat_history_status(request, run_id: str):
+    from conduit.sheet.seat import runs
+
+    state = runs.state(run_id)
+    if state is None:
+        raise HttpError(404, "No such run (or it expired)")
+    return state
+
+
+@router.delete("/import/seat/history/{run_id}", tags=["import"])
+@require_scope("import:seat")
+def seat_history_discard(request, run_id: str):
+    from conduit.sheet.seat import runs
+
+    runs.discard(run_id)
+    return {"discarded": True}
+
+
 external_api.add_router("/", router)
 external_api.add_router("/corporations", corp_external_router)
 

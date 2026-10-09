@@ -63,12 +63,21 @@ def plan(sections=None) -> list[routes.SectionImport]:
     return [known[s.key] for s in registry.ordered() if s.key in wanted and s.key in known]
 
 
-def load(dump_path: str, staging_path: str, imports: list[routes.SectionImport], say: Callable = print) -> Staging:
-    tables = set(routes.BASE_TABLES) | {t for imp in imports for t in imp.tables}
-    indexes: dict[str, set] = {t: {"character_id"} for t in tables}
+def tables_for(imports: list[routes.SectionImport]) -> set[str]:
+    """SeAT tables these section imports read."""
+    return set(routes.BASE_TABLES) | {t for imp in imports for t in imp.tables}
+
+
+def indexes_for(imports: list[routes.SectionImport]) -> dict[str, set]:
+    indexes: dict[str, set] = {t: {"character_id"} for t in tables_for(imports)}
     for extra in [routes.BASE_INDEXES] + [imp.indexes for imp in imports]:
         for table, cols in extra.items():
             indexes.setdefault(table, set()).update(cols)
+    return indexes
+
+
+def load(dump_path: str, staging_path: str, imports: list[routes.SectionImport], say: Callable = print) -> Staging:
+    tables, indexes = tables_for(imports), indexes_for(imports)
     store = Staging(staging_path)
     say(f"Reading {os.path.basename(dump_path)} ({len(tables)} tables)...")
     counts = store.load(dump_path, tables, indexes,
@@ -145,6 +154,51 @@ def import_character(store: Staging, character, imports, names: set, orgs: dict 
     return out
 
 
+def process(store: Staging, imports, *, character_ids=None, lookup_names=True, say: Callable = print,
+            progress: Callable[[dict], None] | None = None) -> dict:
+    """Import every character that is in the staged SeAT data and on this site. ``progress(summary)`` is called
+    after each character."""
+    if not store.has("refresh_tokens"):
+        raise ValueError("The SeAT data has no refresh_tokens table, so it can't say which characters SeAT had.")
+    say(f"Names from SeAT: {preload_names(store):,}")
+    seat_ids = store.character_ids()
+    if character_ids:
+        seat_ids &= set(character_ids)
+    characters = list(Character.objects.filter(pk__in=seat_ids).order_by("name"))
+    absent = len(seat_ids) - len(characters)
+    say(f"{len(characters)} characters to import" + (f"; {absent} in SeAT aren't on this site (import their "
+                                                     "accounts first)" if absent else ""))
+    names: set = set()
+    orgs: dict = {"corporation_ids": set(), "alliance_ids": set()}
+    summary = {"characters": len(characters), "done": 0, "not_here": absent, "sections": {}, "errors": []}
+    with mock.patch.object(EsiClient, "_request", _no_live_esi), mock.patch.object(Token, "has_scopes", _granted):
+        for n, character in enumerate(characters, 1):
+            for key, result in import_character(store, character, imports, names, orgs).items():
+                counts = summary["sections"].setdefault(key, {"imported": 0, "skipped": 0, "errors": 0})
+                if result.startswith("error"):
+                    counts["errors"] += 1
+                    summary["errors"].append({"character": character.pk, "name": character.name, "section": key,
+                                              "error": result})
+                    say(f"  {character.name}: {key} {result}")
+                else:
+                    counts[result] += 1
+            summary["done"] = n
+            if progress:
+                progress(summary)
+            if n % 25 == 0 or n == len(characters):
+                say(f"  {n}/{len(characters)} characters")
+    if lookup_names and (names or orgs["corporation_ids"] or orgs["alliance_ids"]):
+        from conduit.eve.tasks import ensure_eve_names, ensure_names
+
+        say(f"Looking up {len(names) + len(orgs['corporation_ids']) + len(orgs['alliance_ids']):,} names with EVE...")
+        try:
+            ensure_names(**orgs)
+            ensure_eve_names(names)
+        except Exception as exc:  # names fill in later on their own
+            say(f"  Name lookup stopped ({exc}); they are filled in as characters sync.")
+    return summary
+
+
 def run(dump_path: str, *, sections=None, character_ids=None, staging_path: str | None = None, keep_staging=False,
         lookup_names=True, say: Callable = print) -> dict:
     imports = plan(sections)
@@ -155,39 +209,7 @@ def run(dump_path: str, *, sections=None, character_ids=None, staging_path: str 
     store = None
     try:
         store = load(dump_path, staging_path, imports, say)
-        say(f"Names from SeAT: {preload_names(store):,}")
-        seat_ids = store.character_ids()
-        if character_ids:
-            seat_ids &= set(character_ids)
-        characters = list(Character.objects.filter(pk__in=seat_ids).order_by("name"))
-        absent = len(seat_ids) - len(characters)
-        say(f"{len(characters)} characters to import" + (f"; {absent} in SeAT aren't on this site (import their "
-                                                         "accounts first)" if absent else ""))
-        names: set = set()
-        orgs: dict = {"corporation_ids": set(), "alliance_ids": set()}
-        summary = {"characters": len(characters), "not_here": absent, "sections": {}, "errors": []}
-        with mock.patch.object(EsiClient, "_request", _no_live_esi), mock.patch.object(Token, "has_scopes", _granted):
-            for n, character in enumerate(characters, 1):
-                for key, result in import_character(store, character, imports, names, orgs).items():
-                    counts = summary["sections"].setdefault(key, {"imported": 0, "skipped": 0, "errors": 0})
-                    if result.startswith("error"):
-                        counts["errors"] += 1
-                        summary["errors"].append({"character": character.pk, "section": key, "error": result})
-                        say(f"  {character.name}: {key} {result}")
-                    else:
-                        counts[result] += 1
-                if n % 25 == 0 or n == len(characters):
-                    say(f"  {n}/{len(characters)} characters")
-        if lookup_names and (names or orgs["corporation_ids"] or orgs["alliance_ids"]):
-            from conduit.eve.tasks import ensure_eve_names, ensure_names
-
-            say(f"Looking up {len(names) + len(orgs['corporation_ids']) + len(orgs['alliance_ids']):,} names with EVE...")
-            try:
-                ensure_names(**orgs)
-                ensure_eve_names(names)
-            except Exception as exc:  # names fill in later on their own
-                say(f"  Name lookup stopped ({exc}); they are filled in as characters sync.")
-        return summary
+        return process(store, imports, character_ids=character_ids, lookup_names=lookup_names, say=say)
     finally:
         if store is not None:
             store.close()

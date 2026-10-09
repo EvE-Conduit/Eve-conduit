@@ -116,3 +116,11 @@ def sync_now(character, sections: list[str] | None = None):
     for key in sections or registry.synced():
         SyncStatus.objects.update_or_create(character=character, section=key, defaults={"next_due": timezone.now()})
         sync_section.delay(character.pk, key)
+
+
+@shared_task(time_limit=None, soft_time_limit=None)
+def import_seat_history(run_id: str, character_ids: list[int], sections: list[str]):
+    """Import SeAT character data the SeAT import program uploaded (see conduit.sheet.seat.runs)."""
+    from .seat import runs
+
+    runs.execute(run_id, character_ids, sections)
