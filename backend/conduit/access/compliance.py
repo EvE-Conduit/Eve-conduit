@@ -61,7 +61,8 @@ def plugin_problems(user) -> list[str]:
     return out
 
 
-def character_status(character, required: list[str], statuses: list) -> dict:
+def character_status(character, required: list[str], statuses: list, sources: dict[str, list[str]] | None = None) -> dict:
+    from conduit.plugins.services import describe_missing
     from conduit.sheet import registry
     from conduit.sheet.models import SyncStatus
 
@@ -94,6 +95,8 @@ def character_status(character, required: list[str], statuses: list) -> dict:
         if character.corporation_id and character.corporation else None,
         "token_valid": valid,
         "missing_scopes": missing,
+        #: Each missing scope with what needs it (character sheet sections, plugins).
+        "missing_detail": describe_missing(missing, sources) if missing else [],
         "failing_sections": failing,
         "stale_sections": stale,
         "problems": problems,
@@ -103,14 +106,16 @@ def character_status(character, required: list[str], statuses: list) -> dict:
 
 def check_user(user, required: list[str] | None = None) -> dict:
     """The live compliance of a user."""
+    from conduit.plugins.services import scope_sources
     from conduit.sheet.models import SyncStatus
 
     required = _required() if required is None else required
+    sources = scope_sources()
     chars = list(user.characters.select_related("token", "corporation"))
     statuses: dict[int, list] = {}
     for st in SyncStatus.objects.filter(character__in=chars):
         statuses.setdefault(st.character_id, []).append(st)
-    characters = [character_status(c, required, statuses.get(c.pk, [])) for c in chars]
+    characters = [character_status(c, required, statuses.get(c.pk, []), sources) for c in chars]
     problems = [f"{c['name']}: {p}" for c in characters for p in c["problems"]]
     warnings = [f"{c['name']}: {s['label']} is failing to update" for c in characters for s in c["failing_sections"]]
     warnings += [f"{c['name']}: {s['label']} hasn't updated for a while" for c in characters for s in c["stale_sections"]]

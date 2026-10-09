@@ -175,3 +175,22 @@ def test_plugins_add_their_own_compliance_checks(monkeypatch):
     refresh_user(u)
     note = Notification.objects.get()
     assert note.title == "Your account needs attention" and "not on the server" in note.body
+
+
+@pytest.mark.django_db
+def test_missing_scopes_say_what_needs_them(api_client, user):
+    """Each missing scope names the character sheet section or enabled plugin that wants it."""
+    from conduit.plugins.services import set_enabled, sync_installed
+
+    sync_installed()
+    set_enabled("sample", True)
+    u = make_user(90000098, "Scopeless", scopes=ALL)
+    detail = check_user(u)["characters"][0]["missing_detail"]
+    assert detail == [{"scope": "esi-fleets.read_fleet.v1", "needed_by": ["Sample"]}]
+
+    user.main_character.token.scopes = "publicData"
+    user.main_character.token.save()
+    api_client.force_login(user)
+    mine = api_client.call("get", "/api/me/characters").json()[0]["token"]["missing"]
+    mail = next(m for m in mine if m["scope"] == "esi-mail.read_mail.v1")
+    assert mail["needed_by"] == ["Character sheet: Mail"]

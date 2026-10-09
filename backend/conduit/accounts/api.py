@@ -12,7 +12,7 @@ from ninja.errors import HttpError
 from conduit.access import groups
 from conduit.access.models import GroupProfile, GroupRequest
 from conduit.audit.services import record
-from conduit.plugins.services import required_scopes
+from conduit.plugins.services import describe_missing, required_scopes, scope_sources
 from conduit.schemas import CharacterBrief, character_brief
 
 from conduit.events import bus
@@ -23,10 +23,17 @@ from .services import remove_character, set_main
 router = Router(tags=["me"])
 
 
+class MissingScope(Schema):
+    scope: str
+    #: What wants it: "Character sheet: <section>" or a plugin's name.
+    needed_by: list[str]
+
+
 class TokenStatus(Schema):
     valid: bool
     scopes: list[str]
     missing_scopes: list[str]
+    missing: list[MissingScope]
 
 
 class MyCharacter(CharacterBrief):
@@ -52,16 +59,18 @@ class MyGroup(Schema):
     leader: bool
 
 
-def _my_character(char: Character, main_id: int | None, wanted: list[str]) -> dict:
+def _my_character(char: Character, main_id: int | None, wanted: list[str], sources: dict[str, list[str]]) -> dict:
     token = getattr(char, "token", None)
     granted = token.scope_set if token else set()
+    missing = [s for s in wanted if s not in granted]
     return {
         **character_brief(char),
         "is_main": char.pk == main_id,
         "token": {
             "valid": token.valid,
             "scopes": sorted(granted),
-            "missing_scopes": [s for s in wanted if s not in granted],
+            "missing_scopes": missing,
+            "missing": describe_missing(missing, sources),
         }
         if token
         else None,
@@ -71,10 +80,11 @@ def _my_character(char: Character, main_id: int | None, wanted: list[str]) -> di
 @router.get("/characters", response=list[MyCharacter])
 def my_characters(request):
     wanted = required_scopes()
+    sources = scope_sources()
     chars = request.user.characters.select_related("corporation", "alliance", "token")
     main_id = request.user.main_character_id
     return sorted(
-        (_my_character(c, main_id, wanted) for c in chars),
+        (_my_character(c, main_id, wanted, sources) for c in chars),
         key=lambda c: (not c["is_main"], c["name"].lower()),
     )
 

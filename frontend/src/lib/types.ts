@@ -139,9 +139,15 @@ export interface Bootstrap {
   plugins: PluginEntry[];
 }
 
+/** A missing ESI scope and what needs it: "Character sheet: <section>" or a plugin's name. */
+export interface MissingScope {
+  scope: string;
+  needed_by: string[];
+}
+
 export interface MyCharacter extends CharacterBrief {
   is_main: boolean;
-  token: { valid: boolean; scopes: string[]; missing_scopes: string[] } | null;
+  token: { valid: boolean; scopes: string[]; missing_scopes: string[]; missing: MissingScope[] } | null;
 }
 
 export interface MyGroup {
