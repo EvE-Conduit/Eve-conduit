@@ -1,0 +1,22 @@
+# Builds the SeAT import program (EvE-Conduit-SeAT-Import.exe) on demand: Actions -> SeAT import -> Run workflow,
+# then download it from the run's artifacts. Releases build it too (release.yml).
+name: SeAT import
+
+on:
+  workflow_dispatch:
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        shell: pwsh
+        run: ./tools/seat-import/build-exe.ps1 -OutDir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seat-import
+          path: dist/EvE-Conduit-SeAT-Import.exe

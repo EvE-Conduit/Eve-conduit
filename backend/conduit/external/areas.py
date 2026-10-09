@@ -101,6 +101,16 @@ def core_areas() -> list[Area]:
             ),
         ),
         Area(
+            "import",
+            "SeAT import",
+            "Bring users, characters, SSO tokens and squads over from SeAT with the SeAT import tool. Tokens keep "
+            "working only if this site uses the same EVE application as SeAT. Switch this on for the move and off "
+            "again afterwards.",
+            "/api/v1/import/seat/...",
+            (Scope("import:seat", "Import from SeAT", "Create users and characters, store their SSO tokens and turn "
+                   "squads into groups", write=True),),
+        ),
+        Area(
             "logs",
             "Logs",
             "Pull the audit log, the snooper log, the API request log, the service log and the ESI call log, e.g. into a SIEM or a "
