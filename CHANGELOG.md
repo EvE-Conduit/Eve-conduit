@@ -3,6 +3,41 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.29
+
+### Changed
+- **Character and corporation data keeps up on big installs.** Routine syncs now wait in their own queue, which
+  the scheduler tops up to `CONDUIT_SYNC_QUEUE_MAX` (20,000) jobs instead of queueing at most 500 every two
+  minutes, so thousands of characters stay as fresh as their sections' intervals. **Refresh** and a newly
+  linked character's first sync skip that queue and start within seconds.
+- **Background jobs run on threads, 16 at once by default** (was 4 processes). Syncs mostly wait on ESI, so this
+  is several times faster on the same server. For large alliances raise `WORKER_CONCURRENCY` (about 16 per 1000
+  characters); `.env.example` explains the sizing.
+- **PostgreSQL:** each process now keeps a connection pool (`CONDUIT_DB_POOL=false` turns it off), and the Docker
+  database runs with settings sized for a server instead of Postgres's defaults (`POSTGRES_MAX_CONNECTIONS`,
+  `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE` in `.env`). Bare-metal installs: see the new
+  tuning block in the install guide.
+- **Assets, blueprints and skills** are updated in place on each sync instead of deleted and written again, which
+  keeps the database much smaller and quieter on busy installs.
+- **The ESI log records failed calls only by default** (`CONDUIT_ESI_LOG=all` brings back a row per call). The
+  totals in Administration → Logs → ESI and Health still count every call. Old log rows are purged in batches.
+
+### Added
+- **Rate limits in Administration → Logs → ESI:** for each ESI rate-limit group, its limit, how many calls used
+  it, the fewest tokens any bucket had left (and whose), and how many requests ESI refused.
+
+### Fixed
+- **A broken EVE application no longer logs everyone out.** If the application's id or secret is wrong, EVE answers
+  token refreshes with `invalid_client`; every character used to be marked as needing a new login. Now only a
+  revoked or expired token (`invalid_grant`) does that, and the error is logged for the admin.
+- **ESI rate limits are respected everywhere.** A rate-limited answer without rate-limit headers now pauses that
+  route; routes are paused with the rest of their group even before their first call (the groups come from
+  ESI's own specification); and a nearly empty bucket waits about as long as it takes to refill instead of a
+  flat minute.
+
+### Updating
+- **Docker:** `docker compose up -d --build` (new Python dependency and database settings).
+
 ## 0.5.28
 
 ### Added
