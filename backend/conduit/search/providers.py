@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from django.db.models import Case, IntegerField, Q, Value, When
 
 from conduit.eve.models import EveAlliance, EveCorporation, alliance_logo_url, corporation_logo_url, portrait_url
+from conduit.sheet.access import viewable_characters
 
 from .registry import register
 
@@ -20,26 +21,10 @@ def ranked(qs, field: str, q: str):
     ).order_by("_rank", field)
 
 
-def _viewable_characters(user):
-    from conduit.accounts.models import Character
-
-    qs = Character.objects.select_related("corporation", "user")
-    if user.has_perm("sheet.view_all_characters"):
-        return qs
-    rule = Q(user=user)
-    main = user.main_character
-    if main is not None:
-        if user.has_perm("sheet.view_alliance_characters") and main.alliance_id:
-            rule |= Q(alliance_id=main.alliance_id)
-        if user.has_perm("sheet.view_corporation_characters") and main.corporation_id:
-            rule |= Q(corporation_id=main.corporation_id)
-    return qs.filter(rule)
-
-
 @register("characters", order=10)
 def characters(request, q, limit):
     user = request.user
-    rows = ranked(_viewable_characters(user).filter(name__icontains=q), "name", q)[:limit]
+    rows = ranked(viewable_characters(user).filter(name__icontains=q), "name", q)[:limit]
     return {
         "key": "characters",
         "label": "Characters",

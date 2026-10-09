@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api";
 import { useLoadedPlugins } from "@/lib/pluginContext";
 import type { Entity } from "@/lib/types";
@@ -20,7 +21,7 @@ import { AssetsView } from "@/features/assets/AssetsView";
 import { OverviewTab } from "@/features/overview/OverviewTab";
 import { SectionGate, SyncedAt } from "@/features/sheet/components";
 import { useCharacterHeader, useRefreshCharacter } from "@/features/sheet/hooks";
-import type { CharacterHeader } from "@/features/sheet/types";
+import type { AltCharacter, CharacterHeader } from "@/features/sheet/types";
 import { BlueprintsTab, ContractsTab, IndustryTab, MarketTab, MiningTab, PlanetsTab, ResearchTab } from "@/features/industry/tabs";
 import { SkillsTab } from "@/features/skills/SkillsTab";
 import { CalendarTab, ContactsTab, FittingsTab, IntelTab, KillmailsTab, LoyaltyTab, MailTab, NotificationsTab, StandingsTab } from "@/features/social/tabs";
@@ -117,6 +118,7 @@ export function CharacterSheet() {
           </div>
           <SyncedAt status={header.sections.find((s) => s.key === tab) ?? header.sections[0]} onRefresh={header.can_refresh ? () => refresh.mutate() : undefined} refreshing={refresh.isPending} />
         </div>
+        {header.alts.length > 0 && <Alts alts={header.alts} />}
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
@@ -153,6 +155,40 @@ export function CharacterSheet() {
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Alts({ alts }: { alts: AltCharacter[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-border px-6 py-4 sm:px-8">
+      <span className="mr-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle">
+        <Users className="size-3.5" /> Alts · {alts.length}
+      </span>
+      {alts.map((a) => {
+        const chip = (
+          <>
+            <Avatar src={a.portrait} name={a.name} size="xs" rounded="full" />
+            <span className="truncate font-medium">{a.name}</span>
+            {a.corporation?.ticker && <span className="font-mono text-xs text-muted">[{a.corporation.ticker}]</span>}
+            {a.is_main && <Crown className="size-3.5 text-accent-ink" aria-label="Main" />}
+            {!a.token_valid && <span className="size-1.5 rounded-full bg-warning" aria-label="Login expired" />}
+          </>
+        );
+        const tip = [a.corporation?.name, a.alliance?.name, !a.token_valid && "login expired", !a.viewable && "you can't open this sheet"].filter(Boolean).join(" · ");
+        const cls = "inline-flex max-w-64 items-center gap-2 rounded-full border border-border bg-surface-2/80 py-1 pl-1 pr-3 text-sm";
+        return (
+          <Tooltip key={a.id} content={tip || a.name}>
+            {a.viewable ? (
+              <Link to={`/characters/${a.id}`} className={cn(cls, "transition-colors hover:border-border-strong hover:bg-hover")}>
+                {chip}
+              </Link>
+            ) : (
+              <span className={cn(cls, "opacity-60")}>{chip}</span>
+            )}
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Building2, Crown, Download, HeartPulse, Home, Layers, ShieldAlert, Webhook } from "lucide-react";
+import { Building2, Crown, Download, HeartPulse, Home, Layers, ScanSearch, ShieldAlert, Webhook } from "lucide-react";
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { iconFor } from "@/lib/icons";
@@ -67,6 +67,7 @@ export function buildNav(
 
   const admin: NavLinkItem[] = [];
   if (can(user, "site.view_members")) admin.push({ label: "Members", to: "/admin/members", icon: Users });
+  if (can(user, "sheet.use_member_audit")) admin.push({ label: "Member Audit", to: "/admin/member-audit", icon: ScanSearch });
   if (can(user, "site.manage_access")) admin.push({ label: "States", to: "/admin/access", icon: ShieldCheck });
   if (can(user, "site.manage_access")) admin.push({ label: "Groups", to: "/admin/groups", icon: Layers });
   if (can(user, "access.view_compliance")) admin.push({ label: "Compliance", to: "/admin/compliance", icon: ShieldAlert });

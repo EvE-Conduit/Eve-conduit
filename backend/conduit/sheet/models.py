@@ -29,6 +29,7 @@ class SyncStatus(models.Model):
             ("view_alliance_characters", "Can view character data of their alliance"),
             ("view_corporation_characters", "Can view character data of their corporation"),
             ("refresh_characters", "Can refresh character data from ESI now (characters they can view)"),
+            ("use_member_audit", "Can use Member Audit: search the characters they can view all at once (mail and more)"),
         ]
 
 

@@ -10,8 +10,17 @@ export interface SectionStatus {
   last_success: string | null;
 }
 
+export interface AltCharacter extends CharacterBrief {
+  is_main: boolean;
+  token_valid: boolean;
+  /** The viewer may open this alt's sheet; otherwise it's shown without a link. */
+  viewable: boolean;
+}
+
 export interface CharacterHeader extends CharacterBrief {
   owner: { id: number; name: string };
+  /** The owner's other characters, main first. */
+  alts: AltCharacter[];
   is_mine: boolean;
   is_main: boolean;
   token_valid: boolean;

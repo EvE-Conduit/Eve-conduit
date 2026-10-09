@@ -3,6 +3,7 @@
 import logging
 from functools import cache
 
+from django.db.models import Q
 from django.utils.module_loading import import_string
 
 from conduit.accounts.models import Character
@@ -22,6 +23,22 @@ def can_view(user, character: Character) -> bool:
         if user.has_perm("sheet.view_corporation_characters") and main.corporation_id and character.corporation_id == main.corporation_id:
             return True
     return plugin_grants(user, character)
+
+
+def viewable_characters(user):
+    """Every character ``can_view`` lets the user see through their own permissions, as a queryset.
+    Plugin grants are per character and are left out."""
+    qs = Character.objects.select_related("corporation", "user")
+    if user.has_perm("sheet.view_all_characters"):
+        return qs
+    rule = Q(user=user)
+    main = user.main_character
+    if main is not None:
+        if user.has_perm("sheet.view_alliance_characters") and main.alliance_id:
+            rule |= Q(alliance_id=main.alliance_id)
+        if user.has_perm("sheet.view_corporation_characters") and main.corporation_id:
+            rule |= Q(corporation_id=main.corporation_id)
+    return qs.filter(rule)
 
 
 @cache
