@@ -20,7 +20,6 @@ import argparse
 import getpass
 import json
 import os
-import re
 import shlex
 import subprocess
 import sys
@@ -30,6 +29,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
+
+import seat_dump
 
 #: Kept equal to Conduit's version (a test checks), so a report or error says which build it came from.
 VERSION = "0.5.27"
@@ -168,157 +169,13 @@ def assemble(rows: dict) -> tuple[list[User], list[Squad]]:
 
 #: The tables the import needs; the rest of a dump is skipped without being parsed.
 DUMP_TABLES = ("users", "refresh_tokens", "character_infos", "squads", "squad_member", "squad_moderator")
-_ESCAPES = {"0": "\0", "b": "\b", "n": "\n", "r": "\r", "t": "\t", "Z": "\x1a"}
-
-
-def _sql_values(text: str, start: int):
-    """The rows of one ``INSERT ... VALUES (...),(...);`` statement, as lists of str, int, float or None."""
-    i, n = start, len(text)
-    while i < n:
-        while i < n and text[i] in " \t\r\n,":
-            i += 1
-        if i >= n or text[i] == ";":
-            return
-        if text[i] != "(":
-            raise ValueError(f"unexpected {text[i:i + 20]!r}")
-        i += 1
-        row = []
-        while True:
-            while text[i] in " \t\r\n":
-                i += 1
-            if text.startswith("_binary ", i):
-                i += 8
-            if text[i] == "'":
-                i += 1
-                out = []
-                while True:
-                    c = text[i]
-                    if c == "\\":
-                        nxt = text[i + 1]
-                        out.append(_ESCAPES.get(nxt, nxt))
-                        i += 2
-                    elif c == "'":
-                        if text.startswith("''", i):  # a doubled quote is one quote
-                            out.append("'")
-                            i += 2
-                        else:
-                            i += 1
-                            break
-                    else:
-                        j = i
-                        while text[j] not in "\\'":
-                            j += 1
-                        out.append(text[i:j])
-                        i = j
-                row.append("".join(out))
-            else:
-                j = i
-                while text[j] not in ",)":
-                    j += 1
-                raw = text[i:j].strip()
-                i = j
-                if raw.upper() == "NULL":
-                    row.append(None)
-                elif raw.lower().startswith("0x"):
-                    row.append(bytes.fromhex(raw[2:]).decode("utf-8", "replace"))
-                else:
-                    try:
-                        row.append(int(raw))
-                    except ValueError:
-                        row.append(float(raw))
-            while text[i] in " \t\r\n":
-                i += 1
-            if text[i] == ",":
-                i += 1
-                continue
-            i += 1  # the closing parenthesis
-            yield row
-            break
-
-
-_CREATE = re.compile(r"CREATE TABLE (?:IF NOT EXISTS )?(?:`[^`]+`\.)?`([^`]+)`", re.I)
-_INSERT = re.compile(r"(?:INSERT|REPLACE)(?: IGNORE)? INTO (?:`[^`]+`\.)?`([^`]+)`\s*(\([^)]*\))?\s*VALUES\s*", re.I)
-_COLUMN = re.compile(r"\s*`([^`]+)`\s")
-
-
-def _open_dump(path: str):
-    """Text of a dump in whatever encoding it was saved in (PowerShell's > writes UTF-16)."""
-    try:
-        with open(path, "rb") as fh:
-            head = fh.read(4)
-        if head[:2] in (b"\xff\xfe", b"\xfe\xff"):
-            encoding = "utf-16"
-        else:
-            encoding = "utf-8-sig"
-        return open(path, encoding=encoding, errors="replace", newline="")
-    except OSError as exc:
-        raise ImportError_(f"Could not open {path}: {exc.strerror}") from None
 
 
 def read_dump_tables(path: str, tables=DUMP_TABLES) -> dict[str, list[dict]]:
-    """Rows of the wanted tables in a SQL dump, as dicts by column name.
-
-    Reads mariadb-dump / mysqldump output and the exports of phpMyAdmin, HeidiSQL and similar tools: statements may
-    span lines, and inserts may name their columns. Everything else in the file is skipped without being parsed.
-    """
-    columns: dict[str, list[str]] = {}
-    out: dict[str, list[dict]] = {t: [] for t in tables}
-    creating = None  # table whose column list is being read
-    inserting = None  # (table, column names, first line number, lines so far) of a statement spanning lines
-
-    def rows_of(name, names, text, line_no):
-        if not names:
-            raise ImportError_(f"Line {line_no}: the dump inserts into {name} before defining it. Dump with the "
-                               "table definitions (CREATE TABLE) included.")
-        try:
-            out[name].extend(dict(zip(names, row)) for row in _sql_values(text, 0))
-        except (ValueError, IndexError) as exc:
-            raise ImportError_(f"Line {line_no}: could not read the {name} rows ({exc}).") from None
-
-    with _open_dump(path) as fh:
-        for line_no, line in enumerate(fh, 1):
-            line = line.rstrip("\r\n")
-            if inserting is not None:
-                inserting[3].append(line)
-                if line.rstrip().endswith(";"):
-                    name, names, first, parts = inserting
-                    inserting = None
-                    rows_of(name, names, "\n".join(parts), first)
-                continue
-            if creating is not None:
-                stripped = line.lstrip()
-                if stripped.startswith(")"):
-                    creating = None
-                elif stripped.startswith("`"):
-                    m = _COLUMN.match(line)
-                    if m:
-                        columns[creating].append(m.group(1))
-                continue
-            m = _CREATE.match(line)
-            if m:
-                if m.group(1) in out:
-                    creating = m.group(1)
-                    columns[creating] = []
-                continue
-            m = _INSERT.match(line)
-            if not m or m.group(1) not in out:
-                continue
-            name = m.group(1)
-            names = columns.get(name)
-            if m.group(2):  # the insert names its columns
-                names = [c.strip(" `\t") for c in m.group(2)[1:-1].split(",")]
-            rest = line[m.end():]
-            if rest.rstrip().endswith(";"):
-                rows_of(name, names, rest, line_no)
-            else:
-                inserting = (name, names, line_no, [rest])
-    if inserting is not None:
-        rows_of(inserting[0], inserting[1], "\n".join(inserting[3]), inserting[2])
-    missing = [t for t in ("users", "refresh_tokens") if t not in columns and not out[t]]
-    if missing:
-        raise ImportError_(f"{os.path.basename(path)} has no {' or '.join(missing)} table. Is it a dump of SeAT's "
-                           "database, with those tables in it?")
-    return out
+    try:
+        return seat_dump.read_tables(path, tables)
+    except seat_dump.DumpError as exc:
+        raise ImportError_(str(exc)) from None
 
 
 def read_dump(path: str, with_tokens: bool) -> tuple[list[User], list[Squad]]:

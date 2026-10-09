@@ -17,6 +17,7 @@ from .conftest import make_user
 from .test_external import make_key, on
 
 TOOL = Path(__file__).resolve().parents[2] / "tools" / "seat-import" / "seat_import.py"
+sys.path.insert(0, str(TOOL.parent))  # the tool imports seat_dump from its own folder
 spec = importlib.util.spec_from_file_location("seat_import_tool", TOOL)
 tool = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = tool  # dataclasses look the module up
@@ -477,3 +478,9 @@ def test_tool_version_matches_conduit():
     from conduit import __version__
 
     assert tool.VERSION == __version__, "bump VERSION in tools/seat-import/seat_import.py with each release"
+
+
+def test_both_copies_of_the_dump_reader_are_identical():
+    backend = Path(__file__).resolve().parents[1] / "conduit" / "sheet" / "seat" / "dump.py"
+    assert (TOOL.parent / "seat_dump.py").read_text() == backend.read_text(), \
+        "tools/seat-import/seat_dump.py and conduit/sheet/seat/dump.py must stay identical"
