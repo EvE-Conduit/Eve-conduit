@@ -285,3 +285,60 @@ def test_known_structures_are_offered_and_fill_the_timer(people, api_client, cor
     assert t["structure_id"] == 1030000000001 and t["source"] == "manual"
     assert services.import_structures() == 0
     assert Timer.objects.count() == 1
+
+
+# --- Discord pings ---------------------------------------------------------------------------------------------------
+
+
+def test_ping_asks_webhooks_to_mention(people, api_client, monkeypatch):
+    from conduit.events import bus
+
+    seen = []
+    monkeypatch.setattr(bus, "emit", lambda name, **payload: seen.append((name, payload)))
+    end = timezone.now() + timedelta(minutes=10)
+    t = add(api_client, people["manager"], ping=True, ping_roles=["123", "<script>", "123", "456"], ends_at=end.isoformat())
+    assert t["ping"] is True and t["ping_roles"] == ["123", "456"]
+    created = [p for n, p in seen if n == "timers.created"]
+    assert created and created[0]["ping"] is True and created[0]["mention_roles"] == ["123", "456"]
+    # Reminders ping too; a quiet timer doesn't.
+    quiet = add(api_client, people["manager"], name="Quiet", ends_at=end.isoformat())
+    assert quiet["ping"] is False
+    seen.clear()
+    assert services.remind_due() == 2
+    by_timer = {p["timer_id"]: p for n, p in seen if n == "timers.reminder"}
+    assert by_timer[t["id"]]["ping"] is True and by_timer[t["id"]]["mention_roles"] == ["123", "456"]
+    assert by_timer[quiet["id"]]["ping"] is False and by_timer[quiet["id"]]["mention_roles"] == []
+    # Taking a timer off the board never pings.
+    seen.clear()
+    api_client.force_login(people["manager"])
+    assert api_client.call("delete", f"/api/p/timers/{t['id']}").status_code == 200
+    assert [p["ping"] for n, p in seen if n == "timers.deleted"] == [False]
+
+
+def test_discord_roles_need_the_discord_plugin(people, api_client, monkeypatch):
+    from django.apps import apps
+
+    api_client.force_login(people["manager"])
+    if not apps.is_installed("conduit_discord"):
+        assert api_client.call("get", "/api/p/timers/discord-roles").json() == {"available": False, "roles": []}
+        return
+    from conduit.plugins.services import set_enabled
+    from conduit_discord import discord_api
+    from conduit_discord.models import DiscordSettings
+
+    set_enabled("discord", True)
+    assert api_client.call("get", "/api/p/timers/discord-roles").json() == {"available": False, "roles": []}
+    s = DiscordSettings.load()
+    s.bot_token, s.guild_id = "bot-token", "1000"
+    s.save()
+    monkeypatch.setattr(discord_api, "roles", lambda token, guild: [
+        {"id": "1000", "name": "@everyone", "position": 0}, {"id": "2", "name": "Capitals", "position": 5, "color": 0xFF0000},
+        {"id": "3", "name": "Bot", "position": 9, "managed": True}, {"id": "4", "name": "Members", "position": 1},
+    ])
+    roles = api_client.call("get", "/api/p/timers/discord-roles").json()
+    assert roles == {"available": True, "roles": [{"id": "2", "name": "Capitals", "color": 0xFF0000}, {"id": "4", "name": "Members", "color": 0}]}
+    # Default roles for new timers live in the settings.
+    resp = api_client.call("put", "/api/p/timers/settings", {"reminder_minutes": [15], "default_ping_roles": ["2", "x"]})
+    assert resp.status_code == 200 and resp.json()["default_ping_roles"] == ["2"]
+    api_client.force_login(people["pilot"])
+    assert api_client.call("get", "/api/p/timers/discord-roles").status_code == 403

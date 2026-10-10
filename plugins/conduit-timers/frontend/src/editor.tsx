@@ -3,12 +3,15 @@ import { api, Button, cn, dateTime, Dialog, Field, Input, Segmented, Select, Swi
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import { RoleChips, useDiscordRoles } from "./roles";
 import { fromLocalInput, parseTimeLeft, toLocalInput } from "./time";
-import { BASE, type Kind, KINDS, type OwnStructure, secTone, type Side, type StructureType, type System, type Timer } from "./types";
+import { BASE, type Kind, KINDS, type OwnStructure, secTone, type Settings, type Side, type StructureType, type System, type Timer } from "./types";
 
 export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: () => void }) {
   const qc = useQueryClient();
   const { data: types } = useQuery({ queryKey: ["timers", "types"], queryFn: () => api.get<StructureType[]>(`${BASE}/types`), staleTime: 3_600_000 });
+  const { data: settings } = useQuery({ queryKey: ["timers", "settings"], queryFn: () => api.get<Settings>(`${BASE}/settings`), staleTime: 600_000 });
+  const discord = useDiscordRoles();
   const [form, setForm] = useState({
     name: t?.name ?? "",
     structure_type: t?.structure_type ?? "",
@@ -20,7 +23,11 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
     important: t?.important ?? false,
     notify: true,
     structure_id: t?.structure_id ?? (null as number | null),
+    ping: t?.ping ?? false,
+    ping_roles: t?.ping_roles ?? (null as string[] | null), // null: not chosen yet, use the default roles
   });
+  // A new timer pings the roles from the settings unless its own were picked.
+  const pingRoles = form.ping_roles ?? settings?.default_ping_roles ?? [];
   const [mode, setMode] = useState<"left" | "exact">(t ? "exact" : "left");
   const [left, setLeft] = useState("");
   const [exact, setExact] = useState(toLocalInput(t?.ends_at));
@@ -62,6 +69,8 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
         important: form.important,
         notify: form.notify,
         structure_id: form.structure_id,
+        ping: form.ping,
+        ping_roles: form.ping ? pingRoles : [],
       };
       return t ? api.put<Timer>(`${BASE}/${t.id}`, body) : api.post<Timer>(BASE, body);
     },
@@ -166,8 +175,24 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
             label="Everyone is expected"
             description="Members are told now and reminded before it comes out, even if they muted timers."
             checked={form.important}
-            onCheckedChange={(important) => set({ important })}
+            onCheckedChange={(important) => set({ important, ...(important && !t ? { ping: true } : {}) })}
           />
+          <SwitchRow
+            label="Ping Discord"
+            description={
+              discord.data?.available
+                ? "Discord webhooks that ping mention their own setting and the roles below when it's added, moved and reminded."
+                : "Discord webhooks that ping (Administration → Integrations) mention their setting when it's added, moved and reminded."
+            }
+            checked={form.ping}
+            onCheckedChange={(ping) => set({ ping })}
+          />
+          {form.ping && discord.data?.available && (
+            <div className="py-3">
+              <div className="mb-1.5 text-[13px] font-medium">Roles to ping</div>
+              {discord.data.error ? <p className="text-xs text-warning-fg">{discord.data.error}</p> : <RoleChips roles={discord.data.roles} value={pingRoles} onChange={(ping_roles) => set({ ping_roles })} />}
+            </div>
+          )}
           {!t && (
             <SwitchRow
               label="Tell members it's been added"

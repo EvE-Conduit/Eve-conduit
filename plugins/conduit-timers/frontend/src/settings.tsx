@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Refresh } from "./icons";
+import { RoleChips, useDiscordRoles } from "./roles";
 import { BASE, type Settings } from "./types";
 
 const PRESETS: { minutes: number; label: string }[] = [
@@ -20,6 +21,7 @@ const PRESETS: { minutes: number; label: string }[] = [
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["timers", "settings"], queryFn: () => api.get<Settings>(`${BASE}/settings`) });
+  const discord = useDiscordRoles();
   const [form, setForm] = useState<Settings | null>(null);
   const value = form ?? data ?? null;
   const set = (patch: Partial<Settings>) => value && setForm({ ...value, ...patch });
@@ -103,6 +105,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
             <span>Both are checked every five minutes{value.notifications_seen_until ? <>; notifications last looked at {timeAgo(value.notifications_seen_until)}</> : null}.</span>
             <Button variant="secondary" size="xs" loading={importNow.isPending} onClick={() => importNow.mutate()}><Refresh /> Check now</Button>
+          </div>
+
+          <div>
+            <div className="mb-1.5 text-[13px] font-medium">Discord roles to ping</div>
+            <p className="mb-2 text-xs text-muted">
+              Picked for new timers with <em>Ping Discord</em> on (each timer can change them). Pings go through Discord webhooks that ping, under Administration → Integrations.
+            </p>
+            {discord.data?.available ? (
+              discord.data.error ? <p className="text-xs text-warning-fg">{discord.data.error}</p> : <RoleChips roles={discord.data.roles} value={value.default_ping_roles} onChange={(default_ping_roles) => set({ default_ping_roles })} />
+            ) : (
+              <p className="text-xs text-muted">Link the Discord plugin to your server to pick roles; until then a ping mentions what the webhook is set to.</p>
+            )}
           </div>
 
           <Field label="Keep timers that came out for" hint="Days. Afterwards they drop off the board.">

@@ -24,6 +24,9 @@ export interface Timer {
   ends_at: string;
   notes: string;
   important: boolean;
+  /** Discord webhooks ping (their mention and these roles) when it's added, moved and reminded. */
+  ping: boolean;
+  ping_roles: string[];
   source: "manual" | "structure" | "notification";
   /** The in-game structure id when the timer is for one of our own structures. */
   structure_id: number | null;
@@ -50,6 +53,22 @@ export interface Settings {
   import_notifications: boolean;
   keep_days: number;
   notifications_seen_until: string | null;
+  /** Discord role ids new timers ping by default. */
+  default_ping_roles: string[];
+}
+
+export interface DiscordRole {
+  id: string;
+  name: string;
+  /** Discord's role colour as an integer, 0 for none. */
+  color: number;
+}
+
+export interface DiscordRoles {
+  /** False without the Discord plugin linked to a server; then only the webhook's own mention pings. */
+  available: boolean;
+  roles: DiscordRole[];
+  error?: string;
 }
 
 export interface StructureType {
