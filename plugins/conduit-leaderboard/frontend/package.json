@@ -1,0 +1,9 @@
+{
+  "name": "conduit-leaderboard-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p . && vite build",
+    "watch": "vite build --watch"
+  }
+}

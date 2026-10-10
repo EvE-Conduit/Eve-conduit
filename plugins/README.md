@@ -15,6 +15,7 @@ results, group rules and ESI scopes.
 - [`conduit-doctrines`](conduit-doctrines): Doctrines: doctrine fits shown like the in-game fitting window, copied into the game or saved to a character's fittings, and who can fly them.
 - [`conduit-mentors`](conduit-mentors): Mentoring: new members get a mentor, with goals that tick themselves from group rules, a thread and graduation.
 - [`conduit-buyback`](conduit-buyback): Buyback: programs with taxes and item rules, instant quotes from a paste, and every contract checked against its quote. Programs can be public.
+- [`conduit-leaderboard`](conduit-leaderboard): Leaderboard: members ranked by kills, ISK destroyed, fleets, mining, bounties, industry and skillpoints, with a podium per board and monthly medals.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
