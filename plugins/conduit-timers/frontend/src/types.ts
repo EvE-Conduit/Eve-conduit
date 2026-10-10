@@ -25,6 +25,8 @@ export interface Timer {
   notes: string;
   important: boolean;
   source: "manual" | "structure" | "notification";
+  /** The in-game structure id when the timer is for one of our own structures. */
+  structure_id: number | null;
   status: Status;
   going: boolean;
   going_count: number;
@@ -53,6 +55,22 @@ export interface Settings {
 export interface StructureType {
   name: string;
   type_id: number | null;
+}
+
+/** One of our own structures, from the corporation sheet, offered while typing the structure's name. */
+export interface OwnStructure {
+  structure_id: number;
+  name: string;
+  structure_type: string;
+  type_id: number;
+  icon: string;
+  system: System;
+  owner: string;
+  state: string;
+  /** The timer the structure is in right now, when it has one. */
+  kind: Kind | null;
+  ends_at: string | null;
+  fuel_expires: string | null;
 }
 
 export const KINDS: { value: Kind; label: string }[] = [
