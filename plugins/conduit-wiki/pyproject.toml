@@ -1,0 +1,28 @@
+[project]
+name = "conduit-wiki"
+version = "1.0.0"
+description = "Wiki: pages in a tree with Markdown, a table of contents, page history with restore, visibility by state or group, and public pages for recruits."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+wiki = "conduit_wiki.plugin:WikiPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Wiki"
+icon = "book-open"
+category = "Community"
+min_conduit = "0.5.36"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_wiki*"]
+
+[tool.setuptools.package-data]
+conduit_wiki = ["static/**/*"]
