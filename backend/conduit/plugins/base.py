@@ -45,6 +45,14 @@ class Plugin:
     #: Dotted path to a ``ninja.Router`` for external services (API keys), mounted at
     #: ``/api/v1/p/<id>/``. Guard each route with ``conduit.external.auth.require_scope``.
     external_api: str | None = None
+    #: Dotted path to a ``ninja.Router`` anyone may call, signed in or not, mounted at ``/api/public/p/<id>/``
+    #: (only while the plugin is enabled). Routes get no user check at all: decide in each route what a stranger may
+    #: see, never trust ``request.user`` for anything it would let a stranger do in a member's name, and rate-limit
+    #: anything that writes.
+    public_api: str | None = None
+    #: The front end has pages for everyone (``publicRoutes``, at ``/public/p/<id>/``). Its bundle is then loaded for
+    #: signed-out visitors and non-members too, who get only those pages.
+    public_pages: bool = False
     #: Scopes the external API offers, ``{"read": "Read fleet schedules", ...}``. Keys get them
     #: as ``p.<id>:<name>``; names containing ``write`` count as write access.
     external_scopes: dict = {}
@@ -110,6 +118,8 @@ class Plugin:
             "nav": [vars(n) for n in self.nav],
             "has_api": bool(self.api),
             "has_external_api": bool(self.external_api),
+            "has_public_api": bool(self.public_api),
+            "public_pages": self.public_pages,
             "external_scopes": dict(self.external_scopes),
             "has_frontend": bool(self.frontend),
         }

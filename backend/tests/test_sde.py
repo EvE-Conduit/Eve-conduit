@@ -4,7 +4,7 @@ import zipfile
 import pytest
 
 from conduit.sde import importer
-from conduit.sde.models import ItemType, SdeVersion, SkillInfo, SolarSystem, Station
+from conduit.sde.models import ItemType, SdeVersion, SkillInfo, SolarSystem, Station, TypeMaterial
 
 
 def write_zip(path, files):
@@ -79,6 +79,37 @@ def test_import_archive(tmp_path):
     assert ItemType.objects.get(pk=587).name == "Rifter II"
     assert Station.objects.get(pk=60003760).name == "Jita IV - Moon 4"
     assert SdeVersion.current().build_number == 101
+
+
+@pytest.mark.django_db
+def test_reprocessing_materials_and_compression(tmp_path):
+    files = {
+        **FILES,
+        "types": [
+            {"_key": 1230, "groupID": 462, "name": en("Veldspar"), "published": True, "portionSize": 100, "volume": 0.1},
+            {"_key": 62516, "groupID": 462, "name": en("Compressed Veldspar"), "published": True, "portionSize": 100, "volume": 0.001},
+        ],
+        "compressibleTypes": [{"_key": 1230, "compressedTypeID": 62516}],
+        "typeMaterials": [
+            {"_key": 1230, "materials": [{"materialTypeID": 34, "quantity": 400}]},
+            {"_key": 62516, "materials": [{"materialTypeID": 34, "quantity": 400}]},
+            # Random yields have no fixed output: skipped.
+            {"_key": 90041, "randomizedMaterials": [{"materialTypeID": 34, "quantityMax": 10, "quantityMin": 5}]},
+        ],
+    }
+    write_zip(tmp_path / "sde.zip", files)
+    importer.update(archive=tmp_path / "sde.zip", progress=lambda m: None)
+    assert ItemType.objects.get(pk=1230).compressed_type_id == 62516
+    assert ItemType.objects.get(pk=62516).compressed_type_id is None
+    assert list(TypeMaterial.objects.filter(type_id=1230).values_list("material_type_id", "quantity")) == [(34, 400)]
+    assert TypeMaterial.objects.count() == 2
+
+    # Materials CCP drops are dropped here too.
+    files["typeMaterials"] = files["typeMaterials"][:1]
+    files["_sde"] = [{"_key": "sde", "buildNumber": 102}]
+    write_zip(tmp_path / "sde.zip", files)
+    importer.update(archive=tmp_path / "sde.zip", progress=lambda m: None)
+    assert list(TypeMaterial.objects.values_list("type_id", flat=True)) == [1230]
 
 
 @pytest.mark.django_db

@@ -36,6 +36,7 @@ from .models import (
     SkillInfo,
     SolarSystem,
     Station,
+    TypeMaterial,
 )
 
 log = logging.getLogger(__name__)
@@ -46,7 +47,8 @@ SKILL_CATEGORY = 16
 BATCH = 2000
 #: Bump when the importer starts reading more from the SDE, so existing installs import their build again.
 #: 2: required skills of every type, and fitting data (slots, hardpoints, which slot a module goes in).
-SCHEMA = 2
+#: 3: reprocessing materials, and the compressed variant of each ore and ice.
+SCHEMA = 3
 
 # dogma attribute ids
 PRIMARY_ATTRIBUTE, SECONDARY_ATTRIBUTE, SKILL_RANK = 180, 181, 275
@@ -168,7 +170,7 @@ TYPE_FIELDS = {
 }
 
 
-def _types(zf, skill_ids: set[int], skill_groups: set[int], dogma: dict):
+def _types(zf, skill_ids: set[int], skill_groups: set[int], dogma: dict, compressed: dict[int, int]):
     def rows():
         for r in _records(zf, "types"):
             if r["groupID"] in skill_groups:
@@ -177,6 +179,7 @@ def _types(zf, skill_ids: set[int], skill_groups: set[int], dogma: dict):
             yield ItemType(
                 required_skills=required,
                 fitting=fitting,
+                compressed_type_id=compressed.get(r["_key"]),
                 id=r["_key"],
                 group_id=r["groupID"],
                 name=_en(r.get("name")),
@@ -194,6 +197,7 @@ def _types(zf, skill_ids: set[int], skill_groups: set[int], dogma: dict):
         "portion_size",
         "required_skills",
         "fitting",
+        "compressed_type_id",
         *(f.removesuffix("_id") if f.endswith("_group_id") else f for f in TYPE_FIELDS),
     ]
     return _upsert(ItemType, rows(), fields)
@@ -236,6 +240,30 @@ def _dogma(zf) -> dict[int, tuple[list, dict | None, dict]]:
         }
         out[r["_key"]] = (required, _fitting(attrs, effects), training)
     return out
+
+
+def _compressed(zf) -> dict[int, int]:
+    """``{ore type_id: compressed type_id}``."""
+    return {r["_key"]: r["compressedTypeID"] for r in _records(zf, "compressibleTypes") if r.get("compressedTypeID")}
+
+
+def _materials(zf):
+    """Replaced as a whole: CCP changes what things reprocess into, and drops materials.
+    Types with random yields (``randomizedMaterials``) have no fixed output and are left out."""
+    TypeMaterial.objects.all().delete()
+    rows = (
+        TypeMaterial(type_id=r["_key"], material_type_id=m["materialTypeID"], quantity=m["quantity"])
+        for r in _records(zf, "typeMaterials")
+        for m in r.get("materials", ())
+    )
+    count, batch = 0, []
+    for row in rows:
+        batch.append(row)
+        if len(batch) >= BATCH:
+            TypeMaterial.objects.bulk_create(batch)
+            count, batch = count + len(batch), []
+    TypeMaterial.objects.bulk_create(batch)
+    return count + len(batch)
 
 
 def _skills(skill_ids: set[int], dogma: dict):
@@ -307,9 +335,10 @@ def import_archive(path: Path, build: dict, progress: Callable[[str], None] = lo
         skill_groups = set(ItemGroup.objects.filter(category_id=SKILL_CATEGORY).values_list("id", flat=True))
         skill_ids: set[int] = set()
         dogma = _dogma(zf)
-        progress(f"types: {_types(zf, skill_ids, skill_groups, dogma)}")
+        progress(f"types: {_types(zf, skill_ids, skill_groups, dogma, _compressed(zf))}")
         progress(f"skills: {_skills(skill_ids, dogma)}")
         del dogma
+        progress(f"reprocessing materials: {_materials(zf)}")
 
         for label, step in [
             ("regions", _regions),
