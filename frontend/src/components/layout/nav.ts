@@ -22,6 +22,8 @@ export interface NavSection {
   items: NavLinkItem[];
   /** The title folds the section away (remembered per browser). */
   collapsible?: boolean;
+  /** Shown in its own rail on the right of the page on wide screens (the left sidebar below that). */
+  side?: "right";
 }
 
 function can(user: CurrentUser, perm: string) {
@@ -78,7 +80,7 @@ export function buildNav(
   if (can(user, "site.view_health")) admin.push({ label: "Health", to: "/admin/health", icon: HeartPulse });
   if (can(user, "site.manage_site")) admin.push({ label: "Updates", to: "/admin/updates", icon: Download, badge: updateAvailable ? 1 : undefined });
   if (can(user, "site.manage_site")) admin.push({ label: "Settings", to: "/admin/settings", icon: Settings2 });
-  if (admin.length) sections.push({ title: "Administration", items: admin, collapsible: true });
+  if (admin.length) sections.push({ title: "Administration", items: admin, collapsible: true, side: "right" });
 
   return sections;
 }
