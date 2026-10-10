@@ -189,6 +189,10 @@ function SystemPicker({ value, onChange }: { value: System | null; onChange: (s:
   const [open, setOpen] = useState(false);
   const [debounced, setDebounced] = useState(q);
   const box = useRef<HTMLDivElement>(null);
+  // Filled in from elsewhere (a structure was picked): show that system's name.
+  useEffect(() => {
+    if (value && value.name !== q) { setQ(value.name); setOpen(false); }
+  }, [value?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const h = setTimeout(() => setDebounced(q), 150);
     return () => clearTimeout(h);
