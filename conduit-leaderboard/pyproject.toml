@@ -1,0 +1,28 @@
+[project]
+name = "conduit-leaderboard"
+version = "1.0.0"
+description = "Leaderboard: who tops the corporation in kills, ISK destroyed, fleets, mining, ratting, industry and skillpoints, with monthly medals."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+leaderboard = "conduit_leaderboard.plugin:LeaderboardPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Leaderboard"
+icon = "trophy"
+category = "Community"
+min_conduit = "0.5.19"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_leaderboard*"]
+
+[tool.setuptools.package-data]
+conduit_leaderboard = ["static/**/*"]
