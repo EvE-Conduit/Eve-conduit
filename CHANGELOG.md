@@ -3,6 +3,25 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Changed
+- **Administration has its own rail on the right.** On wide screens (1280px and up) the Administration links sit
+  in a rail on the right of the page, with its own collapse button, so the left sidebar is just the member side of
+  the site. On narrower screens and in the phone menu they stay in the left sidebar as before.
+
+## 0.5.36
+
+### Added
+- **Discord webhooks can ping.** A Discord webhook under Administration → Integrations can mention `@here`,
+  `@everyone` or a role, either on every message or only on events that ask for a ping. Plugins ask with `ping`
+  and may name roles of their own with `mention_roles` (see docs/platform.md). Nothing people typed can ping.
+- **Timers 1.2.0: Ping Discord.** A timer with *Ping Discord* on (the default when everyone is expected) makes
+  those webhooks ping when it's added, moved and at every reminder. With the Discord plugin linked to your server,
+  pick the roles per timer, with defaults in the timer settings. Also, the editor offers every structure the site
+  knows by name (no corporation sheet needed), yours first, and fills the form in from it. Update the plugin under
+  Administration → Plugins.
+
 ## 0.5.35
 
 ### Added
