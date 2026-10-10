@@ -55,6 +55,7 @@ def settings_out(s: TimerSettings) -> dict:
         "import_notifications": s.import_notifications,
         "keep_days": s.keep_days,
         "notifications_seen_until": s.notifications_seen_until.isoformat() if s.notifications_seen_until else None,
+        "default_ping_roles": list(s.default_ping_roles or []),
     }
 
 
@@ -63,6 +64,7 @@ class SettingsIn(Schema):
     import_structures: bool = True
     import_notifications: bool = True
     keep_days: int = 14
+    default_ping_roles: list[str] = []
 
 
 @router.get("/settings")
@@ -81,9 +83,17 @@ def put_settings(request, payload: SettingsIn):
         raise HttpError(400, "Keep past timers for 1 to 90 days")
     s = TimerSettings.load()
     s.reminder_minutes, s.import_structures, s.import_notifications, s.keep_days = marks, payload.import_structures, payload.import_notifications, payload.keep_days
+    s.default_ping_roles = services.clean_roles(payload.default_ping_roles)
     s.save()
     record("timers.settings", "changed the timer settings", request=request, target_type="plugin", details={"plugin": "timers"})
     return settings_out(s)
+
+
+@router.get("/discord-roles")
+@require_perm("timers.manage_timers")
+def discord_roles(request):
+    """The Discord server's roles a timer can ping (needs the Discord plugin, linked to a server)."""
+    return services.discord_roles()
 
 
 @router.post("/import")
@@ -119,6 +129,9 @@ class TimerIn(Schema):
     notify: bool = True
     #: The in-game structure id when the timer was picked from our own structures.
     structure_id: int | None = None
+    #: Discord webhooks ping (their mention and these roles) when it's added, moved and reminded.
+    ping: bool = False
+    ping_roles: list[str] = []
 
 
 def _save(request, t, payload: TimerIn):

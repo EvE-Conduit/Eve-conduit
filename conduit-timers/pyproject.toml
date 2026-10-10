@@ -1,6 +1,6 @@
 [project]
 name = "conduit-timers"
-version = "1.1.2"
+version = "1.2.0"
 description = "Timers: structure and sovereignty timers on one board with live countdowns, who's going, reminders, and timers read from your corporations' structures and in-game notifications."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ timers = "conduit_timers.plugin:TimersPlugin"
 name = "Timers"
 icon = "timer"
 category = "Operations"
-min_conduit = "0.5.19"
+min_conduit = "0.5.36"
 
 [build-system]
 requires = ["setuptools>=75"]
