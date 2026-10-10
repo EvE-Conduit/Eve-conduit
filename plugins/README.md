@@ -16,6 +16,7 @@ results, group rules and ESI scopes.
 - [`conduit-mentors`](conduit-mentors): Mentoring: new members get a mentor, with goals that tick themselves from group rules, a thread and graduation.
 - [`conduit-buyback`](conduit-buyback): Buyback: programs with taxes and item rules, instant quotes from a paste, and every contract checked against its quote. Programs can be public.
 - [`conduit-leaderboard`](conduit-leaderboard): Leaderboard: members ranked by kills, ISK destroyed, fleets, mining, bounties, industry and skillpoints, with a podium per board and monthly medals.
+- [`conduit-timers`](conduit-timers): Timers: structure and sovereignty timers with live countdowns, who's going and reminders, read from your corporations' structures and in-game notifications too.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.

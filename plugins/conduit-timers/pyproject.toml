@@ -1,0 +1,28 @@
+[project]
+name = "conduit-timers"
+version = "1.0.0"
+description = "Timers: structure and sovereignty timers on one board with live countdowns, who's going, reminders, and timers read from your corporations' structures and in-game notifications."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+timers = "conduit_timers.plugin:TimersPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Timers"
+icon = "timer"
+category = "Operations"
+min_conduit = "0.5.19"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_timers*"]
+
+[tool.setuptools.package-data]
+conduit_timers = ["static/**/*"]
