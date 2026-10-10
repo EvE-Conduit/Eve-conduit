@@ -10,6 +10,13 @@ Versions follow `MAJOR.MINOR.PATCH`.
   in a rail on the right of the page, with its own collapse button, so the left sidebar is just the member side of
   the site. On narrower screens and in the phone menu they stay in the left sidebar as before.
 
+## 0.5.37
+
+### Changed
+- **Administration has its own rail.** On wide screens (1280px and up) the Administration menu moves out of the
+  left sidebar into a rail on the right of the page, collapsible to icons on its own (remembered per browser), so
+  the main menu stays short for everyone who runs the site. On narrower screens and on phones it stays where it was.
+
 ## 0.5.36
 
 ### Added
