@@ -98,6 +98,8 @@ class FleetIn(Schema):
     link_minutes: int | None = None
     #: Start tracking the in-game fleet this character is boss of.
     track_character: int | None = None
+    #: While tracking, add the FAT lines to the bottom of the in-game fleet's MOTD.
+    motd: bool = True
 
 
 @router.get("/fc/characters")
@@ -119,7 +121,7 @@ def create(request, payload: FleetIn):
     out = services.fleet_detail(fleet, request.user)
     if payload.track_character:
         try:
-            services.start_tracking(fleet, payload.track_character, request.user)
+            services.start_tracking(fleet, payload.track_character, request.user, payload.motd)
             out = services.fleet_detail(_fleet(fleet.pk), request.user)
         except services.FleetError as exc:
             out["warning"] = f"The fleet was created, but tracking didn't start: {exc}"
@@ -151,12 +153,24 @@ def edit(request, fleet_id: int, payload: EditIn):
 
 class TrackIn(Schema):
     character: int
+    motd: bool = True
 
 
 @router.post("/{fleet_id}/track")
 def track(request, fleet_id: int, payload: TrackIn):
     fleet = _editable(request, fleet_id)
-    _run(services.start_tracking, fleet, payload.character, request.user)
+    _run(services.start_tracking, fleet, payload.character, request.user, payload.motd)
+    return services.fleet_detail(_fleet(fleet_id), request.user)
+
+
+class MotdIn(Schema):
+    on: bool
+
+
+@router.post("/{fleet_id}/motd")
+def set_motd(request, fleet_id: int, payload: MotdIn):
+    """Add the FAT lines to the in-game fleet's MOTD, or take them out."""
+    services.set_motd(_editable(request, fleet_id), payload.on)
     return services.fleet_detail(_fleet(fleet_id), request.user)
 
 
