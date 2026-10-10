@@ -182,15 +182,22 @@ def _announce(c: Contract, created: bool, old_status: str | None) -> None:
                "issuer": issuer, "price": float(c.price), "tracking_number": c.quote.tracking_number if c.quote_id else None,
                "status": c.status, "problems": [p["code"] for p in c.problems]}
     link = f"/p/buyback/contracts/{c.contract_id}"
+    # title, summary, link and level are what webhooks show (a Discord embed, a Slack message).
+    payload["link"] = link
+    where = f" ({program.name})" if program else ""
     if created and c.status in ("outstanding", "in_progress"):
-        bus.emit("buyback.contract_created", **payload)
+        severe = [p for p in c.problems if p["severe"]]
+        body = f"{c.price:,.0f} ISK" + (f". Check it: {severe[0]['text']}" if severe else ".")
+        level = "warning" if severe else "info"
+        bus.emit("buyback.contract_created", **payload, title=f"Buyback contract from {issuer}{where}",
+                 summary=f"{c.title}: {body}" if c.title else body, level=level)
         if program and program.notify_managers:
-            severe = [p for p in c.problems if p["severe"]]
-            body = f"{c.price:,.0f} ISK" + (f". Check it: {severe[0]['text']}" if severe else ".")
-            notify(program.managers.all(), f"Buyback contract from {issuer} ({program.name})", body, link=link,
-                   level="warning" if severe else "info", category="p.buyback")
+            notify(program.managers.all(), f"Buyback contract from {issuer}{where}", body, link=link, level=level, category="p.buyback")
     elif not created and old_status != c.status and c.status in SETTLED:
-        bus.emit("buyback.contract_finished", **payload)
+        outcome = "accepted" if c.status in FINISHED else c.status
+        level = "success" if c.status in FINISHED else "warning" if c.status in ("rejected", "failed", "reversed") else "info"
+        bus.emit("buyback.contract_finished", **payload, title=f"Buyback contract {outcome}{where}",
+                 summary=f"{issuer}: {c.price:,.0f} ISK" + (f" for {c.title}" if c.title else "") + ".", level=level)
         seller = c.quote.user_id if c.quote_id else None
         if seller:
             if c.status in FINISHED:

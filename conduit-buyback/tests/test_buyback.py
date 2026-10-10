@@ -362,6 +362,32 @@ def offline(monkeypatch):
     monkeypatch.setattr("conduit.sheet.locations.resolve", lambda *a, **k: {})
 
 
+def test_new_contracts_reach_discord_webhooks(program, seller, boss, offline, django_capture_on_commit_callbacks):
+    from conduit.events import bus
+    from conduit.events.webhooks import render
+
+    tracking = services.quote(program, "Tritanium 1000", user=seller)["quote"]["tracking_number"]
+    owner = boss.main_character.pk
+    esi = FakeEsi({f"/corporations/{CORP_ID}/contracts": [row(1, tracking, 3600)],
+                   f"/corporations/{CORP_ID}/contracts/1/items": items((TRITANIUM, 1000))})
+    seen = []
+    bus.on("buyback.contract_created", "buyback.contract_finished")(seen.append)
+    try:
+        with django_capture_on_commit_callbacks(execute=True):
+            contracts.sync_owner(owner, client=esi)
+        esi.routes[f"/corporations/{CORP_ID}/contracts"][0] = row(1, tracking, 3600, status="rejected")
+        with django_capture_on_commit_callbacks(execute=True):
+            contracts.sync_owner(owner, client=esi)
+    finally:
+        bus.off("buyback.contract_created", seen.append)
+        bus.off("buyback.contract_finished", seen.append)
+
+    created, finished = (render("discord", e.as_dict())["embeds"][0] for e in seen)
+    assert created["title"] == f"Buyback contract from Someone ({program.name})"
+    assert created["description"] == f"{tracking}: 3,600 ISK." and created["url"].endswith("/p/buyback/contracts/1")
+    assert finished["title"] == f"Buyback contract rejected ({program.name})" and finished["color"] == 0xFBBF24
+
+
 def test_contracts_are_matched_and_checked(program, seller, boss, offline):
     good = services.quote(program, "Tritanium 1000", user=seller)["quote"]["tracking_number"]
     bad = services.quote(program, "Tritanium 1000\nPyerite 100", user=seller)["quote"]["tracking_number"]
