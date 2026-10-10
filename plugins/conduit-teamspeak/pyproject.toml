@@ -1,0 +1,28 @@
+[project]
+name = "conduit-teamspeak"
+version = "1.0.0"
+description = "TeamSpeak: members link their TeamSpeak identity with a one-time privilege key; their server groups follow their groups and state through ServerQuery."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+teamspeak = "conduit_teamspeak.plugin:TeamSpeakPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "TeamSpeak"
+icon = "headphones"
+category = "Communication"
+min_conduit = "0.5.22"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_teamspeak*"]
+
+[tool.setuptools.package-data]
+conduit_teamspeak = ["static/**/*"]
