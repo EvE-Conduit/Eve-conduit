@@ -3,6 +3,14 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.34
+
+### Fixed
+- **A plugin switched on shows its pages straight away.** Its menu entry used to appear at once while its pages
+  said "Lost in space" until the browser reloaded. Switching a plugin with pages on or off now reloads the page,
+  setup finishes with a full load, and a tab that opened the site before a plugin was switched on reloads by itself
+  when it reaches that plugin's pages.
+
 ## 0.5.33
 
 ### Added
