@@ -21,6 +21,11 @@ comes out. Timers for your own structures arrive by themselves.
   `4h23m`, `45m`, `4:23`), counted from the moment it's typed, or an exact time in your own zone. Members are told
   under the bell when a timer is added (switch it off per timer); webhooks always hear about it. A timer marked
   **Everyone is expected** notifies and reminds every member, even those who muted timers.
+- **Ping Discord:** switch it on for a timer (it's on by default when everyone is expected) and Discord webhooks
+  that ping (Administration → Integrations: `@here`, `@everyone` or a role, set to *when the event asks*) mention
+  that when the timer is added, moved and at every reminder. With the Discord plugin linked to your server you also
+  pick roles per timer (the capital pilots for a hull timer, say), with defaults in the settings. Deleting a timer
+  never pings. Needs EvE Conduit 0.5.36.
 - **Reminders:** at the minute marks in the settings (1 hour and 15 minutes by default; pick from 1 day down to 5
   minutes), people who are going get a notification, and the `timers.reminder` event goes to webhooks such as Discord.
   A timer that's moved gets its reminders again.
@@ -32,7 +37,8 @@ comes out. Timers for your own structures arrive by themselves.
   anchoring and unanchoring, *sovereignty structure reinforced* (TCU, IHub) and *customs office reinforced*. The
   same notification seen by several members makes one timer. Both sources can be switched off in the settings, and
   **Check now** runs them straight away.
-- **Settings** (permission `timers.manage_timers`): the reminder marks, the two automatic sources, and how long past
+- **Settings** (permission `timers.manage_timers`): the reminder marks, the two automatic sources, the Discord roles new
+  timers ping, and how long past
   timers stay on the board.
 
 **Events** (Administration → Integrations): `timers.created`, `timers.updated`, `timers.deleted` and

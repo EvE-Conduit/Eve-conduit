@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class TimersPlugin(Plugin):
     id = "timers"
     name = "Timers"
-    version = "1.1.2"
+    version = "1.2.0"
     description = "Structure and sovereignty timers with live countdowns, who's going and reminders; read from your structures and notifications too."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-timers"

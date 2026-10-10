@@ -19,6 +19,8 @@ class TimerSettings(models.Model):
     keep_days = models.PositiveSmallIntegerField(default=14)
     #: Notifications older than this were already looked at.
     notifications_seen_until = models.DateTimeField(null=True, blank=True)
+    #: Discord role ids new timers ping by default (when the Discord plugin is linked to a server).
+    default_ping_roles = models.JSONField(default=list, blank=True)
 
     class Meta:
         permissions = [("manage_timers", "Can add, edit and delete timers and change the timer settings")]
@@ -66,6 +68,10 @@ class Timer(models.Model):
     notes = models.TextField(blank=True)
     #: Everyone is expected: members are notified when it's added and reminded before it comes out.
     important = models.BooleanField(default=False)
+    #: Ask Discord webhooks to ping (their own mention, plus ``ping_roles``) when it's added, moved and reminded.
+    ping = models.BooleanField(default=False)
+    #: Discord role ids to ping, on top of the webhook's own mention.
+    ping_roles = models.JSONField(default=list, blank=True)
     source = models.CharField(max_length=14, choices=Source.choices, default=Source.MANUAL)
     #: The in-game structure id, for timers read from structures and notifications.
     structure_id = models.BigIntegerField(null=True, blank=True, db_index=True)

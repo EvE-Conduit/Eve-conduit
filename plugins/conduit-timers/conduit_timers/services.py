@@ -123,6 +123,8 @@ def out(t: Timer, user, now=None) -> dict:
         "ends_at": t.ends_at.isoformat(),
         "notes": t.notes,
         "important": t.important,
+        "ping": t.ping,
+        "ping_roles": list(t.ping_roles or []),
         "source": t.source,
         "structure_id": t.structure_id,
         "status": status(t, now),
@@ -272,7 +274,8 @@ def structure_search(user, q: str, limit: int = 12) -> list[dict]:
 
 
 def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, ends_at: datetime, structure_type: str = "",
-         owner: str = "", notes: str = "", important: bool = False, notify: bool = True, structure_id: int | None = None) -> Timer:
+         owner: str = "", notes: str = "", important: bool = False, notify: bool = True, structure_id: int | None = None,
+         ping: bool = False, ping_roles: list[str] | None = None) -> Timer:
     name = " ".join(name.split())
     if not name:
         raise TimerError("Give the timer a name (the structure's name)")
@@ -300,6 +303,7 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
     t.structure_type = " ".join(structure_type.split())[:60]
     t.type_id = type_id_for(t.structure_type)
     t.owner, t.notes, t.important = " ".join(owner.split())[:120], notes.strip()[:5000], important
+    t.ping, t.ping_roles = ping, clean_roles(ping_roles)
     # Picked from our own structures: remember which, so the automatic import sees it's already on the board.
     if structure_id:
         t.structure_id = structure_id
@@ -348,11 +352,53 @@ def describe(t: Timer) -> str:
 
 
 def _emit(event: str, t: Timer, summary: str) -> None:
+    """Webhooks hear about every change. ``ping`` and ``mention_roles`` make a Discord webhook ping (its own mention
+    and the timer's roles) when the timer asks for it; a deleted timer never pings."""
     from conduit.events import bus
 
+    ping = t.ping and event != "timers.deleted"
     bus.emit(event, timer_id=t.pk, structure=t.name, structure_type=t.structure_type, system=t.system.name, kind=t.kind, side=t.side,
              owner=t.owner, ends_at=t.ends_at.isoformat(), important=t.important, title=title(t),
-             summary=f"{describe(t)} {summary}".strip(), level=NOTIFY_LEVEL.get(t.side, "info"), link=LINK)
+             summary=f"{describe(t)} {summary}".strip(), level=NOTIFY_LEVEL.get(t.side, "info"), link=LINK,
+             ping=ping, mention_roles=list(t.ping_roles or []) if ping else [])
+
+
+# --- Discord roles to ping ----------------------------------------------------------------------------------------
+
+ROLES_CACHE = 600
+
+
+def clean_roles(roles) -> list[str]:
+    return list(dict.fromkeys(str(r) for r in (roles or []) if str(r).isdigit()))[:10]
+
+
+def discord_roles() -> dict:
+    """The Discord server's roles (through the Discord plugin, when it's on and linked), for picking who a timer
+    pings. ``available`` is False without the plugin; then only the webhook's own mention pings."""
+    from django.apps import apps
+    from django.core.cache import cache
+
+    from conduit.plugins.services import is_enabled
+
+    if not (apps.is_installed("conduit_discord") and is_enabled("discord")):
+        return {"available": False, "roles": []}
+    from conduit_discord import discord_api
+    from conduit_discord.models import DiscordSettings
+
+    s = DiscordSettings.load()
+    if not (s.bot_token and s.guild_id):
+        return {"available": False, "roles": []}
+    roles = cache.get("timers:discord_roles")
+    if roles is None:
+        try:
+            raw = discord_api.roles(s.bot_token, s.guild_id)
+        except Exception as exc:  # noqa: BLE001 - Discord being down mustn't break the editor
+            log.warning("Couldn't read the Discord roles: %s", exc)
+            return {"available": True, "roles": [], "error": "Discord couldn't be reached; the roles aren't available right now."}
+        roles = [{"id": str(r["id"]), "name": r["name"], "color": r.get("color") or 0}
+                 for r in sorted(raw, key=lambda r: -r.get("position", 0)) if str(r["id"]) != str(s.guild_id) and not r.get("managed")]
+        cache.set("timers:discord_roles", roles, ROLES_CACHE)
+    return {"available": True, "roles": roles}
 
 
 # --- reminders ----------------------------------------------------------------------------------------------------
