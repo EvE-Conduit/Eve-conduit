@@ -1,6 +1,6 @@
 // Fleets overview: recent fleets, my attendance, and starting a fleet.
 import {
-  api, Badge, Button, Card, Dialog, EmptyState, Field, Input, PageHeader, SearchInput, Select, Skeleton, StatCard, Table,
+  api, Badge, Button, Card, Dialog, EmptyState, Field, Input, PageHeader, SearchInput, Select, Skeleton, StatCard, SwitchRow, Table,
   TableToolbar, TabPanel, Tabs, Td, Textarea, Th, THead, timeAgo, toast, Tr, dateTime,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +9,18 @@ import { Link, useNavigate } from "react-router";
 
 import { Chart, Check, Plus, Radar, Rocket } from "./icons";
 import { BASE, type FcCharacter, type FleetDetail, type FleetType, type Overview } from "./types";
+
+/** Characters that can track but haven't granted the MOTD scope. */
+export function MotdScopeHint({ chars, on }: { chars: FcCharacter[]; on: boolean }) {
+  const missing = chars.filter((c) => !c.can_motd);
+  if (!on || !missing.length) return null;
+  return (
+    <p className="text-xs text-warning-fg">
+      {missing.map((c) => c.name).join(", ")} can't edit the MOTD yet: log in with {missing.length === 1 ? "it" : "them"} again under Characters.
+      FATs are still tracked.
+    </p>
+  );
+}
 
 export function TypeBadge({ type }: { type: FleetType | null }) {
   if (!type) return null;
@@ -161,7 +173,7 @@ function NewFleetDialog({ types, onClose }: { types: FleetType[]; onClose: () =>
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: chars } = useQuery({ queryKey: ["fleets", "fc-characters"], queryFn: () => api.get<FcCharacter[]>(`${BASE}/fc/characters`) });
-  const [form, setForm] = useState({ name: "", fleet_type: "", notes: "", link_minutes: "", track_character: "" });
+  const [form, setForm] = useState({ name: "", fleet_type: "", notes: "", link_minutes: "", track_character: "", motd: true });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
   const create = useMutation({
     mutationFn: () =>
@@ -171,6 +183,7 @@ function NewFleetDialog({ types, onClose }: { types: FleetType[]; onClose: () =>
         fleet_type: form.fleet_type ? Number(form.fleet_type) : null,
         link_minutes: form.link_minutes ? Number(form.link_minutes) : null,
         track_character: form.track_character ? Number(form.track_character) : null,
+        motd: form.motd,
       }),
     onSuccess: (f) => {
       qc.invalidateQueries({ queryKey: ["fleets"] });
@@ -213,6 +226,17 @@ function NewFleetDialog({ types, onClose }: { types: FleetType[]; onClose: () =>
             {trackable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
         </Field>
+        {form.track_character && (
+          <>
+            <SwitchRow
+              label="FATs in the fleet MOTD"
+              description="Who has a FAT and the FAT link, added below your own MOTD text and updated as pilots get one."
+              checked={form.motd}
+              onCheckedChange={(motd) => set({ motd })}
+            />
+            <MotdScopeHint chars={trackable.filter((c) => String(c.id) === form.track_character)} on={form.motd} />
+          </>
+        )}
         {chars && chars.length > trackable.length && (
           <p className="-mt-2 text-xs text-subtle">
             {chars.filter((c) => !c.can_track).map((c) => c.name).join(", ")} can't track: log in with them again to grant fleet access.

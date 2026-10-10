@@ -1,13 +1,13 @@
 // One fleet: who got a FAT, and for its FC the tracking, the FAT link and adding or removing pilots.
 import {
   Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, dateTime, duration, EmptyState, Input, PageHeader, Select,
-  Skeleton, Spinner, Table, Td, Th, THead, timeAgo, toast, Tr, useHasPerm,
+  Skeleton, Spinner, SwitchRow, Table, Td, Th, THead, timeAgo, toast, Tr, useHasPerm,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
-import { TypeBadge } from "./home";
+import { MotdScopeHint, TypeBadge } from "./home";
 import { ArrowLeft, Copy, LinkIcon, Plus, Radar, Refresh, Rocket, Square, Trash } from "./icons";
 import { BASE, type FcCharacter, type FleetDetail, VIA } from "./types";
 
@@ -164,6 +164,7 @@ function TrackingCard({ data, live, busy, onAct }: { data: FleetDetail; live: bo
   const info = data.tracking_info!;
   const { data: chars } = useQuery({ queryKey: ["fleets", "fc-characters"], queryFn: () => api.get<FcCharacter[]>(`${BASE}/fc/characters`), enabled: live && !data.tracking });
   const [char, setChar] = useState("");
+  const [motd, setMotd] = useState(true);
   const trackable = (chars ?? []).filter((c) => c.can_track);
   useEffect(() => {
     if (!char && trackable[0]) setChar(String(trackable[0].id));
@@ -180,6 +181,14 @@ function TrackingCard({ data, live, busy, onAct }: { data: FleetDetail; live: bo
             </div>
             <div className="text-xs text-muted">Last read {timeAgo(info.last_at)}</div>
             {info.error && <p className="text-xs text-warning-fg">{info.error}</p>}
+            <SwitchRow
+              label="FATs in the fleet MOTD"
+              description="Who has a FAT and the FAT link, added below your own MOTD text and updated as pilots get one."
+              checked={info.motd}
+              disabled={busy}
+              onCheckedChange={(on) => onAct({ path: "/motd", body: { on }, msg: on ? "FATs added to the MOTD" : "FATs taken out of the MOTD" })}
+            />
+            {info.motd && info.motd_error && <p className="text-xs text-warning-fg">{info.motd_error}</p>}
             <div className="flex gap-2">
               <Button size="sm" loading={busy} onClick={() => onAct({ path: "/refresh" })}><Refresh /> Read now</Button>
               <Button size="sm" variant="ghost" onClick={() => onAct({ path: "/track", method: "delete", msg: "Tracking stopped" })}>Stop</Button>
@@ -190,14 +199,18 @@ function TrackingCard({ data, live, busy, onAct }: { data: FleetDetail; live: bo
             {info.error && <Alert tone="warning" title="Tracking stopped">{info.error}</Alert>}
             {live ? (
               trackable.length ? (
+                <>
                 <div className="flex flex-wrap gap-2">
                   <Select value={char} onChange={(e) => setChar(e.target.value)} className="min-w-40 flex-1" aria-label="Fleet boss">
                     {trackable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </Select>
-                  <Button size="sm" variant="primary" loading={busy} disabled={!char} onClick={() => onAct({ path: "/track", body: { character: Number(char) }, msg: "Tracking started" })}>
+                  <Button size="sm" variant="primary" loading={busy} disabled={!char} onClick={() => onAct({ path: "/track", body: { character: Number(char), motd }, msg: "Tracking started" })}>
                     <Radar /> Track
                   </Button>
                 </div>
+                <SwitchRow label="FATs in the fleet MOTD" description="Added below your own MOTD text and updated as pilots get one." checked={motd} onCheckedChange={setMotd} />
+                <MotdScopeHint chars={trackable.filter((c) => String(c.id) === char)} on={motd} />
+                </>
               ) : (
                 <p className="text-xs text-muted">None of your characters has granted fleet access. Log in with your FC character again under Characters.</p>
               )

@@ -1,6 +1,6 @@
 [project]
 name = "conduit-fleets"
-version = "1.0.2"
+version = "1.1.0"
 description = "Fleets and FATs: track who flew in each fleet, automatically from the FC's in-game fleet or with a FAT link, with attendance stats and a group rule for FATs."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,8 +15,8 @@ fleets = "conduit_fleets.plugin:FleetsPlugin"
 name = "Fleets & FATs"
 icon = "rocket"
 category = "Military"
-min_conduit = "0.5.6"
-esi_scopes = ["esi-fleets.read_fleet.v1"]
+min_conduit = "0.5.35"
+esi_scopes = ["esi-fleets.read_fleet.v1", "esi-fleets.write_fleet.v1"]
 
 [build-system]
 requires = ["setuptools>=75"]

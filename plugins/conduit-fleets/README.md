@@ -9,6 +9,11 @@ Records who flew in each fleet (FATs, also called PAPs) and lets groups require 
   - **Tracking:** pick one of your characters that is fleet boss in game. Everyone in the in-game fleet gets a FAT,
     read from ESI every minute (needs `esi-fleets.read_fleet.v1`). It stops when the in-game fleet ends, the boss
     changes, after 12 hours, or when you end the fleet.
+    While tracking, the FAT lines go at the bottom of the in-game **fleet MOTD**: who has a FAT (newest first) and
+    the FAT link while it's open, rewritten as pilots get a FAT (by tracking, the link or by hand) and set to
+    "Fleet ended: N pilots got a FAT" when you end it. Whatever is above them in the MOTD is kept, so write your own
+    text above the `--- FATs by EvE Conduit ---` line. Needs `esi-fleets.write_fleet.v1`; it can be switched off
+    when starting the fleet or on the fleet's page, which takes the lines out again.
   - **FAT link:** share the link in fleet chat; pilots open it and tick the characters they flew with. It can close
     after 15 minutes to 2 hours, or stay open until the fleet ends.
   FCs can also add or remove pilots by hand, read the fleet right away, and end the fleet. Tracking always uses one

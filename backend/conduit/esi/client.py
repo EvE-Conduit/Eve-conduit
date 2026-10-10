@@ -110,6 +110,10 @@ class EsiClient:
         """POST routes (e.g. ``/universe/names``) are not cached."""
         return self._request("POST", path, character=character, body=body)
 
+    def put(self, path: str, body: Any, *, character=None) -> EsiResponse:
+        """PUT routes (e.g. ``/fleets/{id}`` to change the fleet's MOTD) are not cached."""
+        return self._request("PUT", path, character=character, body=body)
+
     # -- internals ----------------------------------------------------------
 
     def _check_pauses(self, path: str, character_id: int | None):

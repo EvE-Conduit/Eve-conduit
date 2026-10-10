@@ -23,8 +23,18 @@ class FakeEsi:
         self.members = []
         self.role = "fleet_commander"
         self.fail = None
+        self.motd = ""
+        self.puts = []
+        self.put_fail = None
 
-    def get(self, path, *, character=None, params=None):
+    def put(self, path, body, *, character=None):
+        assert path == f"/fleets/{FLEET_ID}"
+        if self.put_fail:
+            raise EsiError(self.put_fail, "nope")
+        self.puts.append(body["motd"])
+        self.motd = body["motd"]
+
+    def get(self, path, *, character=None, params=None, cache_response=True):
         if self.fail:
             raise EsiError(self.fail, "nope")
 
@@ -36,6 +46,8 @@ class FakeEsi:
             r.data = {"fleet_id": FLEET_ID, "role": self.role, "squad_id": 1, "wing_id": 1}
         elif path == f"/fleets/{FLEET_ID}/members":
             r.data = self.members
+        elif path == f"/fleets/{FLEET_ID}":
+            r.data = {"motd": self.motd, "is_free_move": False, "is_registered": False, "is_voice_enabled": False}
         else:
             raise AssertionError(path)
         return r
@@ -53,7 +65,7 @@ def esi(monkeypatch):
 def people(db, corp):
     sync_installed()
     set_enabled("fleets", True)
-    fc = make_user(90000001, "FC Bob", corporation=corp, scopes="publicData esi-fleets.read_fleet.v1")
+    fc = make_user(90000001, "FC Bob", corporation=corp, scopes="publicData esi-fleets.read_fleet.v1 esi-fleets.write_fleet.v1")
     fc.user_permissions.add(Permission.objects.get(codename="run_fleets"))
     pilot = make_user(90000002, "Pilot One", corporation=corp)
     alt = Character.objects.create(id=90000003, name="Pilot Alt", owner_hash="alt", user=pilot, corporation=corp)
@@ -205,3 +217,71 @@ def test_only_managers_change_the_type_of_an_ended_fleet(people, api_client):
     assert resp.status_code == 403
     # Renaming is still fine.
     assert api_client.call("put", f"/api/p/fleets/{fleet['id']}", {"name": "Sunday roam!"}).status_code == 200
+
+
+FC_TEXT = '<font size="12" color="#ffffffff">Comms: Mumble, Op channel<br>Doctrine: Ferox</font>'
+
+
+def test_fat_lines_go_below_the_fcs_motd():
+    lines = "<b>--- FATs by EvE Conduit ---</b><br>2 with a FAT: A, B"
+    assert services.with_fat_lines("", lines) == lines
+    assert services.with_fat_lines("<font></font>", lines) == lines
+    once = services.with_fat_lines(FC_TEXT, lines)
+    assert once == f"{FC_TEXT}<br>{lines}"
+    # Next time only our lines change, even after the game client rewrote the MOTD's markup.
+    rewritten = once.replace("<br>", "<br/>").replace("<b>", '<font color="#ffffffff"><b>')
+    again = services.with_fat_lines(rewritten, "<b>--- FATs by EvE Conduit ---</b><br>3 with a FAT: C, A, B")
+    assert again.startswith(FC_TEXT.replace("<br>", "<br/>")) and again.endswith("3 with a FAT: C, A, B") and again.count("FATs by") == 1
+    # Switched off: our lines come out, the FC's text stays.
+    assert services.with_fat_lines(once, "") == FC_TEXT
+
+
+def test_tracking_adds_fats_to_the_motd(people, esi, api_client):
+    esi.motd = FC_TEXT
+    esi.members = [{"character_id": 90000002, "ship_type_id": 587, "solar_system_id": 30000142}]
+    fleet = start(api_client, people["fc"], track_character=90000001, link_minutes=30)
+    assert len(esi.puts) == 1 and esi.motd.startswith(FC_TEXT + "<br>")
+    assert "1 with a FAT: Pilot One" in esi.motd and f"/p/fleets/fat/{fleet['link']['code']}" in esi.motd
+    # Nothing new: the MOTD isn't written again.
+    services.track_all()
+    assert len(esi.puts) == 1
+    # The FC changes the MOTD in game, and someone joins: they're added, the FC's new text stays.
+    esi.motd = esi.motd.replace("Ferox", "Eagle")
+    esi.members.append({"character_id": 90000003, "ship_type_id": 587, "solar_system_id": 30000142})
+    services.track_all()
+    assert "Doctrine: Eagle" in esi.motd and "2 with a FAT: Pilot Alt, Pilot One" in esi.motd and esi.motd.count("FATs by") == 1
+    # A FAT from the link shows up on the next read too.
+    EveName.objects.create(id=777, name="Blue <Friend>", category="character")
+    services.record(Fleet.objects.get(), [(777, None, None)], Fat.Via.MANUAL, by=people["fc"])
+    services.track_all()
+    assert "3 with a FAT: Blue &lt;Friend&gt;" in esi.motd
+    # Ending the fleet says so in the MOTD.
+    api_client.call("post", f"/api/p/fleets/{fleet['id']}/end")
+    assert esi.motd.startswith(FC_TEXT.replace("Ferox", "Eagle") + "<br>") and esi.motd.endswith("Fleet ended: 3 pilots got a FAT")
+
+
+def test_motd_can_be_switched_off(people, esi, api_client):
+    esi.motd = FC_TEXT
+    fleet = start(api_client, people["fc"], track_character=90000001, motd=False)
+    assert esi.puts == [] and not fleet["tracking_info"]["motd"]
+    detail = api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": True}).json()
+    assert detail["tracking_info"]["motd"] and "Nobody has a FAT yet" in esi.motd
+    api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": False})
+    assert esi.motd == FC_TEXT
+
+
+def test_motd_needs_the_scope_and_says_why_it_failed(people, esi, api_client):
+    token = Character.objects.get(pk=90000001).token
+    token.scopes = "publicData esi-fleets.read_fleet.v1"
+    token.save()
+    fleet = start(api_client, people["fc"], track_character=90000001)
+    assert fleet["tracking"] and esi.puts == [] and "log in with it again" in fleet["tracking_info"]["motd_error"]
+    token.scopes += " esi-fleets.write_fleet.v1"
+    token.save()
+    esi.put_fail = 403
+    services.track_all()
+    assert "no longer the fleet boss" in Fleet.objects.get().motd_error
+    # Not retried every minute while nothing changed.
+    esi.put_fail = None
+    services.track_all()
+    assert esi.puts == []
