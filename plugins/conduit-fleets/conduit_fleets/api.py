@@ -67,12 +67,16 @@ def detail(request, fleet_id: int):
 def link_info(request, code: str):
     """What the FAT link page shows: the fleet, whether it's open, and my characters."""
     fleet = _run(services.fleet_for_link, code)
-    have = set(fleet.fats.values_list("character_id", flat=True))
+    have = set(fleet.fats.filter(round=fleet.fat_round).values_list("character_id", flat=True))
+    allowed = services.link_allowed(fleet)
     return {
         **services.fleet_brief(fleet),
         "notes": fleet.notes,
         "open": fleet.link_active,
-        "characters": [{"id": c.pk, "name": c.name, "portrait": c.portrait, "registered": c.pk in have}
+        # Tracked fleets: only characters seen in the in-game fleet this round, who already have their FAT.
+        "tracked": allowed is not None,
+        "characters": [{"id": c.pk, "name": c.name, "portrait": c.portrait, "registered": c.pk in have,
+                        "allowed": allowed is None or c.pk in allowed}
                        for c in Character.objects.filter(user=request.user)],
     }
 
@@ -188,6 +192,14 @@ def refresh(request, fleet_id: int):
     return {**services.fleet_detail(_fleet(fleet_id), request.user), "added": added}
 
 
+@router.post("/{fleet_id}/rounds")
+def new_round(request, fleet_id: int):
+    """Start the next FAT round: everyone in the fleet from now on gets another FAT."""
+    fleet = _run(services.new_round, _editable(request, fleet_id))
+    record("fleets.new_round", f"started FAT round {fleet.fat_round} of \"{fleet.name}\"", request=request, target=fleet)
+    return services.fleet_detail(_fleet(fleet_id), request.user)
+
+
 class LinkIn(Schema):
     open: bool
     minutes: int | None = None
@@ -284,9 +296,9 @@ def stats_csv(request, days: int = 30, type: int | None = None):
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="fleet-attendance-{days}d.csv"'
     out = csv.writer(resp)
-    out.writerow(["Member", "Registered", "Fleets", "Characters", "Last fleet"])
+    out.writerow(["Member", "Registered", "FATs", "Fleets", "Characters", "Last fleet"])
     for m in rows:
-        out.writerow(_csv_row([m["name"], "yes" if m["registered"] else "no", m["fleets"], ", ".join(m["characters"]), m["last"][:10]]))
+        out.writerow(_csv_row([m["name"], "yes" if m["registered"] else "no", m["fats"], m["fleets"], ", ".join(m["characters"]), m["last"][:10]]))
     return resp
 
 

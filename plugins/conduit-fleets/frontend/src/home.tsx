@@ -72,10 +72,10 @@ export function HomePage() {
       ) : (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard label="My fleets · 30 days" value={data.me.counts.days_30} tone={data.me.counts.days_30 ? "accent" : undefined}
+            <StatCard label="My FATs · 30 days" value={data.me.counts.days_30} tone={data.me.counts.days_30 ? "accent" : undefined}
               hint={data.me.by_type_30.map((t) => `${t.count} ${t.type}`).join(" · ") || "none yet"} />
-            <StatCard label="My fleets · 90 days" value={data.me.counts.days_90} />
-            <StatCard label="My fleets · all time" value={data.me.counts.all} />
+            <StatCard label="My FATs · 90 days" value={data.me.counts.days_90} />
+            <StatCard label="My FATs · all time" value={data.me.counts.all} />
           </div>
 
           <Tabs
@@ -144,6 +144,7 @@ export function HomePage() {
                             <div className="flex items-center gap-2 font-medium">{f.name} <TypeBadge type={f.type} /></div>
                             <div className="truncate text-xs text-subtle">{f.characters.join(", ")} · FC {f.fc?.name ?? "unknown"}</div>
                           </div>
+                          {f.fats > 1 && <Badge tone="accent" size="xs">{f.fats} FATs</Badge>}
                           <span className="whitespace-nowrap text-xs text-muted">{timeAgo(f.started_at)}</span>
                         </Link>
                       </li>

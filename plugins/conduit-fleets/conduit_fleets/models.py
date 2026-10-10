@@ -51,6 +51,10 @@ class Fleet(models.Model):
     link_open = models.BooleanField(default=True)
     link_expires_at = models.DateTimeField(null=True, blank=True)
 
+    # FAT rounds: the FC can start another round (e.g. every hour of a long op); each round is one more FAT.
+    fat_round = models.PositiveSmallIntegerField(default=1)
+    round_started_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["-started_at"]
         permissions = [
@@ -67,7 +71,7 @@ class Fleet(models.Model):
 
 
 class Fat(models.Model):
-    """One character was in one fleet."""
+    """One character was in one fleet, in one of its FAT rounds."""
 
     class Via(models.TextChoices):
         ESI = "esi", "In-game fleet"
@@ -75,6 +79,7 @@ class Fat(models.Model):
         MANUAL = "manual", "Added by the FC"
 
     fleet = models.ForeignKey(Fleet, on_delete=models.CASCADE, related_name="fats")
+    round = models.PositiveSmallIntegerField(default=1)
     character_id = models.BigIntegerField(db_index=True)
     character_name = models.CharField(max_length=100)
     ship_type_id = models.IntegerField(null=True, blank=True)
@@ -84,5 +89,5 @@ class Fat(models.Model):
     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
-        unique_together = [("fleet", "character_id")]
-        ordering = ["character_name"]
+        unique_together = [("fleet", "character_id", "round")]
+        ordering = ["-round", "character_name"]

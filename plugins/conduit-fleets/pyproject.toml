@@ -1,6 +1,6 @@
 [project]
 name = "conduit-fleets"
-version = "1.1.0"
+version = "1.2.0"
 description = "Fleets and FATs: track who flew in each fleet, automatically from the FC's in-game fleet or with a FAT link, with attendance stats and a group rule for FATs."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

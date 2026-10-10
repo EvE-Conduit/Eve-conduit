@@ -24,7 +24,7 @@ export function FleetPage() {
     refetchInterval: (q) => (q.state.data?.tracking ? 30_000 : false),
     retry: false,
   });
-  const [confirm, setConfirm] = useState<"end" | "delete" | null>(null);
+  const [confirm, setConfirm] = useState<"end" | "delete" | "round" | null>(null);
   const update = (d: FleetDetail, msg?: string) => {
     qc.setQueryData(key, d);
     qc.invalidateQueries({ queryKey: ["fleets", "overview"] });
@@ -74,7 +74,8 @@ export function FleetPage() {
             <Card><CardBody className="whitespace-pre-line text-sm text-muted">{data.notes}</CardBody></Card>
           )}
           <Card>
-            <CardHeader title={`Pilots · ${data.pilots}`} description={`${data.members} member${data.members === 1 ? "" : "s"} on this site`} />
+            <CardHeader title={`Pilots · ${data.pilots}`}
+              description={`${data.members} member${data.members === 1 ? "" : "s"} on this site${data.round > 1 ? ` · ${data.fat_count} FATs over ${data.round} rounds` : ""}`} />
             {data.can_edit && live && <AddPilot fleetId={data.id} onAdded={(d) => update(d, "Added")} />}
             {data.fats.length === 0 ? (
               <EmptyState icon={<Rocket />} title="Nobody yet" description={data.can_edit ? "Track your in-game fleet or share the FAT link." : undefined} />
@@ -83,6 +84,7 @@ export function FleetPage() {
                 <THead>
                   <tr>
                     <Th>Pilot</Th>
+                    {data.round > 1 && <Th>Round</Th>}
                     <Th>Ship</Th>
                     <Th>System</Th>
                     <Th>How</Th>
@@ -101,6 +103,7 @@ export function FleetPage() {
                           </div>
                         </div>
                       </Td>
+                      {data.round > 1 && <Td className="font-mono text-sm tabular-nums text-muted">{f.round}</Td>}
                       <Td>{f.ship?.name ? <span className="flex items-center gap-2 text-sm"><img src={f.ship.icon} alt="" className="size-5" />{f.ship.name}</span> : <span className="text-subtle">—</span>}</Td>
                       <Td className="text-sm text-muted">{f.system ?? "—"}</Td>
                       <Td><Badge tone={VIA[f.via].tone} size="xs">{VIA[f.via].label}</Badge></Td>
@@ -119,6 +122,7 @@ export function FleetPage() {
         </div>
 
         <div className="space-y-6">
+          {data.can_edit && <RoundsCard data={data} live={live} onNew={() => setConfirm("round")} />}
           {data.can_edit && data.tracking_info && <TrackingCard data={data} live={live} busy={act.isPending} onAct={(v) => act.mutate(v)} />}
           {data.can_edit && data.link && <LinkCard data={data} live={live} onAct={(v) => act.mutate(v)} />}
           {data.ships.length > 0 && (
@@ -146,11 +150,21 @@ export function FleetPage() {
         onConfirm={() => act.mutateAsync({ path: "/end", msg: "Fleet ended" })}
       />
       <ConfirmDialog
+        open={confirm === "round"}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        title={`Start FAT round ${data.round + 1}?`}
+        description={data.tracking
+          ? "Everyone in the in-game fleet gets another FAT now, and so does anyone who joins during this round."
+          : "Pilots can get another FAT from the FAT link, or you add them."}
+        confirmLabel={<><Plus /> Start round {data.round + 1}</>}
+        onConfirm={() => act.mutateAsync({ path: "/rounds", msg: `FAT round ${data.round + 1} started` })}
+      />
+      <ConfirmDialog
         open={confirm === "delete"}
         onOpenChange={(o) => !o && setConfirm(null)}
         danger
         title={`Delete ${data.name}?`}
-        description={`Its ${data.pilots} FATs are deleted too, which lowers everyone's attendance.`}
+        description={`Its ${data.fat_count} FATs are deleted too, which lowers everyone's attendance.`}
         confirmLabel={<><Trash /> Delete</>}
         onConfirm={() => del.mutateAsync()}
       />
@@ -224,6 +238,29 @@ function TrackingCard({ data, live, busy, onAct }: { data: FleetDetail; live: bo
   );
 }
 
+function RoundsCard({ data, live, onNew }: { data: FleetDetail; live: boolean; onNew: () => void }) {
+  return (
+    <Card>
+      <CardHeader title="FAT rounds" icon={<Plus />} description="Each round is one more FAT, e.g. every hour of a long op. Rounds are at least 15 minutes apart." />
+      <CardBody className="space-y-3 text-sm">
+        <ul className="divide-y divide-border border border-border">
+          {data.rounds.map((r) => (
+            <li key={r.round} className="flex items-center justify-between px-3 py-2">
+              <span>
+                Round {r.round}
+                {r.round === data.round && live && <Badge tone="success" size="xs" className="ml-2">now</Badge>}
+                {r.round === data.round && data.round_started_at && <span className="ml-2 text-xs text-subtle">since {timeAgo(data.round_started_at)}</span>}
+              </span>
+              <span className="font-mono tabular-nums text-muted">{r.pilots} pilot{r.pilots === 1 ? "" : "s"}</span>
+            </li>
+          ))}
+        </ul>
+        {live && <Button size="sm" onClick={onNew}><Plus /> New FAT round</Button>}
+      </CardBody>
+    </Card>
+  );
+}
+
 function LinkCard({ data, live, onAct }: { data: FleetDetail; live: boolean; onAct: (v: Act) => void }) {
   const link = data.link!;
   const url = `${window.location.origin}/p/fleets/fat/${link.code}`;
@@ -231,6 +268,11 @@ function LinkCard({ data, live, onAct }: { data: FleetDetail; live: boolean; onA
     <Card>
       <CardHeader title="FAT link" icon={<LinkIcon />} description="Pilots open it and pick the characters they flew with." />
       <CardBody className="space-y-3 text-sm">
+        {link.tracked_only && (
+          <p className="text-xs text-muted">
+            This fleet is tracked, so the link can't add anyone: it only takes characters seen in the in-game fleet this round, who already have their FAT.
+          </p>
+        )}
         <div className="flex">
           <Input readOnly value={url} onFocus={(e) => e.target.select()} className="font-mono text-xs" />
           <Button size="icon" aria-label="Copy the FAT link"
