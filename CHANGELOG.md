@@ -5,6 +5,14 @@ Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+### Added
+- **New plugin: Wiki** (Administration → Plugins → Browse). Guides, rules and reference pages in a tree, written in
+  Markdown with a live preview: headings with an "On this page" list, nested and task lists, tables, code blocks,
+  images and `[[Page Title]]` links between pages. Every save keeps a revision; history shows who changed which
+  lines and can put an old revision back. Editors (`wiki.edit_pages`) write; managers (`wiki.manage_wiki`) choose
+  who sees a page by state or group, lock, reorder and delete pages, and make pages public for anyone at
+  `/public/p/wiki/<address>`. Pages turn up in Ctrl+K search and a dashboard widget lists the latest changes.
+
 ### Changed
 - **Administration has its own rail on the right.** On wide screens (1280px and up) the Administration links sit
   in a rail on the right of the page, with its own collapse button, so the left sidebar is just the member side of
