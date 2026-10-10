@@ -174,61 +174,96 @@ STRUCTURE_STATE_KINDS = {"armor_reinforce": Timer.Kind.ARMOR, "hull_reinforce": 
 
 
 def structure_search(user, q: str, limit: int = 12) -> list[dict]:
-    """Our corporations' structures (from the corporation sheet) whose name, solar system or type matches ``q``, for
-    filling in the editor. Only structures of corporations whose sheet the user may see; someone without that access
-    gets an empty list and types everything by hand."""
+    """Structures the site knows the names of (from members' assets, contracts, mail, notifications and the
+    corporation sheet, the same list Buyback offers) whose name, solar system or type matches ``q``, for filling in
+    the editor. Your own corporation's and alliance's structures come first and are marked ``ours``. When the
+    corporation sheet also has the structure (and the user may see that sheet), its state and running timer are
+    included. With nothing to offer, the editor is filled in by hand."""
     from conduit.corp.access import can_view_section
     from conduit.corp.models import Structure
+    from conduit.eve.models import EveCorporation
+    from conduit.sheet.models import Location
 
     q = " ".join(q.split())
     if len(q) < 2:
         return []
+    now = timezone.now()
     systems = {s.pk: s for s in SolarSystem.objects.filter(name__icontains=q).select_related("region")[:50]}
     types = dict(ItemType.objects.filter(name__icontains=q, published=True).values_list("pk", "name")[:50])
     types.update({v: k for k, v in STRUCTURE_TYPES.items() if v and q.lower() in k.lower()})
-    rows = Structure.objects.filter(Q(name__icontains=q) | Q(system_id__in=list(systems)) | Q(type_id__in=list(types))).select_related("corporation")
-    allowed: dict[int, bool] = {}
-    hits = []
-    for s in rows.order_by("name")[:200]:
-        corp_id = s.corporation_id
-        if corp_id not in allowed:
-            allowed[corp_id] = can_view_section(user, s.corporation, "structures")
-        if not allowed[corp_id]:
-            continue
-        hits.append(s)
-    if not hits:
+    match = Q(name__icontains=q) | Q(solar_system_id__in=list(systems)) | Q(type_id__in=list(types))
+    places = list(Location.objects.filter(kind=Location.Kind.STRUCTURE, resolved=True).filter(match).order_by("name")[:200])
+    # The corporation sheet's structures too (they're mirrored to the names list, but not before their first sync).
+    sheet = {s.structure_id: s for s in Structure.objects.filter(Q(name__icontains=q) | Q(system_id__in=list(systems)) | Q(type_id__in=list(types)))
+             .select_related("corporation")}
+    known = {p.pk for p in places}
+    for sid, s in sheet.items():
+        if sid not in known and s.name:
+            places.append(Location(id=sid, kind=Location.Kind.STRUCTURE, name=s.name, solar_system_id=s.system_id, type_id=s.type_id, owner_id=s.corporation_id))
+    if not places:
         return []
-    missing_systems = {s.system_id for s in hits} - set(systems)
+    sheet.update({s.structure_id: s for s in Structure.objects.filter(structure_id__in=[p.pk for p in places]).select_related("corporation")
+                  if s.structure_id not in sheet})
+    allowed: dict[int, bool] = {}
+
+    def sheet_row(p):
+        s = sheet.get(p.pk)
+        if s is None:
+            return None
+        if s.corporation_id not in allowed:
+            allowed[s.corporation_id] = can_view_section(user, s.corporation, "structures")
+        return s if allowed[s.corporation_id] else None
+
+    missing_systems = {p.solar_system_id for p in places if p.solar_system_id} - set(systems)
     if missing_systems:
         systems.update({x.pk: x for x in SolarSystem.objects.filter(pk__in=missing_systems).select_related("region")})
-    missing_types = {s.type_id for s in hits} - set(types)
+    missing_types = {p.type_id for p in places if p.type_id} - set(types)
     if missing_types:
         types.update(dict(ItemType.objects.filter(pk__in=missing_types).values_list("pk", "name")))
+    owners = {c.pk: c for c in EveCorporation.objects.filter(pk__in={p.owner_id for p in places if p.owner_id})}
+    main = user.main_character
+    my_corp = main.corporation_id if main else None
+    my_alliance = main.alliance_id if main else None
+
+    def ours(p) -> bool:
+        if not p.owner_id:
+            return False
+        if p.owner_id == my_corp:
+            return True
+        owner = owners.get(p.owner_id)
+        return bool(my_alliance and owner is not None and owner.alliance_id == my_alliance)
+
     ql = q.lower()
-    # Structures named like the search first, then the rest by name.
-    hits.sort(key=lambda s: (not s.name.lower().startswith(ql), ql not in s.name.lower(), s.name.lower()))
+    # Ours first, then structures named like the search, then the rest by name.
+    places.sort(key=lambda p: (not ours(p), not p.name.lower().startswith(ql), ql not in p.name.lower(), p.name.lower()))
     out = []
-    for s in hits[:limit]:
-        system = systems.get(s.system_id)
-        kind, ends_at = STRUCTURE_STATE_KINDS.get(s.state), s.state_timer_end
-        if s.unanchors_at and (not ends_at or ends_at <= timezone.now()):
-            kind, ends_at = Timer.Kind.UNANCHORING, s.unanchors_at
-        if not ends_at or ends_at <= timezone.now():
-            kind, ends_at = None, None
-        type_name = types.get(s.type_id) or next((k for k, v in STRUCTURE_TYPES.items() if v == s.type_id), "")
+    for p in places[:limit]:
+        system = systems.get(p.solar_system_id)
+        s = sheet_row(p)
+        kind, ends_at, state = None, None, ""
+        if s is not None:
+            state = s.state
+            kind, ends_at = STRUCTURE_STATE_KINDS.get(s.state), s.state_timer_end
+            if s.unanchors_at and (not ends_at or ends_at <= now):
+                kind, ends_at = Timer.Kind.UNANCHORING, s.unanchors_at
+            if not ends_at or ends_at <= now:
+                kind, ends_at = None, None
+        type_name = types.get(p.type_id) or next((k for k, v in STRUCTURE_TYPES.items() if v == p.type_id), "")
+        owner = owners.get(p.owner_id)
         out.append({
-            "structure_id": s.structure_id,
-            "name": s.name or type_name or f"Structure {s.structure_id}",
+            "structure_id": p.pk,
+            "name": p.name,
             "structure_type": type_name,
-            "type_id": s.type_id,
-            "icon": type_icon_url(s.type_id, 32),
-            "system": {"id": s.system_id, "name": system.name if system else str(s.system_id), "region": region_name(system) if system else "",
-                       "security": round(system.display_security, 1) if system else 0.0},
-            "owner": s.corporation.name,
-            "state": s.state,
+            "type_id": p.type_id,
+            "icon": type_icon_url(p.type_id, 32) if p.type_id else None,
+            "system": {"id": p.solar_system_id, "name": system.name if system else "", "region": region_name(system) if system else "",
+                       "security": round(system.display_security, 1) if system else 0.0} if p.solar_system_id else None,
+            "owner": owner.name if owner else "",
+            "ours": ours(p),
+            "state": state,
             "kind": kind,
             "ends_at": ends_at.isoformat() if ends_at else None,
-            "fuel_expires": s.fuel_expires.isoformat() if s.fuel_expires else None,
+            "fuel_expires": s.fuel_expires.isoformat() if s is not None and s.fuel_expires else None,
         })
     return out
 

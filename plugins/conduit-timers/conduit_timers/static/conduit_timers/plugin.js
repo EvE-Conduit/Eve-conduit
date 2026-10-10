@@ -135,10 +135,10 @@ function oe({ timer: e, onClose: n }) {
 		S({
 			name: e.name,
 			structure_type: e.structure_type,
-			system: e.system,
-			owner: e.owner,
-			side: "friendly",
 			structure_id: e.structure_id,
+			...e.system ? { system: e.system } : {},
+			...e.owner ? { owner: e.owner } : {},
+			...e.ours ? { side: "friendly" } : {},
 			...e.kind ? { kind: e.kind } : {}
 		}), e.ends_at && (l("exact"), _(re(e.ends_at)));
 	}, E = c === "left" ? ne(u) : null, D = c === "left" ? E == null ? null : new Date(y + E * 1e3).toISOString() : ie(g), O = !!o.name.trim() && !!o.system && !!D, k = j({
@@ -484,7 +484,7 @@ function ce({ value: e, picked: t, onChange: n, onPick: r }) {
 		children: [/* @__PURE__ */ z(d, {
 			label: "Structure",
 			required: !0,
-			hint: t == null ? "Its name as shown in game. Type a name or system to pick one of your own structures." : "One of ours: filled in from the corporation sheet.",
+			hint: t == null ? "Its name as shown in game. Type a name or system to pick a structure the site knows." : "Filled in from what the site knows about it; change anything.",
 			children: /* @__PURE__ */ z(f, {
 				value: e,
 				maxLength: 200,
@@ -513,29 +513,35 @@ function ce({ value: e, picked: t, onChange: n, onPick: r }) {
 					onClick: () => u(e),
 					className: "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-hover",
 					children: [
-						/* @__PURE__ */ z("img", {
+						e.icon ? /* @__PURE__ */ z("img", {
 							src: e.icon,
 							alt: "",
 							className: "size-7 shrink-0 border border-border bg-bg",
 							loading: "lazy"
-						}),
+						}) : /* @__PURE__ */ z("span", { className: "size-7 shrink-0 border border-border bg-bg" }),
 						/* @__PURE__ */ B("span", {
 							className: "min-w-0 flex-1",
-							children: [/* @__PURE__ */ z("span", {
+							children: [/* @__PURE__ */ B("span", {
 								className: "block truncate font-medium",
-								children: e.name
+								children: [e.name, e.ours && /* @__PURE__ */ z("span", {
+									className: "ml-2 text-xs font-normal text-success-fg",
+									children: "Ours"
+								})]
 							}), /* @__PURE__ */ B("span", {
 								className: "block truncate text-xs text-subtle",
 								children: [
 									e.structure_type,
-									e.structure_type ? " · " : "",
-									/* @__PURE__ */ z("span", {
-										className: w("font-mono tabular-nums", K(e.system.security)),
-										children: e.system.security.toFixed(1)
-									}),
-									" ",
-									e.system.name,
-									e.system.region ? ` · ${e.system.region}` : ""
+									e.structure_type && e.system ? " · " : "",
+									e.system && /* @__PURE__ */ B(R, { children: [
+										/* @__PURE__ */ z("span", {
+											className: w("font-mono tabular-nums", K(e.system.security)),
+											children: e.system.security.toFixed(1)
+										}),
+										" ",
+										e.system.name,
+										e.system.region ? ` · ${e.system.region}` : ""
+									] }),
+									e.owner && !e.ours ? ` · ${e.owner}` : ""
 								]
 							})]
 						}),
@@ -1321,4 +1327,4 @@ var ke = E({
 //#endregion
 export { ke as default };
 
-export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","about","absolute","accent","access","action","actions","add","added","after","ago","align","alt","an","anchor_vulnerable","anchoring","and","animate-pulse","are","aren","aria-autocomplete","aria-expanded","aria-hidden","aria-invalid","aria-label","aria-pressed","aria-selected","armor","armor_reinforce","armor_vulnerable","as","at","autoComplete","autoFocus","badge","be","been","before","bg-accent-soft","bg-bg","bg-bg/40","bg-border","bg-border-strong","bg-danger","bg-success","bg-surface","block","board","body","border","border-accent/60","border-border","border-t","box","browser","but","button","by","came","can","canManage","can_manage","center","characters","checked","children","className","clock","close","colour","coloured","come","comes","coming","component","confirmLabel","const","content","corporation","count","counting","counts","created_by","current","currentColor","customs","cx","cy","d","danger","data","datetime-local","day","days","debounced","default","defaultValue","del","deleting","deploy_vulnerable","description","diff","disabled","disappears","divide-border","divide-y","doesn","dot","drift","drop","editing","either","else","en-GB","enabled","end","endsAt","ends_at","entered","even","every","everyone","everything","exact","expected","export","extraction","eyebrow","few","fill","filled","fills","fitting_invulnerable","five","flex","flex-1","flex-wrap","font-medium","font-mono","font-normal","font-semibold","footer","for","form","found","friendly","from","fuel_expires","function","game","gap-1","gap-1.5","gap-2","gap-2.5","gap-3","gap-4","gap-x-3","gap-x-4","gap-y-1","gap-y-2","get","ghost","going","going_count","going_names","grid","grouped","h","h-24","h-64","h-8","h-px","has","hear","here","hint","hits","hostile","hour","hover:bg-hover","hover:border-border-strong","hover:text-text","how","hud-label","hull","hull_reinforce","hull_vulnerable","icon","icon-xs","icons","id","if","import","importNow","import_notifications","import_structures","important","in","in-game","info","inline","inline-flex","input","inset-y-0","interface","intervalMs","is","isLoading","iso","it","items","items-baseline","items-center","its","justify-between","justify-end","keep_days","key","kind","knows","label","last","lastIndex","lazy","left","left-0","length","let","lg","lg:grid-cols-4","link","list","listbox","live","ll","loading","local","long","longer","looked","lost","m","m14.5","m16","m17","m21","m6.5","m8","m9.5","manual","marked","matched","matches","max","max-h-60","max-h-72","maxLength","mb-1.5","mb-2","md","members","min","min-w-0","minute","minutes","ml-auto","mode","mono","month","moon","more","mousedown","mr-auto","ms","mt-1","mt-1.5","mutationFn","muted","myCount","n","name","neutral","new","next","no","none","normal-case","not","notes","nothing","notification","notifications","notifications_seen_until","notify","now","null","number","numeric","of","off","offer","offered","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDelete","onDown","onEdit","onError","onFocus","onGoing","onKeyDown","onMouseDown","onOpenChange","onPick","onSelect","onSuccess","once","one","ones","onlining_vulnerable","opacity-80","open","option","options","or","order","other","our","ours","out","overflow-auto","overflow-hidden","own","owner","pad","past","patch","path","people","pick","pickStructure","picked","picking","pills","pl-5","place-items-center","placeholder","portrait","pos","post","press","primary","pt-2","put","px-2","px-3","px-card","py-0.5","py-1","py-2","py-3","qc","queryFn","queryKey","quiet","re","react","react-router","read","reading","ready","recently","ref","refetchInterval","refresh","region","reinforced","relative","remind","reminded","reminder_minutes","reminders","removed","required","rest","results","return","right","right-0","role","rotate-45","round","routes","row","rows","run","s","said","save","saved","scroll","scroll-mt-24","sec","secondary","seconds","security","self-center","set","setDebounced","setDeleting","setEditing","setExact","setForm","setLeft","setMode","setNow","setOpen","setQ","setSettingsOpen","setTypedAt","settings","shadow-e2","sheet","shield_vulnerable","shields","short","show","shown","shows","shrink-0","side","simply","site","size","size-1.5","size-3.5","size-4","size-7","size-8","sm","sm:block","sm:grid-cols-2","sm:grid-cols-[150px_minmax(0,1.4fr)_minmax(0,1fr)_auto]","sm:grid-cols-[1fr_200px]","sm:items-center","so","solar","someone","source","sov","sovereignty","space-y-4","space-y-5","space-y-6","src","staleTime","state","status","stay","string","stripe","stroke","strokeLinecap","strokeLinejoin","strokeWidth","structure","structure_id","structure_type","structures","style","success","such","system","systems","t","tabular-nums","target","text","text-2xl","text-[13px]","text-danger-fg","text-left","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-xs","than","that","the","their","there","they","time","timeLeftText","timeZone","timer","timers","timers-structure-types","title","to","toLocalInput","toast","today","toggle","told","tone","top-full","total","tracking-normal","tracking-wider","transition-colors","truncate","type","type_id","types","typing","u","unanchored","unanchoring","undefined","unit","unknown","up","upcoming","updated","updated_at","uppercase","useNow","useQuery","useQueryClient","useRef","useState","used","using","v","value","variant","viewBox","void","vulnerable","w-0.5","w-1","w-24","w-28","w-full","warning","was","way","weekday","what","when","where","while","whitespace-pre-wrap","who","whose","widget","widgets","will","with","written","x","xs","yet","you","your","z-20","zone"];
+export const classes = ["!data","!o","@conduit/sdk","@tanstack/react-query","a","about","absolute","accent","access","action","actions","add","added","after","ago","align","alt","an","anchor_vulnerable","anchoring","and","animate-pulse","are","aren","aria-autocomplete","aria-expanded","aria-hidden","aria-invalid","aria-label","aria-pressed","aria-selected","armor","armor_reinforce","armor_vulnerable","as","at","autoComplete","autoFocus","badge","be","been","before","bg-accent-soft","bg-bg","bg-bg/40","bg-border","bg-border-strong","bg-danger","bg-success","bg-surface","block","board","body","border","border-accent/60","border-border","border-t","box","browser","but","button","by","came","can","canManage","can_manage","center","change","characters","checked","children","className","clock","close","colour","coloured","come","comes","coming","component","confirmLabel","const","content","corporation","count","counting","counts","created_by","current","currentColor","customs","cx","cy","d","danger","data","datetime-local","day","days","debounced","default","defaultValue","del","deleting","deploy_vulnerable","description","diff","disabled","disappears","divide-border","divide-y","doesn","dot","drift","drop","editing","either","else","en-GB","enabled","end","endsAt","ends_at","entered","even","every","everyone","everything","exact","expected","export","extraction","eyebrow","few","fill","fills","fitting_invulnerable","five","flex","flex-1","flex-wrap","font-medium","font-mono","font-normal","font-semibold","footer","for","form","found","friendly","from","fuel_expires","function","game","gap-1","gap-1.5","gap-2","gap-2.5","gap-3","gap-4","gap-x-3","gap-x-4","gap-y-1","gap-y-2","get","ghost","going","going_count","going_names","grid","grouped","h","h-24","h-64","h-8","h-px","has","hear","here","hint","hits","hostile","hour","hover:bg-hover","hover:border-border-strong","hover:text-text","how","hud-label","hull","hull_reinforce","hull_vulnerable","icon","icon-xs","icons","id","if","import","importNow","import_notifications","import_structures","important","in","in-game","info","inline","inline-flex","input","inset-y-0","interface","intervalMs","is","isLoading","iso","it","items","items-baseline","items-center","its","justify-between","justify-end","keep_days","key","kind","knows","label","last","lastIndex","lazy","left","left-0","length","let","lg","lg:grid-cols-4","link","list","listbox","live","ll","loading","local","long","longer","looked","lost","m","m14.5","m16","m17","m21","m6.5","m8","m9.5","manual","marked","matched","matches","max","max-h-60","max-h-72","maxLength","mb-1.5","mb-2","md","members","min","min-w-0","minute","minutes","ml-2","ml-auto","mode","mono","month","moon","more","mousedown","mr-auto","ms","mt-1","mt-1.5","mutationFn","muted","myCount","n","name","neutral","new","next","no","none","normal-case","not","notes","nothing","notification","notifications","notifications_seen_until","notify","now","null","number","numeric","of","off","offer","offered","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDelete","onDown","onEdit","onError","onFocus","onGoing","onKeyDown","onMouseDown","onOpenChange","onPick","onSelect","onSuccess","once","one","ones","onlining_vulnerable","opacity-80","open","option","options","or","order","other","our","ours","out","overflow-auto","overflow-hidden","own","owner","pad","past","patch","path","people","pick","pickStructure","picked","picking","pills","pl-5","place-items-center","placeholder","portrait","pos","post","press","primary","pt-2","put","px-2","px-3","px-card","py-0.5","py-1","py-2","py-3","qc","queryFn","queryKey","quiet","re","react","react-router","read","reading","ready","recently","ref","refetchInterval","refresh","region","reinforced","relative","remind","reminded","reminder_minutes","reminders","removed","required","rest","results","return","right","right-0","role","rotate-45","round","routes","row","rows","run","s","said","save","saved","scroll","scroll-mt-24","sec","secondary","seconds","security","self-center","set","setDebounced","setDeleting","setEditing","setExact","setForm","setLeft","setMode","setNow","setOpen","setQ","setSettingsOpen","setTypedAt","settings","shadow-e2","sheet","shield_vulnerable","shields","short","show","shown","shows","shrink-0","side","simply","site","size","size-1.5","size-3.5","size-4","size-7","size-8","sm","sm:block","sm:grid-cols-2","sm:grid-cols-[150px_minmax(0,1.4fr)_minmax(0,1fr)_auto]","sm:grid-cols-[1fr_200px]","sm:items-center","so","solar","someone","source","sov","sovereignty","space-y-4","space-y-5","space-y-6","src","staleTime","state","status","stay","string","stripe","stroke","strokeLinecap","strokeLinejoin","strokeWidth","structure","structure_id","structure_type","structures","style","success","such","system","systems","t","tabular-nums","target","text","text-2xl","text-[13px]","text-danger-fg","text-left","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-xs","than","that","the","their","there","they","time","timeLeftText","timeZone","timer","timers","timers-structure-types","title","to","toLocalInput","toast","today","toggle","told","tone","top-full","total","tracking-normal","tracking-wider","transition-colors","truncate","type","type_id","types","typing","u","unanchored","unanchoring","undefined","unit","unknown","up","upcoming","updated","updated_at","uppercase","useNow","useQuery","useQueryClient","useRef","useState","used","using","v","value","variant","viewBox","void","vulnerable","w-0.5","w-1","w-24","w-28","w-full","warning","was","way","weekday","what","when","where","while","whitespace-pre-wrap","who","whose","widget","widgets","will","with","written","x","xs","yet","you","your","z-20","zone"];

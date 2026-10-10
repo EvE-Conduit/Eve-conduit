@@ -11,9 +11,10 @@ comes out. Timers for your own structures arrive by themselves.
   Ctrl+K search finds timers by structure, system or owner, and a dashboard widget shows the next few.
 - **Going:** press *Going?* on a timer and you're counted (everyone sees the names) and reminded before it comes out.
 - **Adding timers** (permission `timers.manage_timers`): start typing the structure's name, its system (`4-HWWF`) or
-  its type, and your own structures from the corporation sheet are offered; pick one and its name, type, system and
-  owner are filled in, plus the timer kind and time when it's reinforced, anchoring or unanchoring. Only structures of
-  corporations whose sheet you may see are offered; with nothing to pick, or for someone else's structure, just keep
+  its type, and the structures the site knows by name are offered (from members' assets, contracts, mail and
+  notifications, and the corporation sheet; the same list Buyback uses), your own corporation's and alliance's first.
+  Pick one and its name, type, system and owner are filled in; for your own, the side too, and when the corporation
+  sheet has it reinforced, anchoring or unanchoring, the timer kind and time as well. With nothing to pick, just keep
   typing and fill in the rest: its type (the usual Upwell structures,
   customs offices and sovereignty structures are offered; anything can be typed), the system (found by typing),
   owner, kind and side, notes, and when it comes out: either the time left as the game shows it (`1d 4h 23m`,

@@ -240,30 +240,43 @@ def test_imports_can_be_switched_off(people, api_client, monkeypatch):
 # --- picking our own structures in the editor ---------------------------------------------------------------------
 
 
-def test_own_structures_are_offered_and_fill_the_timer(people, api_client, corp):
+def test_known_structures_are_offered_and_fill_the_timer(people, api_client, corp):
     from conduit.corp.models import Structure
+    from conduit.eve.models import EveCorporation
+    from conduit.sheet.models import Location
 
+    # Known from members' assets and contracts: no corporation sheet needed (same as Buyback).
+    Location.objects.create(id=1030000000001, kind="structure", name="Jita Keep", solar_system_id=JITA, type_id=35834, owner_id=corp.pk)
+    Location.objects.create(id=1030000000002, kind="structure", name="Perimeter Refinery", solar_system_id=PERIMETER, type_id=35835, owner_id=corp.pk)
+    hostile = EveCorporation.objects.create(id=98000002, name="Bad Corp", ticker="BAD")
+    Location.objects.create(id=1030000000003, kind="structure", name="Jita Hostile Fort", solar_system_id=JITA, type_id=35833, owner_id=hostile.pk)
+    Location.objects.create(id=1030000000004, kind="structure", name="Restricted structure", solar_system_id=JITA, type_id=35833, resolved=False)
+    Location.objects.create(id=60003760, kind="station", name="Jita IV - Moon 4 - Caldari Navy Assembly Plant", solar_system_id=JITA)
+    manager = people["manager"]
+    api_client.force_login(manager)
+    # By system name: every known structure in the system, ours first; stations and unnamed structures aren't offered.
+    hits = api_client.call("get", "/api/p/timers/structures?q=jita").json()
+    assert [(h["name"], h["ours"]) for h in hits] == [("Jita Keep", True), ("Jita Hostile Fort", False)]
+    assert hits[0]["structure_type"] == "Keepstar" and hits[0]["system"]["name"] == "Jita" and hits[0]["owner"] == "Test Corp"
+    assert hits[0]["kind"] is None and hits[0]["ends_at"] is None and hits[0]["state"] == ""
+    assert hits[1]["owner"] == "Bad Corp"
+    # By structure name and by type.
+    assert [h["name"] for h in api_client.call("get", "/api/p/timers/structures?q=perim").json()] == ["Perimeter Refinery"]
+    assert [h["name"] for h in api_client.call("get", "/api/p/timers/structures?q=athanor").json()] == ["Perimeter Refinery"]
+    assert api_client.call("get", "/api/p/timers/structures?q=x").json() == []
+    assert api_client.call("get", "/api/p/timers/structures?q=nowhere").json() == []
+    # The corporation sheet adds the state and running timer, for those who may see the sheet.
     end = timezone.now() + timedelta(hours=30)
     Structure.objects.create(corporation=corp, structure_id=1030000000001, name="Jita Keep", type_id=35834, system_id=JITA, state="armor_reinforce",
                              state_timer_start=timezone.now(), state_timer_end=end)
-    Structure.objects.create(corporation=corp, structure_id=1030000000002, name="Perimeter Refinery", type_id=35835, system_id=PERIMETER, state="shield_vulnerable")
-    manager = people["manager"]
-    api_client.force_login(manager)
-    # Without access to the corporation sheet nothing is offered: the manager types everything by hand.
-    assert api_client.call("get", "/api/p/timers/structures?q=jita").json() == []
-    manager.user_permissions.add(Permission.objects.get(codename="view_own_corporation"))
-    manager = type(manager).objects.get(pk=manager.pk)
-    api_client.force_login(manager)
-    # By system name: every structure in the system. By structure name and by type too.
+    Structure.objects.create(corporation=corp, structure_id=1030000000005, name="Jita Sheet Only", type_id=35832, system_id=JITA, state="shield_vulnerable")
     hits = api_client.call("get", "/api/p/timers/structures?q=jita").json()
-    assert [h["name"] for h in hits] == ["Jita Keep"]
-    assert hits[0]["structure_type"] == "Keepstar" and hits[0]["system"]["name"] == "Jita" and hits[0]["owner"] == "Test Corp"
+    assert [h["name"] for h in hits] == ["Jita Keep", "Jita Sheet Only", "Jita Hostile Fort"]
+    assert hits[0]["kind"] is None and hits[0]["state"] == ""  # no corporation sheet access yet
+    manager.user_permissions.add(Permission.objects.get(codename="view_own_corporation"))
+    api_client.force_login(type(manager).objects.get(pk=manager.pk))
+    hits = api_client.call("get", "/api/p/timers/structures?q=jita").json()
     assert hits[0]["kind"] == "armor" and hits[0]["ends_at"] == end.isoformat() and hits[0]["state"] == "armor_reinforce"
-    assert [h["name"] for h in api_client.call("get", "/api/p/timers/structures?q=perim").json()] == ["Perimeter Refinery"]
-    by_type = api_client.call("get", "/api/p/timers/structures?q=athanor").json()
-    assert [h["name"] for h in by_type] == ["Perimeter Refinery"] and by_type[0]["kind"] is None and by_type[0]["ends_at"] is None
-    assert api_client.call("get", "/api/p/timers/structures?q=x").json() == []
-    assert api_client.call("get", "/api/p/timers/structures?q=nowhere").json() == []
     # Members who can't add timers can't look either.
     api_client.force_login(people["pilot"])
     assert api_client.call("get", "/api/p/timers/structures?q=jita").status_code == 403

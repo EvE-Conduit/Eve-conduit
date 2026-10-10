@@ -57,15 +57,18 @@ export interface StructureType {
   type_id: number | null;
 }
 
-/** One of our own structures, from the corporation sheet, offered while typing the structure's name. */
+/** A structure the site knows by name, offered while typing the structure's name. */
 export interface OwnStructure {
   structure_id: number;
   name: string;
   structure_type: string;
-  type_id: number;
-  icon: string;
-  system: System;
+  type_id: number | null;
+  icon: string | null;
+  system: System | null;
   owner: string;
+  /** Owned by your corporation or alliance. */
+  ours: boolean;
+  /** Its state in the corporation sheet, when the sheet has it. */
   state: string;
   /** The timer the structure is in right now, when it has one. */
   kind: Kind | null;
