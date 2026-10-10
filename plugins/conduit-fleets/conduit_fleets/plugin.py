@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class FleetsPlugin(Plugin):
     id = "fleets"
     name = "Fleets & FATs"
-    version = "1.2.0"
+    version = "1.2.1"
     description = "Track who flew in each fleet, from the FC's in-game fleet or a FAT link, with attendance stats and a FAT group rule."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-fleets"

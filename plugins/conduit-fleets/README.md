@@ -9,7 +9,7 @@ Records who flew in each fleet (FATs, also called PAPs) and lets groups require 
   - **Tracking:** pick one of your characters that is fleet boss in game. Everyone in the in-game fleet gets a FAT,
     read from ESI every minute (needs `esi-fleets.read_fleet.v1`). It stops when the in-game fleet ends, the boss
     changes, after 12 hours, or when you end the fleet.
-    While tracking, two FAT lines go at the bottom of the in-game **fleet MOTD**: that everyone in fleet gets a FAT
+    While tracking, two green FAT lines go at the bottom of the in-game **fleet MOTD**, two empty lines below your text: that everyone in fleet gets a FAT
     automatically, the FAT round and how many pilots have one so far (counts only, never who). They're rewritten
     when the count changes and say "Fleet ended: N pilots got a FAT" when you end it. Whatever is above them in the
     MOTD is kept, so write your own text above the `--- FATs by EvE Conduit ---` line. Needs
