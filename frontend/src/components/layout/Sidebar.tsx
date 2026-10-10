@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronRight, ExternalLink, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { matchPath, NavLink, useLocation } from "react-router";
 
@@ -11,22 +11,27 @@ import { cn } from "@/lib/utils";
 import { Brand, BrandMark } from "./Brand";
 import type { NavLinkItem, NavSection } from "./nav";
 
-const COLLAPSE_KEY = "conduit:sidebar-collapsed";
+export type Side = "left" | "right";
 
-export function readCollapsed() {
-  try {
-    return localStorage.getItem(COLLAPSE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function storeCollapsed(v: boolean) {
-  try {
-    localStorage.setItem(COLLAPSE_KEY, v ? "1" : "0");
-  } catch {
-    // storage unavailable; the choice lasts until reload
-  }
+/** Whether a rail is folded to icons, remembered per browser under `key`. */
+export function useCollapsed(key: string) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(key, c ? "0" : "1");
+      } catch {
+        // storage unavailable; the choice lasts until reload
+      }
+      return !c;
+    });
+  return [collapsed, toggle] as const;
 }
 
 const FOLDED_KEY = "conduit:sidebar-folded";
@@ -63,12 +68,14 @@ function NavEntry({
   onNavigate,
   nested = false,
   dimmed = false,
+  side = "left",
 }: {
   item: NavLinkItem;
   collapsed: boolean;
   onNavigate?: () => void;
   nested?: boolean;
   dimmed?: boolean;
+  side?: Side;
 }) {
   const className = (isActive: boolean) =>
     cn(
@@ -107,7 +114,7 @@ function NavEntry({
         const current = isActive && !dimmed;
         return (
           <>
-            {current && <span className="absolute inset-y-0 left-0 w-[2px] bg-accent" />}
+            {current && <span className={cn("absolute inset-y-0 w-[2px] bg-accent", side === "right" ? "right-0" : "left-0")} />}
             <item.icon
               className={cn(
                 "shrink-0 transition-colors",
@@ -128,7 +135,7 @@ function NavEntry({
     </NavLink>
   );
   return collapsed ? (
-    <Tooltip content={item.badge ? `${item.label} (${item.badge})` : item.external ? `${item.label} ↗` : item.label} side="right">
+    <Tooltip content={item.badge ? `${item.label} (${item.badge})` : item.external ? `${item.label} ↗` : item.label} side={side === "right" ? "left" : "right"}>
       {link}
     </Tooltip>
   ) : (
@@ -138,39 +145,60 @@ function NavEntry({
 
 /**
  * Site navigation. `collapsed` turns it into an icon rail with tooltips (desktop only; the mobile
- * drawer always shows the full version).
+ * drawer always shows the full version). `side="right"` is the rail on the other side of the page:
+ * its first section's title sits in the header in place of the brand, and there is no account card.
  */
 export function Sidebar({
   sections,
   onNavigate,
   collapsed = false,
   onToggleCollapsed,
+  side = "left",
 }: {
   sections: NavSection[];
   onNavigate?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  side?: Side;
 }) {
   const { user, site } = useBootstrap();
   const { pathname } = useLocation();
   const [folded, toggleFolded] = useFolded();
+  const right = side === "right";
+  const headline = right ? sections[0]?.title : undefined;
   return (
     <div className="flex h-full flex-col">
       <div className={cn("flex h-16 shrink-0 items-center", collapsed ? "justify-center px-2" : "px-5")}>
-        {collapsed ? <BrandMark /> : <Brand />}
+        {right ? (
+          collapsed ? (
+            <Tooltip content={headline} side="left">
+              <span role="img" aria-label={headline} className="flex">
+                <ShieldCheck className="size-5 text-subtle" aria-hidden />
+              </span>
+            </Tooltip>
+          ) : (
+            <div className="truncate text-[11px] font-semibold uppercase tracking-[0.24em] text-subtle">{headline}</div>
+          )
+        ) : collapsed ? (
+          <BrandMark />
+        ) : (
+          <Brand />
+        )}
       </div>
 
-      <nav className={cn("flex-1 overflow-y-auto overflow-x-hidden py-2", collapsed ? "space-y-4 px-2" : "space-y-6 px-3")} aria-label="Main">
+      <nav className={cn("flex-1 overflow-y-auto overflow-x-hidden py-2", collapsed ? "space-y-4 px-2" : "space-y-6 px-3")} aria-label={headline ?? "Main"}>
         {sections.map((section) => {
+          // The header above names the right rail's first section, so it has no title line to fold with.
+          const titled = section.title !== headline;
           // The icon rail always shows everything: it has no titles to unfold with.
-          const isFolded = !collapsed && !!section.collapsible && folded.includes(section.title);
+          const isFolded = !collapsed && titled && !!section.collapsible && folded.includes(section.title);
           // A folded section still shows the page you're on, so you never lose your place.
           const items = isFolded ? section.items.filter((i) => !i.external && matchPath({ path: i.to, end: !!i.end }, pathname)) : section.items;
           const hiddenBadges = isFolded ? section.items.filter((i) => !items.includes(i)).reduce((n, i) => n + (i.badge ?? 0), 0) : 0;
           const listId = `nav-${section.title.toLowerCase().replace(/\W+/g, "-")}`;
           return (
             <div key={section.title}>
-              {collapsed ? (
+              {!titled ? null : collapsed ? (
                 <div className="mx-auto mb-2 h-px w-6 bg-border first:hidden" aria-hidden />
               ) : section.collapsible ? (
                 <button
@@ -195,12 +223,12 @@ export function Sidebar({
                   const childActive = children.some((c) => matchPath({ path: c.to, end: false }, pathname));
                   return (
                     <li key={item.to}>
-                      <NavEntry item={item} collapsed={collapsed} onNavigate={onNavigate} dimmed={childActive} />
+                      <NavEntry item={item} collapsed={collapsed} onNavigate={onNavigate} dimmed={childActive} side={side} />
                       {children.length > 0 && (
                         <ul className={cn("mt-0.5 space-y-0.5", !collapsed && "ml-5 border-l border-border pl-2")}>
                           {children.map((child) => (
                             <li key={child.to}>
-                              <NavEntry item={child} collapsed={collapsed} onNavigate={onNavigate} nested />
+                              <NavEntry item={child} collapsed={collapsed} onNavigate={onNavigate} nested side={side} />
                             </li>
                           ))}
                         </ul>
@@ -214,7 +242,24 @@ export function Sidebar({
         })}
       </nav>
 
-      {user && (
+      {right && onToggleCollapsed && (
+        <div className={cn("shrink-0 border-t border-border", collapsed ? "p-2" : "p-3")}>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className={cn(
+              "flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-subtle transition-colors hover:bg-hover hover:text-text",
+              collapsed ? "mx-auto size-8 justify-center" : "w-full px-2 py-1.5",
+            )}
+            aria-label={collapsed ? `Expand ${headline ?? "rail"}` : `Collapse ${headline ?? "rail"}`}
+          >
+            {collapsed ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}
+            {!collapsed && <span className="flex-1 text-left">Collapse</span>}
+          </button>
+        </div>
+      )}
+
+      {!right && user && (
         <div className={cn("shrink-0 border-t border-border", collapsed ? "p-2" : "p-3")}>
           {collapsed ? (
             <Tooltip content={user.name} side="right">

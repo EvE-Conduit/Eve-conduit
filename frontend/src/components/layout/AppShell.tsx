@@ -1,7 +1,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, ChevronRight, ExternalLink, LogOut, Menu, Moon, Search, Settings2, SlidersHorizontal, Sun, UserPlus, UsersRound } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -23,7 +23,7 @@ import { ExternalLinkGuard } from "@/lib/externalLinks";
 import { CommandPalette } from "./CommandPalette";
 import { buildNav, type NavSection } from "./nav";
 import { NotificationBell } from "./NotificationBell";
-import { readCollapsed, Sidebar, storeCollapsed } from "./Sidebar";
+import { Sidebar, useCollapsed } from "./Sidebar";
 import { ThemeToggle, useToggleTheme } from "./ThemeToggle";
 import { ThreatStrip } from "./ThreatStrip";
 
@@ -34,12 +34,18 @@ export function AppShell() {
   const canManageSite = useHasPerm("site.manage_site");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
-  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [collapsed, toggleCollapsed] = useCollapsed("conduit:sidebar-collapsed");
+  const [adminCollapsed, toggleAdminCollapsed] = useCollapsed("conduit:admin-rail-collapsed");
   const [maintenance, setMaintenance] = useState<string | null>(null);
   const sections = useMemo(
     () => (user ? buildNav(user, plugins, site.update_available, { title: site.nav_links_title, items: site.nav_links ?? [] }) : []),
     [user, plugins, site.update_available, site.nav_links_title, site.nav_links],
   );
+  // On wide screens, Administration gets its own rail on the right; below that it stays in the left
+  // sidebar so the page keeps its room. The mobile drawer always lists everything.
+  const wide = useMediaQuery("(min-width: 1280px)");
+  const rightSections = useMemo(() => sections.filter((s) => s.side === "right"), [sections]);
+  const leftSections = useMemo(() => (wide ? sections.filter((s) => s.side !== "right") : sections), [sections, wide]);
   const theme = useToggleTheme();
 
   useEffect(() => {
@@ -61,13 +67,6 @@ export function AppShell() {
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   if (!setup.completed && (user.is_admin || !setup.admin_claimed)) return <Navigate to="/setup" replace />;
   if ((site.maintenance.enabled || maintenance !== null) && !canManageSite) return <MaintenanceScreen message={maintenance ?? undefined} />;
-
-  const toggleCollapsed = () => {
-    setCollapsed((c) => {
-      storeCollapsed(!c);
-      return !c;
-    });
-  };
 
   const logout = async () => {
     let res: { impersonation_ended?: boolean } | undefined;
@@ -99,7 +98,7 @@ export function AppShell() {
             collapsed ? "w-[68px]" : "w-64",
           )}
         >
-          <Sidebar sections={sections} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+          <Sidebar sections={leftSections} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
         </aside>
 
         <DialogPrimitive.Root open={mobileNav} onOpenChange={setMobileNav}>
@@ -193,11 +192,35 @@ export function AppShell() {
             <Outlet />
           </main>
         </div>
+
+        {rightSections.length > 0 && (
+          <aside
+            className={cn(
+              "sticky top-0 hidden h-screen shrink-0 border-l border-border bg-bg transition-[width] duration-200 xl:block",
+              adminCollapsed ? "w-[68px]" : "w-56",
+            )}
+          >
+            <Sidebar sections={rightSections} collapsed={adminCollapsed} onToggleCollapsed={toggleAdminCollapsed} side="right" />
+          </aside>
+        )}
       </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} sections={sections} />
       <ExternalLinkGuard />
     </div>
+  );
+}
+
+/** Whether the viewport matches `query`, following window resizes. */
+function useMediaQuery(query: string) {
+  return useSyncExternalStore(
+    (onChange) => {
+      const m = window.matchMedia(query);
+      m.addEventListener("change", onChange);
+      return () => m.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
   );
 }
 
