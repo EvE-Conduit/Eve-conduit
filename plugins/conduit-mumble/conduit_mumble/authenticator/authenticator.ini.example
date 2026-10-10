@@ -1,0 +1,33 @@
+; EvE Conduit Mumble authenticator. Put this next to conduit_mumble_authenticator.py (or point at it with -i).
+
+[conduit]
+; Your EvE Conduit site.
+url = https://auth.example.com
+; An API key with the p.mumble:auth scope (Administration -> API -> Keys). Switch the Mumble API on under
+; Administration -> API -> APIs first.
+api_key = evk_...
+; Seconds to wait for the site before refusing a login.
+timeout = 10
+
+[ice]
+; Where the Mumble server's Ice interface listens (murmur.ini: ice="tcp -h 127.0.0.1 -p 6502").
+host = 127.0.0.1
+port = 6502
+; The Ice write secret from murmur.ini (icesecretwrite=...). Leave empty if there is none.
+secret =
+; The Murmur.ice file that came with your Mumble server. Leave empty to look in the usual places.
+slice =
+; Every this many seconds the authenticator checks the server is still there and says hello to the site.
+watchdog = 30
+
+[murmur]
+; Which virtual servers to attach to, by Ice server id, comma-separated. Empty means every server that is running.
+servers =
+
+[user]
+; Fetch character portraits from EVE's image server and use them as Mumble avatars.
+avatars = true
+
+[log]
+; debug, info, warning or error.
+level = info
