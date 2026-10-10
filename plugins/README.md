@@ -19,6 +19,7 @@ results, group rules and ESI scopes.
 - [`conduit-timers`](conduit-timers): Timers: structure and sovereignty timers with live countdowns, who's going and reminders, read from your corporations' structures and in-game notifications too.
 - [`conduit-mumble`](conduit-mumble): Mumble: members make a Mumble account whose name and groups follow their main character, groups and state; temporary access links let guests in for a while.
 - [`conduit-teamspeak`](conduit-teamspeak): TeamSpeak: members link their TeamSpeak identity with a one-time privilege key; their server groups follow their groups and state through ServerQuery.
+- [`conduit-wiki`](conduit-wiki): Wiki: pages in a tree with Markdown, a table of contents, history with restore, visibility by state or group, and public pages for recruits.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
