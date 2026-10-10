@@ -16,8 +16,10 @@ the description, and every contract is checked against its quote before you acce
   valued at what they reprocess into, and Sleeper and Triglavian loot at the NPC buy price.
 - **Items** (per program): the market laid out like in game, to browse or search. Click an item and pick just that
   item or its entire category (Minerals, Frigates, Ship Equipment...), at any level. A category's terms cover every
-  item under it, including items added to the game later; an item's own terms, or a closer category's, win. Every row
-  shows the terms that apply to it and where they come from.
+  item under it, including items added to the game later. The closest terms win: an item's own terms beat its
+  category's, and a category's beat any category above it, so a category at +0% keeps its items at the program's tax
+  even if a wider category adds more. Every row shows the terms that apply to it and where they come from, rules that
+  override a wider category say so, and setting a category's terms lists the rules inside it that won't follow.
 - **Manual review list**: items or whole categories (officer modules, rare loot) flagged on the quote, so the seller
   knows, and on the contract, so the manager checks them by hand. Ticked when setting an item's terms.
 - **Contract checks**: every 15 minutes each program owner's contracts are read (character, and corporation for

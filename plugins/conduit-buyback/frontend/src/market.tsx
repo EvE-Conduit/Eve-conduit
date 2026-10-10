@@ -300,6 +300,10 @@ function RulesPanel({ program, onOpen }: { program: ManagedDetail; onOpen: (s: S
             ? <>Anything not listed here is bought at <span className="font-mono text-text">{program.tax}%</span> tax.</>
             : <>Nothing else is bought: <span className="text-text">Buy every item</span> is off in the program's pricing.</>}
         </p>
+        <p className="text-xs text-muted">
+          The closest terms win: an item's own terms beat its category's, and a category's terms beat those of any category
+          above it. So a category at +0% isn't neutral: its items stay at the program's tax even if a category above adds more.
+        </p>
         <Segmented
           size="sm"
           value={tab}
@@ -320,7 +324,7 @@ function RulesPanel({ program, onOpen }: { program: ManagedDetail; onOpen: (s: S
             key={r.market_group_id}
             icon={<Folder className="size-4 text-muted" />}
             name={<>{r.name} <span className="text-[11px] text-subtle">{r.count} items</span></>}
-            sub={where(r.path)}
+            sub={withOverride(where(r.path), program, r.path)}
             terms={<TermsBadge terms={r} />}
             onEdit={() => onOpen({ kind: "group", path: [...r.path, { id: r.market_group_id, name: r.name, count: r.count }] })}
             onRemove={() => clear.mutate({ market_group_id: r.market_group_id })}
@@ -333,7 +337,7 @@ function RulesPanel({ program, onOpen }: { program: ManagedDetail; onOpen: (s: S
             key={r.type_id}
             icon={<img src={r.icon} alt="" className="size-6 border border-border bg-bg" loading="lazy" />}
             name={r.name}
-            sub={where(r.path)}
+            sub={withOverride(where(r.path), program, r.path)}
             terms={<TermsBadge terms={r} />}
             onEdit={() => onOpen({ kind: "type", id: r.type_id, name: r.name, icon: r.icon, path: r.path })}
             onRemove={() => clear.mutate({ type_id: r.type_id })}
@@ -422,6 +426,7 @@ function RuleDialog({ program, subject, onClose }: { program: ManagedDetail; sub
     setForm(formFor(ownTerms(program, t), program.watch_rules.some((w) => (t.kind === "type" ? w.kind === "type" : w.kind === "market") && w.target_id === t.id)));
   };
   const above = inheritedTerms(program, targets.slice(index + 1));
+  const inside = target.kind === "group" ? rulesInside(program, target.id) : [];
   const key = target.kind === "type" ? { type_id: target.id } : { market_group_id: target.id };
   const save = useMutation({
     mutationFn: (rule: RuleTerms | null) => api.post<RuleSet>(`${BASE}/manage/programs/${id}/rules`, { ...key, rule, watch: form.watch }),
@@ -505,13 +510,22 @@ function RuleDialog({ program, subject, onClose }: { program: ManagedDetail; sub
 
         <div className="border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
           {own ? (
-            <>Now: <span className="text-text">{describe(own)}</span>, its own terms.</>
+            <>
+              Now: <span className="text-text">{describe(own)}</span>, its own terms.
+              {above && <> They override {above.label} (<span className="text-text">{describe(above.terms)}</span>).</>}
+            </>
           ) : above ? (
             <>Now: <span className="text-text">{describe(above.terms)}</span>, from {above.label}.</>
           ) : (
             <>Now: {program.allow_all_items ? <>the program's terms (<span className="font-mono">{program.tax}%</span> tax)</> : <span className="text-text">not bought</span>}.</>
           )}
-          {target.kind === "group" && " Items and categories inside it with terms of their own keep them."}
+          {inside.length > 0 && (
+            <div className="mt-1.5 text-warning-fg">
+              {inside.length === 1 ? "This has" : `These ${inside.length} have`} terms of {inside.length === 1 ? "its" : "their"} own and won't follow this category's:{" "}
+              {inside.slice(0, 8).map((r) => `${r.name} (${describe(r.terms)})`).join(", ")}
+              {inside.length > 8 && ", …"}. Remove {inside.length === 1 ? "its terms" : "theirs"} in the rules list if they should.
+            </div>
+          )}
         </div>
 
         <Field label="Terms">
@@ -526,7 +540,7 @@ function RuleDialog({ program, subject, onClose }: { program: ManagedDetail; sub
           />
         </Field>
         {form.mode === "buy" && (
-          <Field label="Extra tax" hint={`On top of the program's ${program.tax}%. Negative for less; 0 buys it at the program's terms${program.allow_all_items ? "" : " (and adds it to the list)"}.`}>
+          <Field label="Extra tax" hint={`On top of the program's ${program.tax}%. Negative for less; 0 is the program's tax alone${above ? `, ignoring ${above.label}` : ""}${program.allow_all_items ? "" : " (and adds it to the list)"}.`}>
             <div className="flex items-center gap-2">
               <Input type="number" step={0.5} value={form.tax} onChange={(e) => setForm({ ...form, tax: e.target.value })} className="w-32 font-mono" autoFocus />
               <span className="text-sm text-subtle">% → {Math.min(100, Math.max(-100, program.tax + (Number(form.tax) || 0)))}% in all</span>
@@ -563,6 +577,20 @@ function ownTerms(program: ManagedDetail, t: Target): RuleTerms | null {
 }
 
 /** The closest category above the target that has terms. */
+/** The rule list's location line, plus the category whose terms the rule overrides (the closest one above it). */
+function withOverride(where: string, program: ManagedDetail, path: Crumb[]): string {
+  const over = inheritedTerms(program, [...path].reverse().map((c) => ({ kind: "group" as const, ...c, above: [] })));
+  return over ? `${where} · overrides ${over.label} (${describe(over.terms)})` : where;
+}
+
+/** Item and category rules inside a category: they keep their own terms whatever the category's are. */
+function rulesInside(program: ManagedDetail, groupId: number): { key: string; name: string; terms: RuleTerms }[] {
+  return [
+    ...program.group_rules.filter((r) => r.path.some((c) => c.id === groupId)).map((r) => ({ key: `g${r.market_group_id}`, name: r.name, terms: r })),
+    ...program.item_rules.filter((r) => r.path.some((c) => c.id === groupId)).map((r) => ({ key: `t${r.type_id}`, name: r.name, terms: r })),
+  ];
+}
+
 function inheritedTerms(program: ManagedDetail, above: Target[]): { terms: RuleTerms; label: string } | null {
   for (const g of above) {
     const terms = ownTerms(program, g);
