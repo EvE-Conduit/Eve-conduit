@@ -23,6 +23,9 @@ interface Hook {
   url: string;
   events: string[];
   enabled: boolean;
+  /** Discord: "" (nobody), "here", "everyone" or a role id. */
+  mention: string;
+  mention_always: boolean;
   secret: string | null;
   last_status: number | null;
   last_error: string;
@@ -67,7 +70,7 @@ export function AdminIntegrations() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: KEY });
   const toggle = useMutation({
-    mutationFn: (h: Hook) => api.put<Hook>(`/api/admin/webhooks/${h.id}`, { name: h.name, kind: h.kind, url: h.url, events: h.events, enabled: !h.enabled }),
+    mutationFn: (h: Hook) => api.put<Hook>(`/api/admin/webhooks/${h.id}`, { name: h.name, kind: h.kind, url: h.url, events: h.events, enabled: !h.enabled, mention: h.mention, mention_always: h.mention_always }),
     onSuccess: refresh,
     onError: (e) => toast.error(e.message),
   });
@@ -205,10 +208,16 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
   const [selected, setSelected] = useState<Set<string>>(new Set(hook?.events ?? []));
   const [secret, setSecret] = useState(hook?.secret ?? null);
   const [copied, setCopied] = useState(false);
+  const [mentionKind, setMentionKind] = useState<"" | "here" | "everyone" | "role">(
+    hook?.mention === "here" || hook?.mention === "everyone" ? hook.mention : hook?.mention ? "role" : "",
+  );
+  const [roleId, setRoleId] = useState(hook?.mention && hook.mention !== "here" && hook.mention !== "everyone" ? hook.mention : "");
+  const [mentionAlways, setMentionAlways] = useState(hook?.mention_always ?? false);
+  const mention = mentionKind === "role" ? roleId.trim() : mentionKind;
 
   const save = useMutation({
     mutationFn: () => {
-      const body = { name, kind, url, events: all ? [] : [...selected], enabled: hook?.enabled ?? true };
+      const body = { name, kind, url, events: all ? [] : [...selected], enabled: hook?.enabled ?? true, mention: kind === "discord" ? mention : "", mention_always: kind === "discord" && mentionAlways };
       return hook ? api.put<Hook>(`/api/admin/webhooks/${hook.id}`, body) : api.post<Hook>("/api/admin/webhooks", body);
     },
     onSuccess: (h) => {
@@ -251,7 +260,7 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" loading={save.isPending} disabled={!name.trim() || !url.trim() || (!all && selected.size === 0)} onClick={() => save.mutate()}>
+          <Button variant="primary" loading={save.isPending} disabled={!name.trim() || !url.trim() || (!all && selected.size === 0) || (kind === "discord" && mentionKind === "role" && !/^\d{1,32}$/.test(roleId.trim()))} onClick={() => save.mutate()}>
             {hook ? "Save" : "Create webhook"}
           </Button>
         </>
@@ -283,6 +292,46 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
         <Field label="Webhook URL" hint={KINDS.find((k) => k.value === kind)?.hint}>
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className="font-mono" />
         </Field>
+
+        {kind === "discord" && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Ping" hint={mentionKind === "role" ? "Server Settings → Roles → ⋯ → Copy Role ID (Developer Mode on)." : "An embed on its own doesn't notify anyone."}>
+              <div className="flex gap-2">
+                <select
+                  value={mentionKind}
+                  onChange={(e) => setMentionKind(e.target.value as typeof mentionKind)}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-border bg-bg px-2 text-sm"
+                >
+                  <option value="">Nobody</option>
+                  <option value="here">@here</option>
+                  <option value="everyone">@everyone</option>
+                  <option value="role">A role…</option>
+                </select>
+                {mentionKind === "role" && <Input value={roleId} onChange={(e) => setRoleId(e.target.value)} placeholder="Role id" className="w-44 font-mono" inputMode="numeric" />}
+              </div>
+            </Field>
+            {mentionKind !== "" && (
+              <Field label="When">
+                <div className="grid grid-cols-2 gap-1 rounded-lg border border-border-strong p-1">
+                  {[{ v: false, l: "When the event asks" }, { v: true, l: "Every message" }].map((o) => (
+                    <button
+                      key={String(o.v)}
+                      type="button"
+                      onClick={() => setMentionAlways(o.v)}
+                      className={cn(
+                        "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                        mentionAlways === o.v ? "bg-accent-soft text-text ring-1 ring-accent/40" : "text-muted hover:bg-hover hover:text-text",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-muted">{mentionAlways ? "Every event this webhook sends pings." : "Only events that ask for a ping, such as a timer with Ping Discord on."}</p>
+              </Field>
+            )}
+          </div>
+        )}
 
         {kind === "json" && hook && secret && (
           <Field label="Signing secret" hint="Keep this in the receiving service only.">

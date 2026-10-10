@@ -73,6 +73,17 @@ def test_render_formats():
     sneaky = {**event, "data": {"title": "<!channel> <https://evil.example|Fix your fit>", "summary": "a & b"}}
     assert render("slack", sneaky)["text"] == "*&lt;!channel&gt; &lt;https://evil.example|Fix your fit&gt;*\na &amp; b"
     assert render("json", event) == event
+    # Nothing pings unless the webhook says so; a role mention needs allowed_mentions or Discord shows it as text.
+    assert discord["content"] == "" and discord["allowed_mentions"] == {"parse": [], "roles": []}
+    asks = {**event, "data": {**event["data"], "ping": True, "mention_roles": ["123456789", "<@&evil>"]}}
+    quiet = render("discord", event, mention="here")
+    assert quiet["content"] == ""
+    loud = render("discord", asks, mention="here")
+    assert loud["content"] == "@here <@&123456789>" and loud["allowed_mentions"] == {"parse": ["everyone"], "roles": ["123456789"]}
+    always = render("discord", event, mention="987", mention_always=True)
+    assert always["content"] == "<@&987>" and always["allowed_mentions"] == {"parse": [], "roles": ["987"]}
+    # A ping in the payload without a mention on the webhook pings nobody by itself.
+    assert render("discord", {**event, "data": {**event["data"], "ping": True}})["content"] == ""
 
 
 @pytest.mark.django_db

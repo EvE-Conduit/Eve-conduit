@@ -32,7 +32,10 @@ account into another; `from_user_id`, `to_user_id`, `records_moved`), `token.inv
 
 **Administration → Integrations** sends chosen events (or all) to a URL:
 
-- **Discord**: an embed per event, coloured by level.
+- **Discord**: an embed per event, coloured by level. A webhook can **ping**: `@here`, `@everyone` or a role,
+  either on every message or only on events that ask for one (`ping: true` in the payload, e.g. a timer with
+  *Ping Discord* on). An event may also name roles to ping itself (`mention_roles`: a list of role ids), used
+  when it asks for a ping. Nothing else can ping: text people typed is never a mention.
 - **Slack**: a text message.
 - **JSON**: `{"event", "at", "data"}` with `X-Conduit-Event` and `X-Conduit-Signature: sha256=<hex>`, the
   HMAC-SHA256 of the raw body keyed with the webhook's secret. Verify it before trusting the body.

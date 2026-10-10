@@ -31,7 +31,32 @@ def describe(event: dict) -> tuple[str, str, str]:
     return title, text[:1800], data.get("level", "info")
 
 
-def render(kind: str, event: dict) -> dict:
+def discord_mentions(event: dict, mention: str = "", always: bool = False) -> tuple[str, dict]:
+    """The message text that makes Discord ping people, and the ``allowed_mentions`` that lets it.
+
+    ``mention`` is the webhook's own setting ("here", "everyone" or a role id): used when the event asks for a ping
+    (``ping: true`` in its payload) or when the webhook pings on every message. An event may also name roles of its
+    own (``mention_roles``: role ids), e.g. a timer that pings the capital pilots; those are used when it asks for a
+    ping. Nothing else in the message can ping: text people typed stays text."""
+    data = event.get("data", {})
+    ping = bool(data.get("ping"))
+    wanted: list[str] = []
+    if mention and (ping or always):
+        wanted.append(mention)
+    if ping:
+        wanted.extend(str(r) for r in data.get("mention_roles") or [] if str(r).isdigit())
+    parts, roles = [], []
+    for m in dict.fromkeys(wanted):
+        if m in ("here", "everyone"):
+            parts.append(f"@{m}")
+        elif m.isdigit():
+            parts.append(f"<@&{m}>")
+            roles.append(m)
+    allowed = {"parse": ["everyone"] if any(p.startswith("@") for p in parts) else [], "roles": roles}
+    return " ".join(parts), allowed
+
+
+def render(kind: str, event: dict, mention: str = "", mention_always: bool = False) -> dict:
     if kind == "json":
         return event
     title, text, level = describe(event)
@@ -47,7 +72,8 @@ def render(kind: str, event: dict) -> dict:
         link = event.get("data", {}).get("link")
         if link:
             embed["url"] = site + link if link.startswith("/") else link
-        return {"username": "EvE Conduit", "embeds": [embed]}
+        content, allowed = discord_mentions(event, mention, mention_always)
+        return {"username": "EvE Conduit", "content": content, "embeds": [embed], "allowed_mentions": allowed}
     # slack: <...> makes pings (<!channel>) and disguised links, and titles can be text people typed (a fit's or an
     # announcement's name), so escape the three characters Slack asks for.
     title, text = _slack_escape(title), _slack_escape(text)
@@ -80,7 +106,7 @@ def deliver(self, hook_id: int, event: dict, retry: bool = True) -> str:
     hook = Webhook.objects.filter(pk=hook_id, enabled=True).first()
     if hook is None:
         return "gone"
-    body = json.dumps(render(hook.kind, event), default=str).encode()
+    body = json.dumps(render(hook.kind, event, hook.mention, hook.mention_always), default=str).encode()
     headers = {"Content-Type": "application/json", "User-Agent": "EvE-Conduit-Webhooks"}
     if hook.kind == "json":
         headers["X-Conduit-Event"] = event["event"]
