@@ -124,6 +124,7 @@ def out(t: Timer, user, now=None) -> dict:
         "notes": t.notes,
         "important": t.important,
         "source": t.source,
+        "structure_id": t.structure_id,
         "status": status(t, now),
         "going": any(u.pk == user.pk for u in going),
         "going_count": len(going),
@@ -166,11 +167,77 @@ def board(user) -> dict:
     }
 
 
+# --- our own structures, for the editor ---------------------------------------------------------------------------
+
+#: A structure's state in the corporation sheet, and the timer kind and end time it carries.
+STRUCTURE_STATE_KINDS = {"armor_reinforce": Timer.Kind.ARMOR, "hull_reinforce": Timer.Kind.HULL, "anchoring": Timer.Kind.ANCHORING}
+
+
+def structure_search(user, q: str, limit: int = 12) -> list[dict]:
+    """Our corporations' structures (from the corporation sheet) whose name, solar system or type matches ``q``, for
+    filling in the editor. Only structures of corporations whose sheet the user may see; someone without that access
+    gets an empty list and types everything by hand."""
+    from conduit.corp.access import can_view_section
+    from conduit.corp.models import Structure
+
+    q = " ".join(q.split())
+    if len(q) < 2:
+        return []
+    systems = {s.pk: s for s in SolarSystem.objects.filter(name__icontains=q).select_related("region")[:50]}
+    types = dict(ItemType.objects.filter(name__icontains=q, published=True).values_list("pk", "name")[:50])
+    types.update({v: k for k, v in STRUCTURE_TYPES.items() if v and q.lower() in k.lower()})
+    rows = Structure.objects.filter(Q(name__icontains=q) | Q(system_id__in=list(systems)) | Q(type_id__in=list(types))).select_related("corporation")
+    allowed: dict[int, bool] = {}
+    hits = []
+    for s in rows.order_by("name")[:200]:
+        corp_id = s.corporation_id
+        if corp_id not in allowed:
+            allowed[corp_id] = can_view_section(user, s.corporation, "structures")
+        if not allowed[corp_id]:
+            continue
+        hits.append(s)
+    if not hits:
+        return []
+    missing_systems = {s.system_id for s in hits} - set(systems)
+    if missing_systems:
+        systems.update({x.pk: x for x in SolarSystem.objects.filter(pk__in=missing_systems).select_related("region")})
+    missing_types = {s.type_id for s in hits} - set(types)
+    if missing_types:
+        types.update(dict(ItemType.objects.filter(pk__in=missing_types).values_list("pk", "name")))
+    ql = q.lower()
+    # Structures named like the search first, then the rest by name.
+    hits.sort(key=lambda s: (not s.name.lower().startswith(ql), ql not in s.name.lower(), s.name.lower()))
+    out = []
+    for s in hits[:limit]:
+        system = systems.get(s.system_id)
+        kind, ends_at = STRUCTURE_STATE_KINDS.get(s.state), s.state_timer_end
+        if s.unanchors_at and (not ends_at or ends_at <= timezone.now()):
+            kind, ends_at = Timer.Kind.UNANCHORING, s.unanchors_at
+        if not ends_at or ends_at <= timezone.now():
+            kind, ends_at = None, None
+        type_name = types.get(s.type_id) or next((k for k, v in STRUCTURE_TYPES.items() if v == s.type_id), "")
+        out.append({
+            "structure_id": s.structure_id,
+            "name": s.name or type_name or f"Structure {s.structure_id}",
+            "structure_type": type_name,
+            "type_id": s.type_id,
+            "icon": type_icon_url(s.type_id, 32),
+            "system": {"id": s.system_id, "name": system.name if system else str(s.system_id), "region": region_name(system) if system else "",
+                       "security": round(system.display_security, 1) if system else 0.0},
+            "owner": s.corporation.name,
+            "state": s.state,
+            "kind": kind,
+            "ends_at": ends_at.isoformat() if ends_at else None,
+            "fuel_expires": s.fuel_expires.isoformat() if s.fuel_expires else None,
+        })
+    return out
+
+
 # --- writing ------------------------------------------------------------------------------------------------------
 
 
 def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, ends_at: datetime, structure_type: str = "",
-         owner: str = "", notes: str = "", important: bool = False, notify: bool = True) -> Timer:
+         owner: str = "", notes: str = "", important: bool = False, notify: bool = True, structure_id: int | None = None) -> Timer:
     name = " ".join(name.split())
     if not name:
         raise TimerError("Give the timer a name (the structure's name)")
@@ -198,6 +265,9 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
     t.structure_type = " ".join(structure_type.split())[:60]
     t.type_id = type_id_for(t.structure_type)
     t.owner, t.notes, t.important = " ".join(owner.split())[:120], notes.strip()[:5000], important
+    # Picked from our own structures: remember which, so the automatic import sees it's already on the board.
+    if structure_id:
+        t.structure_id = structure_id
     if changed_time:
         t.reminded = []  # a moved timer gets its reminders again
     t.save()

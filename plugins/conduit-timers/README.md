@@ -10,7 +10,11 @@ comes out. Timers for your own structures arrive by themselves.
   the timer came from. Timers that came out move to **Came out** and drop off after a while (14 days by default).
   Ctrl+K search finds timers by structure, system or owner, and a dashboard widget shows the next few.
 - **Going:** press *Going?* on a timer and you're counted (everyone sees the names) and reminded before it comes out.
-- **Adding timers** (permission `timers.manage_timers`): the structure's name, its type (the usual Upwell structures,
+- **Adding timers** (permission `timers.manage_timers`): start typing the structure's name, its system (`4-HWWF`) or
+  its type, and your own structures from the corporation sheet are offered; pick one and its name, type, system and
+  owner are filled in, plus the timer kind and time when it's reinforced, anchoring or unanchoring. Only structures of
+  corporations whose sheet you may see are offered; with nothing to pick, or for someone else's structure, just keep
+  typing and fill in the rest: its type (the usual Upwell structures,
   customs offices and sovereignty structures are offered; anything can be typed), the system (found by typing),
   owner, kind and side, notes, and when it comes out: either the time left as the game shows it (`1d 4h 23m`,
   `4h23m`, `45m`, `4:23`), counted from the moment it's typed, or an exact time in your own zone. Members are told
