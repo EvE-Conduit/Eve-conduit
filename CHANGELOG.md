@@ -3,6 +3,23 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.33
+
+### Added
+- **Buyback plugin** (Administration → Plugins → Browse). Members paste their items for an instant quote and
+  contract them with the tracking number; every contract is checked against its quote (items, price, location,
+  who it's made out to, duplicates and imitations) and managers are told about new ones. Programs have their own
+  tax, item rules, hauling and low-value costs, ore valued at the best of raw, compressed and refined, and who may
+  use them, including people without an account. Prices come straight from ESI by default (or Fuzzwork or Janice)
+  at the trade hub you pick, including player structures, and are checked against what items actually traded for,
+  so a propped-up order can't make you overpay.
+- **Public plugin pages.** Plugins can now offer pages anyone can open without signing in, at `/public/p/<plugin>/`
+  (see docs/platform.md).
+
+### Changed
+- **The static data import also keeps reprocessing output and compressed ore.** Installs import their current
+  static data again once after updating, by themselves.
+
 ## 0.5.32
 
 ### Added
