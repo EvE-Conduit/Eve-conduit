@@ -21,6 +21,17 @@ class WebhookIn(Schema):
     url: str = Field(max_length=500)
     events: list[str] = []
     enabled: bool = True
+    #: Discord: "" (nobody), "here", "everyone" or a role id.
+    mention: str = ""
+    mention_always: bool = False
+
+    @field_validator("mention")
+    @classmethod
+    def _mention(cls, v):
+        v = (v or "").strip().lstrip("@")
+        if v and v not in ("here", "everyone") and not (v.isdigit() and len(v) <= 32):
+            raise ValueError("mention must be empty, here, everyone or a Discord role id")
+        return v
 
     @field_validator("kind")
     @classmethod
@@ -57,6 +68,8 @@ def hook_out(h: Webhook, with_secret: bool = False) -> dict:
         "url": h.url,
         "events": h.events,
         "enabled": h.enabled,
+        "mention": h.mention,
+        "mention_always": h.mention_always,
         "secret": h.secret if with_secret and h.kind == "json" else None,
         "last_status": h.last_status,
         "last_error": h.last_error,

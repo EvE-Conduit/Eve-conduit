@@ -24,6 +24,10 @@ class Webhook(models.Model):
     #: For ``json`` hooks: requests carry ``X-Conduit-Signature: sha256=<hmac of the body>``.
     secret = models.CharField(max_length=64, default=new_secret)
     enabled = models.BooleanField(default=True)
+    #: Discord only: who to ping. "" (nobody), "here", "everyone" or a role id.
+    mention = models.CharField(max_length=32, blank=True, default="")
+    #: Ping on every message, not only on events that ask for one (``ping`` in the payload).
+    mention_always = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
     last_status = models.IntegerField(null=True, blank=True)
     last_error = models.CharField(max_length=300, blank=True)
