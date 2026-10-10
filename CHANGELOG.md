@@ -3,6 +3,16 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.35
+
+### Added
+- **Fleets & FATs 1.1.0: FATs in the fleet MOTD.** While a fleet is tracked, the in-game fleet MOTD gets the FAT
+  lines at the bottom: who has a FAT (newest first) and the FAT link, updated as pilots get one, and "Fleet ended"
+  when the FC ends it. The FC's own MOTD text above them is kept. It needs the new `esi-fleets.write_fleet.v1`
+  scope (FCs log in with their FC character again) and can be switched off per fleet. Update the plugin under
+  Administration → Plugins.
+- Plugins can use ESI's PUT routes through `esi().put(path, body, character=...)`.
+
 ## 0.5.34
 
 ### Fixed
