@@ -41,8 +41,7 @@ def structure_types(request):
 @router.get("/structures")
 @require_perm("timers.manage_timers")
 def structures(request, q: str = ""):
-    """Our own structures (from the corporation sheet) matching ``q`` by name, system or type, to fill in the editor.
-    Only those of corporations whose sheet the user may see; otherwise an empty list."""
+    """Structures the site knows by name, matching ``q`` by name, system or type, to fill in the editor. Yours first."""
     return services.structure_search(request.user, q)
 
 

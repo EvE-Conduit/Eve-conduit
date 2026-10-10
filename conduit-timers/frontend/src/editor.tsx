@@ -29,7 +29,15 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
   /** One of our own structures was picked: fill in everything the corporation sheet knows about it. */
   const pickStructure = (s: OwnStructure) => {
-    set({ name: s.name, structure_type: s.structure_type, system: s.system, owner: s.owner, side: "friendly", structure_id: s.structure_id, ...(s.kind ? { kind: s.kind } : {}) });
+    set({
+      name: s.name,
+      structure_type: s.structure_type,
+      structure_id: s.structure_id,
+      ...(s.system ? { system: s.system } : {}),
+      ...(s.owner ? { owner: s.owner } : {}),
+      ...(s.ours ? { side: "friendly" as Side } : {}),
+      ...(s.kind ? { kind: s.kind } : {}),
+    });
     if (s.ends_at) {
       setMode("exact");
       setExact(toLocalInput(s.ends_at));
@@ -275,7 +283,7 @@ function StructurePicker({ value, picked, onChange, onPick }: { value: string; p
       <Field
         label="Structure"
         required
-        hint={picked != null ? "One of ours: filled in from the corporation sheet." : "Its name as shown in game. Type a name or system to pick one of your own structures."}
+        hint={picked != null ? "Filled in from what the site knows about it; change anything." : "Its name as shown in game. Type a name or system to pick a structure the site knows."}
       >
         <Input
           value={value}
@@ -295,14 +303,17 @@ function StructurePicker({ value, picked, onChange, onPick }: { value: string; p
           {list.map((s) => (
             <li key={s.structure_id} role="option" aria-selected={false}>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(s)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-hover">
-                <img src={s.icon} alt="" className="size-7 shrink-0 border border-border bg-bg" loading="lazy" />
+                {s.icon ? <img src={s.icon} alt="" className="size-7 shrink-0 border border-border bg-bg" loading="lazy" /> : <span className="size-7 shrink-0 border border-border bg-bg" />}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{s.name}</span>
+                  <span className="block truncate font-medium">
+                    {s.name}
+                    {s.ours && <span className="ml-2 text-xs font-normal text-success-fg">Ours</span>}
+                  </span>
                   <span className="block truncate text-xs text-subtle">
                     {s.structure_type}
-                    {s.structure_type ? " · " : ""}
-                    <span className={cn("font-mono tabular-nums", secTone(s.system.security))}>{s.system.security.toFixed(1)}</span> {s.system.name}
-                    {s.system.region ? ` · ${s.system.region}` : ""}
+                    {s.structure_type && s.system ? " · " : ""}
+                    {s.system && <><span className={cn("font-mono tabular-nums", secTone(s.system.security))}>{s.system.security.toFixed(1)}</span> {s.system.name}{s.system.region ? ` · ${s.system.region}` : ""}</>}
+                    {s.owner && !s.ours ? ` · ${s.owner}` : ""}
                   </span>
                 </span>
                 <span className={cn("shrink-0 text-xs", s.ends_at ? "text-danger-fg" : "text-subtle")}>
