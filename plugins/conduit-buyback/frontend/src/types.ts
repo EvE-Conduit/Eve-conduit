@@ -52,6 +52,8 @@ export interface Program {
   red_loot_npc: boolean;
   t1_refined: boolean;
   t1_refining_rate: number;
+  /** Where its items are priced: its own market, or the site's. */
+  prices: PriceInfo;
   terms: Terms;
   item_rules: ItemRule[];
   can_manage: boolean;
@@ -60,6 +62,7 @@ export interface Program {
 export interface PriceInfo {
   source: string;
   hub: string;
+  hub_id: number;
   instant: boolean;
   guard: boolean;
   guard_days: number;
@@ -109,6 +112,8 @@ export interface QuoteSummary {
   flagged: boolean;
   created_at: string;
   items: number;
+  /** The market it was priced at. */
+  hub: string;
   terms: Terms;
   lines?: Line[];
 }
@@ -121,6 +126,7 @@ export interface Appraisal {
   flagged: boolean;
   accepted_count: number;
   rejected_count: number;
+  hub: string;
   blocked?: string;
   quote: QuoteSummary | null;
 }
@@ -267,6 +273,9 @@ export interface ProgramForm {
   wallet_division: number | null;
   tracking_prefix: string;
   active: boolean;
+  /** Its own market; null: the site's. */
+  hub_id: number | null;
+  hub_name: string;
 }
 
 export interface ManagedDetail extends Program, Omit<ProgramForm, "price_type"> {
@@ -282,6 +291,15 @@ export interface Options {
   groups: { id: number; name: string }[];
   managers: { id: number; name: string }[];
   default_prefix: string;
+  /** The site's market, which programs use unless they pick their own. */
+  market: { source: Settings["price_source"]; source_name: string; hub_id: number; hub_name: string; hubs: TradeHub[] };
+}
+
+export interface TradeHub {
+  id: number;
+  name: string;
+  full_name: string;
+  region: string;
 }
 
 export interface Hit {
@@ -305,7 +323,7 @@ export interface Settings {
   reject_disallowed: boolean;
   restrict_quotes: boolean;
   prices_stored: number;
-  hubs: { id: number; name: string; full_name: string; region: string }[];
+  hubs: TradeHub[];
   esi_character: { id: number; name: string } | null;
   esi_character_id?: number | null;
   characters: { id: number; name: string; can_read: boolean }[];
@@ -313,6 +331,8 @@ export interface Settings {
   history_region: string | null;
   market_pulled_at: string | null;
   market_note: string;
+  /** Every market in use: the site's first, then those programs picked. */
+  markets: { id: number; name: string; pulled_at: string | null; note: string; prices: number; programs: string[] }[];
   guard_enabled: boolean;
   guard_threshold: number;
   guard_days: number;

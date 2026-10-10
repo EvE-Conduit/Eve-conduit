@@ -104,6 +104,8 @@ class Appraisal:
     value: Decimal = D0
     volume: float = 0.0
     flagged: bool = False
+    #: The market it was priced at.
+    hub: str = ""
 
     @property
     def accepted(self) -> list[dict]:
@@ -125,7 +127,7 @@ def _money(value: Decimal) -> Decimal:
 class _Context:
     """Everything valuing a set of types needs, loaded in a few queries."""
 
-    def __init__(self, program: Program, type_ids: set[int], settings: BuybackSettings):
+    def __init__(self, program: Program, type_ids: set[int], settings: BuybackSettings, hub: market.Hub):
         self.program = program
         self.types = {t.pk: t for t in ItemType.objects.filter(pk__in=type_ids).select_related("group")}
         compressed_ids = {t.compressed_type_id for t in self.types.values() if t.compressed_type_id}
@@ -141,9 +143,9 @@ class _Context:
         for m in TypeMaterial.objects.filter(type_id__in=refine):
             self.materials[m.type_id].append((m.material_type_id, m.quantity))
         wanted = set(type_ids) | compressed_ids | {mid for mats in self.materials.values() for mid, _ in mats}
-        self.prices: dict[int, ItemPrice] = prices.get(wanted, settings)
+        self.prices: dict[int, ItemPrice] = prices.get(wanted, settings, hub)
         self.settings = settings
-        self.history = market.histories([t for t in wanted if t in self.prices], settings)
+        self.history = market.histories([t for t in wanted if t in self.prices], settings, hub)
         #: What the manipulation guard made of each market price used.
         self.checks: dict[int, market.Check] = {}
 
@@ -287,7 +289,8 @@ def _line(ctx: _Context, t: ItemType, quantity: int, assembled: bool) -> dict:
 
 def appraise(program: Program, pasted: list[PastedLine], settings: BuybackSettings | None = None) -> Appraisal:
     s = settings or BuybackSettings.load()
-    out = Appraisal()
+    hub = market.program_hub(program, s)
+    out = Appraisal(hub=hub.name)
     names = {ln.name.lower() for ln in pasted}
     found: dict[str, int] = {}
     for tid, lname, published in (
@@ -307,7 +310,7 @@ def appraise(program: Program, pasted: list[PastedLine], settings: BuybackSettin
             assembled.add(tid)
     if not totals:
         return out
-    ctx = _Context(program, set(totals), s)
+    ctx = _Context(program, set(totals), s, hub)
     for tid, qty in totals.items():
         if tid in ctx.types:
             out.lines.append(_line(ctx, ctx.types[tid], qty, tid in assembled))

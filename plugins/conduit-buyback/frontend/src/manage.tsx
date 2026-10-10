@@ -13,7 +13,7 @@ import { BackLink, HOME } from "./member";
 import { ItemCell, Problems, StatusBadge, SystemText } from "./shared";
 import {
   BASE, type ContractRow, type Hit, type ItemRule, type ManagedDetail, type ManagedProgram, type Options, type Place, type ProgramForm,
-  type Settings, type Stats, type WatchRule,
+  type Settings, type Stats, type TradeHub, type WatchRule,
 } from "./types";
 
 const MANAGE = `${HOME}/manage`;
@@ -280,7 +280,7 @@ const BLANK: ProgramForm = {
   tax: 10, hauling_fuel_cost: 0, price_density_threshold: 0, price_density_tax: 0, compressed_volume: false, allow_all_items: true,
   use_raw: true, use_compressed: true, use_refined: true, refining_rate: 80, allow_unpacked: false, blue_loot_npc: false, red_loot_npc: false,
   t1_refined: false, t1_refining_rate: 55, state_ids: [], group_ids: [], public: false, notify_managers: true, wallet_division: null,
-  tracking_prefix: "", active: true,
+  tracking_prefix: "", active: true, hub_id: null, hub_name: "",
 };
 
 function NumberField({ label, hint, value, onChange, step = 1, suffix }: { label: string; hint?: ReactNode; value: number; onChange: (n: number) => void; step?: number; suffix?: string }) {
@@ -427,6 +427,9 @@ export function EditPage() {
         <TabPanel value="pricing">
           <Card>
             <CardBody className="grid gap-6 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <ProgramMarket value={value} market={o.market} onChange={(hub_id, hub_name) => set({ hub_id, hub_name })} />
+              </div>
               <div className="space-y-5">
                 <Field label="Price" hint="Which hub price items are valued at, before tax.">
                   <Segmented value={value.price_type} onChange={(v) => set({ price_type: v })} options={[{ value: "buy", label: "Buy" }, { value: "split", label: "Split" }, { value: "sell", label: "Sell" }]} />
@@ -863,16 +866,18 @@ function hubKind(id: number): Settings["hub_kind"] {
 }
 
 /** The trade hub prices come from: one of the main hubs, or any region, system, station or (ESI) structure. */
-function HubPicker({ value, esi, onChange }: { value: Settings; esi: boolean; onChange: (id: number, name: string) => void }) {
-  const preset = value.hubs.find((h) => h.id === value.hub_id);
+function HubPicker({ hubs, hubId, hubName, esi, onChange, note, label = "Trade hub" }: {
+  hubs: TradeHub[]; hubId: number; hubName: string; esi: boolean; onChange: (id: number, name: string) => void; note: ReactNode; label?: string;
+}) {
+  const preset = hubs.find((h) => h.id === hubId);
   const [other, setOther] = useState(!preset);
-  const kind = hubKind(value.hub_id);
+  const kind = hubKind(hubId);
   return (
     <div className="space-y-3">
-      <div className="text-[13px] font-medium text-text">Trade hub</div>
+      <div className="text-[13px] font-medium text-text">{label}</div>
       <div className="grid gap-2 sm:grid-cols-3">
-        {value.hubs.map((h) => {
-          const on = h.id === value.hub_id && !other;
+        {hubs.map((h) => {
+          const on = h.id === hubId && !other;
           return (
             <button
               key={h.id}
@@ -904,16 +909,53 @@ function HubPicker({ value, esi, onChange }: { value: Settings; esi: boolean; on
           <Search kind="hubs" placeholder="Find a region, system, station or structure…" onPick={(h) => onChange(h.id, h.name)} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Market id" hint={`Now ${KIND_LABEL[kind]}. Or paste an id: a structure's is in its chat link (showinfo:35826//1037962518481).`}>
-              <Input type="number" value={value.hub_id} onChange={(e) => onChange(Number(e.target.value), value.hub_name)} className="font-mono" />
+              <Input type="number" value={hubId} onChange={(e) => onChange(Number(e.target.value), hubName)} className="font-mono" />
             </Field>
             <Field label="Shown as">
-              <Input value={value.hub_name} onChange={(e) => onChange(value.hub_id, e.target.value)} />
+              <Input value={hubName} onChange={(e) => onChange(hubId, e.target.value)} />
             </Field>
           </div>
           {!esi && <p className="text-xs text-subtle">Fuzzwork covers the main hubs and regions; smaller stations may have no prices there. ESI reads any market.</p>}
         </div>
       )}
-      <p className="text-xs text-subtle">Changing the hub clears the stored prices; they're read again from the new hub.</p>
+      <p className="text-xs text-subtle">{note}</p>
+    </div>
+  );
+}
+
+/** A program's market: the site's, or its own. */
+function ProgramMarket({ value, market, onChange }: { value: ProgramForm; market: Options["market"]; onChange: (id: number | null, name: string) => void }) {
+  if (market.source === "janice") {
+    return (
+      <Field label="Market">
+        <p className="text-sm text-muted">Jita 4-4: the Janice price source prices nowhere else. Switch the source in the buyback settings to pick another market.</p>
+      </Field>
+    );
+  }
+  const own = value.hub_id != null;
+  return (
+    <div className="space-y-3">
+      <div className="border border-border px-3">
+        <SwitchRow
+          label={`Price at the site's market (${market.hub_name})`}
+          description="Off: pick a market for this program. Sellers see which one on the program and on every quote."
+          checked={!own}
+          onCheckedChange={(v) => (v ? onChange(null, "") : onChange(market.hub_id, market.hub_name))}
+        />
+      </div>
+      {own && (
+        <HubPicker
+          label="This program's market"
+          hubs={market.hubs}
+          hubId={value.hub_id!}
+          hubName={value.hub_name}
+          esi={market.source === "esi"}
+          onChange={onChange}
+          note={hubKind(value.hub_id!) === "structure"
+            ? "A player structure's market is read with the login of the character contracts go to, so it must be able to dock there and use the market."
+            : `Prices come from ${market.source_name}, like the site's.`}
+        />
+      )}
     </div>
   );
 }
@@ -976,7 +1018,14 @@ export function SettingsPage() {
               {value.price_source === "janice" && "Janice prices Jita 4-4 and needs an API key (ask its author)."}
             </p>
             {value.price_source !== "janice" ? (
-              <HubPicker value={value} esi={esi} onChange={(hub_id, hub_name) => set({ hub_id, hub_name })} />
+              <HubPicker
+                hubs={value.hubs}
+                hubId={value.hub_id}
+                hubName={value.hub_name}
+                esi={esi}
+                onChange={(hub_id, hub_name) => set({ hub_id, hub_name })}
+                note="Programs use it unless they pick their own market. Changing it drops its stored prices; they're read again from the new hub."
+              />
             ) : (
               <Field label="Janice API key" hint={value.janice_key_set ? "A key is stored. Type a new one to replace it, or - to remove it." : undefined}>
                 <Input type="password" value={value.janice_api_key} onChange={(e) => set({ janice_api_key: e.target.value })} placeholder={value.janice_key_set ? "••••••••" : ""} autoComplete="off" />
@@ -1000,6 +1049,25 @@ export function SettingsPage() {
               <p className="text-xs text-muted">
                 {data.market_pulled_at ? <>Last read {timeAgo(data.market_pulled_at)}: {data.market_note}</> : data.market_note || "Not read yet; the first read starts within a minute."}
               </p>
+            )}
+            {data && data.markets.length > 1 && (
+              <div className="space-y-1.5">
+                <div className="text-[13px] font-medium text-text">Programs' own markets</div>
+                <ul className="divide-y divide-border border border-border text-sm">
+                  {data.markets.slice(1).map((m) => (
+                    <li key={m.id} className="px-3 py-2">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="font-medium">{m.name}</span>
+                        <span className="text-xs text-subtle">{m.programs.join(", ")}</span>
+                      </div>
+                      <div className="text-xs text-muted">
+                        {num(m.prices)} prices
+                        {data.price_source === "esi" && <> · {m.pulled_at ? <>read {timeAgo(m.pulled_at)}{m.note && `: ${m.note}`}</> : m.note || "not read yet"}</>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             <div className="border border-border px-3">
               <SwitchRow label="Best order instead of the top 5% average" description="Instant prices move faster and are easier to manipulate." checked={value.instant_prices} onCheckedChange={(v) => set({ instant_prices: v })} />

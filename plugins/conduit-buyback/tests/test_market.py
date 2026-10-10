@@ -10,9 +10,9 @@ from conduit.esi.client import EsiResponse
 from conduit.esi.exceptions import EsiError
 from conduit.sde.models import Region, SolarSystem, Station
 from conduit_buyback import market, prices, services
-from conduit_buyback.models import BuybackSettings, ItemPrice, PriceHistory, Quote
+from conduit_buyback.models import BuybackSettings, ItemPrice, MarketRead, PriceHistory, Quote
 
-from test_buyback import PYERITE, TRITANIUM, appraise, boss, line, program, sde, seller  # noqa: F401  (fixtures)
+from test_buyback import PYERITE, TRITANIUM, appraise, boss, grant, line, program, sde, seller  # noqa: F401  (fixtures)
 
 JITA_44 = 60003760
 FORGE = 10000002
@@ -82,20 +82,21 @@ def test_pull_reads_the_hub_and_zeroes_what_left(jita):
     })
     assert market.pull(s, client=esi) == 2
     assert [c[0] for c in esi.calls] == [f"/markets/{FORGE}/orders"] * 2
-    tri = ItemPrice.objects.get(pk=TRITANIUM)
+    tri = ItemPrice.objects.get(type_id=TRITANIUM)
     assert (tri.buy, tri.sell) == (Decimal("4.00"), Decimal("5.00"))
-    assert ItemPrice.objects.get(pk=PYERITE).buy == 0 and ItemPrice.objects.get(pk=PYERITE).sell == Decimal("12.00")
-    assert ItemPrice.objects.get(pk=999).sell == 0
-    s.refresh_from_db()
-    assert s.market_pulled_at and s.market_note == "2 items from 2 pages"
+    assert ItemPrice.objects.get(type_id=PYERITE).buy == 0 and ItemPrice.objects.get(type_id=PYERITE).sell == Decimal("12.00")
+    assert ItemPrice.objects.get(type_id=999).sell == 0
+    read = MarketRead.objects.get(hub_id=JITA_44)
+    assert read.pulled_at and read.note == "2 items from 2 pages"
 
 
 def test_pulls_are_spaced_out(jita, monkeypatch):
-    esi_settings(market_pulled_at=None)
+    esi_settings()
+    MarketRead.objects.all().delete()
     esi = FakeEsi(pages={1: [order(TRITANIUM, 4.0, 100, True)]})
     assert market.pull_once(client=esi) == 1
     assert market.pull_once(client=esi) is None and len(esi.calls) == 1  # ESI's copy hasn't changed yet
-    BuybackSettings.objects.filter(pk=1).update(market_pulled_at=timezone.now() - timedelta(minutes=11))
+    MarketRead.objects.filter(hub_id=JITA_44).update(pulled_at=timezone.now() - timedelta(minutes=11))
     assert market.pull_once(client=esi) == 1
 
 
@@ -121,11 +122,12 @@ def test_esi_source_never_fetches_item_by_item(program, monkeypatch):
     queued = []
     monkeypatch.setattr(tasks.pull_market, "delay", lambda: queued.append(1))
     monkeypatch.setattr(prices, "fetch", lambda *a, **k: pytest.fail("no per-item fetch"))
-    esi_settings(market_pulled_at=None)
+    esi_settings()
+    MarketRead.objects.all().delete()
     ItemPrice.objects.filter(type_id=TRITANIUM).update(updated_at=timezone.now() - timedelta(days=5))
     assert line(appraise(program, "Tritanium 10"), TRITANIUM)["market_unit"] == 4.0
     assert queued == [1]  # never read yet: start the first read
-    BuybackSettings.objects.filter(pk=1).update(market_pulled_at=timezone.now())
+    MarketRead.objects.create(hub_id=JITA_44, pulled_at=timezone.now())
     appraise(program, "Tritanium 10")
     assert queued == [1]
 
@@ -158,7 +160,7 @@ def test_guarded_quotes(jita, program, seller, monkeypatch):
     assert tri["guard"]["used"] == "average" and tri["market_unit"] == 3.0 and tri["unit_price"] == 2.7 and not tri["watch"]
 
     # Rarely traded: the lower price, and checked by hand.
-    PriceHistory.objects.filter(pk=TRITANIUM).delete()
+    PriceHistory.objects.filter(type_id=TRITANIUM).delete()
     history(TRITANIUM, 3.0, 2)
     out = services.quote(program, "Tritanium 1000", user=seller)
     tri = out["lines"][0]
@@ -187,7 +189,7 @@ def test_history_is_fetched_for_quotes(jita, program, monkeypatch):
     monkeypatch.setattr("conduit.esi.client.esi", lambda: esi)
     tri = line(appraise(program, "Tritanium 10\nPyerite 5"), TRITANIUM)
     assert tri["guard"]["used"] == "average"
-    assert PriceHistory.objects.get(pk=PYERITE).days == []  # 404: never traded
+    assert PriceHistory.objects.get(type_id=PYERITE).days == []  # 404: never traded
     calls = len(esi.calls)
     appraise(program, "Tritanium 10")
     assert len(esi.calls) == calls  # fresh for a day
@@ -234,3 +236,80 @@ def test_picking_a_trade_hub(jita, program, boss, api_client, monkeypatch):
     assert api_client.call("put", "/api/p/buyback/settings", {**s, "hub_id": FORGE, "hub_name": "The Forge"}).status_code == 200
     names = [h["name"] for h in api_client.get("/api/p/buyback/manage/search/hubs?q=Am").json()]
     assert names == ["Amarr"]
+
+
+# --- a program's own market -----------------------------------------------------------------------------------------
+
+AMARR_VIII = 60008494
+DOMAIN = 10000043
+AMARR = 30002187
+
+
+@pytest.fixture
+def amarr(jita):
+    Region.objects.create(id=DOMAIN, name="Domain")
+    SolarSystem.objects.create(id=AMARR, constellation_id=1, region_id=DOMAIN, name="Amarr", security_status=1.0)
+    Station.objects.create(id=AMARR_VIII, solar_system_id=AMARR, type_id=1932)
+
+
+def test_programs_price_at_their_own_market(amarr, program, seller, monkeypatch):
+    monkeypatch.setattr(market, "fetch_history", lambda *a, **k: 0)
+    ItemPrice.objects.create(hub_id=AMARR_VIII, type_id=TRITANIUM, buy=7, sell=8, updated_at=timezone.now())
+    MarketRead.objects.create(hub_id=AMARR_VIII, pulled_at=timezone.now())
+    assert line(appraise(program, "Tritanium 10"), TRITANIUM)["market_unit"] == 4.0  # the site's: Jita 4-4
+    program.hub_id, program.hub_name = AMARR_VIII, "Amarr VIII"
+    program.save()
+    assert line(appraise(program, "Tritanium 10"), TRITANIUM)["market_unit"] == 7.0
+    out = services.quote(program, "Tritanium 10", user=seller)
+    assert out["hub"] == "Amarr VIII" and out["quote"]["hub"] == "Amarr VIII"
+    assert Quote.objects.get(tracking_number=out["quote"]["tracking_number"]).hub_name == "Amarr VIII"
+    assert services.program_out(program)["prices"]["hub"] == "Amarr VIII" and services.prices_out()["hub"] == "Jita 4-4"
+    # Janice prices Jita 4-4 only, whatever the program picked.
+    BuybackSettings.objects.filter(pk=1).update(price_source="janice", janice_api_key="key")
+    assert services.program_out(program)["prices"]["hub"] == "Jita 4-4"
+
+
+def test_every_market_in_use_is_read(amarr, program):
+    from conduit_buyback.models import Program
+
+    esi_settings()
+    MarketRead.objects.all().delete()
+    Program.objects.create(name="Amarr", owner=program.owner, hub_id=AMARR_VIII, hub_name="Amarr VIII")
+    Program.objects.create(name="Forge", owner=program.owner, hub_id=FORGE, hub_name="The Forge")
+    Program.objects.create(name="Closed", owner=program.owner, hub_id=60011866, hub_name="Dodixie", active=False)
+    esi = FakeEsi(pages={1: [order(TRITANIUM, 4.0, 100, True), order(TRITANIUM, 9.0, 100, True, location=AMARR_VIII, system=AMARR)]})
+    assert market.pull_once(client=esi) == 3
+    # Jita 4-4 and The Forge share one read of the region; the closed program's market isn't read.
+    assert sorted(c[0] for c in esi.calls) == [f"/markets/{FORGE}/orders", f"/markets/{DOMAIN}/orders"]
+    buy = dict(ItemPrice.objects.filter(type_id=TRITANIUM).values_list("hub_id", "buy"))
+    assert buy == {JITA_44: Decimal("4.00"), AMARR_VIII: Decimal("9.00"), FORGE: Decimal("9.00")}
+    assert set(MarketRead.objects.values_list("hub_id", flat=True)) == {JITA_44, AMARR_VIII, FORGE}
+    # Closed: its market's prices are forgotten.
+    Program.objects.filter(name="Amarr").update(active=False)
+    market.prune()
+    assert not ItemPrice.objects.filter(hub_id=AMARR_VIII).exists() and not MarketRead.objects.filter(hub_id=AMARR_VIII).exists()
+
+
+def test_picking_a_programs_market(amarr, program, boss, api_client, monkeypatch):
+    from conduit_buyback import tasks
+
+    queued = []
+    monkeypatch.setattr(tasks.pull_market, "delay", lambda: queued.append(1))
+    api_client.force_login(boss)
+    opts = api_client.get("/api/p/buyback/manage/options").json()["market"]
+    assert (opts["source"], opts["hub_id"], opts["hub_name"]) == ("esi", JITA_44, "Jita 4-4") and len(opts["hubs"]) == 5
+    url = f"/api/p/buyback/manage/programs/{program.pk}"
+    body = {"name": "Ore buyback", "owner_id": boss.main_character.pk, "location_ids": list(program.locations.values_list("pk", flat=True))}
+    assert api_client.call("put", url, {**body, "hub_id": 60099999}).status_code == 400  # no such station
+    # A structure's market is read with the owner's login.
+    resp = api_client.call("put", url, {**body, "hub_id": 1035466617946, "hub_name": "Perimeter Keepstar"})
+    assert resp.status_code == 400 and "log in again" in resp.json()["detail"]
+    resp = api_client.call("put", url, {**body, "hub_id": AMARR_VIII, "hub_name": "Amarr VIII"})
+    assert resp.status_code == 200, resp.content
+    assert (resp.json()["hub_id"], resp.json()["prices"]["hub"]) == (AMARR_VIII, "Amarr VIII") and queued == [1]
+    assert api_client.get(f"/api/p/buyback/programs/{program.pk}").json()["prices"]["hub"] == "Amarr VIII"
+    api_client.force_login(grant(boss, "manage_all_programs"))
+    markets = api_client.get("/api/p/buyback/settings").json()["markets"]
+    assert [(m["name"], m["programs"]) for m in markets] == [("Jita 4-4", []), ("Amarr VIII", ["Ore buyback"])]
+    # Back to the site's market.
+    assert api_client.call("put", url, {**body, "hub_id": None}).json()["prices"]["hub"] == "Jita 4-4"

@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from datetime import timedelta
 
 from celery import shared_task
@@ -46,7 +47,7 @@ def update_prices() -> int:
 
 @shared_task
 def pull_market() -> int | None:
-    """Every 30 minutes, for the ESI source: read the hub's whole order book."""
+    """Every 30 minutes, for the ESI source: read the whole order book of every hub in use."""
     return market.pull_once()
 
 
@@ -61,24 +62,31 @@ def fetch_history_later(self, type_ids: list[int], region_id: int) -> int:
 
 @shared_task
 def refresh_history() -> int:
-    """Hourly: refresh the market history of items quoted before, a slice at a time (history changes daily)."""
+    """Hourly: refresh the market history of items quoted before, in the regions of the hubs in use, a slice at a
+    time (history changes daily)."""
     from .models import PriceHistory
 
     s = BuybackSettings.load()
-    region = market.hub_region(s)
-    if not s.guard_enabled or region is None:
+    if not s.guard_enabled:
         return 0
-    stale = PriceHistory.objects.filter(updated_at__lt=timezone.now() - timedelta(hours=20))
-    ids = list(stale.order_by("updated_at").values_list("type_id", flat=True)[:500])
-    try:
-        return market.fetch_history(ids, region) if ids else 0
-    except EsiBackoff:
-        return 0
+    regions = {r for r in (market.hub_region(h.id) for h in market.hubs_in_use(s)) if r}
+    stale = PriceHistory.objects.filter(region_id__in=regions, updated_at__lt=timezone.now() - timedelta(hours=20))
+    todo = defaultdict(list)
+    for region, type_id in stale.order_by("updated_at").values_list("region_id", "type_id")[:500]:
+        todo[region].append(type_id)
+    done = 0
+    for region, ids in todo.items():
+        try:
+            done += market.fetch_history(ids, region)
+        except EsiBackoff:
+            break
+    return done
 
 
 @shared_task
 def cleanup() -> int:
-    """Remove quotes nobody made a contract for."""
+    """Remove quotes nobody made a contract for, and the prices of markets nothing uses any more."""
+    market.prune()
     hours = BuybackSettings.load().unlinked_purge_hours
     if not hours:
         return 0

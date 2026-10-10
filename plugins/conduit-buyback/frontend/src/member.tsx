@@ -60,7 +60,7 @@ export function HomePage() {
         title="Sell your loot and ore"
         description={
           data
-            ? `Paste your items for an instant quote, then contract them. Prices: ${data.prices.source}, ${data.prices.hub}${data.prices.instant ? " (best order)" : " (top 5% of orders)"}${data.prices.guard ? `, checked against the last ${data.prices.guard_days} days of trading` : ""}.`
+            ? `Paste your items for an instant quote, then contract them. Prices: ${data.prices.source}${data.prices.instant ? " (best order)" : " (top 5% of orders)"} at each program's market${data.prices.guard ? `, checked against the last ${data.prices.guard_days} days of trading` : ""}.`
             : "Paste your items for an instant quote, then contract them."
         }
         actions={
@@ -126,7 +126,7 @@ export function ProgramPage() {
       <BackLink to={HOME}>All programs</BackLink>
       <PageHeader
         icon={<Cart />}
-        eyebrow={`Buyback · ${data.tax}% tax`}
+        eyebrow={`Buyback · ${data.tax}% tax · priced at ${data.prices.hub}`}
         title={data.name}
         description={data.description || undefined}
         actions={
@@ -228,7 +228,7 @@ export function QuotePage() {
             {data.tracking_number} <CopyButton value={data.tracking_number} />
           </span>
         }
-        description={`Quoted ${dateTime(data.created_at)}${data.seller && !data.mine ? ` for ${data.seller}` : ""}${data.public ? " (public calculator)" : ""}.`}
+        description={`Quoted ${dateTime(data.created_at)}${data.hub ? ` at ${data.hub} prices` : ""}${data.seller && !data.mine ? ` for ${data.seller}` : ""}${data.public ? " (public calculator)" : ""}.`}
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-4">

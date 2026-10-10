@@ -102,7 +102,7 @@ const pct = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(2)}%`;
 export function ProgramFacts({ program }: { program: Program }) {
   const ore = [program.use_raw && "raw", program.use_compressed && "compressed", program.use_refined && `refined at ${pct(program.refining_rate)}`].filter(Boolean);
   const facts: ReactNode[] = [
-    <>{program.price_type === "split" ? "Split" : program.price_type === "sell" ? "Sell" : "Buy"} price, less {pct(program.tax)}</>,
+    <>{program.prices.hub} {program.price_type === "split" ? "split" : program.price_type === "sell" ? "sell" : "buy"} price, less {pct(program.tax)}</>,
     program.allow_all_items ? "Buys any item" : "Only listed items",
     ore.length ? <>Ore & ice: best of {ore.join(", ")}</> : null,
     program.hauling_fuel_cost > 0 ? <>Hauling {isk(program.hauling_fuel_cost, { full: true })}/m³{program.compressed_volume ? " (compressed volume)" : ""}</> : null,
@@ -252,7 +252,7 @@ export function ContractSteps({ quote }: { quote: QuoteSummary }) {
           <div className="hud-label text-subtle">You get</div>
           <div className="mt-1 font-mono text-[34px] font-semibold leading-none tabular-nums text-accent-ink">{isk(quote.value, { full: true })}</div>
           <div className="mt-1.5 text-xs text-muted">
-            {quote.items} item{quote.items === 1 ? "" : "s"} · {num(quote.volume)} m³
+            {quote.items} item{quote.items === 1 ? "" : "s"} · {num(quote.volume)} m³{quote.hub && <> · priced at {quote.hub}</>}
           </div>
         </div>
         {quote.flagged && (

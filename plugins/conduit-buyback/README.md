@@ -8,7 +8,8 @@ the description, and every contract is checked against its quote before you acce
   items the program doesn't buy say why. The quote comes with the steps to make the contract: who to, where, the
   price and the tracking number, each with a copy button. **My quotes** follows every quote and its contract, and
   sellers are told when a contract is accepted or rejected.
-- **Pricing** (per program): hub buy, sell or split price less a tax. On top: extra tax (or less) per item, fixed
+- **Pricing** (per program): buy, sell or split price at the site's trade hub, or a market the program picks for
+  itself, less a tax. Sellers see the market on the program and on every quote. On top: extra tax (or less) per item, fixed
   prices, items not bought, or only listed items; a hauling cost per m³; an extra tax for items worth little per m³
   (T1 ships, bulky junk); assembled items refused or taken. Ore, moon ore and ice are valued at the best of raw,
   compressed and refined (at your refining rate), optionally with their compressed volume. Tech I modules can be
@@ -31,16 +32,19 @@ the description, and every contract is checked against its quote before you acce
 - **Public programs**: a program marked public gives quotes to anyone at `/public/p/buyback/<id>`, without an
   account (30 quotes per visitor per 10 minutes). Public quotes belong to nobody; contracts for them are checked like
   any other.
-- **Prices** (permission `buyback.manage_all_programs`, which also runs every program) at the trade hub you pick:
+- **Prices** (permission `buyback.manage_all_programs`, which also runs every program) at the trade hub you pick,
+  which programs use unless they pick their own:
   Jita 4-4, Amarr VIII, Dodixie IX-20, Rens VI-8 or Hek VIII-12 in one click, or any region, system, station or
   (with ESI) player structure. The top-5% average or the best order, from:
-  - **ESI** (the default), straight from CCP: the hub's whole order book is read every 30 minutes (Jita: about 400
-    pages, 30 seconds) and quotes use what was read; the first read starts as soon as the plugin is used. Also reads
-    a **player structure's market**, with a character that can dock there (`esi-markets.structure_markets.v1`).
+  - **ESI** (the default), straight from CCP: the whole order book of every hub in use is read every 30 minutes
+    (Jita: about 400 pages, 30 seconds; hubs in one region share one read) and quotes use what was read; the first
+    read starts as soon as the plugin is used. Also reads a **player structure's market**, with a character that can
+    dock there (`esi-markets.structure_markets.v1`): the one picked in the settings, or for a program's own market
+    the character contracts go to.
     PLEX trades on CCP's global PLEX market, which ESI's regional orders don't include.
   - [Fuzzwork](https://market.fuzzwork.co.uk/api/): any station, system or region; free; fetched when a quote needs
     them.
-  - [Janice](https://janice.e-351.com/): Jita 4-4; needs an API key.
+  - [Janice](https://janice.e-351.com/): Jita 4-4 only, for every program; needs an API key.
 - **Manipulation guard** (on by default, any source): each market price, including the minerals refined values use,
   is compared with what the item traded for over the last 7 days in the hub's region (ESI market history). A price
   more than 20 % above that average is suspect: if the item traded on at least 5 of those days, the average is used;

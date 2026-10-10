@@ -39,7 +39,7 @@ export function PublicProgram() {
   const { id } = useParams();
   const { data, isLoading } = useQuery({
     queryKey: ["buyback", "public", "program", id],
-    queryFn: () => api.get<Program & { prices: PriceInfo }>(`${PUBLIC_BASE}/programs/${id}`),
+    queryFn: () => api.get<Program>(`${PUBLIC_BASE}/programs/${id}`),
   });
   if (isLoading) return <Skeleton className="h-96" />;
   if (!data) return <EmptyState icon={<Cart />} title="No such program" description="It may be closed, or no longer public." />;
@@ -48,7 +48,7 @@ export function PublicProgram() {
       <BackLink to={PUBLIC_HOME}>All programs</BackLink>
       <PageHeader
         icon={<Cart />}
-        eyebrow={`Buyback · ${data.tax}% tax · ${data.prices.source} ${data.prices.hub}`}
+        eyebrow={`Buyback · ${data.tax}% tax · priced at ${data.prices.hub}`}
         title={data.name}
         description={data.description || undefined}
       />

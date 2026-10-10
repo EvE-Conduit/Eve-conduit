@@ -1,8 +1,9 @@
 """Prices straight from ESI, and the manipulation guard.
 
-ESI has no "price of these items" call. Like Fuzzwork and Janice, the ESI source reads the hub's whole order book
+ESI has no "price of these items" call. Like Fuzzwork and Janice, the ESI source reads each hub's whole order book
 in the background (``/markets/{region}/orders``, a few hundred pages for The Forge; or a player structure's market),
-keeps the hub's orders, and stores each item's prices. Quotes then only read stored prices.
+keeps the hub's orders, and stores each item's prices. Quotes then only read stored prices. The hubs are the site's
+and those programs picked for themselves; hubs in one region share one read of it.
 
 The guard compares each price with what the item actually traded for recently in the hub's region
 (``/markets/{region}/history``, daily averages and volumes).
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -22,11 +23,10 @@ from django.utils import timezone
 from conduit.db import upsert
 from conduit.esi.exceptions import EsiError
 
-from .models import BuybackSettings, ItemPrice, PriceHistory
+from .models import JITA_44, BuybackSettings, ItemPrice, MarketRead, PriceHistory, Program
 
 log = logging.getLogger(__name__)
 
-THE_FORGE = 10000002
 STRUCTURE_SCOPE = "esi-markets.structure_markets.v1"
 TOP_SHARE = Decimal("0.05")
 PULL_LOCK = "buyback:market-pull"
@@ -41,7 +41,7 @@ CENT = Decimal("0.01")
 
 #: The main trade hubs: (station id, short name, full name, region).
 HUBS = (
-    (60003760, "Jita 4-4", "Jita IV - Moon 4 - Caldari Navy Assembly Plant", "The Forge"),
+    (JITA_44, "Jita 4-4", "Jita IV - Moon 4 - Caldari Navy Assembly Plant", "The Forge"),
     (60008494, "Amarr VIII", "Amarr VIII (Oris) - Emperor Family Academy", "Domain"),
     (60011866, "Dodixie IX-20", "Dodixie IX - Moon 20 - Federation Navy Assembly Plant", "Sinq Laison"),
     (60004588, "Rens VI-8", "Rens VI - Moon 8 - Brutor Tribe Treasury", "Heimatar"),
@@ -51,6 +51,44 @@ HUBS = (
 
 class MarketError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class Hub:
+    """A market items are priced at."""
+
+    id: int
+    name: str
+    #: Reads a player structure's market.
+    character: object | None = field(default=None, compare=False)
+
+
+def site_hub(s: BuybackSettings) -> Hub:
+    if s.price_source == BuybackSettings.Source.JANICE:
+        return Hub(JITA_44, "Jita 4-4")  # Janice prices Jita 4-4 only
+    return Hub(s.hub_id, s.hub_name, s.esi_character)
+
+
+def program_hub(p: Program, s: BuybackSettings) -> Hub:
+    """Where the program's items are priced: its own market, or the site's. Its owner reads a structure's."""
+    if s.price_source == BuybackSettings.Source.JANICE or not p.hub_id or p.hub_id == s.hub_id:
+        return site_hub(s)
+    return Hub(p.hub_id, p.hub_name or f"Market {p.hub_id}", p.owner)
+
+
+def hubs_in_use(s: BuybackSettings) -> list[Hub]:
+    """The site's market and those open programs picked for themselves."""
+    out = {}
+    for hub in [site_hub(s)] + [program_hub(p, s) for p in Program.objects.filter(active=True).exclude(hub_id=None).select_related("owner__token")]:
+        out.setdefault(hub.id, hub)
+    return list(out.values())
+
+
+def prune(s: BuybackSettings | None = None) -> None:
+    """Forget the prices of markets nothing uses any more."""
+    used = [h.id for h in hubs_in_use(s or BuybackSettings.load())]
+    ItemPrice.objects.exclude(hub_id__in=used).delete()
+    MarketRead.objects.exclude(hub_id__in=used).delete()
 
 
 def search_hubs(q: str, limit: int = 15) -> list[dict]:
@@ -83,13 +121,11 @@ def hub_kind(hub_id: int) -> str:
     return "structure"
 
 
-def hub_region(s: BuybackSettings) -> int | None:
+def hub_region(hub: int) -> int | None:
     """The region the hub is in: where its orders are read and its history is measured."""
-    if s.price_source == BuybackSettings.Source.JANICE:
-        return THE_FORGE  # Janice prices Jita 4-4
     from conduit.sde.models import SolarSystem, Station
 
-    kind, hub = hub_kind(s.hub_id), s.hub_id
+    kind = hub_kind(hub)
     if kind == "region":
         return hub
     if kind == "system":
@@ -141,69 +177,98 @@ def aggregate(orders: dict[int, dict[str, list]], instant: bool) -> dict[int, tu
     return out
 
 
-def _source(s: BuybackSettings) -> tuple[str, dict, object, callable]:
+def _source(hub: Hub) -> tuple[str, dict, object, callable]:
     """ESI route, query, login and which orders count."""
-    kind = hub_kind(s.hub_id)
+    kind = hub_kind(hub.id)
     if kind == "structure":
-        c = s.esi_character
+        c = hub.character
         if c is None:
             raise MarketError("Pick a character that can see the structure's market")
         token = getattr(c, "token", None)
         if not (token and token.has_scopes(STRUCTURE_SCOPE)):
             raise MarketError(f"{c.name}'s login can't read structure markets; they need to log in again")
-        return f"/markets/structures/{s.hub_id}", {}, c, lambda o: True
-    region = hub_region(s)
+        return f"/markets/structures/{hub.id}", {}, c, lambda o: True
+    region = hub_region(hub.id)
     if region is None:
-        raise MarketError(f"Unknown market {s.hub_id}: use a station, system or region id")
+        raise MarketError(f"Unknown market {hub.id}: use a station, system or region id")
     if kind == "station":
-        return f"/markets/{region}/orders", {"order_type": "all"}, None, lambda o: o.get("location_id") == s.hub_id
+        return f"/markets/{region}/orders", {"order_type": "all"}, None, lambda o: o.get("location_id") == hub.id
     if kind == "system":
-        return f"/markets/{region}/orders", {"order_type": "all"}, None, lambda o: o.get("system_id") == s.hub_id
+        return f"/markets/{region}/orders", {"order_type": "all"}, None, lambda o: o.get("system_id") == hub.id
     return f"/markets/{region}/orders", {"order_type": "all"}, None, lambda o: True
 
 
-def pull(settings: BuybackSettings | None = None, client=None) -> int:
-    """Read the hub's whole order book and store every item's prices. Items no longer on sale drop to 0."""
+def pull(settings: BuybackSettings | None = None, client=None, hubs: list[Hub] | None = None) -> int:
+    """Read the hubs' whole order books (the site's by default) and store every item's prices. Hubs in one region
+    share one read of it. Items no longer on sale drop to 0."""
     from conduit.esi.client import esi
 
     s = settings or BuybackSettings.load()
     client = client or esi()
-    path, params, character, wanted = _source(s)
-    books: dict[int, dict[str, list]] = defaultdict(lambda: {"buy": [], "sell": []})
-    page, pages = 1, 1
-    while page <= pages:
-        resp = client.get(path, character=character, params={**params, "page": page} if page > 1 else (params or None), cache_response=False)
-        pages = resp.pages
-        for o in resp.data or ():
-            if wanted(o):
-                books[o["type_id"]]["buy" if o.get("is_buy_order") else "sell"].append((Decimal(str(o["price"])), int(o["volume_remain"])))
-        page += 1
-    prices = aggregate(books, s.instant_prices)
+    reads: dict[tuple, tuple] = {}
+    for hub in hubs if hubs is not None else [site_hub(s)]:
+        path, params, character, wanted = _source(hub)
+        reads.setdefault((path, getattr(character, "pk", None)), (path, params, character, []))[3].append((hub, wanted))
+    total = 0
+    for path, params, character, members in reads.values():
+        books = {hub.id: defaultdict(lambda: {"buy": [], "sell": []}) for hub, _ in members}
+        page, pages = 1, 1
+        while page <= pages:
+            resp = client.get(path, character=character, params={**params, "page": page} if page > 1 else (params or None), cache_response=False)
+            pages = resp.pages
+            for o in resp.data or ():
+                for hub, wanted in members:
+                    if wanted(o):
+                        books[hub.id][o["type_id"]]["buy" if o.get("is_buy_order") else "sell"].append((Decimal(str(o["price"])), int(o["volume_remain"])))
+            page += 1
+        for hub, _ in members:
+            total += _store(hub, aggregate(books[hub.id], s.instant_prices), pages)
+    return total
+
+
+def _store(hub: Hub, prices: dict[int, tuple[Decimal, Decimal]], pages: int) -> int:
     now = timezone.now()
-    upsert(ItemPrice, [ItemPrice(type_id=t, buy=b, sell=sl, updated_at=now) for t, (b, sl) in prices.items()],
-           unique_fields=["type_id"], update_fields=["buy", "sell", "updated_at"], batch_size=2000)
-    ItemPrice.objects.exclude(type_id__in=list(prices)).update(buy=0, sell=0, updated_at=now)
-    s.market_pulled_at = now
-    s.market_note = f"{len(prices):,} items from {pages} page{'s' if pages != 1 else ''}"
-    s.save(update_fields=["market_pulled_at", "market_note"])
+    upsert(ItemPrice, [ItemPrice(hub_id=hub.id, type_id=t, buy=b, sell=sl, updated_at=now) for t, (b, sl) in prices.items()],
+           unique_fields=["hub_id", "type_id"], update_fields=["buy", "sell", "updated_at"], batch_size=2000)
+    ItemPrice.objects.filter(hub_id=hub.id).exclude(type_id__in=list(prices)).update(buy=0, sell=0, updated_at=now)
+    MarketRead.objects.update_or_create(hub_id=hub.id, defaults={
+        "pulled_at": now, "note": f"{len(prices):,} items from {pages} page{'s' if pages != 1 else ''}"})
     return len(prices)
 
 
+def _failed(hubs: list[Hub], exc: Exception) -> None:
+    for hub in hubs:
+        MarketRead.objects.update_or_create(hub_id=hub.id, defaults={"note": f"Last read failed: {exc}"[:300]})
+    log.warning("Couldn't read the market at %s: %s", ", ".join(h.name for h in hubs), exc)
+
+
 def pull_once(client=None) -> int | None:
-    """``pull`` unless one is already running (they take a minute or two)."""
+    """``pull`` the markets in use that are due, unless a read is already running (they take a minute or two). One
+    market failing doesn't stop the others."""
     s = BuybackSettings.load()
     if s.price_source != BuybackSettings.Source.ESI:
         return None
-    if s.market_pulled_at and timezone.now() - s.market_pulled_at < MIN_PULL_GAP:
-        return None
-    if not cache.add(PULL_LOCK, 1, timeout=30 * 60):
+    read = dict(MarketRead.objects.exclude(pulled_at=None).values_list("hub_id", "pulled_at"))
+    due = [h for h in hubs_in_use(s) if h.id not in read or timezone.now() - read[h.id] >= MIN_PULL_GAP]
+    if not due or not cache.add(PULL_LOCK, 1, timeout=30 * 60):
         return None
     try:
-        return pull(s, client)
-    except (MarketError, EsiError) as exc:
-        BuybackSettings.objects.filter(pk=s.pk).update(market_note=f"Last read failed: {exc}"[:300])
-        log.warning("Couldn't read the market: %s", exc)
-        return None
+        groups: dict[tuple, list[Hub]] = defaultdict(list)
+        for hub in due:
+            try:
+                path, _, character, _ = _source(hub)
+            except MarketError as exc:
+                _failed([hub], exc)
+                continue
+            groups[(path, getattr(character, "pk", None))].append(hub)
+        total, ok = 0, False
+        for hubs in groups.values():
+            try:
+                total += pull(s, client, hubs)
+                ok = True
+            except (MarketError, EsiError) as exc:
+                _failed(hubs, exc)
+        return total if ok else None
     finally:
         cache.delete(PULL_LOCK)
 
@@ -226,16 +291,16 @@ def fetch_history(type_ids, region_id: int, client=None) -> int:
             data = []
         days = [[d["date"], d["average"], d["volume"]] for d in data if d.get("date", "") >= cutoff]
         rows.append(PriceHistory(type_id=type_id, region_id=region_id, days=sorted(days), updated_at=now))
-    upsert(PriceHistory, rows, unique_fields=["type_id"], update_fields=["region_id", "days", "updated_at"])
+    upsert(PriceHistory, rows, unique_fields=["region_id", "type_id"], update_fields=["days", "updated_at"])
     return len(rows)
 
 
-def histories(type_ids, s: BuybackSettings) -> dict[int, PriceHistory]:
-    """History for the types, fetching up to ``HISTORY_INLINE`` missing or stale ones now and the rest in the
-    background. Empty when the guard is off or the hub's region is unknown."""
+def histories(type_ids, s: BuybackSettings, hub: Hub | None = None) -> dict[int, PriceHistory]:
+    """History for the types in the hub's region, fetching up to ``HISTORY_INLINE`` missing or stale ones now and
+    the rest in the background. Empty when the guard is off or the hub's region is unknown."""
     if not s.guard_enabled:
         return {}
-    region = hub_region(s)
+    region = hub_region((hub or site_hub(s)).id)
     if region is None:
         return {}
     ids = {int(t) for t in type_ids}

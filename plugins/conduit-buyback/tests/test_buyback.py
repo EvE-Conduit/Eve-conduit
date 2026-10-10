@@ -11,7 +11,7 @@ from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
 from conduit.sde.models import ItemCategory, ItemGroup, ItemType, MarketGroup, SolarSystem, TypeMaterial
 from conduit_buyback import contracts, prices, pricing, services
-from conduit_buyback.models import BuybackSettings, Contract, ItemPrice, ItemRule, Location, Program, Quote, WatchRule
+from conduit_buyback.models import BuybackSettings, Contract, ItemPrice, ItemRule, Location, MarketRead, Program, Quote, WatchRule
 from tests.conftest import make_user
 
 TRITANIUM, PYERITE, VELDSPAR, COMPRESSED_VELDSPAR, RIFTER, GUN, OFFICER, BLUE_LOOT = 34, 35, 1230, 62516, 587, 484, 9999, 30745
@@ -44,7 +44,8 @@ def sde(db):
     SolarSystem.objects.create(id=30000142, constellation_id=1, region_id=1, name="Jita", security_status=0.95)
     now = timezone.now()
     # ESI is the default source; the market was read just now (tests that need another source pick it).
-    BuybackSettings.objects.update_or_create(pk=1, defaults={"market_pulled_at": now})
+    BuybackSettings.load()
+    MarketRead.objects.create(hub_id=60003760, pulled_at=now)
     for tid, buy, sell in ((TRITANIUM, 4, 5), (PYERITE, 10, 12), (VELDSPAR, 15, 17), (COMPRESSED_VELDSPAR, 16, 18), (RIFTER, 400_000, 500_000),
                            (GUN, 20_000, 30_000), (OFFICER, 900_000_000, 1_000_000_000), (BLUE_LOOT, 150_000, 160_000)):
         ItemPrice.objects.create(type_id=tid, buy=buy, sell=sell, updated_at=now)
@@ -227,7 +228,7 @@ def test_stale_prices_are_fetched_and_kept_when_the_source_is_down(program, monk
     ItemPrice.objects.filter(type_id=TRITANIUM).update(updated_at=timezone.now() - timedelta(days=3))
     asked = []
 
-    def fake_fetch(ids, settings=None, client=None):
+    def fake_fetch(ids, settings=None, client=None, hub=None):
         asked.append(sorted(ids))
         raise prices.PriceError("down")
 
@@ -252,11 +253,11 @@ def test_fuzzwork_prices(sde):
     client = httpx.Client(transport=httpx.MockTransport(handler))
     BuybackSettings.objects.filter(pk=1).update(price_source="fuzzwork")
     assert prices.fetch([34, 35], client=client) == 2
-    assert (ItemPrice.objects.get(pk=34).buy, ItemPrice.objects.get(pk=34).sell) == (Decimal("4.10"), Decimal("4.90"))
-    assert ItemPrice.objects.get(pk=35).buy == 0  # unknown to the source: kept at 0 until stale
+    assert (ItemPrice.objects.get(type_id=34).buy, ItemPrice.objects.get(type_id=34).sell) == (Decimal("4.10"), Decimal("4.90"))
+    assert ItemPrice.objects.get(type_id=35).buy == 0  # unknown to the source: kept at 0 until stale
     BuybackSettings.objects.update_or_create(pk=1, defaults={"instant_prices": True})
     prices.fetch([34], client=client)
-    assert ItemPrice.objects.get(pk=34).buy == Decimal("4.20")
+    assert ItemPrice.objects.get(type_id=34).buy == Decimal("4.20")
 
 
 def test_janice_prices(sde):
@@ -272,7 +273,7 @@ def test_janice_prices(sde):
         prices.fetch([34])
     BuybackSettings.objects.filter(pk=1).update(janice_api_key="key")
     prices.fetch([34], client=httpx.Client(transport=httpx.MockTransport(handler)))
-    assert ItemPrice.objects.get(pk=34).sell == Decimal("5.50")
+    assert ItemPrice.objects.get(type_id=34).sell == Decimal("5.50")
 
 
 # --- contracts -------------------------------------------------------------------------------------------------------

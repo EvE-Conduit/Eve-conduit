@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 
 D0 = Decimal("0")
+JITA_44 = 60003760
 
 
 class BuybackSettings(models.Model):
@@ -17,7 +18,8 @@ class BuybackSettings(models.Model):
     #: ESI, straight from CCP, unless the site prefers a third party.
     price_source = models.CharField(max_length=10, choices=Source.choices, default=Source.ESI)
     #: ESI and Fuzzwork market: a station, system or region id (Jita 4-4 by default), or for ESI a player structure.
-    hub_id = models.BigIntegerField(default=60003760)
+    #: Programs use it unless they pick their own.
+    hub_id = models.BigIntegerField(default=JITA_44)
     hub_name = models.CharField(max_length=100, default="Jita 4-4")
     #: Best order prices instead of the average of the top 5% of orders.
     instant_prices = models.BooleanField(default=False)
@@ -25,9 +27,6 @@ class BuybackSettings(models.Model):
     janice_api_key = models.CharField(max_length=100, blank=True)
     #: Reads a player structure's market for the ESI source (needs docking access there).
     esi_character = models.ForeignKey("accounts.Character", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    #: The last time the ESI source read the whole market, and what came of it.
-    market_pulled_at = models.DateTimeField(null=True, blank=True)
-    market_note = models.CharField(max_length=300, blank=True)
     #: Manipulation guard: a price this many percent above its recent traded average is suspect. Then the average is
     #: used if the item trades often enough to trust it, otherwise the lower price, and the item is checked by hand.
     guard_enabled = models.BooleanField(default=True)
@@ -88,6 +87,9 @@ class Program(models.Model):
     managers = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="buyback_programs")
     expiration_days = models.PositiveSmallIntegerField(default=14)
     price_type = models.CharField(max_length=5, choices=PriceType.choices, default=PriceType.BUY)
+    #: Its own market (like the settings' ``hub_id``); empty: the site's. A player structure is read with the owner's login.
+    hub_id = models.BigIntegerField(null=True, blank=True)
+    hub_name = models.CharField(max_length=100, blank=True)
     #: Percent taken off every item's price.
     tax = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("10"))
     #: ISK per m³ taken off for hauling.
@@ -180,13 +182,25 @@ class WatchRule(models.Model):
         ]
 
 
-class ItemPrice(models.Model):
-    """Market prices at the hub, per unit, from the configured source."""
+class MarketRead(models.Model):
+    """The last time the ESI source read a market's whole order book, and what came of it."""
 
-    type_id = models.IntegerField(primary_key=True)
+    hub_id = models.BigIntegerField(primary_key=True)
+    pulled_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=300, blank=True)
+
+
+class ItemPrice(models.Model):
+    """Market prices at a hub, per unit, from the configured source."""
+
+    hub_id = models.BigIntegerField(default=JITA_44)
+    type_id = models.IntegerField()
     buy = models.DecimalField(max_digits=20, decimal_places=2, default=D0)
     sell = models.DecimalField(max_digits=20, decimal_places=2, default=D0)
     updated_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["hub_id", "type_id"], name="buyback_item_price_unique")]
 
     def price(self, kind: str) -> Decimal:
         if kind == "buy":
@@ -199,13 +213,16 @@ class ItemPrice(models.Model):
 
 
 class PriceHistory(models.Model):
-    """Recent daily trading of a type in the hub's region, from ESI: the manipulation guard's yardstick."""
+    """Recent daily trading of a type in a hub's region, from ESI: the manipulation guard's yardstick."""
 
-    type_id = models.IntegerField(primary_key=True)
     region_id = models.IntegerField()
+    type_id = models.IntegerField()
     #: ``[[date, average, volume], ...]``, last 30 days with trades, oldest first.
     days = models.JSONField(default=list)
     updated_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["region_id", "type_id"], name="buyback_price_history_unique")]
 
 
 class Quote(models.Model):
@@ -222,6 +239,8 @@ class Quote(models.Model):
     #: Has items on the program's manual review list.
     flagged = models.BooleanField(default=False)
     public = models.BooleanField(default=False)
+    #: The market it was priced at (the program's may change later).
+    hub_name = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

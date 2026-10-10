@@ -14,7 +14,7 @@ from django.utils import timezone
 from conduit.eve.models import EveName
 from conduit.sde.models import ItemGroup, ItemType, MarketGroup, SolarSystem, type_icon_url
 
-from . import pricing
+from . import market, pricing
 from .models import BuybackSettings, Contract, ItemRule, Location, Program, Quote, WatchRule
 
 OPEN = ("outstanding", "in_progress")
@@ -115,7 +115,7 @@ def quote(program: Program, text: str, user=None, public: bool = False) -> dict:
         try:
             q = Quote.objects.create(
                 program=program, user=user if user and user.is_authenticated else None, tracking_number=new_tracking_number(program, s),
-                lines=result.lines, value=result.value, volume=result.volume, flagged=result.flagged, public=public,
+                lines=result.lines, value=result.value, volume=result.volume, flagged=result.flagged, public=public, hub_name=result.hub,
             )
             break
         except IntegrityError:  # the same random number twice: try another
@@ -134,6 +134,7 @@ def appraisal_out(a: pricing.Appraisal) -> dict:
         "flagged": a.flagged,
         "accepted_count": len(a.accepted),
         "rejected_count": len(a.rejected),
+        "hub": a.hub,
     }
 
 
@@ -158,6 +159,7 @@ def quote_out(q: Quote, *, with_lines: bool = False) -> dict:
         "flagged": q.flagged,
         "created_at": q.created_at,
         "items": len([ln for ln in q.lines if ln.get("accepted")]),
+        "hub": q.hub_name,
         "terms": contract_terms(q.program),
     }
     if with_lines:
@@ -200,8 +202,8 @@ def _names(ids) -> dict[int, str]:
     return dict(EveName.objects.filter(pk__in=ids).values_list("pk", "name"))
 
 
-def program_out(p: Program, user=None) -> dict:
-    """What sellers see: the terms, every rule that changes a price, nothing internal."""
+def program_out(p: Program, user=None, settings: BuybackSettings | None = None) -> dict:
+    """What sellers see: the terms, where items are priced, every rule that changes a price, nothing internal."""
     rules = list(p.item_rules.all())
     names = dict(ItemType.objects.filter(pk__in=[r.type_id for r in rules]).values_list("pk", "name"))
     out = {
@@ -226,6 +228,7 @@ def program_out(p: Program, user=None) -> dict:
         "red_loot_npc": p.red_loot_npc,
         "t1_refined": p.t1_refined,
         "t1_refining_rate": float(p.t1_refining_rate),
+        "prices": prices_out(settings, p),
         "terms": contract_terms(p),
         "item_rules": sorted(
             [{"type_id": r.type_id, "name": names.get(r.type_id, f"Type {r.type_id}"), "icon": type_icon_url(r.type_id, 32), "tax": float(r.tax),
@@ -237,9 +240,11 @@ def program_out(p: Program, user=None) -> dict:
     return out
 
 
-def prices_out(settings: BuybackSettings | None = None) -> dict:
+def prices_out(settings: BuybackSettings | None = None, program: Program | None = None) -> dict:
+    """Where items are priced: the program's market, or the site's."""
     s = settings or BuybackSettings.load()
-    return {"source": s.get_price_source_display(), "hub": "Jita 4-4" if s.price_source == "janice" else s.hub_name,
+    hub = market.program_hub(program, s) if program else market.site_hub(s)
+    return {"source": s.get_price_source_display(), "hub": hub.name, "hub_id": hub.id,
             "instant": s.instant_prices, "guard": s.guard_enabled, "guard_days": s.guard_days}
 
 
@@ -422,6 +427,8 @@ def manage_out(p: Program) -> dict:
         "notify_managers": p.notify_managers,
         "wallet_division": p.wallet_division,
         "tracking_prefix": p.tracking_prefix,
+        "hub_id": p.hub_id,
+        "hub_name": p.hub_name,
         "owner": owner_out(p),
         "watch_rules": watch_rules_out(p),
     }
@@ -464,6 +471,9 @@ def save_program(user, program: Program | None, data: dict) -> Program:
     locations = list(Location.objects.filter(pk__in=location_ids))
     if not locations:
         raise BuybackError("Pick at least one location")
+    hub_id = data.get("hub_id") or None
+    if hub_id:
+        _check_hub(hub_id, owner)
     program = program or Program()
     for f in PROGRAM_FIELDS & set(data):
         value = data[f]
@@ -473,6 +483,8 @@ def save_program(user, program: Program | None, data: dict) -> Program:
     program.name = name[:100]
     program.description = (program.description or "")[:4000]
     program.owner = owner
+    program.hub_id = hub_id
+    program.hub_name = ((data.get("hub_name") or "").strip() or f"Market {hub_id}")[:100] if hub_id else ""
     program.save()
     program.locations.set(locations)
     from conduit.accounts.models import User
@@ -482,6 +494,19 @@ def save_program(user, program: Program | None, data: dict) -> Program:
     program.states.set(data.get("state_ids") or [])
     program.groups.set(data.get("group_ids") or [])
     return program
+
+
+def _check_hub(hub_id: int, owner) -> None:
+    """A program's own market must exist; a player structure's is read with the owner's login, through ESI."""
+    s = BuybackSettings.load()
+    if market.hub_kind(hub_id) == "structure":
+        if s.price_source != BuybackSettings.Source.ESI:
+            raise BuybackError("Only the ESI price source can read a player structure's market")
+        token = getattr(owner, "token", None)
+        if not (token and token.has_scopes(market.STRUCTURE_SCOPE)):
+            raise BuybackError(f"{owner.name} reads the structure's market, but their login can't: they need to log in again")
+    elif market.hub_region(hub_id) is None:
+        raise BuybackError("No such market: pick a trade hub, or a region, system or station")
 
 
 def save_location(location: Location | None, data: dict) -> Location:
