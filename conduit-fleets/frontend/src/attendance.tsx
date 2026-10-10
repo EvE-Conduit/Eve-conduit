@@ -17,6 +17,7 @@ interface Row {
   registered: boolean;
   name: string;
   portrait: string;
+  fats: number;
   fleets: number;
   characters: string[];
   last: string;
@@ -33,14 +34,14 @@ export function AttendancePage() {
     queryFn: () => api.get<{ members: Row[] }>(`${BASE}/stats/members?days=${days}${type ? `&type=${type}` : ""}`),
     placeholderData: (prev) => prev,
   });
-  const max = Math.max(1, ...(data?.members ?? []).map((m) => m.fleets));
+  const max = Math.max(1, ...(data?.members ?? []).map((m) => m.fats));
   return (
     <>
       <PageHeader
         eyebrow={<Link to="/p/fleets" className="inline-flex items-center gap-1 hover:text-text"><ArrowLeft className="size-3" /> Fleets</Link>}
         title="Attendance"
         icon={<Chart />}
-        description="Fleets each member flew in, with any of their characters. Use the Fleet attendance rule on a group to require it."
+        description="FATs per member with any of their characters: one per fleet, or per FAT round when the FC started more than one. Use the Fleet attendance rule on a group to require it."
         actions={<a href={`${BASE}/stats/members.csv?days=${days}${type ? `&type=${type}` : ""}`} download><Button variant="ghost"><Download /> CSV</Button></a>}
       />
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
@@ -61,7 +62,7 @@ export function AttendancePage() {
               <THead>
                 <tr>
                   <Th>Member</Th>
-                  <Th>Fleets</Th>
+                  <Th>FATs</Th>
                   <Th>Last fleet</Th>
                 </tr>
               </THead>
@@ -79,8 +80,8 @@ export function AttendancePage() {
                     </Td>
                     <Td className="w-1/3">
                       <div className="flex items-center gap-3">
-                        <div className="h-1.5 flex-1 bg-hover"><div className="h-full bg-accent" style={{ width: `${(m.fleets / max) * 100}%` }} /></div>
-                        <span className="w-8 text-right font-mono tabular-nums">{m.fleets}</span>
+                        <div className="h-1.5 flex-1 bg-hover"><div className="h-full bg-accent" style={{ width: `${(m.fats / max) * 100}%` }} /></div>
+                        <span className="w-8 text-right font-mono tabular-nums" title={`${m.fleets} fleet${m.fleets === 1 ? "" : "s"}`}>{m.fats}</span>
                       </div>
                     </Td>
                     <Td className="whitespace-nowrap text-sm text-muted">{timeAgo(m.last)}</Td>

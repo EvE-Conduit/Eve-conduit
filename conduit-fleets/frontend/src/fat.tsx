@@ -11,7 +11,9 @@ import { BASE, type FleetBrief } from "./types";
 interface LinkInfo extends FleetBrief {
   notes: string;
   open: boolean;
-  characters: { id: number; name: string; portrait: string; registered: boolean }[];
+  tracked: boolean;
+  round: number;
+  characters: { id: number; name: string; portrait: string; registered: boolean; allowed: boolean }[];
 }
 
 export function FatPage() {
@@ -32,7 +34,7 @@ export function FatPage() {
 
   if (error) return <EmptyState icon={<Rocket />} title="This FAT link doesn't exist" description="Check the link with your FC." />;
   if (isLoading || !data) return <Skeleton className="mx-auto h-80 max-w-xl" />;
-  const open = data.characters.filter((c) => !c.registered);
+  const open = data.characters.filter((c) => !c.registered && c.allowed);
   // The main (first) character is ticked to start with.
   const chosen = picked ?? new Set(open.slice(0, 1).map((c) => c.id));
   const toggle = (id: number) => {
@@ -52,20 +54,26 @@ export function FatPage() {
             <Alert tone="warning" title="This link has closed">Ask the FC to add you if you flew in this fleet.</Alert>
           ) : (
             <>
-              <div className="text-sm font-medium">Which characters flew in this fleet?</div>
+              {data.tracked && (
+                <Alert tone="info" title="This fleet is tracked">
+                  Everyone in the in-game fleet gets a FAT by itself within a minute. Characters that weren't in it can't be registered here.
+                </Alert>
+              )}
+              <div className="text-sm font-medium">Which characters flew in this fleet{data.round > 1 ? ` (FAT round ${data.round})` : ""}?</div>
               <ul className="divide-y divide-border border border-border">
                 {data.characters.map((c) => (
                   <li key={c.id}>
-                    <label className={`flex items-center gap-3 px-3 py-2.5 ${c.registered ? "opacity-60" : "cursor-pointer hover:bg-hover"}`}>
-                      <input type="checkbox" className="size-4 accent-accent" disabled={c.registered} checked={c.registered || chosen.has(c.id)} onChange={() => toggle(c.id)} />
+                    <label className={`flex items-center gap-3 px-3 py-2.5 ${c.registered || !c.allowed ? "opacity-60" : "cursor-pointer hover:bg-hover"}`}>
+                      <input type="checkbox" className="size-4 accent-accent" disabled={c.registered || !c.allowed} checked={c.registered || chosen.has(c.id)} onChange={() => toggle(c.id)} />
                       <Avatar src={c.portrait} name={c.name} size="sm" />
                       <span className="flex-1 text-sm">{c.name}</span>
-                      {c.registered && <span className="flex items-center gap-1 text-xs text-success-fg"><Check className="size-3.5" /> FAT</span>}
+                      {c.registered ? <span className="flex items-center gap-1 text-xs text-success-fg"><Check className="size-3.5" /> FAT</span>
+                        : !c.allowed && <span className="text-xs text-subtle">not in the fleet</span>}
                     </label>
                   </li>
                 ))}
               </ul>
-              <Button variant="primary" className="w-full" disabled={chosen.size === 0} loading={register.isPending} onClick={() => register.mutate([...chosen])}>
+              <Button variant="primary" className="w-full" disabled={chosen.size === 0 || !open.length} loading={register.isPending} onClick={() => register.mutate([...chosen])}>
                 <Check /> Register {chosen.size || ""} FAT{chosen.size === 1 ? "" : "s"}
               </Button>
             </>

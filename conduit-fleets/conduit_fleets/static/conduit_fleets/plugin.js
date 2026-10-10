@@ -186,17 +186,17 @@ function de() {
 				className: "grid gap-4 sm:grid-cols-3",
 				children: [
 					/* @__PURE__ */ H(v, {
-						label: "My fleets · 30 days",
+						label: "My FATs · 30 days",
 						value: d.me.counts.days_30,
 						tone: d.me.counts.days_30 ? "accent" : void 0,
 						hint: d.me.by_type_30.map((e) => `${e.count} ${e.type}`).join(" · ") || "none yet"
 					}),
 					/* @__PURE__ */ H(v, {
-						label: "My fleets · 90 days",
+						label: "My FATs · 90 days",
 						value: d.me.counts.days_90
 					}),
 					/* @__PURE__ */ H(v, {
-						label: "My fleets · all time",
+						label: "My FATs · all time",
 						value: d.me.counts.all
 					})
 				]
@@ -298,27 +298,35 @@ function de() {
 						children: d.me.fleets.map((e) => /* @__PURE__ */ H("li", { children: /* @__PURE__ */ U(I, {
 							to: `/p/fleets/${e.id}`,
 							className: "flex items-center gap-3 px-card py-3 hover:bg-hover",
-							children: [/* @__PURE__ */ U("div", {
-								className: "min-w-0 flex-1",
-								children: [/* @__PURE__ */ U("div", {
-									className: "flex items-center gap-2 font-medium",
-									children: [
-										e.name,
-										" ",
-										/* @__PURE__ */ H(Q, { type: e.type })
-									]
-								}), /* @__PURE__ */ U("div", {
-									className: "truncate text-xs text-subtle",
-									children: [
-										e.characters.join(", "),
-										" · FC ",
-										e.fc?.name ?? "unknown"
-									]
-								})]
-							}), /* @__PURE__ */ H("span", {
-								className: "whitespace-nowrap text-xs text-muted",
-								children: j(e.started_at)
-							})]
+							children: [
+								/* @__PURE__ */ U("div", {
+									className: "min-w-0 flex-1",
+									children: [/* @__PURE__ */ U("div", {
+										className: "flex items-center gap-2 font-medium",
+										children: [
+											e.name,
+											" ",
+											/* @__PURE__ */ H(Q, { type: e.type })
+										]
+									}), /* @__PURE__ */ U("div", {
+										className: "truncate text-xs text-subtle",
+										children: [
+											e.characters.join(", "),
+											" · FC ",
+											e.fc?.name ?? "unknown"
+										]
+									})]
+								}),
+								e.fats > 1 && /* @__PURE__ */ U(n, {
+									tone: "accent",
+									size: "xs",
+									children: [e.fats, " FATs"]
+								}),
+								/* @__PURE__ */ H("span", {
+									className: "whitespace-nowrap text-xs text-muted",
+									children: j(e.started_at)
+								})
+							]
 						}) }, e.id))
 					}) })
 				})]
@@ -488,7 +496,7 @@ function me() {
 		],
 		queryFn: () => k.get(`${Z}/stats/members?days=${e}${o ? `&type=${o}` : ""}`),
 		placeholderData: (e) => e
-	}), p = Math.max(1, ...(u?.members ?? []).map((e) => e.fleets));
+	}), p = Math.max(1, ...(u?.members ?? []).map((e) => e.fats));
 	return /* @__PURE__ */ U(V, { children: [/* @__PURE__ */ H(f, {
 		eyebrow: /* @__PURE__ */ U(I, {
 			to: "/p/fleets",
@@ -497,7 +505,7 @@ function me() {
 		}),
 		title: "Attendance",
 		icon: /* @__PURE__ */ H(X, {}),
-		description: "Fleets each member flew in, with any of their characters. Use the Fleet attendance rule on a group to require it.",
+		description: "FATs per member with any of their characters: one per fleet, or per FAT round when the FC started more than one. Use the Fleet attendance rule on a group to require it.",
 		actions: /* @__PURE__ */ H("a", {
 			href: `${Z}/stats/members.csv?days=${e}${o ? `&type=${o}` : ""}`,
 			download: !0,
@@ -543,7 +551,7 @@ function me() {
 			title: "No FATs in this period"
 		}) : /* @__PURE__ */ U(S, { children: [/* @__PURE__ */ H(b, { children: /* @__PURE__ */ U("tr", { children: [
 			/* @__PURE__ */ H(D, { children: "Member" }),
-			/* @__PURE__ */ H(D, { children: "Fleets" }),
+			/* @__PURE__ */ H(D, { children: "FATs" }),
 			/* @__PURE__ */ H(D, { children: "Last fleet" })
 		] }) }), /* @__PURE__ */ H("tbody", { children: u.members.map((e) => /* @__PURE__ */ U(O, { children: [
 			/* @__PURE__ */ H(T, { children: /* @__PURE__ */ U("div", {
@@ -575,11 +583,12 @@ function me() {
 						className: "h-1.5 flex-1 bg-hover",
 						children: /* @__PURE__ */ H("div", {
 							className: "h-full bg-accent",
-							style: { width: `${e.fleets / p * 100}%` }
+							style: { width: `${e.fats / p * 100}%` }
 						})
 					}), /* @__PURE__ */ H("span", {
 						className: "w-8 text-right font-mono tabular-nums",
-						children: e.fleets
+						title: `${e.fleets} fleet${e.fleets === 1 ? "" : "s"}`,
+						children: e.fats
 					})]
 				})
 			}),
@@ -687,7 +696,7 @@ function ge() {
 		description: "Check the link with your FC."
 	});
 	if (c || !s) return /* @__PURE__ */ H(g, { className: "mx-auto h-80 max-w-xl" });
-	let h = s.characters.filter((e) => !e.registered), _ = d ?? new Set(h.slice(0, 1).map((e) => e.id)), v = (e) => {
+	let h = s.characters.filter((e) => !e.registered && e.allowed), _ = d ?? new Set(h.slice(0, 1).map((e) => e.id)), v = (e) => {
 		let t = new Set(_);
 		t.has(e) ? t.delete(e) : t.add(e), p(t);
 	};
@@ -713,19 +722,28 @@ function ge() {
 					children: s.notes
 				}),
 				s.open ? /* @__PURE__ */ U(V, { children: [
-					/* @__PURE__ */ H("div", {
+					s.tracked && /* @__PURE__ */ H(e, {
+						tone: "info",
+						title: "This fleet is tracked",
+						children: "Everyone in the in-game fleet gets a FAT by itself within a minute. Characters that weren't in it can't be registered here."
+					}),
+					/* @__PURE__ */ U("div", {
 						className: "text-sm font-medium",
-						children: "Which characters flew in this fleet?"
+						children: [
+							"Which characters flew in this fleet",
+							s.round > 1 ? ` (FAT round ${s.round})` : "",
+							"?"
+						]
 					}),
 					/* @__PURE__ */ H("ul", {
 						className: "divide-y divide-border border border-border",
 						children: s.characters.map((e) => /* @__PURE__ */ H("li", { children: /* @__PURE__ */ U("label", {
-							className: `flex items-center gap-3 px-3 py-2.5 ${e.registered ? "opacity-60" : "cursor-pointer hover:bg-hover"}`,
+							className: `flex items-center gap-3 px-3 py-2.5 ${e.registered || !e.allowed ? "opacity-60" : "cursor-pointer hover:bg-hover"}`,
 							children: [
 								/* @__PURE__ */ H("input", {
 									type: "checkbox",
 									className: "size-4 accent-accent",
-									disabled: e.registered,
+									disabled: e.registered || !e.allowed,
 									checked: e.registered || _.has(e.id),
 									onChange: () => v(e.id)
 								}),
@@ -738,9 +756,12 @@ function ge() {
 									className: "flex-1 text-sm",
 									children: e.name
 								}),
-								e.registered && /* @__PURE__ */ U("span", {
+								e.registered ? /* @__PURE__ */ U("span", {
 									className: "flex items-center gap-1 text-xs text-success-fg",
 									children: [/* @__PURE__ */ H(Y, { className: "size-3.5" }), " FAT"]
+								}) : !e.allowed && /* @__PURE__ */ H("span", {
+									className: "text-xs text-subtle",
+									children: "not in the fleet"
 								})
 							]
 						}) }, e.id))
@@ -748,7 +769,7 @@ function ge() {
 					/* @__PURE__ */ U(r, {
 						variant: "primary",
 						className: "w-full",
-						disabled: _.size === 0,
+						disabled: _.size === 0 || !h.length,
 						loading: m.isPending,
 						onClick: () => m.mutate([..._]),
 						children: [
@@ -865,9 +886,9 @@ function _e() {
 					/* @__PURE__ */ U(i, { children: [
 						/* @__PURE__ */ H(o, {
 							title: `Pilots · ${h.pilots}`,
-							description: `${h.members} member${h.members === 1 ? "" : "s"} on this site`
+							description: `${h.members} member${h.members === 1 ? "" : "s"} on this site${h.round > 1 ? ` · ${h.fat_count} FATs over ${h.round} rounds` : ""}`
 						}),
-						h.can_edit && A && /* @__PURE__ */ H(be, {
+						h.can_edit && A && /* @__PURE__ */ H(xe, {
 							fleetId: h.id,
 							onAdded: (e) => C(e, "Added")
 						}),
@@ -877,6 +898,7 @@ function _e() {
 							description: h.can_edit ? "Track your in-game fleet or share the FAT link." : void 0
 						}) : /* @__PURE__ */ U(S, { children: [/* @__PURE__ */ H(b, { children: /* @__PURE__ */ U("tr", { children: [
 							/* @__PURE__ */ H(D, { children: "Pilot" }),
+							h.round > 1 && /* @__PURE__ */ H(D, { children: "Round" }),
 							/* @__PURE__ */ H(D, { children: "Ship" }),
 							/* @__PURE__ */ H(D, { children: "System" }),
 							/* @__PURE__ */ H(D, { children: "How" }),
@@ -899,6 +921,10 @@ function _e() {
 									})]
 								})]
 							}) }),
+							h.round > 1 && /* @__PURE__ */ H(T, {
+								className: "font-mono text-sm tabular-nums text-muted",
+								children: e.round
+							}),
 							/* @__PURE__ */ H(T, { children: e.ship?.name ? /* @__PURE__ */ U("span", {
 								className: "flex items-center gap-2 text-sm",
 								children: [/* @__PURE__ */ H("img", {
@@ -939,13 +965,18 @@ function _e() {
 			}), /* @__PURE__ */ U("div", {
 				className: "space-y-6",
 				children: [
+					h.can_edit && /* @__PURE__ */ H(ye, {
+						data: h,
+						live: A,
+						onNew: () => x("round")
+					}),
 					h.can_edit && h.tracking_info && /* @__PURE__ */ H(ve, {
 						data: h,
 						live: A,
 						busy: w.isPending,
 						onAct: (e) => w.mutate(e)
 					}),
-					h.can_edit && h.link && /* @__PURE__ */ H(ye, {
+					h.can_edit && h.link && /* @__PURE__ */ H(be, {
 						data: h,
 						live: A,
 						onAct: (e) => w.mutate(e)
@@ -975,11 +1006,26 @@ function _e() {
 			})
 		}),
 		/* @__PURE__ */ H(s, {
+			open: y === "round",
+			onOpenChange: (e) => !e && x(null),
+			title: `Start FAT round ${h.round + 1}?`,
+			description: h.tracking ? "Everyone in the in-game fleet gets another FAT now, and so does anyone who joins during this round." : "Pilots can get another FAT from the FAT link, or you add them.",
+			confirmLabel: /* @__PURE__ */ U(V, { children: [
+				/* @__PURE__ */ H(q, {}),
+				" Start round ",
+				h.round + 1
+			] }),
+			onConfirm: () => w.mutateAsync({
+				path: "/rounds",
+				msg: `FAT round ${h.round + 1} started`
+			})
+		}),
+		/* @__PURE__ */ H(s, {
 			open: y === "delete",
 			onOpenChange: (e) => !e && x(null),
 			danger: !0,
 			title: `Delete ${h.name}?`,
-			description: `Its ${h.pilots} FATs are deleted too, which lowers everyone's attendance.`,
+			description: `Its ${h.fat_count} FATs are deleted too, which lowers everyone's attendance.`,
 			confirmLabel: /* @__PURE__ */ U(V, { children: [/* @__PURE__ */ H(J, {}), " Delete"] }),
 			onConfirm: () => E.mutateAsync()
 		})
@@ -1103,7 +1149,47 @@ function ve({ data: t, live: n, busy: s, onAct: c }) {
 		})] })
 	})] });
 }
-function ye({ data: e, live: t, onAct: s }) {
+function ye({ data: e, live: t, onNew: s }) {
+	return /* @__PURE__ */ U(i, { children: [/* @__PURE__ */ H(o, {
+		title: "FAT rounds",
+		icon: /* @__PURE__ */ H(q, {}),
+		description: "Each round is one more FAT, e.g. every hour of a long op. Rounds are at least 15 minutes apart."
+	}), /* @__PURE__ */ U(a, {
+		className: "space-y-3 text-sm",
+		children: [/* @__PURE__ */ H("ul", {
+			className: "divide-y divide-border border border-border",
+			children: e.rounds.map((r) => /* @__PURE__ */ U("li", {
+				className: "flex items-center justify-between px-3 py-2",
+				children: [/* @__PURE__ */ U("span", { children: [
+					"Round ",
+					r.round,
+					r.round === e.round && t && /* @__PURE__ */ H(n, {
+						tone: "success",
+						size: "xs",
+						className: "ml-2",
+						children: "now"
+					}),
+					r.round === e.round && e.round_started_at && /* @__PURE__ */ U("span", {
+						className: "ml-2 text-xs text-subtle",
+						children: ["since ", j(e.round_started_at)]
+					})
+				] }), /* @__PURE__ */ U("span", {
+					className: "font-mono tabular-nums text-muted",
+					children: [
+						r.pilots,
+						" pilot",
+						r.pilots === 1 ? "" : "s"
+					]
+				})]
+			}, r.round))
+		}), t && /* @__PURE__ */ U(r, {
+			size: "sm",
+			onClick: s,
+			children: [/* @__PURE__ */ H(q, {}), " New FAT round"]
+		})]
+	})] });
+}
+function be({ data: e, live: t, onAct: s }) {
 	let c = e.link, l = `${window.location.origin}/p/fleets/fat/${c.code}`;
 	return /* @__PURE__ */ U(i, { children: [/* @__PURE__ */ H(o, {
 		title: "FAT link",
@@ -1111,67 +1197,74 @@ function ye({ data: e, live: t, onAct: s }) {
 		description: "Pilots open it and pick the characters they flew with."
 	}), /* @__PURE__ */ U(a, {
 		className: "space-y-3 text-sm",
-		children: [/* @__PURE__ */ U("div", {
-			className: "flex",
-			children: [/* @__PURE__ */ H(d, {
-				readOnly: !0,
-				value: l,
-				onFocus: (e) => e.target.select(),
-				className: "font-mono text-xs"
-			}), /* @__PURE__ */ H(r, {
-				size: "icon",
-				"aria-label": "Copy the FAT link",
-				onClick: () => navigator.clipboard.writeText(l).then(() => M.success("Link copied; paste it in fleet chat"), () => M.error("Couldn't copy; select the link instead")),
-				children: /* @__PURE__ */ H(ie, {})
-			})]
-		}), c.active ? /* @__PURE__ */ U("div", {
-			className: "flex flex-wrap items-center justify-between gap-2",
-			children: [/* @__PURE__ */ U(n, {
-				tone: "success",
-				children: ["Open", c.expires_at ? ` until ${new Date(c.expires_at).toLocaleTimeString([], {
-					hour: "2-digit",
-					minute: "2-digit"
-				})}` : ""]
-			}), /* @__PURE__ */ H(r, {
-				size: "sm",
-				variant: "ghost",
-				onClick: () => s({
-					path: "/link",
-					body: { open: !1 },
-					msg: "Link closed"
-				}),
-				children: "Close link"
-			})]
-		}) : t ? /* @__PURE__ */ U("div", {
-			className: "flex flex-wrap items-center justify-between gap-2",
-			children: [/* @__PURE__ */ H(n, { children: "Closed" }), /* @__PURE__ */ U("div", {
-				className: "flex gap-1",
-				children: [/* @__PURE__ */ H(r, {
-					size: "sm",
-					onClick: () => s({
-						path: "/link",
-						body: {
-							open: !0,
-							minutes: 30
-						},
-						msg: "Link open for 30 minutes"
-					}),
-					children: "Open 30 min"
+		children: [
+			c.tracked_only && /* @__PURE__ */ H("p", {
+				className: "text-xs text-muted",
+				children: "This fleet is tracked, so the link can't add anyone: it only takes characters seen in the in-game fleet this round, who already have their FAT."
+			}),
+			/* @__PURE__ */ U("div", {
+				className: "flex",
+				children: [/* @__PURE__ */ H(d, {
+					readOnly: !0,
+					value: l,
+					onFocus: (e) => e.target.select(),
+					className: "font-mono text-xs"
+				}), /* @__PURE__ */ H(r, {
+					size: "icon",
+					"aria-label": "Copy the FAT link",
+					onClick: () => navigator.clipboard.writeText(l).then(() => M.success("Link copied; paste it in fleet chat"), () => M.error("Couldn't copy; select the link instead")),
+					children: /* @__PURE__ */ H(ie, {})
+				})]
+			}),
+			c.active ? /* @__PURE__ */ U("div", {
+				className: "flex flex-wrap items-center justify-between gap-2",
+				children: [/* @__PURE__ */ U(n, {
+					tone: "success",
+					children: ["Open", c.expires_at ? ` until ${new Date(c.expires_at).toLocaleTimeString([], {
+						hour: "2-digit",
+						minute: "2-digit"
+					})}` : ""]
 				}), /* @__PURE__ */ H(r, {
 					size: "sm",
 					variant: "ghost",
 					onClick: () => s({
 						path: "/link",
-						body: { open: !0 },
-						msg: "Link open"
+						body: { open: !1 },
+						msg: "Link closed"
 					}),
-					children: "Open"
+					children: "Close link"
 				})]
-			})]
-		}) : /* @__PURE__ */ H(n, { children: "Closed with the fleet" })]
+			}) : t ? /* @__PURE__ */ U("div", {
+				className: "flex flex-wrap items-center justify-between gap-2",
+				children: [/* @__PURE__ */ H(n, { children: "Closed" }), /* @__PURE__ */ U("div", {
+					className: "flex gap-1",
+					children: [/* @__PURE__ */ H(r, {
+						size: "sm",
+						onClick: () => s({
+							path: "/link",
+							body: {
+								open: !0,
+								minutes: 30
+							},
+							msg: "Link open for 30 minutes"
+						}),
+						children: "Open 30 min"
+					}), /* @__PURE__ */ H(r, {
+						size: "sm",
+						variant: "ghost",
+						onClick: () => s({
+							path: "/link",
+							body: { open: !0 },
+							msg: "Link open"
+						}),
+						children: "Open"
+					})]
+				})]
+			}) : /* @__PURE__ */ H(n, { children: "Closed with the fleet" })
+		]
 	})] });
 }
-function be({ fleetId: e, onAdded: n }) {
+function xe({ fleetId: e, onAdded: n }) {
 	let [i, a] = B(""), [o, s] = B("");
 	z(() => {
 		let e = setTimeout(() => s(i.trim()), 250);
@@ -1238,7 +1331,7 @@ function be({ fleetId: e, onAdded: n }) {
 }
 //#endregion
 //#region src/index.tsx
-function xe() {
+function Se() {
 	let { data: e, isLoading: t } = P({
 		queryKey: ["fleets", "me"],
 		queryFn: () => k.get(`${Z}/me`)
@@ -1271,7 +1364,7 @@ function xe() {
 		})
 	});
 }
-var Se = A({
+var Ce = A({
 	routes: [
 		{
 			path: "",
@@ -1293,12 +1386,12 @@ var Se = A({
 	widgets: [{
 		id: "my-fats",
 		title: "Fleets",
-		Component: xe,
+		Component: Se,
 		size: "sm",
 		order: 35
 	}]
 });
 //#endregion
-export { Se as default };
+export { Ce as default };
 
-export const classes = ["!data","!o","!q","!type","-mt-2","@conduit/sdk","@tanstack/react-query","a","about","accent","accent-accent","act","action","actions","active","add","added","adding","afterwards","again","align","all","alt","and","animate-pulse","any","are","aria-label","as","at","attendance","attended","autoFocus","background","be","below","bg-accent","bg-hover","bg-success","bg-transparent","block","body","boolean","border","border-accent/50","border-b","border-border","border-l-2","border-t","boss","busy","but","by","by_type_30","can","canManage","can_edit","can_manage","can_motd","can_run","can_track","candidates","character","characters","chars","chat","checkbox","checked","children","chosen","cid","className","closed","code","color","confirmLabel","const","count","counts","create","currentColor","cursor-pointer","cx","cy","danger","data","days","days_30","days_90","default","defaultValue","defense","del","delete","deleted","description","disabled","divide-border","divide-y","doesn","dot","dq","each","edit","else","enabled","end","ended","ended_at","ends","error","esi","every","everyone","exist","expires_at","export","extends","eyebrow","false","far","fats","fc","fc-characters","few","fill","fleet","fleetId","fleet_type","fleets","flew","flex","flex-1","flex-wrap","fly","font-medium","font-mono","font-semibold","footer","for","from","function","gap-1","gap-2","gap-2.5","gap-3","gap-4","gap-6","get","gets","ghost","got","grant","granted","grid","group","h-1.5","h-16","h-28","h-40","h-80","h-9","h-96","h-fit","h-full","hand","has","have","haven","height","here","hint","hour","hours","hover:bg-hover","hover:text-text","href","icon","icon-xs","icons","id","ids","if","import","in","in-game","info","inline","inline-flex","instead","interactive","interface","is","isLoading","isPending","isn","it","items","items-center","items-end","its","justify-between","key","label","last","last_at","lasted","length","lg","link","link_minutes","live","loading","log","lowers","m-card","m12","m13.41","m7","main","manage_fleets","manual","matches","max","max-w-sm","max-w-xl","max-w-xs","me","member","members","method","min","min-w-0","min-w-40","mine","minute","minutes","missing","motd","motd_error","msg","mt-1","mt-2","must","mutationFn","mx-auto","my","my-fats","n","name","navigate","neutral","new","none","not","notes","now","null","number","o7","of","often","on","onAct","onAdded","onChange","onCheckedChange","onClick","onClose","onConfirm","onError","onFocus","onOpenChange","onSuccess","once","one","only","op","opacity-60","open","options","or","order","out","overview","own","p-card","page","paste","patch","path","per","period","pick","picked","picks","pills","pilot","pilots","pl-3","placeholder","placeholderData","portrait","post","primary","px-2","px-3","px-card","py-1","py-2","py-2.5","py-3","qc","queryFn","queryKey","react","react-router","read","readOnly","reads","recent","refetchInterval","refresh","register","registered","remove","removing","require","rest","retry","return","right","rotate-45","round","rounded-full","routes","rows","rule","rx","ry","s","see","select","server","set","setChar","setColor","setConfirm","setCreating","setDays","setDq","setForm","setMotd","setName","setPicked","setQ","setType","share","ship","ships","show","site","size","size-2","size-2.5","size-3","size-3.5","size-4","size-5","sm","sm:grid-cols-3","sm:grid-cols-[1fr_200px]","so","space-y-1","space-y-3","space-y-4","space-y-6","src","start","started","started_at","starting","stats","stays","still","stopped","stops","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subtle","success","system","t","tabular-nums","taken","text","text-3xl","text-center","text-muted","text-right","text-sm","text-subtle","text-success-fg","text-warning-fg","text-xs","that","the","their","them","they","this","ticked","time","timeAgo","title","to","toast","toggle","tone","towards","track","track_character","trackable","tracking","tracking_info","tracks","true","truncate","type","types","undefined","under","unknown","until","up","update","updated","url","use","useNavigate","useOverview","useParams","useQuery","useQueryClient","useState","used","user_id","value","variables","variant","via","viewBox","void","w-1/3","w-10","w-44","w-64","w-8","w-full","warning","which","whitespace-nowrap","whitespace-pre-line","who","widgets","width","with","xl:grid-cols-[1fr_320px]","xl:grid-cols-[1fr_360px]","xs","year","yet","you","your"];
+export const classes = ["!data","!o","!q","!type","-mt-2","@conduit/sdk","@tanstack/react-query","a","about","accent","accent-accent","act","action","actions","active","add","added","adding","afterwards","again","align","all","allowed","already","alt","and","animate-pulse","another","any","anyone","are","aria-label","as","at","attendance","attended","autoFocus","background","be","below","bg-accent","bg-hover","bg-success","bg-transparent","block","body","boolean","border","border-accent/50","border-b","border-border","border-l-2","border-t","boss","busy","but","by","by_type_30","can","canManage","can_edit","can_manage","can_motd","can_run","can_track","candidates","character","characters","chars","chat","checkbox","checked","children","chosen","cid","className","closed","code","color","confirmLabel","const","count","counts","create","current","currentColor","cursor-pointer","cx","cy","danger","data","days","days_30","days_90","default","defaultValue","defense","del","delete","deleted","description","disabled","divide-border","divide-y","does","doesn","dot","dq","during","each","edit","else","enabled","end","ended","ended_at","ends","error","esi","every","everyone","exist","expires_at","export","extends","eyebrow","false","far","fat_count","fats","fc","fc-characters","few","fill","fleet","fleetId","fleet_type","fleets","flew","flex","flex-1","flex-wrap","fly","font-medium","font-mono","font-semibold","footer","for","from","function","gap-1","gap-2","gap-2.5","gap-3","gap-4","gap-6","get","gets","ghost","got","grant","granted","grid","group","h-1.5","h-16","h-28","h-40","h-80","h-9","h-96","h-fit","h-full","hand","has","have","haven","height","here","hint","hour","hours","hover:bg-hover","hover:text-text","href","icon","icon-xs","icons","id","ids","if","import","in","in-game","info","inline","inline-flex","instead","interactive","interface","is","isLoading","isPending","isn","it","items","items-center","items-end","its","itself","joins","justify-between","key","label","last","last_at","lasted","least","length","lg","link","link_minutes","live","loading","log","long","lowers","m-card","m12","m13.41","m7","main","manage_fleets","manual","matches","max","max-w-sm","max-w-xl","max-w-xs","me","member","members","method","min","min-w-0","min-w-40","mine","minute","minutes","missing","ml-2","more","motd","motd_error","msg","mt-1","mt-2","must","mutationFn","mx-auto","my","my-fats","n","name","navigate","neutral","new","none","not","notes","now","null","number","o7","of","often","on","onAct","onAdded","onChange","onCheckedChange","onClick","onClose","onConfirm","onError","onFocus","onNew","onOpenChange","onSuccess","once","one","only","op","opacity-60","open","options","or","order","out","over","overview","own","p-card","page","paste","patch","path","per","period","pick","picked","picks","pills","pilot","pilots","pl-3","placeholder","placeholderData","portrait","post","primary","px-2","px-3","px-card","py-1","py-2","py-2.5","py-3","qc","queryFn","queryKey","react","react-router","read","readOnly","reads","recent","refetchInterval","refresh","register","registered","remove","removing","require","rest","retry","return","right","rotate-45","round","round_started_at","rounded-full","rounds","routes","rows","rule","rx","ry","s","see","seen","select","server","set","setChar","setColor","setConfirm","setCreating","setDays","setDq","setForm","setMotd","setName","setPicked","setQ","setType","share","ship","ships","show","since","site","size","size-2","size-2.5","size-3","size-3.5","size-4","size-5","sm","sm:grid-cols-3","sm:grid-cols-[1fr_200px]","so","space-y-1","space-y-3","space-y-4","space-y-6","src","start","started","started_at","starting","stats","stays","still","stopped","stops","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subtle","success","system","t","tabular-nums","taken","takes","text","text-3xl","text-center","text-muted","text-right","text-sm","text-subtle","text-success-fg","text-warning-fg","text-xs","than","that","the","their","them","they","this","ticked","time","timeAgo","title","to","toast","toggle","tone","towards","track","track_character","trackable","tracked","tracked_only","tracking","tracking_info","tracks","true","truncate","type","types","undefined","under","unknown","until","up","update","updated","url","use","useNavigate","useOverview","useParams","useQuery","useQueryClient","useState","used","user_id","value","variables","variant","via","viewBox","void","w-1/3","w-10","w-44","w-64","w-8","w-full","warning","weren","when","which","whitespace-nowrap","whitespace-pre-line","who","widgets","width","with","within","xl:grid-cols-[1fr_320px]","xl:grid-cols-[1fr_360px]","xs","year","yet","you","your"];
