@@ -317,6 +317,7 @@ export function EditPage() {
   const existing = useQuery({ queryKey: ["buyback", "managed", id], queryFn: () => api.get<ManagedDetail>(`${BASE}/manage/programs/${id}`), enabled: !isNew });
   const [form, setForm] = useState<ProgramForm | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [addingLocation, setAddingLocation] = useState(false);
   const base: ProgramForm | null = isNew ? BLANK : existing.data ? { ...BLANK, ...pick(existing.data) } : null;
   const value = form ?? base;
   const set = (patch: Partial<ProgramForm>) => value && setForm({ ...value, ...patch });
@@ -415,9 +416,9 @@ export function EditPage() {
               <CardHeader title="Locations" description="Where sellers make contracts. With a structure id, contracts made anywhere else are flagged." />
               <CardBody className="space-y-3">
                 <Toggles items={o.locations} selected={value.location_ids} onChange={(ids) => set({ location_ids: ids })} empty="No locations yet." />
-                <Link to={`${MANAGE}/locations`} className="inline-flex items-center gap-1.5 text-sm text-accent-ink hover:underline">
+                <button type="button" onClick={() => setAddingLocation(true)} className="inline-flex items-center gap-1.5 text-sm text-accent-ink hover:underline">
                   <Plus /> Add a location
-                </Link>
+                </button>
               </CardBody>
             </Card>
           </div>
@@ -512,6 +513,13 @@ export function EditPage() {
         danger
         onConfirm={() => remove.mutateAsync()}
       />
+      {addingLocation && (
+        <LocationDialog
+          location={null}
+          onClose={() => setAddingLocation(false)}
+          onSaved={(place) => set({ location_ids: [...value.location_ids, place.id] })}
+        />
+      )}
     </div>
   );
 }
@@ -776,7 +784,7 @@ export function LocationsPage() {
   );
 }
 
-function LocationDialog({ location, onClose }: { location: Place | null; onClose: () => void }) {
+function LocationDialog({ location, onClose, onSaved }: { location: Place | null; onClose: () => void; onSaved?: (place: Place) => void }) {
   const invalidate = useInvalidate();
   const [name, setName] = useState(location?.name ?? "");
   const [system, setSystem] = useState<{ id: number; name: string } | null>(location?.system ? { id: location.system.id, name: location.system.name } : null);
@@ -784,10 +792,11 @@ function LocationDialog({ location, onClose }: { location: Place | null; onClose
   const save = useMutation({
     mutationFn: () => {
       const body = { name, solar_system_id: system?.id, structure_id: structureId ? Number(structureId) : null };
-      return location ? api.put(`${BASE}/manage/locations/${location.id}`, body) : api.post(`${BASE}/manage/locations`, body);
+      return location ? api.put<Place>(`${BASE}/manage/locations/${location.id}`, body) : api.post<Place>(`${BASE}/manage/locations`, body);
     },
-    onSuccess: () => {
+    onSuccess: (place) => {
       invalidate();
+      onSaved?.(place);
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
