@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { Check, ClipboardCopy, ExternalLink, KeyRound, LogIn, Palette, Puzzle, Rocket, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate } from "react-router";
 import { toast } from "sonner";
 
 import { BrandingForm, type BrandingValues } from "@/components/BrandingForm";
@@ -25,7 +25,6 @@ const STEPS = [
 export function Setup() {
   const { setup, user, site } = useBootstrap();
   const refresh = useRefreshBootstrap();
-  const navigate = useNavigate();
   const [brandStep, setBrandStep] = useState<"brand" | "plugins">("brand");
   const [branding, setBranding] = useState<BrandingValues>({ name: site.name, tagline: site.tagline, accent: site.accent, logo_url: site.logo_url });
 
@@ -86,8 +85,8 @@ export function Setup() {
               onBack={() => setBrandStep("brand")}
               onDone={async () => {
                 await refresh();
-                toast.success("You're all set. Welcome aboard!");
-                navigate("/");
+                // A full load, so the plugins switched on here get their pages.
+                window.location.assign("/");
               }}
             />
           )}
@@ -234,7 +233,7 @@ function FinishStep({ onBack, onDone }: { onBack: () => void; onDone: () => void
         </>
       }
     >
-      <PluginList compact />
+      <PluginList compact reloadOnChange={false} />
     </Step>
   );
 }

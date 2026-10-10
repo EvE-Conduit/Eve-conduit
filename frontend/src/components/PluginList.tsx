@@ -30,17 +30,28 @@ export interface AdminModule {
     requires: string[];
     esi_scopes: string[];
     nav: { icon: string }[];
+    has_frontend: boolean;
   } | null;
 }
 
-/** Installed plugins with their on/off switches. `extra` adds per-plugin details and actions (Administration → Plugins). */
-export function PluginList({ compact = false, extra }: { compact?: boolean; extra?: (m: AdminModule) => ReactNode }) {
+/**
+ * Installed plugins with their on/off switches. `extra` adds per-plugin details and actions (Administration → Plugins).
+ * Plugins' pages are loaded when the site opens, so switching one with pages on or off reloads the page, unless
+ * `reloadOnChange` is off (setup reloads once it's done instead).
+ */
+export function PluginList({ compact = false, extra, reloadOnChange = true }: { compact?: boolean; extra?: (m: AdminModule) => ReactNode; reloadOnChange?: boolean }) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["admin", "plugins"], queryFn: () => api.get<AdminModule[]>("/api/admin/plugins") });
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.post(`/api/admin/plugins/${id}`, { enabled }),
     onSuccess: (_, { id, enabled }) => {
-      toast.success(`${data?.find((m) => m.id === id)?.manifest?.name ?? id} ${enabled ? "enabled" : "disabled"}`);
+      const plugin = data?.find((m) => m.id === id);
+      const reload = reloadOnChange && !!plugin?.manifest?.has_frontend;
+      toast.success(`${plugin?.manifest?.name ?? id} ${enabled ? "enabled" : "disabled"}${reload ? ". Reloading…" : ""}`);
+      if (reload) {
+        setTimeout(() => window.location.reload(), 700);
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["admin", "plugins"] });
       qc.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
     },
