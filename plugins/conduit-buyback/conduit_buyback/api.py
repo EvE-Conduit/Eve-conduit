@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
+from django.db.models import Count
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja.security import django_auth
@@ -13,7 +14,7 @@ from conduit.audit.services import record
 from conduit.permissions import require_perm
 
 from . import market, prices, services
-from .models import BuybackSettings, Contract, ItemPrice, Location, Program, Quote
+from .models import BuybackSettings, Contract, ItemPrice, Location, MarketRead, Program, Quote
 
 router = Router(tags=["buyback"], auth=django_auth)
 MAX_PASTE = 200_000
@@ -32,9 +33,10 @@ def _run(fn, *args, **kwargs):
 @router.get("/programs")
 def programs(request):
     qs = services.usable(request.user).select_related("owner__corporation").prefetch_related("locations", "item_rules")
+    s = BuybackSettings.load()
     return {
-        "programs": [services.program_out(p, request.user) for p in qs],
-        "prices": services.prices_out(),
+        "programs": [services.program_out(p, request.user, s) for p in qs],
+        "prices": services.prices_out(s),
         "can_create": services.can_create(request.user),
         "manages": services.managed(request.user).exists(),
         "can_see_leaderboards": request.user.has_perm("buyback.view_leaderboard"),
@@ -44,7 +46,7 @@ def programs(request):
 @router.get("/programs/{program_id}")
 def program(request, program_id: int):
     p = _run(services.program_for, request.user, program_id)
-    return {**services.program_out(p, request.user), "prices": services.prices_out()}
+    return services.program_out(p, request.user)
 
 
 class QuoteIn(Schema):
@@ -105,6 +107,7 @@ def options(request):
     from conduit.notify.services import users_with_perm
 
     chars = request.user.characters.select_related("corporation", "token").order_by("name")
+    s = BuybackSettings.load()
     return {
         "characters": [{"id": c.pk, "name": c.name, "corporation": c.corporation.name if c.corporation_id and c.corporation else None,
                         "login_ok": bool(getattr(c, "token", None) and c.token.valid)} for c in chars],
@@ -112,7 +115,10 @@ def options(request):
         "states": [{"id": s.pk, "name": s.name, "color": s.color} for s in State.objects.all()],
         "groups": [{"id": g.pk, "name": g.name} for g in Group.objects.order_by("name")],
         "managers": [{"id": u.pk, "name": u.display_name} for u in users_with_perm("buyback.manage_programs")][:500],
-        "default_prefix": BuybackSettings.load().tracking_prefix,
+        "default_prefix": s.tracking_prefix,
+        # The program's market: the site's unless it picks its own.
+        "market": {"source": s.price_source, "source_name": s.get_price_source_display(), "hub_id": market.site_hub(s).id, "hub_name": market.site_hub(s).name,
+                   "hubs": [{"id": i, "name": short, "full_name": full, "region": reg} for i, short, full, reg in market.HUBS]},
     }
 
 
@@ -147,6 +153,9 @@ class ProgramIn(Schema):
     wallet_division: int | None = None
     tracking_prefix: str = ""
     active: bool = True
+    #: Its own market; empty: the site's.
+    hub_id: int | None = None
+    hub_name: str = Field("", max_length=100)
 
 
 def _program_data(payload: ProgramIn) -> dict:
@@ -165,6 +174,8 @@ def create_program(request, payload: ProgramIn):
     if not services.can_create(request.user):
         raise HttpError(403, "You can't create buyback programs")
     p = _run(services.save_program, request.user, None, _program_data(payload))
+    if p.hub_id:
+        _market_changed()
     record("buyback.program", f"created the buyback program {p.name}", request=request, target_type="plugin", details={"plugin": "buyback", "program_id": p.pk})
     return services.manage_out(p)
 
@@ -179,8 +190,11 @@ def update_program(request, program_id: int, payload: ProgramIn):
     from .contracts import recheck
 
     p = _run(services.managed_program, request.user, program_id)
+    hub = p.hub_id
     p = _run(services.save_program, request.user, p, _program_data(payload))
     recheck(p)
+    if p.hub_id != hub:
+        _market_changed()
     record("buyback.program", f"changed the buyback program {p.name}", request=request, target_type="plugin", details={"plugin": "buyback", "program_id": p.pk})
     return services.manage_out(p)
 
@@ -190,8 +204,18 @@ def delete_program(request, program_id: int):
     p = _run(services.managed_program, request.user, program_id)
     name = p.name
     p.delete()
+    market.prune()
     record("buyback.program", f"deleted the buyback program {name}", request=request, target_type="plugin", details={"plugin": "buyback"})
     return {"ok": True}
+
+
+def _market_changed() -> None:
+    """A program picked another market: read it (ESI), and forget the one nothing uses any more."""
+    market.prune()
+    if BuybackSettings.load().price_source == BuybackSettings.Source.ESI:
+        from .tasks import pull_market
+
+        pull_market.delay()
 
 
 def _stats_program(request, program_id: int) -> Program:
@@ -384,9 +408,13 @@ def search(request, kind: str, q: str = ""):
 def settings_out(s: BuybackSettings, user=None) -> dict:
     from conduit.sde.models import Region
 
-    region = market.hub_region(s)
+    region = market.hub_region(market.site_hub(s).id)
     c = s.esi_character
+    reads = {r.hub_id: r for r in MarketRead.objects.all()}
+    site = reads.get(s.hub_id)
     chars = user.characters.select_related("token").order_by("name") if user else []
+    counts = dict(ItemPrice.objects.values_list("hub_id").annotate(n=Count("pk")).values_list("hub_id", "n"))
+    programs = list(Program.objects.filter(active=True).exclude(hub_id=None).only("name", "hub_id"))
     return {
         "hubs": [{"id": i, "name": short, "full_name": full, "region": reg} for i, short, full, reg in market.HUBS],
         "esi_character": {"id": c.pk, "name": c.name} if c else None,
@@ -394,8 +422,13 @@ def settings_out(s: BuybackSettings, user=None) -> dict:
                        for ch in chars],
         "hub_kind": market.hub_kind(s.hub_id),
         "history_region": Region.objects.filter(pk=region).values_list("name", flat=True).first() if region else None,
-        "market_pulled_at": s.market_pulled_at,
-        "market_note": s.market_note,
+        "market_pulled_at": site.pulled_at if site else None,
+        "market_note": site.note if site else "",
+        # Every market in use: the site's first, then those programs picked.
+        "markets": [{"id": h.id, "name": h.name, "pulled_at": reads[h.id].pulled_at if h.id in reads else None,
+                     "note": reads[h.id].note if h.id in reads else "", "prices": counts.get(h.id, 0),
+                     "programs": [p.name for p in programs if p.hub_id == h.id and h.id != s.hub_id]}
+                    for h in market.hubs_in_use(s)],
         "guard_enabled": s.guard_enabled,
         "guard_threshold": float(s.guard_threshold),
         "guard_days": s.guard_days,
@@ -411,7 +444,7 @@ def settings_out(s: BuybackSettings, user=None) -> dict:
         "unlinked_purge_hours": s.unlinked_purge_hours,
         "reject_disallowed": s.reject_disallowed,
         "restrict_quotes": s.restrict_quotes,
-        "prices_stored": ItemPrice.objects.count(),
+        "prices_stored": sum(counts.values()),
     }
 
 
@@ -471,9 +504,10 @@ def put_settings(request, payload: SettingsIn):
             raise HttpError(400, "Only ESI can read a player structure's market")
         if kind == "structure" and s.esi_character is None:
             raise HttpError(400, "Reading a structure's market needs a character that can dock there")
-        if kind != "structure" and market.hub_region(BuybackSettings(price_source=payload.price_source, hub_id=payload.hub_id)) is None:
+        if kind != "structure" and market.hub_region(payload.hub_id) is None:
             raise HttpError(400, "No such market: pick a trade hub, or a region, system or station")
-    source_changed = (s.price_source, s.hub_id, s.instant_prices) != (payload.price_source, payload.hub_id, payload.instant_prices)
+    source_changed = (s.price_source, s.instant_prices) != (payload.price_source, payload.instant_prices)
+    hub_changed = s.hub_id != payload.hub_id
     s.price_source = payload.price_source
     s.hub_id = payload.hub_id
     s.hub_name = payload.hub_name.strip() or "Market hub"
@@ -494,11 +528,13 @@ def put_settings(request, payload: SettingsIn):
     s.guard_days = payload.guard_days
     s.guard_min_days = payload.guard_min_days
     s.guard_both_ways = payload.guard_both_ways
-    if source_changed:
-        s.market_pulled_at, s.market_note = None, ""
     s.save()
     if source_changed:
-        ItemPrice.objects.all().delete()  # priced elsewhere or differently: fetch again when next needed
+        ItemPrice.objects.all().delete()  # priced differently: fetch again when next needed
+        MarketRead.objects.all().delete()
+    elif hub_changed:
+        market.prune(s)
+    if source_changed or hub_changed:
         if s.price_source == BuybackSettings.Source.ESI:
             from .tasks import pull_market
 
@@ -515,9 +551,8 @@ def refresh_prices(request):
 
         pull_market.delay()
         return {"refreshed": None, "queued": True}
-    ids = list(ItemPrice.objects.values_list("type_id", flat=True)[:20000])
     try:
-        n = prices.fetch(ids) if ids else 0
+        n = prices.refresh(stale_only=False, limit=20000)
     except prices.PriceError as exc:
         raise HttpError(502, str(exc)) from None
     return {"refreshed": n}
