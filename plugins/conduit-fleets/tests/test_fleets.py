@@ -162,7 +162,7 @@ def test_attendance_and_the_group_rule(people, api_client):
     assert rule(count=3, days=90, types="CTA")
     assert not rule(count=3, days=30, types="CTA, Stratop")
     assert rules.explain_rule({"type": "fleets_attended", "params": {"count": 4, "days": 30, "types": "CTA"}}) == \
-        "Flew in at least 4 CTA fleets (FATs) in the last 30 days"
+        "At least 4 CTA FATs in the last 30 days"
 
     api_client.force_login(pilot)
     me = api_client.call("get", "/api/p/fleets").json()["me"]
@@ -206,7 +206,7 @@ def test_fats_cant_be_farmed_for_group_rules(people, api_client):
 
     assert rule(count=1, days=30) and not rule(count=1, days=30, min_pilots=3)
     assert rules.explain_rule({"type": "fleets_attended", "params": {"count": 2, "days": 30, "types": "", "min_pilots": 10}}) == \
-        "Flew in at least 2 fleets of 10+ pilots (FATs) in the last 30 days"
+        "At least 2 FATs in fleets of 10+ pilots in the last 30 days"
 
 
 def test_only_managers_change_the_type_of_an_ended_fleet(people, api_client):
@@ -236,28 +236,77 @@ def test_fat_lines_go_below_the_fcs_motd():
     assert services.with_fat_lines(once, "") == FC_TEXT
 
 
-def test_tracking_adds_fats_to_the_motd(people, esi, api_client):
+def test_tracking_adds_fat_counts_to_the_motd(people, esi, api_client):
     esi.motd = FC_TEXT
     esi.members = [{"character_id": 90000002, "ship_type_id": 587, "solar_system_id": 30000142}]
     fleet = start(api_client, people["fc"], track_character=90000001, link_minutes=30)
     assert len(esi.puts) == 1 and esi.motd.startswith(FC_TEXT + "<br>")
-    assert "1 with a FAT: Pilot One" in esi.motd and f"/p/fleets/fat/{fleet['link']['code']}" in esi.motd
+    assert esi.motd.endswith("Everyone in fleet gets a FAT automatically. 1 pilot so far")
+    # Who has a FAT isn't shown, and neither is the FAT link (it can't add anyone to a tracked fleet).
+    assert "Pilot One" not in esi.motd and "/p/fleets/fat/" not in esi.motd
     # Nothing new: the MOTD isn't written again.
     services.track_all()
     assert len(esi.puts) == 1
-    # The FC changes the MOTD in game, and someone joins: they're added, the FC's new text stays.
+    # The FC changes the MOTD in game, and someone joins: the count goes up, the FC's new text stays.
     esi.motd = esi.motd.replace("Ferox", "Eagle")
     esi.members.append({"character_id": 90000003, "ship_type_id": 587, "solar_system_id": 30000142})
     services.track_all()
-    assert "Doctrine: Eagle" in esi.motd and "2 with a FAT: Pilot Alt, Pilot One" in esi.motd and esi.motd.count("FATs by") == 1
-    # A FAT from the link shows up on the next read too.
-    EveName.objects.create(id=777, name="Blue <Friend>", category="character")
-    services.record(Fleet.objects.get(), [(777, None, None)], Fat.Via.MANUAL, by=people["fc"])
-    services.track_all()
-    assert "3 with a FAT: Blue &lt;Friend&gt;" in esi.motd
-    # Ending the fleet says so in the MOTD.
+    assert "Doctrine: Eagle" in esi.motd and esi.motd.endswith("2 pilots so far") and esi.motd.count("FATs by") == 1
+    # A new FAT round starts counting again.
+    Fleet.objects.update(round_started_at=timezone.now() - timedelta(hours=1))
+    api_client.call("post", f"/api/p/fleets/{fleet['id']}/rounds")
+    assert esi.motd.endswith("FAT round 2: 2 pilots so far")
+    # Ending the fleet says so in the MOTD, counting each pilot once.
     api_client.call("post", f"/api/p/fleets/{fleet['id']}/end")
-    assert esi.motd.startswith(FC_TEXT.replace("Ferox", "Eagle") + "<br>") and esi.motd.endswith("Fleet ended: 3 pilots got a FAT")
+    assert esi.motd.startswith(FC_TEXT.replace("Ferox", "Eagle") + "<br>") and esi.motd.endswith("Fleet ended: 2 pilots got a FAT")
+
+
+def test_fat_rounds(people, esi, api_client):
+    esi.members = [{"character_id": 90000002, "ship_type_id": 587, "solar_system_id": 30000142}]
+    fleet = start(api_client, people["fc"], track_character=90000001)
+    # Not straight after the last one.
+    resp = api_client.call("post", f"/api/p/fleets/{fleet['id']}/rounds")
+    assert resp.status_code == 400 and "15 minutes apart" in resp.json()["detail"]
+    Fleet.objects.update(started_at=timezone.now() - timedelta(minutes=20))
+    detail = api_client.call("post", f"/api/p/fleets/{fleet['id']}/rounds").json()
+    # Everyone in the in-game fleet got round 2's FAT straight away; the alt only joins for round 2.
+    assert detail["round"] == 2 and detail["fat_count"] == 2 and detail["pilots"] == 1
+    esi.members.append({"character_id": 90000003, "ship_type_id": 587, "solar_system_id": 30000142})
+    services.track_all()
+    detail = api_client.call("get", f"/api/p/fleets/{fleet['id']}").json()
+    assert detail["rounds"] == [{"round": 2, "pilots": 2}, {"round": 1, "pilots": 1}] and detail["pilots"] == 2
+    assert sum(s["count"] for s in detail["ships"]) in (0, 2)  # one ship per pilot, not per FAT
+    # Two FATs for the member (main in both rounds, alt in round 2 counts once with the main), one fleet.
+    assert services.fleets_attended(people["pilot"], 30) == 2
+    api_client.force_login(people["pilot"])
+    me = api_client.call("get", "/api/p/fleets").json()["me"]
+    assert me["counts"]["days_30"] == 2 and me["fleets"][0]["fats"] == 2
+    assert sorted(me["fleets"][0]["characters"]) == ["Pilot Alt", "Pilot One"]
+    listed = api_client.call("get", "/api/p/fleets").json()["fleets"][0]
+    assert listed["pilots"] == 2 and listed["round"] == 2
+
+
+def test_fat_link_on_a_tracked_fleet_only_takes_pilots_in_the_fleet(people, esi, api_client):
+    esi.members = [{"character_id": 90000002, "ship_type_id": 587, "solar_system_id": 30000142}]
+    fleet = start(api_client, people["fc"], track_character=90000001)
+    code = fleet["link"]["code"]
+    assert fleet["link"]["tracked_only"]
+    api_client.force_login(people["pilot"])
+    info = api_client.call("get", f"/api/p/fleets/fat/{code}").json()
+    assert info["tracked"] and {c["name"]: (c["registered"], c["allowed"]) for c in info["characters"]} == {
+        "Pilot One": (True, True), "Pilot Alt": (False, False)}
+    # The alt wasn't in the in-game fleet: it can't be registered, alone or along with the main.
+    for ids in ([90000003], [90000002, 90000003]):
+        resp = api_client.call("post", f"/api/p/fleets/fat/{code}", {"characters": ids})
+        assert resp.status_code == 400 and "Pilot Alt wasn't seen in the in-game fleet" in resp.json()["detail"]
+    assert not Fat.objects.filter(character_id=90000003).exists()
+    # Seen in round 1 isn't enough for round 2.
+    Fleet.objects.update(started_at=timezone.now() - timedelta(minutes=20))
+    esi.members = []
+    api_client.force_login(people["fc"])
+    api_client.call("post", f"/api/p/fleets/{fleet['id']}/rounds")
+    api_client.force_login(people["pilot"])
+    assert api_client.call("post", f"/api/p/fleets/fat/{code}", {"characters": [90000002]}).status_code == 400
 
 
 def test_motd_can_be_switched_off(people, esi, api_client):
@@ -265,7 +314,7 @@ def test_motd_can_be_switched_off(people, esi, api_client):
     fleet = start(api_client, people["fc"], track_character=90000001, motd=False)
     assert esi.puts == [] and not fleet["tracking_info"]["motd"]
     detail = api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": True}).json()
-    assert detail["tracking_info"]["motd"] and "Nobody has a FAT yet" in esi.motd
+    assert detail["tracking_info"]["motd"] and esi.motd.endswith("0 pilots so far")
     api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": False})
     assert esi.motd == FC_TEXT
 
