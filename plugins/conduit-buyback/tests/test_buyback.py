@@ -11,7 +11,7 @@ from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
 from conduit.sde.models import ItemCategory, ItemGroup, ItemType, MarketGroup, SolarSystem, TypeMaterial
 from conduit_buyback import contracts, prices, pricing, services
-from conduit_buyback.models import BuybackSettings, Contract, ItemPrice, ItemRule, Location, MarketRead, Program, Quote, WatchRule
+from conduit_buyback.models import BuybackSettings, Contract, GroupRule, ItemPrice, ItemRule, Location, MarketRead, Program, Quote, WatchRule
 from tests.conftest import make_user
 
 TRITANIUM, PYERITE, VELDSPAR, COMPRESSED_VELDSPAR, RIFTER, GUN, OFFICER, BLUE_LOOT = 34, 35, 1230, 62516, 587, 484, 9999, 30745
@@ -180,6 +180,59 @@ def test_item_rules(program):
     program.save()
     r = appraise(program, "Tritanium 1\nEstamel's Shield 1")
     assert line(r, TRITANIUM)["accepted"] and line(r, OFFICER)["reason"] == "Not on this program's list"
+
+
+def test_market_group_rules(program):
+    # Materials > Minerals > Tritanium, Pyerite. A rule on a group covers everything under it; closer rules win.
+    GroupRule.objects.create(program=program, market_group_id=1, tax=Decimal("5"))
+    r = appraise(program, "Tritanium 1000\nPyerite 10\nRifter 1")
+    assert (line(r, TRITANIUM)["tax"], line(r, PYERITE)["tax"], line(r, RIFTER)["tax"]) == (15.0, 15.0, 10.0)
+    GroupRule.objects.create(program=program, market_group_id=1857, disallowed=True)
+    ItemRule.objects.create(program=program, type_id=TRITANIUM, tax=Decimal("-2"))
+    r = appraise(program, "Tritanium 1000\nPyerite 10")
+    assert line(r, TRITANIUM)["tax"] == 8.0
+    assert (line(r, PYERITE)["accepted"], line(r, PYERITE)["reason"]) == (False, "Not bought by this program")
+    # Only listed items: a group rule lists everything under it.
+    GroupRule.objects.filter(market_group_id=1857).delete()
+    program.allow_all_items = False
+    program.save()
+    r = appraise(program, "Pyerite 10\nRifter 1")
+    assert line(r, PYERITE)["accepted"] and line(r, RIFTER)["reason"] == "Not on this program's list"
+    # Manual review for a whole market group.
+    WatchRule.objects.create(program=program, market_group_id=1)
+    r = appraise(program, "Pyerite 10")
+    assert line(r, PYERITE)["watch"] and r.flagged
+
+
+def test_market_browser(program, boss, api_client):
+    api_client.force_login(boss)
+    url = f"/api/p/buyback/manage/programs/{program.pk}"
+    top = api_client.get(f"{url}/market").json()
+    assert [(g["name"], g["count"]) for g in top["groups"]] == [("Materials", 2)] and top["types"] == []
+    minerals = api_client.get(f"{url}/market?group=1857").json()
+    assert [p["name"] for p in minerals["path"]] == ["Materials", "Minerals"]
+    assert [t["name"] for t in minerals["types"]] == ["Pyerite", "Tritanium"]
+    # The whole category, then one item in it on its own terms.
+    resp = api_client.call("post", f"{url}/rules", {"market_group_id": 1857, "rule": {"tax": 3}, "watch": True})
+    assert resp.status_code == 200, resp.content
+    assert [(g["name"], g["tax"], g["count"]) for g in resp.json()["group_rules"]] == [("Minerals", 3.0, 2)]
+    assert [w["kind"] for w in resp.json()["watch_rules"]] == ["market"]
+    api_client.call("post", f"{url}/rules", {"type_id": TRITANIUM, "rule": {"disallowed": True}})
+    types = {t["name"]: t for t in api_client.get(f"{url}/market?group=1857").json()["types"]}
+    assert types["Pyerite"]["effective"] == {"tax": 3.0, "disallowed": False, "static_price": None, "from": {"kind": "group", "id": 1857, "name": "Minerals"}}
+    assert types["Pyerite"]["rule"] is None and types["Pyerite"]["watched"]
+    assert types["Tritanium"]["effective"]["disallowed"] and types["Tritanium"]["effective"]["from"]["kind"] == "type"
+    # Groups take no fixed price.
+    assert api_client.call("post", f"{url}/rules", {"market_group_id": 1, "rule": {"static_price": 5}}).status_code == 400
+    found = api_client.get(f"{url}/market/search?q=trit").json()
+    assert [(t["name"], [p["name"] for p in t["path"]]) for t in found["types"]] == [("Tritanium", ["Materials", "Minerals"])]
+    assert [g["name"] for g in api_client.get(f"{url}/market/search?q=miner").json()["groups"]] == ["Minerals"]
+    # Clearing: back to the group's terms.
+    out = api_client.call("post", f"{url}/rules", {"type_id": TRITANIUM, "rule": None}).json()
+    assert out["item_rules"] == []
+    assert line(appraise(program, "Tritanium 10"), TRITANIUM)["tax"] == 13.0
+    # Sellers see category terms on the program.
+    assert [g["name"] for g in api_client.get(f"/api/p/buyback/programs/{program.pk}").json()["group_rules"]] == ["Minerals"]
 
 
 def test_assembled_npc_loot_and_t1_modules(program):
@@ -419,8 +472,8 @@ def test_running_programs(program, seller, boss, api_client):
     assert resp.status_code == 200, resp.content
     loot = Program.objects.get(pk=resp.json()["id"])
     assert loot.tax == Decimal("15") and list(loot.managers.all()) == [boss]
-    resp = api_client.call("post", f"/api/p/buyback/manage/programs/{loot.pk}/items", {"market_group_id": 1, "tax": 2})
-    assert resp.json()["added"] == 2  # Tritanium and Pyerite, under Materials > Minerals
+    resp = api_client.call("post", f"/api/p/buyback/manage/programs/{loot.pk}/items", {"type_ids": [TRITANIUM, PYERITE], "tax": 2})
+    assert resp.json()["added"] == 2
     assert api_client.call("post", f"/api/p/buyback/manage/programs/{loot.pk}/watchlist", {"type_id": OFFICER}).status_code == 200
     assert api_client.get(f"/api/p/buyback/manage/programs/{loot.pk}/stats").status_code == 200
     # Someone else's program: not theirs to run, unless they may run them all.

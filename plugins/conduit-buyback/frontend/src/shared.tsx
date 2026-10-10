@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { Check, Copy, Eye, Pin, Warning } from "./icons";
-import { type Appraisal, type ContractItem, type Guard, type Line, METHOD_LABEL, type Problem, type Program, type QuoteSummary, type SystemInfo, type Terms } from "./types";
+import { type Appraisal, type ContractItem, type Guard, type Line, METHOD_LABEL, type Problem, type Program, type QuoteSummary, type RuleTerms, type SystemInfo, type Terms } from "./types";
 
 export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -366,7 +366,7 @@ export function Calculator({ program, base, quoteLink }: { program: Program; bas
                 <PlacesList terms={program.terms} />
               </div>
             </div>
-            {program.item_rules.length > 0 && <SpecialItems program={program} />}
+            {program.item_rules.length + program.group_rules.length > 0 && <SpecialItems program={program} />}
           </div>
         )}
       </div>
@@ -374,33 +374,38 @@ export function Calculator({ program, base, quoteLink }: { program: Program; bas
   );
 }
 
+/** An item's or market group's terms, in a few words. */
+export function TermsBadge({ terms, inherited }: { terms: RuleTerms; inherited?: boolean }) {
+  const faint = inherited ? "opacity-60" : "";
+  if (terms.disallowed) return <Badge tone="danger" className={faint}>not bought</Badge>;
+  if (terms.static_price != null) return <span className={`font-mono text-xs ${faint}`}>{isk(terms.static_price, { full: true })}</span>;
+  if (terms.tax) return <span className={`font-mono text-xs text-muted ${faint}`}>{terms.tax > 0 ? "+" : ""}{pct(terms.tax)} tax</span>;
+  return <span className={`text-xs text-muted ${faint}`}>standard</span>;
+}
+
 function SpecialItems({ program }: { program: Program }) {
   const [open, setOpen] = useState(false);
-  const rules = open ? program.item_rules : program.item_rules.slice(0, 6);
+  const all = [
+    ...program.group_rules.map((r) => ({ key: `g${r.market_group_id}`, terms: r, cell: <ItemCell icon={null} name={r.name} sub={`Category · ${r.count} items`} /> })),
+    ...program.item_rules.map((r) => ({ key: `t${r.type_id}`, terms: r, cell: <ItemCell icon={r.icon} name={r.name} /> })),
+  ];
+  const rules = open ? all : all.slice(0, 6);
   return (
     <div>
       <div className="hud-label text-subtle">{program.allow_all_items ? "Items with their own terms" : "Items it buys"}</div>
       <ul className="mt-2 divide-y divide-border border border-border">
         {rules.map((r) => (
-          <li key={r.type_id} className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-sm">
-            <ItemCell icon={r.icon} name={r.name} />
-            <span className="shrink-0 text-xs">
-              {r.disallowed ? (
-                <Badge tone="danger">not bought</Badge>
-              ) : r.static_price != null ? (
-                <span className="font-mono">{isk(r.static_price, { full: true })}</span>
-              ) : r.tax ? (
-                <span className="font-mono text-muted">{r.tax > 0 ? "+" : ""}{pct(r.tax)} tax</span>
-              ) : (
-                <span className="text-muted">standard</span>
-              )}
+          <li key={r.key} className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-sm">
+            {r.cell}
+            <span className="shrink-0">
+              <TermsBadge terms={r.terms} />
             </span>
           </li>
         ))}
       </ul>
-      {program.item_rules.length > 6 && (
+      {all.length > 6 && (
         <button className="mt-2 text-xs text-accent-ink hover:underline" onClick={() => setOpen(!open)}>
-          {open ? "Show fewer" : `Show all ${program.item_rules.length}`}
+          {open ? "Show fewer" : `Show all ${all.length}`}
         </button>
       )}
     </div>

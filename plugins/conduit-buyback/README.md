@@ -13,10 +13,13 @@ the description, and every contract is checked against its quote before you acce
   prices, items not bought, or only listed items; a hauling cost per m³; an extra tax for items worth little per m³
   (T1 ships, bulky junk); assembled items refused or taken. Ore, moon ore and ice are valued at the best of raw,
   compressed and refined (at your refining rate), optionally with their compressed volume. Tech I modules can be
-  valued at what they reprocess into, and Sleeper and Triglavian loot at the NPC buy price. Item rules can be set
-  for a whole market group (Minerals, Standard Ores, Salvaged Materials...).
-- **Manual review list**: items or item groups (officer modules, rare loot) flagged on the quote, so the seller
-  knows, and on the contract, so the manager checks them by hand.
+  valued at what they reprocess into, and Sleeper and Triglavian loot at the NPC buy price.
+- **Items** (per program): the market laid out like in game, to browse or search. Click an item and pick just that
+  item or its entire category (Minerals, Frigates, Ship Equipment...), at any level. A category's terms cover every
+  item under it, including items added to the game later; an item's own terms, or a closer category's, win. Every row
+  shows the terms that apply to it and where they come from.
+- **Manual review list**: items or whole categories (officer modules, rare loot) flagged on the quote, so the seller
+  knows, and on the contract, so the manager checks them by hand. Ticked when setting an item's terms.
 - **Contract checks**: every 15 minutes each program owner's contracts are read (character, and corporation for
   programs that go to the corporation). Contracts carrying a tracking number or the program's prefix are matched to
   their quote and checked: missing or extra items, items asked for in return, a higher (or lower) price, the wrong

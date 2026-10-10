@@ -166,18 +166,37 @@ class ItemRule(models.Model):
         constraints = [models.UniqueConstraint(fields=["program", "type_id"], name="buyback_item_rule_unique")]
 
 
+class GroupRule(models.Model):
+    """A market group's own terms in a program (Minerals, Frigates, Ship Equipment...), for every item under it, now or
+    added to the game later. An item's own rule, or a rule on a group closer to it, wins."""
+
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="group_rules")
+    market_group_id = models.IntegerField()
+    #: Added to the program's tax.
+    tax = models.DecimalField(max_digits=6, decimal_places=2, default=D0)
+    disallowed = models.BooleanField(default=False)
+    #: Groups have no fixed price; this keeps them interchangeable with ``ItemRule`` when pricing.
+    static_price = None
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["program", "market_group_id"], name="buyback_group_rule_unique")]
+
+
 class WatchRule(models.Model):
-    """Items (or a whole item group) a manager checks by hand before accepting: officer modules, rare loot..."""
+    """Items, an item group or a market group a manager checks by hand before accepting: officer modules, rare loot..."""
 
     program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="watch_rules")
     type_id = models.IntegerField(null=True, blank=True)
     group_id = models.IntegerField(null=True, blank=True)
+    market_group_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(type_id__isnull=False, group_id__isnull=True) | models.Q(type_id__isnull=True, group_id__isnull=False),
-                name="buyback_watch_type_or_group",
+                condition=models.Q(type_id__isnull=False, group_id__isnull=True, market_group_id__isnull=True)
+                | models.Q(type_id__isnull=True, group_id__isnull=False, market_group_id__isnull=True)
+                | models.Q(type_id__isnull=True, group_id__isnull=True, market_group_id__isnull=False),
+                name="buyback_watch_one_target",
             ),
         ]
 
