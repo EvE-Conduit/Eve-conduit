@@ -44,7 +44,13 @@ MOTD_SCOPE = "esi-fleets.write_fleet.v1"
 MOTD_TAG = "FATs by EvE Conduit"
 #: The shortest time between FAT rounds, so a fleet can't be turned into a pile of FATs.
 MIN_ROUND_GAP = timedelta(minutes=15)
+#: EVE colours are ARGB: fully opaque green.
+MOTD_COLOR = "#ff00ff00"
+#: Empty lines between the FC's MOTD and the FAT lines.
+MOTD_GAP = 2
 _BR = re.compile(r"<br\s*/?>", re.I)
+#: Line breaks at the end of the kept MOTD (the gap we added), possibly followed by closing tags the client moved.
+_TRAILING_BR = re.compile(r"(?:<br\s*/?>\s*)+((?:</[^>]+>\s*)*)$", re.I)
 _TAG = re.compile(r"<[^>]*>")
 #: Tracking stops by itself after this long, in case nobody ends the fleet.
 MAX_TRACKING = timedelta(hours=12)
@@ -213,7 +219,7 @@ def motd_lines(fleet: Fleet) -> str:
         now = fleet.fats.filter(round=fleet.fat_round).count()
         round_text = f"FAT round {fleet.fat_round}: " if fleet.fat_round > 1 else ""
         lines.append(f"Everyone in fleet gets a FAT automatically. {round_text}{_pilots(now)} so far")
-    return "<br>".join(lines)
+    return f'<font color="{MOTD_COLOR}">' + "<br>".join(lines) + "</font>"
 
 
 def with_fat_lines(motd: str, lines: str) -> str:
@@ -222,9 +228,12 @@ def with_fat_lines(motd: str, lines: str) -> str:
     if at >= 0:
         breaks = list(_BR.finditer(motd, 0, at))
         motd = motd[: breaks[-1].start()] if breaks else ""
+        # Take our gap off too, or it would grow by one each time.
+        while (trimmed := _TRAILING_BR.sub(r"\1", motd)) != motd:
+            motd = trimmed
     if not lines:
         return motd
-    return f"{motd}<br>{lines}" if _TAG.sub("", motd).strip() else lines
+    return motd + "<br>" * (MOTD_GAP + 1) + lines if _TAG.sub("", motd).strip() else lines
 
 
 def update_motd(fleet: Fleet) -> None:

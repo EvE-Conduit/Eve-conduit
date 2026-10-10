@@ -227,21 +227,26 @@ def test_fat_lines_go_below_the_fcs_motd():
     assert services.with_fat_lines("", lines) == lines
     assert services.with_fat_lines("<font></font>", lines) == lines
     once = services.with_fat_lines(FC_TEXT, lines)
-    assert once == f"{FC_TEXT}<br>{lines}"
+    assert once == f"{FC_TEXT}<br><br><br>{lines}"  # two empty lines between
+    # Rewriting keeps the same gap, however often it happens.
+    assert services.with_fat_lines(services.with_fat_lines(once, lines), lines) == once
     # Next time only our lines change, even after the game client rewrote the MOTD's markup.
     rewritten = once.replace("<br>", "<br/>").replace("<b>", '<font color="#ffffffff"><b>')
     again = services.with_fat_lines(rewritten, "<b>--- FATs by EvE Conduit ---</b><br>3 with a FAT: C, A, B")
     assert again.startswith(FC_TEXT.replace("<br>", "<br/>")) and again.endswith("3 with a FAT: C, A, B") and again.count("FATs by") == 1
     # Switched off: our lines come out, the FC's text stays.
     assert services.with_fat_lines(once, "") == FC_TEXT
+    # The client moving our gap inside the FC's closing tag doesn't add to it either.
+    moved = FC_TEXT[:-len("</font>")] + "<br><br></font><br>" + lines
+    assert services.with_fat_lines(moved, lines) == f"{FC_TEXT}<br><br><br>{lines}"
 
 
 def test_tracking_adds_fat_counts_to_the_motd(people, esi, api_client):
     esi.motd = FC_TEXT
     esi.members = [{"character_id": 90000002, "ship_type_id": 587, "solar_system_id": 30000142}]
     fleet = start(api_client, people["fc"], track_character=90000001, link_minutes=30)
-    assert len(esi.puts) == 1 and esi.motd.startswith(FC_TEXT + "<br>")
-    assert esi.motd.endswith("Everyone in fleet gets a FAT automatically. 1 pilot so far")
+    assert len(esi.puts) == 1 and esi.motd.startswith(FC_TEXT + "<br><br><br><font color=\"#ff00ff00\">")
+    assert esi.motd.endswith("Everyone in fleet gets a FAT automatically. 1 pilot so far</font>")
     # Who has a FAT isn't shown, and neither is the FAT link (it can't add anyone to a tracked fleet).
     assert "Pilot One" not in esi.motd and "/p/fleets/fat/" not in esi.motd
     # Nothing new: the MOTD isn't written again.
@@ -251,14 +256,14 @@ def test_tracking_adds_fat_counts_to_the_motd(people, esi, api_client):
     esi.motd = esi.motd.replace("Ferox", "Eagle")
     esi.members.append({"character_id": 90000003, "ship_type_id": 587, "solar_system_id": 30000142})
     services.track_all()
-    assert "Doctrine: Eagle" in esi.motd and esi.motd.endswith("2 pilots so far") and esi.motd.count("FATs by") == 1
+    assert "Doctrine: Eagle" in esi.motd and esi.motd.endswith("2 pilots so far</font>") and esi.motd.count("FATs by") == 1
     # A new FAT round starts counting again.
     Fleet.objects.update(round_started_at=timezone.now() - timedelta(hours=1))
     api_client.call("post", f"/api/p/fleets/{fleet['id']}/rounds")
-    assert esi.motd.endswith("FAT round 2: 2 pilots so far")
+    assert esi.motd.endswith("FAT round 2: 2 pilots so far</font>")
     # Ending the fleet says so in the MOTD, counting each pilot once.
     api_client.call("post", f"/api/p/fleets/{fleet['id']}/end")
-    assert esi.motd.startswith(FC_TEXT.replace("Ferox", "Eagle") + "<br>") and esi.motd.endswith("Fleet ended: 2 pilots got a FAT")
+    assert esi.motd.startswith(FC_TEXT.replace("Ferox", "Eagle") + "<br><br><br>") and esi.motd.endswith("Fleet ended: 2 pilots got a FAT</font>")
 
 
 def test_fat_rounds(people, esi, api_client):
@@ -314,7 +319,7 @@ def test_motd_can_be_switched_off(people, esi, api_client):
     fleet = start(api_client, people["fc"], track_character=90000001, motd=False)
     assert esi.puts == [] and not fleet["tracking_info"]["motd"]
     detail = api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": True}).json()
-    assert detail["tracking_info"]["motd"] and esi.motd.endswith("0 pilots so far")
+    assert detail["tracking_info"]["motd"] and esi.motd.endswith("0 pilots so far</font>")
     api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": False})
     assert esi.motd == FC_TEXT
 
