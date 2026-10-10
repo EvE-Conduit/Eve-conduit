@@ -46,7 +46,13 @@ export interface FleetDetail extends FleetBrief {
   attended: boolean;
   can_edit: boolean;
   link: { code: string; active: boolean; expires_at: string | null } | null;
-  tracking_info: { character: { id: number; name: string } | null; last_at: string | null; error: string } | null;
+  tracking_info: {
+    character: { id: number; name: string } | null;
+    last_at: string | null;
+    error: string;
+    motd: boolean;
+    motd_error: string;
+  } | null;
   warning?: string;
   added?: number;
 }
@@ -70,6 +76,7 @@ export interface FcCharacter {
   name: string;
   portrait: string;
   can_track: boolean;
+  can_motd: boolean;
 }
 
 export const VIA: Record<FatRow["via"], { label: string; tone: "accent" | "info" | "neutral" }> = {

@@ -39,6 +39,12 @@ class Fleet(models.Model):
     last_tracked_at = models.DateTimeField(null=True, blank=True)
     #: Why tracking stopped or isn't working; shown to the FC.
     tracking_error = models.CharField(max_length=300, blank=True)
+    #: While tracking, add the FAT lines to the bottom of the in-game fleet's MOTD (``esi-fleets.write_fleet.v1``).
+    motd = models.BooleanField(default=True)
+    #: The FAT lines last written to the MOTD, so it's only written again when they change.
+    motd_written = models.TextField(blank=True)
+    #: Why the MOTD couldn't be written; shown to the FC.
+    motd_error = models.CharField(max_length=300, blank=True)
 
     # The FAT link: pilots open /p/fleets/fat/<code> and register.
     link_code = models.CharField(max_length=20, default=new_link_code, unique=True)

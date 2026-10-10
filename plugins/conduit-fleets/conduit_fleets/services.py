@@ -7,15 +7,21 @@ Attendance is recorded three ways:
 - **FAT link:** pilots open the fleet's link and register the characters they flew with.
 - **Manually:** the FC or a fleet manager adds a character.
 
+While a fleet is tracked, the FAT lines (who has a FAT, and the FAT link) are added to the bottom of the in-game
+fleet's MOTD (``esi-fleets.write_fleet.v1``) and rewritten when they change. Whatever the FC wrote above them stays.
+
 A character gets at most one FAT per fleet. Attendance counts belong to whoever owns the character now.
 """
 
 from __future__ import annotations
 
+import html
 import logging
+import re
 from collections import defaultdict
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -29,6 +35,14 @@ from .models import Fat, Fleet, FleetType
 log = logging.getLogger(__name__)
 
 FLEET_SCOPE = "esi-fleets.read_fleet.v1"
+MOTD_SCOPE = "esi-fleets.write_fleet.v1"
+#: Starts the FAT lines in the MOTD. From the line it's on to the end of the MOTD is ours and gets replaced; the FC's
+#: text above it is kept.
+MOTD_TAG = "FATs by EvE Conduit"
+#: Characters of pilot names the MOTD lists before "and N more", so it stays readable and within EVE's limit.
+MOTD_NAMES = 400
+_BR = re.compile(r"<br\s*/?>", re.I)
+_TAG = re.compile(r"<[^>]*>")
 #: Tracking stops by itself after this long, in case nobody ends the fleet.
 MAX_TRACKING = timedelta(hours=12)
 DEFAULT_TYPES = (("CTA", "#f43f5e"), ("Stratop", "#fb923c"), ("Roam", "#22d3ee"), ("Home defense", "#34d399"), ("Mining", "#a78bfa"))
@@ -86,10 +100,16 @@ def end_fleet(fleet: Fleet) -> Fleet:
 
     if fleet.ended_at:
         raise FleetError("This fleet has already ended")
+    was_tracking = fleet.tracking
     fleet.ended_at = timezone.now()
     fleet.tracking = False
     fleet.link_open = False
     fleet.save(update_fields=["ended_at", "tracking", "link_open"])
+    if was_tracking:
+        try:
+            update_motd(fleet)  # "Fleet ended: N pilots got a FAT"
+        except Exception:  # ending the fleet mustn't fail over the MOTD
+            log.exception("Writing the MOTD of fleet %s failed", fleet.pk)
     pilots = fleet.fats.count()
     bus.emit("fleets.ended", fleet_id=fleet.pk, fleet=fleet.name, pilots=pilots, title=f"Fleet ended: {fleet.name}",
              summary=f"{pilots} pilot{'s' if pilots != 1 else ''} got a FAT", link=f"/p/fleets/{fleet.pk}", level="success")
@@ -99,8 +119,8 @@ def end_fleet(fleet: Fleet) -> Fleet:
 # --- tracking the in-game fleet ------------------------------------------------------------------------------------
 
 
-def start_tracking(fleet: Fleet, character_id: int, by) -> Fleet:
-    """Follow the in-game fleet ``character_id`` is boss of."""
+def start_tracking(fleet: Fleet, character_id: int, by, motd: bool = True) -> Fleet:
+    """Follow the in-game fleet ``character_id`` is boss of, and with ``motd`` put the FAT lines in its MOTD."""
     from conduit.esi.client import esi
     from conduit.esi.exceptions import EsiBackoff, EsiError, TokenInvalid
 
@@ -128,7 +148,8 @@ def start_tracking(fleet: Fleet, character_id: int, by) -> Fleet:
     fleet.esi_fleet_id = info["fleet_id"]
     fleet.tracking = True
     fleet.tracking_error = ""
-    fleet.save(update_fields=["tracking_character", "esi_fleet_id", "tracking", "tracking_error"])
+    fleet.motd, fleet.motd_written, fleet.motd_error = motd, "", ""
+    fleet.save(update_fields=["tracking_character", "esi_fleet_id", "tracking", "tracking_error", "motd", "motd_written", "motd_error"])
     poll(fleet)
     return fleet
 
@@ -169,7 +190,87 @@ def poll(fleet: Fleet) -> int:
     fleet.last_tracked_at = timezone.now()
     fleet.tracking_error = ""
     fleet.save(update_fields=["last_tracked_at", "tracking_error"])
+    update_motd(fleet)
     return added
+
+
+# --- the in-game fleet's MOTD --------------------------------------------------------------------------------------
+
+
+def motd_lines(fleet: Fleet) -> str:
+    """The FAT lines for the bottom of the MOTD, in EVE's MOTD markup. Newest FATs first."""
+    names = list(fleet.fats.order_by("-created_at", "character_name").values_list("character_name", flat=True))
+    lines = [f"<b>--- {MOTD_TAG} ---</b>"]
+    if fleet.ended_at:
+        lines.append(f"Fleet ended: {len(names)} pilot{'s' if len(names) != 1 else ''} got a FAT")
+    else:
+        if fleet.link_active:
+            lines.append(f'Not listed? <a href="{settings.SITE_URL}/p/fleets/fat/{fleet.link_code}">Get your FAT here</a>')
+        if names:
+            shown, used = [], 0
+            for name in names:
+                if shown and used + len(name) > MOTD_NAMES:
+                    break
+                shown.append(html.escape(name, quote=False))
+                used += len(name) + 2
+            more = len(names) - len(shown)
+            lines.append(f"{len(names)} with a FAT: " + ", ".join(shown) + (f" and {more} more" if more else ""))
+        else:
+            lines.append("Nobody has a FAT yet")
+    return "<br>".join(lines)
+
+
+def with_fat_lines(motd: str, lines: str) -> str:
+    """``motd`` with our old FAT lines (if any) replaced by ``lines`` at the bottom."""
+    at = motd.find(MOTD_TAG)
+    if at >= 0:
+        breaks = list(_BR.finditer(motd, 0, at))
+        motd = motd[: breaks[-1].start()] if breaks else ""
+    if not lines:
+        return motd
+    return f"{motd}<br>{lines}" if _TAG.sub("", motd).strip() else lines
+
+
+def update_motd(fleet: Fleet) -> None:
+    """Bring the FAT lines in the in-game fleet's MOTD up to date (or take them out when the FC switched them off)."""
+    from conduit.esi.client import esi
+    from conduit.esi.exceptions import EsiBackoff, EsiError, TokenInvalid
+
+    char = fleet.tracking_character
+    if not fleet.esi_fleet_id or char is None:
+        return
+    lines = motd_lines(fleet) if fleet.motd else ""
+    if lines == fleet.motd_written:
+        return
+    token = getattr(char, "token", None)
+    if token is None or not token.has_scopes(MOTD_SCOPE):
+        error = f"{char.name} hasn't allowed editing the fleet MOTD; log in with it again (Characters → Add character)"
+        if fleet.motd_error != error:
+            fleet.motd_error = error
+            fleet.save(update_fields=["motd_error"])
+        return
+    path = f"/fleets/{fleet.esi_fleet_id}"
+    try:
+        current = (esi().get(path, character=char, cache_response=False).data or {}).get("motd") or ""
+        esi().put(path, {"motd": with_fat_lines(current, lines)}, character=char)
+        error = ""
+    except (EsiBackoff, TokenInvalid):
+        return  # try again next minute; tracking reports a login that stopped working
+    except EsiError as exc:
+        # Not again until the lines change: every failed call counts against the ESI error limit.
+        error = (f"{char.name} is no longer the fleet boss" if exc.status in (403, 404)
+                 else f"ESI didn't take the new MOTD ({exc.status})")
+    fleet.motd_written, fleet.motd_error = lines, error
+    fleet.save(update_fields=["motd_written", "motd_error"])
+
+
+def set_motd(fleet: Fleet, on: bool) -> Fleet:
+    fleet.motd = on
+    fleet.motd_error = ""
+    fleet.save(update_fields=["motd", "motd_error"])
+    if fleet.tracking:
+        update_motd(fleet)
+    return fleet
 
 
 def track_all() -> int:
@@ -368,6 +469,8 @@ def fleet_detail(fleet: Fleet, user) -> dict:
             "character": {"id": fleet.tracking_character_id, "name": fleet.tracking_character.name} if fleet.tracking_character_id else None,
             "last_at": fleet.last_tracked_at.isoformat() if fleet.last_tracked_at else None,
             "error": fleet.tracking_error,
+            "motd": fleet.motd,
+            "motd_error": fleet.motd_error,
         } if editable else None,
     }
 
@@ -377,5 +480,6 @@ def fc_characters(user) -> list[dict]:
     out = []
     for c in Character.objects.filter(user=user).select_related("token"):
         token = getattr(c, "token", None)
-        out.append({"id": c.pk, "name": c.name, "portrait": portrait_url(c.pk, 64), "can_track": bool(token and token.has_scopes(FLEET_SCOPE))})
+        out.append({"id": c.pk, "name": c.name, "portrait": portrait_url(c.pk, 64), "can_track": bool(token and token.has_scopes(FLEET_SCOPE)),
+                    "can_motd": bool(token and token.has_scopes(MOTD_SCOPE))})
     return out
