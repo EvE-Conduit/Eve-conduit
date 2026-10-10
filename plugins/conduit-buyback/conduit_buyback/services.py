@@ -14,8 +14,8 @@ from django.utils import timezone
 from conduit.eve.models import EveName
 from conduit.sde.models import ItemGroup, ItemType, MarketGroup, SolarSystem, type_icon_url
 
-from . import market, pricing
-from .models import BuybackSettings, Contract, ItemRule, Location, Program, Quote, WatchRule
+from . import catalog, market, pricing
+from .models import BuybackSettings, Contract, GroupRule, ItemRule, Location, Program, Quote, WatchRule
 
 OPEN = ("outstanding", "in_progress")
 TRACKING_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
@@ -204,8 +204,7 @@ def _names(ids) -> dict[int, str]:
 
 def program_out(p: Program, user=None, settings: BuybackSettings | None = None) -> dict:
     """What sellers see: the terms, where items are priced, every rule that changes a price, nothing internal."""
-    rules = list(p.item_rules.all())
-    names = dict(ItemType.objects.filter(pk__in=[r.type_id for r in rules]).values_list("pk", "name"))
+    rules = catalog.rules_out(p)
     out = {
         "id": p.pk,
         "name": p.name,
@@ -230,11 +229,8 @@ def program_out(p: Program, user=None, settings: BuybackSettings | None = None) 
         "t1_refining_rate": float(p.t1_refining_rate),
         "prices": prices_out(settings, p),
         "terms": contract_terms(p),
-        "item_rules": sorted(
-            [{"type_id": r.type_id, "name": names.get(r.type_id, f"Type {r.type_id}"), "icon": type_icon_url(r.type_id, 32), "tax": float(r.tax),
-              "disallowed": r.disallowed, "static_price": float(r.static_price) if r.static_price is not None else None} for r in rules],
-            key=lambda r: r["name"],
-        ),
+        "item_rules": rules["item_rules"],
+        "group_rules": rules["group_rules"],
         "can_manage": bool(user and user.is_authenticated and can_manage(user, p)),
     }
     return out
@@ -430,7 +426,7 @@ def manage_out(p: Program) -> dict:
         "hub_id": p.hub_id,
         "hub_name": p.hub_name,
         "owner": owner_out(p),
-        "watch_rules": watch_rules_out(p),
+        "watch_rules": catalog.rules_out(p)["watch_rules"],
     }
 
 
@@ -524,7 +520,7 @@ def save_location(location: Location | None, data: dict) -> Location:
 
 
 def item_rules_out(program: Program) -> list[dict]:
-    return program_out(program)["item_rules"]
+    return catalog.rules_out(program)["item_rules"]
 
 
 def save_item_rules(program: Program, type_ids: list[int], tax: float, disallowed: bool, static_price: float | None) -> int:
@@ -542,33 +538,47 @@ def save_item_rules(program: Program, type_ids: list[int], tax: float, disallowe
     return len(ids)
 
 
-def market_group_types(market_group_id: int) -> list[int]:
-    """Every published type in the market group and the groups under it."""
-    ids, todo = set(), [market_group_id]
-    while todo and len(ids) < 5000:
-        ids.update(todo)
-        todo = list(MarketGroup.objects.filter(parent_id__in=todo).exclude(pk__in=ids).values_list("pk", flat=True))
-    return list(ItemType.objects.filter(market_group_id__in=ids, published=True).values_list("pk", flat=True)[:5000])
+def set_rule(program: Program, type_id: int | None, market_group_id: int | None, rule: dict | None, watch: bool | None) -> str:
+    """An item's or a whole market group's terms (None: back to what's above it) and whether it's checked by hand.
+    Returns its name."""
+    if bool(type_id) == bool(market_group_id):
+        raise BuybackError("Pick an item or a market group")
+    if type_id:
+        name = ItemType.objects.filter(pk=type_id, published=True).values_list("name", flat=True).first()
+    else:
+        name = MarketGroup.objects.filter(pk=market_group_id).values_list("name", flat=True).first()
+    if name is None:
+        raise BuybackError("No such item or market group")
+    model, key = (ItemRule, {"type_id": type_id}) if type_id else (GroupRule, {"market_group_id": market_group_id})
+    if rule is None:
+        model.objects.filter(program=program, **key).delete()
+    else:
+        tax, static_price = rule.get("tax") or 0, rule.get("static_price")
+        if not -100 <= tax <= 100:
+            raise BuybackError("The tax goes from -100 to 100 percent")
+        if static_price is not None and (market_group_id or static_price < 0):
+            raise BuybackError("Fixed prices are for single items and can't be negative")
+        defaults = {"tax": Decimal(str(tax)), "disallowed": bool(rule.get("disallowed"))}
+        if type_id:
+            defaults["static_price"] = Decimal(str(static_price)) if static_price is not None else None
+        model.objects.update_or_create(program=program, **key, defaults=defaults)
+    if watch is not None:
+        target = {"type_id": type_id or None, "group_id": None, "market_group_id": market_group_id or None}
+        if watch:
+            WatchRule.objects.get_or_create(program=program, **target)
+        else:
+            WatchRule.objects.filter(program=program, **target).delete()
+    return name
 
 
-def watch_rules_out(program: Program) -> list[dict]:
-    rules = list(program.watch_rules.all())
-    types = dict(ItemType.objects.filter(pk__in=[r.type_id for r in rules if r.type_id]).values_list("pk", "name"))
-    groups = dict(ItemGroup.objects.filter(pk__in=[r.group_id for r in rules if r.group_id]).values_list("pk", "name"))
-    return [
-        {"id": r.pk, "kind": "type" if r.type_id else "group", "target_id": r.type_id or r.group_id,
-         "name": types.get(r.type_id, f"Type {r.type_id}") if r.type_id else groups.get(r.group_id, f"Group {r.group_id}"),
-         "icon": type_icon_url(r.type_id, 32) if r.type_id else None}
-        for r in rules
-    ]
-
-
-def add_watch(program: Program, type_id: int | None, group_id: int | None) -> WatchRule:
-    if bool(type_id) == bool(group_id):
-        raise BuybackError("Pick an item or an item group")
-    if type_id and not ItemType.objects.filter(pk=type_id).exists() or group_id and not ItemGroup.objects.filter(pk=group_id).exists():
+def add_watch(program: Program, type_id: int | None, group_id: int | None, market_group_id: int | None = None) -> WatchRule:
+    if sum(bool(x) for x in (type_id, group_id, market_group_id)) != 1:
+        raise BuybackError("Pick an item, an item group or a market group")
+    if (type_id and not ItemType.objects.filter(pk=type_id).exists() or group_id and not ItemGroup.objects.filter(pk=group_id).exists()
+            or market_group_id and not MarketGroup.objects.filter(pk=market_group_id).exists()):
         raise BuybackError("No such item or group")
-    rule, _ = WatchRule.objects.get_or_create(program=program, type_id=type_id or None, group_id=group_id or None)
+    rule, _ = WatchRule.objects.get_or_create(program=program, type_id=type_id or None, group_id=group_id or None,
+                                              market_group_id=market_group_id or None)
     return rule
 
 

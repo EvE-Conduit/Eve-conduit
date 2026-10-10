@@ -8,12 +8,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
-import { Cart, Coins, Eye, Pencil, Pin, Plus, Refresh, Settings as SettingsIcon, Tag, Trash, Warning } from "./icons";
+import { Cart, Coins, Pencil, Pin, Plus, Refresh, Settings as SettingsIcon, Tag, Trash, Warning } from "./icons";
 import { BackLink, HOME } from "./member";
 import { ItemCell, Problems, StatusBadge, SystemText } from "./shared";
 import {
-  BASE, type ContractRow, type Hit, type ItemRule, type ManagedDetail, type ManagedProgram, type Options, type Place, type ProgramForm,
-  type Settings, type Stats, type TradeHub, type WatchRule,
+  BASE, type ContractRow, type Hit, type ManagedDetail, type ManagedProgram, type Options, type Place, type ProgramForm, type Settings,
+  type Stats, type TradeHub,
 } from "./types";
 
 const MANAGE = `${HOME}/manage`;
@@ -533,7 +533,7 @@ function pick(p: ManagedDetail): ProgramForm {
   return out as unknown as ProgramForm;
 }
 
-// --- item rules and watchlist -------------------------------------------------------------------------------------
+// --- searches -------------------------------------------------------------------------------------
 
 function Search({ kind, placeholder, onPick }: { kind: string; placeholder: string; onPick: (hit: Hit) => void }) {
   const [q, setQ] = useState("");
@@ -563,176 +563,6 @@ function Search({ kind, placeholder, onPick }: { kind: string; placeholder: stri
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-type RuleMode = "tax" | "fixed" | "banned";
-
-export function ItemsPage() {
-  const { id } = useParams();
-  const qc = useQueryClient();
-  const key = ["buyback", "managed", id];
-  const { data } = useQuery({ queryKey: key, queryFn: () => api.get<ManagedDetail>(`${BASE}/manage/programs/${id}`) });
-  const [target, setTarget] = useState<{ kind: "type" | "market"; hit: Hit } | null>(null);
-  const [mode, setMode] = useState<RuleMode>("tax");
-  const [amount, setAmount] = useState("0");
-  const [filter, setFilter] = useState("");
-  const [clearAll, setClearAll] = useState(false);
-  const setRules = (item_rules: ItemRule[]) => qc.setQueryData<ManagedDetail>(key, (d) => (d ? { ...d, item_rules } : d));
-  const setWatch = (watch_rules: WatchRule[]) => qc.setQueryData<ManagedDetail>(key, (d) => (d ? { ...d, watch_rules } : d));
-  const add = useMutation({
-    mutationFn: () =>
-      api.post<{ added: number; item_rules: ItemRule[] }>(`${BASE}/manage/programs/${id}/items`, {
-        type_ids: target?.kind === "type" ? [target.hit.id] : [],
-        market_group_id: target?.kind === "market" ? target.hit.id : null,
-        tax: mode === "tax" ? Number(amount) : 0,
-        disallowed: mode === "banned",
-        static_price: mode === "fixed" ? Number(amount) : null,
-      }),
-    onSuccess: (r) => {
-      setRules(r.item_rules);
-      toast.success(`${r.added} item${r.added === 1 ? "" : "s"} set`);
-      setTarget(null);
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: (typeId: number) => api.delete<{ item_rules: ItemRule[] }>(`${BASE}/manage/programs/${id}/items/${typeId}`),
-    onSuccess: (r) => setRules(r.item_rules),
-  });
-  const removeAll = useMutation({
-    mutationFn: () => api.delete<{ item_rules: ItemRule[] }>(`${BASE}/manage/programs/${id}/items`),
-    onSuccess: (r) => setRules(r.item_rules),
-  });
-  const watch = useMutation({
-    mutationFn: (body: { type_id?: number; group_id?: number }) => api.post<WatchRule[]>(`${BASE}/manage/programs/${id}/watchlist`, body),
-    onSuccess: setWatch,
-    onError: (e: Error) => toast.error(e.message),
-  });
-  const unwatch = useMutation({
-    mutationFn: (ruleId: number) => api.delete<WatchRule[]>(`${BASE}/manage/programs/${id}/watchlist/${ruleId}`),
-    onSuccess: setWatch,
-  });
-  if (!data) return <Skeleton className="h-96" />;
-  const rules = data.item_rules.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()));
-
-  return (
-    <div>
-      <BackLink to={`${MANAGE}/${id}`}>{data.name}</BackLink>
-      <PageHeader
-        icon={<Tag />}
-        title="Item rules"
-        description={
-          data.allow_all_items
-            ? "Everything is bought at the program's terms; these items have their own: extra tax (or less), a fixed price, or not bought."
-            : "Only these items are bought."
-        }
-      />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader title="Add items" description="One item, or every item in a market group and the groups under it (Minerals, Standard Ores, Salvaged Materials…)." />
-            <CardBody className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Search kind="types" placeholder="Find an item…" onPick={(hit) => setTarget({ kind: "type", hit })} />
-                <Search kind="market-groups" placeholder="Find a market group…" onPick={(hit) => setTarget({ kind: "market", hit })} />
-              </div>
-              {target && (
-                <div className="space-y-4 border border-border bg-surface-2 p-4">
-                  <div className="text-sm">
-                    {target.kind === "market" ? "Every item in " : ""}
-                    <span className="font-medium">{target.hit.name}</span>
-                    <span className="text-subtle"> · {target.hit.subtitle}</span>
-                  </div>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <Segmented value={mode} onChange={setMode} options={[{ value: "tax", label: "Tax" }, { value: "fixed", label: "Fixed price" }, { value: "banned", label: "Not bought" }]} />
-                    {mode !== "banned" && (
-                      <div className="flex items-center gap-2">
-                        <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-36 font-mono" />
-                        <span className="text-sm text-subtle">{mode === "tax" ? "% on top of the program's (negative for less)" : "ISK per unit, no tax"}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="primary" loading={add.isPending} onClick={() => add.mutate()}>Set</Button>
-                    <Button variant="ghost" onClick={() => setTarget(null)}>Cancel</Button>
-                  </div>
-                </div>
-              )}
-            </CardBody>
-          </Card>
-          <Card>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div className="hud-label text-subtle">{data.item_rules.length} item{data.item_rules.length === 1 ? "" : "s"}</div>
-              <div className="flex items-center gap-2">
-                <SearchInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" className="w-48" />
-                {data.item_rules.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={() => setClearAll(true)}>
-                    <Trash /> Remove all
-                  </Button>
-                )}
-              </div>
-            </div>
-            {rules.length === 0 ? (
-              <EmptyState icon={<Tag />} title={data.item_rules.length ? "No match" : "No item rules"} />
-            ) : (
-              <ul className="max-h-[600px] divide-y divide-border overflow-y-auto">
-                {rules.map((r) => (
-                  <li key={r.type_id} className="flex items-center justify-between gap-3 px-4 py-2">
-                    <ItemCell icon={r.icon} name={r.name} />
-                    <div className="flex shrink-0 items-center gap-3">
-                      {r.disallowed ? (
-                        <Badge tone="danger">not bought</Badge>
-                      ) : r.static_price != null ? (
-                        <span className="font-mono text-sm">{isk(r.static_price, { full: true })}</span>
-                      ) : (
-                        <span className="font-mono text-sm text-muted">{r.tax > 0 ? "+" : ""}{r.tax}% tax</span>
-                      )}
-                      <Button size="icon-xs" variant="ghost" aria-label={`Remove ${r.name}`} onClick={() => remove.mutate(r.type_id)}>
-                        <Trash />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-        <Card className="h-fit">
-          <CardHeader title="Manual review" description="Quotes with these items are flagged, and so are their contracts: officer modules, rare loot, anything easy to manipulate." />
-          <CardBody className="space-y-3">
-            <Search kind="types" placeholder="Add an item…" onPick={(h) => watch.mutate({ type_id: h.id })} />
-            <Search kind="groups" placeholder="Add an item group…" onPick={(h) => watch.mutate({ group_id: h.id })} />
-            {data.watch_rules.length === 0 ? (
-              <p className="text-sm text-subtle">Nothing on the list.</p>
-            ) : (
-              <ul className="divide-y divide-border border border-border">
-                {data.watch_rules.map((w) => (
-                  <li key={w.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <ItemCell icon={w.icon} name={w.name} sub={w.kind === "group" ? "Item group" : undefined} />
-                    <Button size="icon-xs" variant="ghost" aria-label={`Remove ${w.name}`} onClick={() => unwatch.mutate(w.id)}>
-                      <Trash />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="flex items-center gap-1.5 text-xs text-subtle">
-              <Eye className="size-3.5" /> Sellers see which of their items will be checked.
-            </p>
-          </CardBody>
-        </Card>
-      </div>
-      <ConfirmDialog
-        open={clearAll}
-        onOpenChange={setClearAll}
-        title="Remove every item rule?"
-        description={data.allow_all_items ? "All items go back to the program's terms." : "The program won't buy anything until you add items again."}
-        confirmLabel="Remove all"
-        danger
-        onConfirm={() => removeAll.mutateAsync()}
-      />
     </div>
   );
 }

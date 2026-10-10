@@ -13,7 +13,7 @@ from conduit.access.models import State
 from conduit.audit.services import record
 from conduit.permissions import require_perm
 
-from . import market, prices, services
+from . import catalog, market, prices, services
 from .models import BuybackSettings, Contract, ItemPrice, Location, MarketRead, Program, Quote
 
 router = Router(tags=["buyback"], auth=django_auth)
@@ -291,7 +291,6 @@ def sync_now(request, program_id: int):
 
 class RulesIn(Schema):
     type_ids: list[int] = []
-    market_group_id: int | None = None
     tax: float = 0
     disallowed: bool = False
     static_price: float | None = None
@@ -301,10 +300,8 @@ class RulesIn(Schema):
 def add_items(request, program_id: int, payload: RulesIn):
     p = _run(services.managed_program, request.user, program_id)
     ids = list(payload.type_ids[:5000])
-    if payload.market_group_id:
-        ids += services.market_group_types(payload.market_group_id)
     if not ids:
-        raise HttpError(400, "Pick an item or a market group")
+        raise HttpError(400, "Pick an item")
     n = _run(services.save_item_rules, p, ids, payload.tax, payload.disallowed, payload.static_price)
     record("buyback.items", f"set {n} item rule{'s' if n != 1 else ''} in the buyback program {p.name}", request=request,
            target_type="plugin", details={"plugin": "buyback", "program_id": p.pk})
@@ -322,28 +319,71 @@ def delete_item(request, program_id: int, type_id: int):
 def delete_all_items(request, program_id: int):
     p = _run(services.managed_program, request.user, program_id)
     n, _ = p.item_rules.all().delete()
-    record("buyback.items", f"removed all {n} item rules from the buyback program {p.name}", request=request, target_type="plugin",
-           details={"plugin": "buyback", "program_id": p.pk})
-    return {"item_rules": []}
+    g, _ = p.group_rules.all().delete()
+    record("buyback.items", f"removed all {n} item and {g} market group rules from the buyback program {p.name}", request=request,
+           target_type="plugin", details={"plugin": "buyback", "program_id": p.pk})
+    return catalog.rules_out(p)
+
+
+# The market browser: the in-game market tree with each item's and group's terms in the program.
+
+
+@router.get("/manage/programs/{program_id}/market")
+def browse_market(request, program_id: int, group: int | None = None):
+    p = _run(services.managed_program, request.user, program_id)
+    return catalog.browse(p, group)
+
+
+@router.get("/manage/programs/{program_id}/market/search")
+def search_market(request, program_id: int, q: str = ""):
+    p = _run(services.managed_program, request.user, program_id)
+    return catalog.search(p, q[:100])
+
+
+class RuleIn(Schema):
+    tax: float = 0
+    disallowed: bool = False
+    static_price: float | None = None
+
+
+class SetRuleIn(Schema):
+    type_id: int | None = None
+    market_group_id: int | None = None
+    #: None: no rule of its own (the group above it, or the program's terms, apply).
+    rule: RuleIn | None = None
+    #: On the manual review list; None leaves it as it is.
+    watch: bool | None = None
+
+
+@router.post("/manage/programs/{program_id}/rules")
+def set_rule(request, program_id: int, payload: SetRuleIn):
+    p = _run(services.managed_program, request.user, program_id)
+    rule = payload.rule.model_dump() if payload.rule else None
+    name = _run(services.set_rule, p, payload.type_id, payload.market_group_id, rule, payload.watch)
+    what = "item" if payload.type_id else "market group"
+    record("buyback.items", f"{'set' if rule else 'cleared'} the terms of the {what} {name} in the buyback program {p.name}",
+           request=request, target_type="plugin", details={"plugin": "buyback", "program_id": p.pk})
+    return catalog.rules_out(p)
 
 
 class WatchIn(Schema):
     type_id: int | None = None
     group_id: int | None = None
+    market_group_id: int | None = None
 
 
 @router.post("/manage/programs/{program_id}/watchlist")
 def add_watch(request, program_id: int, payload: WatchIn):
     p = _run(services.managed_program, request.user, program_id)
-    _run(services.add_watch, p, payload.type_id, payload.group_id)
-    return services.watch_rules_out(p)
+    _run(services.add_watch, p, payload.type_id, payload.group_id, payload.market_group_id)
+    return catalog.rules_out(p)["watch_rules"]
 
 
 @router.delete("/manage/programs/{program_id}/watchlist/{rule_id}")
 def delete_watch(request, program_id: int, rule_id: int):
     p = _run(services.managed_program, request.user, program_id)
     p.watch_rules.filter(pk=rule_id).delete()
-    return services.watch_rules_out(p)
+    return catalog.rules_out(p)["watch_rules"]
 
 
 # --- locations -------------------------------------------------------------------------------------------------------

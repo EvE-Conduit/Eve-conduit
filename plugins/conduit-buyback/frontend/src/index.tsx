@@ -1,6 +1,7 @@
 import { definePlugin } from "@conduit/sdk";
 
-import { EditPage, ItemsPage, LocationsPage, ManagePage, ManagerWidget, SettingsPage, StatsPage } from "./manage";
+import { EditPage, LocationsPage, ManagePage, ManagerWidget, SettingsPage, StatsPage } from "./manage";
+import { ItemsPage } from "./market";
 import { ContractPage, HomePage, MyPage, ProgramPage, QuotePage, SellerWidget } from "./member";
 import { PublicList, PublicProgram, PublicQuote } from "./public";
 

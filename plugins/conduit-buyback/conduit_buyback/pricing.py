@@ -11,7 +11,7 @@ from django.db.models.functions import Lower
 
 from conduit.sde.models import ItemType, TypeMaterial, type_icon_url
 
-from . import market, prices
+from . import catalog, market, prices
 from .models import BuybackSettings, ItemPrice, Program
 
 ASTEROID_CATEGORY = 25  # ore, moon ore and ice, raw and compressed
@@ -134,10 +134,8 @@ class _Context:
         self.types.update({t.pk: t for t in ItemType.objects.filter(pk__in=compressed_ids - set(self.types)).select_related("group")})
         #: Compressed ore and ice: they are what something else compresses into.
         self.compressed = set(ItemType.objects.filter(compressed_type_id__in=type_ids).values_list("compressed_type_id", flat=True))
-        self.rules = {r.type_id: r for r in program.item_rules.filter(type_id__in=type_ids)}
-        watch = list(program.watch_rules.all())
-        self.watch_types = {w.type_id for w in watch if w.type_id}
-        self.watch_groups = {w.group_id for w in watch if w.group_id}
+        #: Item rules, market group rules (Minerals, Frigates...) and the manual review list.
+        self.rules = catalog.Rules(program, type_ids)
         refine = [t for t in type_ids if t in self.types and self._refinable(self.types[t])]
         self.materials: dict[int, list[tuple[int, int]]] = defaultdict(list)
         for m in TypeMaterial.objects.filter(type_id__in=refine):
@@ -222,7 +220,7 @@ def _guard(ctx: _Context, t: ItemType, method: str) -> dict:
 
 def _line(ctx: _Context, t: ItemType, quantity: int, assembled: bool) -> dict:
     p = ctx.program
-    rule = ctx.rules.get(t.pk)
+    rule = ctx.rules.for_type(t)
     volume = _volume(t)
     line = {
         "type_id": t.pk,
@@ -241,7 +239,7 @@ def _line(ctx: _Context, t: ItemType, quantity: int, assembled: bool) -> dict:
         "unit_price": 0.0,
         "value": 0.0,
         "options": {},
-        "watch": t.pk in ctx.watch_types or t.group_id in ctx.watch_groups,
+        "watch": ctx.rules.watched(t),
         "guard": None,
     }
     if rule and rule.disallowed:

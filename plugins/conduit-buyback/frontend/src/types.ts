@@ -21,13 +21,80 @@ export interface Terms {
   expiration_days: number;
 }
 
-export interface ItemRule {
-  type_id: number;
-  name: string;
-  icon: string;
+/** An item's or a market group's terms. */
+export interface RuleTerms {
   tax: number;
   disallowed: boolean;
   static_price: number | null;
+}
+
+/** A market group on the way to an item, top first. */
+export interface Crumb {
+  id: number;
+  name: string;
+  count: number;
+}
+
+export interface ItemRule extends RuleTerms {
+  type_id: number;
+  name: string;
+  icon: string;
+  path: Crumb[];
+}
+
+/** Terms for every item in a market group (and the groups under it) without terms of its own. */
+export interface GroupRule extends RuleTerms {
+  market_group_id: number;
+  name: string;
+  count: number;
+  /** The groups above it. */
+  path: Crumb[];
+}
+
+/** The terms that apply to an item or group, and where they come from. */
+export type Effective = RuleTerms & { from: { kind: "type"; id: number } | { kind: "group"; id: number; name: string } };
+
+interface NodeBase {
+  id: number;
+  name: string;
+  /** Its own terms. */
+  rule: RuleTerms | null;
+  effective: Effective | null;
+  /** On the manual review list itself... */
+  watch: boolean;
+  /** ...or through a group above it. */
+  watched: boolean;
+  path?: Crumb[];
+}
+
+export interface GroupNode extends NodeBase {
+  kind: "group";
+  count: number;
+  has_children: boolean;
+}
+
+export interface TypeNode extends NodeBase {
+  kind: "type";
+  icon: string;
+  market_group_id: number;
+}
+
+export interface MarketLevel {
+  group: GroupNode | null;
+  path: Crumb[];
+  groups: GroupNode[];
+  types: TypeNode[];
+}
+
+export interface MarketHits {
+  groups: GroupNode[];
+  types: TypeNode[];
+}
+
+export interface RuleSet {
+  item_rules: ItemRule[];
+  group_rules: GroupRule[];
+  watch_rules: WatchRule[];
 }
 
 export interface Program {
@@ -56,6 +123,7 @@ export interface Program {
   prices: PriceInfo;
   terms: Terms;
   item_rules: ItemRule[];
+  group_rules: GroupRule[];
   can_manage: boolean;
 }
 
@@ -236,10 +304,13 @@ export interface Seller {
 
 export interface WatchRule {
   id: number;
-  kind: "type" | "group";
+  /** An item, a market group, or (older lists) an inventory group. */
+  kind: "type" | "market" | "group";
   target_id: number;
   name: string;
   icon: string | null;
+  path: Crumb[];
+  count?: number;
 }
 
 export interface ProgramForm {
