@@ -34,7 +34,7 @@ from datetime import datetime
 import seat_dump
 
 #: Kept equal to Conduit's version (a test checks), so a report or error says which build it came from.
-VERSION = "0.5.36"
+VERSION = "0.5.37"
 #: Users per request. With tokens and scopes this stays well under Conduit's request size limit.
 BATCH = 25
 #: Seconds between polls of the token check.
