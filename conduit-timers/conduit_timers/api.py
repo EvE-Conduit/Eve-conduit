@@ -38,6 +38,14 @@ def structure_types(request):
     return [{"name": name, "type_id": type_id} for name, type_id in services.STRUCTURE_TYPES.items()]
 
 
+@router.get("/structures")
+@require_perm("timers.manage_timers")
+def structures(request, q: str = ""):
+    """Our own structures (from the corporation sheet) matching ``q`` by name, system or type, to fill in the editor.
+    Only those of corporations whose sheet the user may see; otherwise an empty list."""
+    return services.structure_search(request.user, q)
+
+
 # --- settings (timers.manage_timers) ------------------------------------------------------------------------------
 
 
@@ -110,6 +118,8 @@ class TimerIn(Schema):
     important: bool = False
     #: Tell members under the bell when it's added (webhooks always hear about it).
     notify: bool = True
+    #: The in-game structure id when the timer was picked from our own structures.
+    structure_id: int | None = None
 
 
 def _save(request, t, payload: TimerIn):

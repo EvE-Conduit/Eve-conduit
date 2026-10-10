@@ -1,6 +1,6 @@
 [project]
 name = "conduit-timers"
-version = "1.0.0"
+version = "1.1.0"
 description = "Timers: structure and sovereignty timers on one board with live countdowns, who's going, reminders, and timers read from your corporations' structures and in-game notifications."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

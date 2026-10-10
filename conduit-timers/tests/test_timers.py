@@ -235,3 +235,40 @@ def test_imports_can_be_switched_off(people, api_client, monkeypatch):
     assert api_client.call("post", "/api/p/timers/import").json() == {"structures": 5, "notifications": 7}
     api_client.call("put", "/api/p/timers/settings", {"import_structures": False, "import_notifications": False})
     assert api_client.call("post", "/api/p/timers/import").json() == {"structures": 0, "notifications": 0}
+
+
+# --- picking our own structures in the editor ---------------------------------------------------------------------
+
+
+def test_own_structures_are_offered_and_fill_the_timer(people, api_client, corp):
+    from conduit.corp.models import Structure
+
+    end = timezone.now() + timedelta(hours=30)
+    Structure.objects.create(corporation=corp, structure_id=1030000000001, name="Jita Keep", type_id=35834, system_id=JITA, state="armor_reinforce",
+                             state_timer_start=timezone.now(), state_timer_end=end)
+    Structure.objects.create(corporation=corp, structure_id=1030000000002, name="Perimeter Refinery", type_id=35835, system_id=PERIMETER, state="shield_vulnerable")
+    manager = people["manager"]
+    api_client.force_login(manager)
+    # Without access to the corporation sheet nothing is offered: the manager types everything by hand.
+    assert api_client.call("get", "/api/p/timers/structures?q=jita").json() == []
+    manager.user_permissions.add(Permission.objects.get(codename="view_own_corporation"))
+    manager = type(manager).objects.get(pk=manager.pk)
+    api_client.force_login(manager)
+    # By system name: every structure in the system. By structure name and by type too.
+    hits = api_client.call("get", "/api/p/timers/structures?q=jita").json()
+    assert [h["name"] for h in hits] == ["Jita Keep"]
+    assert hits[0]["structure_type"] == "Keepstar" and hits[0]["system"]["name"] == "Jita" and hits[0]["owner"] == "Test Corp"
+    assert hits[0]["kind"] == "armor" and hits[0]["ends_at"] == end.isoformat() and hits[0]["state"] == "armor_reinforce"
+    assert [h["name"] for h in api_client.call("get", "/api/p/timers/structures?q=perim").json()] == ["Perimeter Refinery"]
+    by_type = api_client.call("get", "/api/p/timers/structures?q=athanor").json()
+    assert [h["name"] for h in by_type] == ["Perimeter Refinery"] and by_type[0]["kind"] is None and by_type[0]["ends_at"] is None
+    assert api_client.call("get", "/api/p/timers/structures?q=x").json() == []
+    assert api_client.call("get", "/api/p/timers/structures?q=nowhere").json() == []
+    # Members who can't add timers can't look either.
+    api_client.force_login(people["pilot"])
+    assert api_client.call("get", "/api/p/timers/structures?q=jita").status_code == 403
+    # A timer added from the pick keeps the structure id, so the automatic import doesn't add it again.
+    t = add(api_client, manager, name="Jita Keep", structure_type="Keepstar", structure_id=1030000000001, ends_at=end.isoformat())
+    assert t["structure_id"] == 1030000000001 and t["source"] == "manual"
+    assert services.import_structures() == 0
+    assert Timer.objects.count() == 1

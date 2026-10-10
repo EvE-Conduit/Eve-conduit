@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { fromLocalInput, parseTimeLeft, toLocalInput } from "./time";
-import { BASE, type Kind, KINDS, secTone, type Side, type StructureType, type System, type Timer } from "./types";
+import { BASE, type Kind, KINDS, type OwnStructure, secTone, type Side, type StructureType, type System, type Timer } from "./types";
 
 export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: () => void }) {
   const qc = useQueryClient();
@@ -19,6 +19,7 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
     notes: t?.notes ?? "",
     important: t?.important ?? false,
     notify: true,
+    structure_id: t?.structure_id ?? (null as number | null),
   });
   const [mode, setMode] = useState<"left" | "exact">(t ? "exact" : "left");
   const [left, setLeft] = useState("");
@@ -26,6 +27,14 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
   // "Time left" counts from when it was typed, so the saved time doesn't drift while the form is open.
   const [typedAt, setTypedAt] = useState(Date.now());
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  /** One of our own structures was picked: fill in everything the corporation sheet knows about it. */
+  const pickStructure = (s: OwnStructure) => {
+    set({ name: s.name, structure_type: s.structure_type, system: s.system, owner: s.owner, side: "friendly", structure_id: s.structure_id, ...(s.kind ? { kind: s.kind } : {}) });
+    if (s.ends_at) {
+      setMode("exact");
+      setExact(toLocalInput(s.ends_at));
+    }
+  };
 
   const seconds = mode === "left" ? parseTimeLeft(left) : null;
   const endsAt = mode === "left" ? (seconds != null ? new Date(typedAt + seconds * 1000).toISOString() : null) : fromLocalInput(exact);
@@ -44,6 +53,7 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
         notes: form.notes,
         important: form.important,
         notify: form.notify,
+        structure_id: form.structure_id,
       };
       return t ? api.put<Timer>(`${BASE}/${t.id}`, body) : api.post<Timer>(BASE, body);
     },
@@ -73,9 +83,12 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
-          <Field label="Structure" required hint="Its name as shown in game.">
-            <Input value={form.name} maxLength={200} onChange={(e) => set({ name: e.target.value })} placeholder="M-OEE8 Keepstar" autoFocus />
-          </Field>
+          <StructurePicker
+            value={form.name}
+            picked={form.structure_id}
+            onChange={(name) => set({ name, structure_id: null })}
+            onPick={pickStructure}
+          />
           <Field label="Type">
             <Input list="timers-structure-types" value={form.structure_type} maxLength={60} onChange={(e) => set({ structure_type: e.target.value })} placeholder="Fortizar" />
             <datalist id="timers-structure-types">
@@ -207,6 +220,94 @@ function SystemPicker({ value, onChange }: { value: System | null; onChange: (s:
                 <span className={cn("font-mono text-xs font-semibold tabular-nums", secTone(s.security))}>{s.security.toFixed(1)}</span>
                 <span className="font-medium">{s.name}</span>
                 <span className="ml-auto truncate text-xs text-subtle">{s.region}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const STATE_LABEL: Record<string, string> = {
+  shield_vulnerable: "Shields up",
+  armor_vulnerable: "Armor vulnerable",
+  hull_vulnerable: "Hull vulnerable",
+  armor_reinforce: "Armor reinforced",
+  hull_reinforce: "Hull reinforced",
+  anchoring: "Anchoring",
+  anchor_vulnerable: "Anchoring",
+  unanchored: "Unanchored",
+  fitting_invulnerable: "Fitting",
+  onlining_vulnerable: "Onlining",
+  deploy_vulnerable: "Deploying",
+  unknown: "",
+};
+
+/**
+ * The structure's name. While typing, our own structures (from the corporation sheet) whose name, system or type
+ * matches are offered; picking one fills in the rest of the form. With nothing to offer (no match, or no access to
+ * the corporation sheet) the name is simply what was typed.
+ */
+function StructurePicker({ value, picked, onChange, onPick }: { value: string; picked: number | null; onChange: (name: string) => void; onPick: (s: OwnStructure) => void }) {
+  const [open, setOpen] = useState(false);
+  const [debounced, setDebounced] = useState(value);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = setTimeout(() => setDebounced(value), 150);
+    return () => clearTimeout(h);
+  }, [value]);
+  const { data: hits } = useQuery({
+    queryKey: ["timers", "structures", debounced],
+    queryFn: () => api.get<OwnStructure[]>(`${BASE}/structures?q=${encodeURIComponent(debounced)}`),
+    enabled: open && picked == null && debounced.trim().length >= 2,
+    staleTime: 60_000,
+  });
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+  const pick = (s: OwnStructure) => { onPick(s); setOpen(false); };
+  const list = open && picked == null && debounced.trim().length >= 2 ? hits ?? [] : [];
+  return (
+    <div ref={box} className="relative">
+      <Field
+        label="Structure"
+        required
+        hint={picked != null ? "One of ours: filled in from the corporation sheet." : "Its name as shown in game. Type a name or system to pick one of your own structures."}
+      >
+        <Input
+          value={value}
+          maxLength={200}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" && list[0]) { e.preventDefault(); pick(list[0]); } if (e.key === "Escape") setOpen(false); }}
+          placeholder="M-OEE8 Keepstar"
+          autoComplete="off"
+          aria-autocomplete="list"
+          aria-expanded={list.length > 0}
+          autoFocus
+        />
+      </Field>
+      {list.length > 0 && (
+        <ul role="listbox" className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-auto border border-border bg-surface shadow-e2">
+          {list.map((s) => (
+            <li key={s.structure_id} role="option" aria-selected={false}>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(s)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-hover">
+                <img src={s.icon} alt="" className="size-7 shrink-0 border border-border bg-bg" loading="lazy" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{s.name}</span>
+                  <span className="block truncate text-xs text-subtle">
+                    {s.structure_type}
+                    {s.structure_type ? " · " : ""}
+                    <span className={cn("font-mono tabular-nums", secTone(s.system.security))}>{s.system.security.toFixed(1)}</span> {s.system.name}
+                    {s.system.region ? ` · ${s.system.region}` : ""}
+                  </span>
+                </span>
+                <span className={cn("shrink-0 text-xs", s.ends_at ? "text-danger-fg" : "text-subtle")}>
+                  {s.ends_at ? `${STATE_LABEL[s.state] ?? s.state} · ${dateTime(s.ends_at)}` : STATE_LABEL[s.state] ?? s.state}
+                </span>
               </button>
             </li>
           ))}
