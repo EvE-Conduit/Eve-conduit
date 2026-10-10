@@ -1,0 +1,15 @@
+[Unit]
+Description=EvE Conduit Mumble authenticator
+After=network-online.target mumble-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mumble-server
+WorkingDirectory=/opt/conduit-mumble
+ExecStart=/opt/conduit-mumble/venv/bin/python /opt/conduit-mumble/conduit_mumble_authenticator.py -i /opt/conduit-mumble/authenticator.ini
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
