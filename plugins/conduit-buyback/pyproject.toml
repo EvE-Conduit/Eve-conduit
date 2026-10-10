@@ -1,0 +1,30 @@
+[project]
+name = "conduit-buyback"
+version = "1.0.0"
+description = "Buyback programs: members paste their items for an instant quote, contract them to you, and every contract is checked against its quote."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+buyback = "conduit_buyback.plugin:BuybackPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Buyback"
+icon = "shopping-cart"
+category = "Industry"
+# Public programs, and reprocessing data from the SDE.
+min_conduit = "0.5.33"
+esi_scopes = ["esi-contracts.read_character_contracts.v1", "esi-contracts.read_corporation_contracts.v1"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_buyback*"]
+
+[tool.setuptools.package-data]
+conduit_buyback = ["static/**/*"]
