@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class BuybackPlugin(Plugin):
     id = "buyback"
     name = "Buyback"
-    version = "1.2.0"
+    version = "1.2.1"
     description = "Members paste their items for an instant quote and contract them to you; every contract is checked against its quote."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-buyback"

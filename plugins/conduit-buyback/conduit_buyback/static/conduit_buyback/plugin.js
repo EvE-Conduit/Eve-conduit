@@ -1,4 +1,4 @@
-import { Badge as e, BarChart as t, Button as n, Callout as r, Card as i, CardBody as a, CardHeader as o, ConfirmDialog as s, DataTable as c, Dialog as l, EmptyState as u, Field as d, Input as f, PageHeader as p, SearchInput as m, SectionTitle as h, Segmented as ee, Select as g, Skeleton as _, Spinner as v, StatCard as y, Switch as b, SwitchRow as x, THead as S, TabPanel as C, Table as te, Tabs as ne, Td as w, Textarea as re, Th as T, Tooltip as E, Tr as ie, api as D, buttonVariants as O, cn as k, dateTime as A, definePlugin as ae, isk as j, num as M, timeAgo as oe, toast as N, useHasPerm as se } from "@conduit/sdk";
+import { Badge as e, BarChart as t, Button as n, Callout as r, Card as i, CardBody as a, CardHeader as o, ConfirmDialog as s, DataTable as c, Dialog as l, EmptyState as u, Field as d, Input as f, PageHeader as p, SearchInput as m, SectionTitle as h, Segmented as ee, Select as g, Skeleton as _, Spinner as v, StatCard as y, Switch as b, SwitchRow as x, THead as S, TabPanel as te, Table as C, Tabs as ne, Td as w, Textarea as re, Th as T, Tooltip as E, Tr as ie, api as D, buttonVariants as O, cn as k, dateTime as A, definePlugin as ae, isk as j, num as M, timeAgo as oe, toast as N, useHasPerm as se } from "@conduit/sdk";
 import { useMutation as P, useQuery as F, useQueryClient as ce } from "@tanstack/react-query";
 import { useState as I } from "react";
 import { Link as L, useNavigate as le, useParams as R } from "react-router";
@@ -52,31 +52,31 @@ var U = (e) => /* @__PURE__ */ V(H, {
 		/* @__PURE__ */ B("path", { d: "M12 9v4" }),
 		/* @__PURE__ */ B("path", { d: "M12 17h.01" })
 	]
-}), W = (e) => /* @__PURE__ */ V(H, {
+}), pe = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [/* @__PURE__ */ B("path", { d: "M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0" }), /* @__PURE__ */ B("circle", {
 		cx: "12",
 		cy: "12",
 		r: "3"
 	})]
-}), pe = (e) => /* @__PURE__ */ V(H, {
+}), me = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [/* @__PURE__ */ B("path", { d: "M5 12h14" }), /* @__PURE__ */ B("path", { d: "M12 5v14" })]
-}), me = (e) => /* @__PURE__ */ V(H, {
+}), he = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [
 		/* @__PURE__ */ B("path", { d: "M3 6h18" }),
 		/* @__PURE__ */ B("path", { d: "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" }),
 		/* @__PURE__ */ B("path", { d: "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" })
 	]
-}), he = (e) => /* @__PURE__ */ V(H, {
+}), ge = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [/* @__PURE__ */ B("path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }), /* @__PURE__ */ B("circle", {
 		cx: "12",
 		cy: "12",
 		r: "3"
 	})]
-}), ge = (e) => /* @__PURE__ */ V(H, {
+}), _e = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [
 		/* @__PURE__ */ B("path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }),
@@ -84,20 +84,20 @@ var U = (e) => /* @__PURE__ */ V(H, {
 		/* @__PURE__ */ B("path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }),
 		/* @__PURE__ */ B("path", { d: "M8 16H3v5" })
 	]
-}), _e = (e) => /* @__PURE__ */ V(H, {
+}), ve = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [/* @__PURE__ */ B("path", { d: "M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0" }), /* @__PURE__ */ B("circle", {
 		cx: "12",
 		cy: "10",
 		r: "3"
 	})]
-}), ve = (e) => /* @__PURE__ */ V(H, {
-	...e,
-	children: [/* @__PURE__ */ B("path", { d: "m12 19-7-7 7-7" }), /* @__PURE__ */ B("path", { d: "M19 12H5" })]
 }), ye = (e) => /* @__PURE__ */ V(H, {
 	...e,
-	children: [/* @__PURE__ */ B("path", { d: "M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z" }), /* @__PURE__ */ B("path", { d: "m15 5 4 4" })]
+	children: [/* @__PURE__ */ B("path", { d: "m12 19-7-7 7-7" }), /* @__PURE__ */ B("path", { d: "M19 12H5" })]
 }), be = (e) => /* @__PURE__ */ V(H, {
+	...e,
+	children: [/* @__PURE__ */ B("path", { d: "M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z" }), /* @__PURE__ */ B("path", { d: "m15 5 4 4" })]
+}), xe = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [
 		/* @__PURE__ */ B("circle", {
@@ -109,7 +109,7 @@ var U = (e) => /* @__PURE__ */ V(H, {
 		/* @__PURE__ */ B("path", { d: "M7 6h1v4" }),
 		/* @__PURE__ */ B("path", { d: "m16.71 13.88.7.71-2.82 2.82" })
 	]
-}), xe = (e) => /* @__PURE__ */ V(H, {
+}), Se = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [/* @__PURE__ */ B("path", { d: "M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z" }), /* @__PURE__ */ B("circle", {
 		cx: "7.5",
@@ -117,7 +117,7 @@ var U = (e) => /* @__PURE__ */ V(H, {
 		r: ".5",
 		fill: "currentColor"
 	})]
-}), Se = (e) => /* @__PURE__ */ V(H, {
+}), Ce = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [
 		/* @__PURE__ */ B("circle", {
@@ -128,23 +128,23 @@ var U = (e) => /* @__PURE__ */ V(H, {
 		/* @__PURE__ */ B("path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" }),
 		/* @__PURE__ */ B("path", { d: "M2 12h20" })
 	]
-}), G = (e) => /* @__PURE__ */ V(H, {
+}), W = (e) => /* @__PURE__ */ V(H, {
 	...e,
 	children: [
 		/* @__PURE__ */ B("path", { d: "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" }),
 		/* @__PURE__ */ B("path", { d: "M12 22V12" }),
 		/* @__PURE__ */ B("path", { d: "m3.3 7 8.7 5 8.7-5" })
 	]
-}), Ce = (e) => /* @__PURE__ */ B(H, {
-	...e,
-	children: /* @__PURE__ */ B("path", { d: "m9 18 6-6-6-6" })
-}), K = (e) => /* @__PURE__ */ B(H, {
-	...e,
-	children: /* @__PURE__ */ B("path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" })
 }), we = (e) => /* @__PURE__ */ B(H, {
 	...e,
+	children: /* @__PURE__ */ B("path", { d: "m9 18 6-6-6-6" })
+}), G = (e) => /* @__PURE__ */ B(H, {
+	...e,
+	children: /* @__PURE__ */ B("path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" })
+}), Te = (e) => /* @__PURE__ */ B(H, {
+	...e,
 	children: /* @__PURE__ */ B("path", { d: "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" })
-}), q = "/api/p/buyback", Te = "/api/public/p/buyback", Ee = {
+}), K = "/api/p/buyback", Ee = "/api/public/p/buyback", De = {
 	market: "Market",
 	raw: "Raw ore",
 	compressed: "Compressed",
@@ -155,7 +155,7 @@ var U = (e) => /* @__PURE__ */ V(H, {
 };
 //#endregion
 //#region src/shared.tsx
-function De({ value: e, label: t = "Copy" }) {
+function Oe({ value: e, label: t = "Copy" }) {
 	let [r, i] = I(!1);
 	return /* @__PURE__ */ V(n, {
 		size: "xs",
@@ -173,7 +173,7 @@ function De({ value: e, label: t = "Copy" }) {
 		]
 	});
 }
-function Oe({ system: e }) {
+function ke({ system: e }) {
 	if (!e) return null;
 	let t = e.security >= .5 ? "text-success-fg" : e.security > 0 ? "text-warning-fg" : "text-danger-fg";
 	return /* @__PURE__ */ V("span", {
@@ -192,7 +192,7 @@ function Oe({ system: e }) {
 		]
 	});
 }
-function J({ icon: e, name: t, sub: n }) {
+function q({ icon: e, name: t, sub: n }) {
 	return /* @__PURE__ */ V("div", {
 		className: "flex min-w-0 items-center gap-2.5",
 		children: [e ? /* @__PURE__ */ B("img", {
@@ -212,7 +212,7 @@ function J({ icon: e, name: t, sub: n }) {
 		})]
 	});
 }
-var ke = {
+var Ae = {
 	quoted: "neutral",
 	outstanding: "accent",
 	in_progress: "accent",
@@ -225,13 +225,13 @@ var ke = {
 	failed: "danger",
 	reversed: "warning"
 };
-function Ae({ status: t, label: n }) {
+function je({ status: t, label: n }) {
 	return /* @__PURE__ */ B(e, {
-		tone: ke[t] ?? "neutral",
+		tone: Ae[t] ?? "neutral",
 		children: n ?? (t === "quoted" ? "No contract yet" : t)
 	});
 }
-function je({ problems: t, compact: n }) {
+function Me({ problems: t, compact: n }) {
 	if (!t.length) return n ? /* @__PURE__ */ B(e, {
 		tone: "success",
 		children: "Matches its quote"
@@ -254,19 +254,19 @@ function je({ problems: t, compact: n }) {
 		}, e.code))
 	});
 }
-var Y = (e) => `${Number.isInteger(e) ? e : e.toFixed(2)}%`;
-function Me({ program: e }) {
+var J = (e) => `${Number.isInteger(e) ? e : e.toFixed(2)}%`;
+function Ne({ program: e }) {
 	let t = [
 		e.use_raw && "raw",
 		e.use_compressed && "compressed",
-		e.use_refined && `refined at ${Y(e.refining_rate)}`
+		e.use_refined && `refined at ${J(e.refining_rate)}`
 	].filter(Boolean), n = [
 		/* @__PURE__ */ V(z, { children: [
 			e.prices.hub,
 			" ",
 			e.price_type === "split" ? "split" : e.price_type === "sell" ? "sell" : "buy",
 			" price, less ",
-			Y(e.tax)
+			J(e.tax)
 		] }),
 		e.allow_all_items ? "Buys any item" : "Only listed items",
 		t.length ? /* @__PURE__ */ V(z, { children: ["Ore & ice: best of ", t.join(", ")] }) : null,
@@ -278,14 +278,14 @@ function Me({ program: e }) {
 		] }) : null,
 		e.price_density_threshold > 0 ? /* @__PURE__ */ V(z, { children: [
 			"+",
-			Y(e.price_density_tax),
+			J(e.price_density_tax),
 			" under ",
 			j(e.price_density_threshold),
 			"/m³"
 		] }) : null,
 		e.t1_refined ? /* @__PURE__ */ V(z, { children: [
 			"Tech I modules at ",
-			Y(e.t1_refining_rate),
+			J(e.t1_refining_rate),
 			" reprocessed"
 		] }) : null,
 		e.blue_loot_npc || e.red_loot_npc ? /* @__PURE__ */ V(z, { children: [[e.blue_loot_npc && "Sleeper", e.red_loot_npc && "Triglavian"].filter(Boolean).join(" and "), " loot at NPC price"] }) : null,
@@ -299,23 +299,23 @@ function Me({ program: e }) {
 		}, t))
 	});
 }
-function Ne({ terms: e }) {
+function Pe({ terms: e }) {
 	return /* @__PURE__ */ B("ul", {
 		className: "space-y-1",
 		children: e.locations.map((e) => /* @__PURE__ */ V("li", {
 			className: "flex items-start gap-2 text-sm",
-			children: [/* @__PURE__ */ B(_e, { className: "mt-0.5 size-3.5 shrink-0 text-subtle" }), /* @__PURE__ */ V("span", { children: [
+			children: [/* @__PURE__ */ B(ve, { className: "mt-0.5 size-3.5 shrink-0 text-subtle" }), /* @__PURE__ */ V("span", { children: [
 				/* @__PURE__ */ B("span", {
 					className: "font-medium",
 					children: e.name
 				}),
 				" ",
-				/* @__PURE__ */ B(Oe, { system: e.system })
+				/* @__PURE__ */ B(ke, { system: e.system })
 			] })]
 		}, e.id))
 	});
 }
-function Pe({ guard: t }) {
+function Fe({ guard: t }) {
 	if (!t || t.used === "current") return null;
 	if (t.used === "materials") return /* @__PURE__ */ B(E, {
 		content: `${t.materials} of the minerals it refines into were priced far above their recent average, so their average was used.`,
@@ -335,16 +335,16 @@ function Pe({ guard: t }) {
 		}) })
 	});
 }
-function Fe({ line: e }) {
-	let t = [`${Ee[e.method ?? "market"]} ${j(e.market_unit, { full: !0 })}`, `less ${Y(e.tax)}${e.density_tax ? " (incl. low value per m³)" : ""}`];
+function Ie({ line: e }) {
+	let t = [`${De[e.method ?? "market"]} ${j(e.market_unit, { full: !0 })}`, `less ${J(e.tax)}${e.density_tax ? " (incl. low value per m³)" : ""}`];
 	e.hauling_unit > 0 && t.push(`less ${j(e.hauling_unit, { full: !0 })} hauling`);
 	let n = Object.entries(e.options).filter(([t]) => t !== e.method);
-	return n.length && t.push(`(${n.map(([e, t]) => `${Ee[e]} ${j(t, { full: !0 })}`).join(", ")})`), /* @__PURE__ */ B(z, { children: t.join(", ") });
+	return n.length && t.push(`(${n.map(([e, t]) => `${De[e]} ${j(t, { full: !0 })}`).join(", ")})`), /* @__PURE__ */ B(z, { children: t.join(", ") });
 }
-function Ie({ lines: t }) {
+function Le({ lines: t }) {
 	return /* @__PURE__ */ B("div", {
 		className: "overflow-x-auto",
-		children: /* @__PURE__ */ V(te, { children: [/* @__PURE__ */ B(S, { children: /* @__PURE__ */ V("tr", { children: [
+		children: /* @__PURE__ */ V(C, { children: [/* @__PURE__ */ B(S, { children: /* @__PURE__ */ V("tr", { children: [
 			/* @__PURE__ */ B(T, { children: "Item" }),
 			/* @__PURE__ */ B(T, {
 				align: "right",
@@ -362,12 +362,12 @@ function Ie({ lines: t }) {
 		] }) }), /* @__PURE__ */ B("tbody", { children: t.map((t) => /* @__PURE__ */ V(ie, {
 			className: k(!t.accepted && "opacity-60"),
 			children: [
-				/* @__PURE__ */ B(w, { children: /* @__PURE__ */ B(J, {
+				/* @__PURE__ */ B(w, { children: /* @__PURE__ */ B(q, {
 					icon: t.icon,
 					name: t.name,
 					sub: t.watch ? /* @__PURE__ */ V("span", {
 						className: "inline-flex items-center gap-1 text-info-fg",
-						children: [/* @__PURE__ */ B(W, { className: "size-3" }), " Checked by hand before it's accepted"]
+						children: [/* @__PURE__ */ B(pe, { className: "size-3" }), " Checked by hand before it's accepted"]
 					}) : t.group
 				}) }),
 				/* @__PURE__ */ B(w, {
@@ -377,17 +377,17 @@ function Ie({ lines: t }) {
 				/* @__PURE__ */ B(w, { children: t.accepted ? /* @__PURE__ */ V("span", {
 					className: "text-sm",
 					children: [
-						Ee[t.method ?? "market"],
+						De[t.method ?? "market"],
 						t.method !== "fixed" && /* @__PURE__ */ V("span", {
 							className: "text-subtle",
-							children: [" · −", Y(t.tax)]
+							children: [" · −", J(t.tax)]
 						}),
 						t.density_tax && /* @__PURE__ */ B(e, {
 							tone: "warning",
 							className: "ml-1.5",
 							children: "low ISK/m³"
 						}),
-						/* @__PURE__ */ B(Pe, { guard: t.guard })
+						/* @__PURE__ */ B(Fe, { guard: t.guard })
 					]
 				}) : /* @__PURE__ */ B(e, {
 					tone: "danger",
@@ -396,7 +396,7 @@ function Ie({ lines: t }) {
 				/* @__PURE__ */ B(w, {
 					numeric: !0,
 					children: t.accepted ? /* @__PURE__ */ B(E, {
-						content: /* @__PURE__ */ B(Fe, { line: t }),
+						content: /* @__PURE__ */ B(Ie, { line: t }),
 						children: /* @__PURE__ */ B("span", {
 							className: "cursor-help underline decoration-dotted decoration-border-strong underline-offset-4",
 							children: j(t.unit_price, { full: !0 })
@@ -412,7 +412,7 @@ function Ie({ lines: t }) {
 		}, t.type_id)) })] })
 	});
 }
-function Le({ n: e, title: t, children: n }) {
+function Re({ n: e, title: t, children: n }) {
 	return /* @__PURE__ */ V("li", {
 		className: "grid grid-cols-[28px_1fr] gap-3",
 		children: [/* @__PURE__ */ B("span", {
@@ -430,7 +430,7 @@ function Le({ n: e, title: t, children: n }) {
 		})]
 	});
 }
-function Re({ quote: t }) {
+function ze({ quote: t }) {
 	let n = t.terms, r = String(Math.floor(t.value));
 	return /* @__PURE__ */ V("div", {
 		className: "panel border-accent/40 p-5",
@@ -459,12 +459,12 @@ function Re({ quote: t }) {
 				})
 			] }), t.flagged && /* @__PURE__ */ V(e, {
 				tone: "info",
-				children: [/* @__PURE__ */ B(W, { className: "size-3" }), " Some items are checked by hand"]
+				children: [/* @__PURE__ */ B(pe, { className: "size-3" }), " Some items are checked by hand"]
 			})]
 		}), /* @__PURE__ */ V("ol", {
 			className: "mt-6 space-y-4",
 			children: [
-				/* @__PURE__ */ B(Le, {
+				/* @__PURE__ */ B(Re, {
 					n: 1,
 					title: "Item exchange contract, private, to",
 					children: /* @__PURE__ */ V("div", {
@@ -482,16 +482,16 @@ function Re({ quote: t }) {
 									")"
 								]
 							}),
-							n.assignee.name && /* @__PURE__ */ B(De, { value: n.assignee.name })
+							n.assignee.name && /* @__PURE__ */ B(Oe, { value: n.assignee.name })
 						]
 					})
 				}),
-				/* @__PURE__ */ B(Le, {
+				/* @__PURE__ */ B(Re, {
 					n: 2,
 					title: n.locations.length === 1 ? "Made at" : "Made at one of",
-					children: /* @__PURE__ */ B(Ne, { terms: n })
+					children: /* @__PURE__ */ B(Pe, { terms: n })
 				}),
-				/* @__PURE__ */ B(Le, {
+				/* @__PURE__ */ B(Re, {
 					n: 3,
 					title: "I will receive",
 					children: /* @__PURE__ */ V("div", {
@@ -499,10 +499,10 @@ function Re({ quote: t }) {
 						children: [/* @__PURE__ */ V("span", {
 							className: "font-mono font-medium tabular-nums",
 							children: [Number(r).toLocaleString("en"), " ISK"]
-						}), /* @__PURE__ */ B(De, { value: r })]
+						}), /* @__PURE__ */ B(Oe, { value: r })]
 					})
 				}),
-				/* @__PURE__ */ B(Le, {
+				/* @__PURE__ */ B(Re, {
 					n: 4,
 					title: "Description (exactly this, nothing else)",
 					children: /* @__PURE__ */ V("div", {
@@ -510,10 +510,10 @@ function Re({ quote: t }) {
 						children: [/* @__PURE__ */ B("code", {
 							className: "border border-border bg-bg px-2 py-1 font-mono text-sm text-text",
 							children: t.tracking_number
-						}), /* @__PURE__ */ B(De, { value: t.tracking_number })]
+						}), /* @__PURE__ */ B(Oe, { value: t.tracking_number })]
 					})
 				}),
-				/* @__PURE__ */ B(Le, {
+				/* @__PURE__ */ B(Re, {
 					n: 5,
 					title: "Expiration",
 					children: /* @__PURE__ */ V("span", {
@@ -529,7 +529,7 @@ function Re({ quote: t }) {
 		})]
 	});
 }
-function ze({ program: e, base: t, quoteLink: i }) {
+function Be({ program: e, base: t, quoteLink: i }) {
 	let [a, o] = I(""), s = P({
 		mutationFn: () => D.post(`${t}/programs/${e.id}/quote`, { text: a }),
 		onError: (e) => N.error(e.message)
@@ -575,14 +575,14 @@ function ze({ program: e, base: t, quoteLink: i }) {
 					className: "m-4",
 					title: `Not recognised (${c.unknown.length})`,
 					children: [c.unknown.slice(0, 20).join(", "), c.unknown.length > 20 && "…"]
-				}), c.lines.length > 0 ? /* @__PURE__ */ B(Ie, { lines: c.lines }) : /* @__PURE__ */ B("p", {
+				}), c.lines.length > 0 ? /* @__PURE__ */ B(Le, { lines: c.lines }) : /* @__PURE__ */ B("p", {
 					className: "p-6 text-center text-sm text-muted",
 					children: "No items recognised."
 				})]
 			})]
 		}), /* @__PURE__ */ B("div", {
 			className: "space-y-4",
-			children: c?.quote ? /* @__PURE__ */ V(z, { children: [/* @__PURE__ */ B(Re, { quote: c.quote }), /* @__PURE__ */ V("p", {
+			children: c?.quote ? /* @__PURE__ */ V(z, { children: [/* @__PURE__ */ B(ze, { quote: c.quote }), /* @__PURE__ */ V("p", {
 				className: "text-xs text-subtle",
 				children: [
 					"The contract is checked against this quote when it arrives.",
@@ -612,7 +612,7 @@ function ze({ program: e, base: t, quoteLink: i }) {
 						children: "How it's priced"
 					}), /* @__PURE__ */ B("div", {
 						className: "mt-2",
-						children: /* @__PURE__ */ B(Me, { program: e })
+						children: /* @__PURE__ */ B(Ne, { program: e })
 					})] }),
 					/* @__PURE__ */ V("div", { children: [/* @__PURE__ */ B("div", {
 						className: "hud-label text-subtle",
@@ -626,7 +626,7 @@ function ze({ program: e, base: t, quoteLink: i }) {
 						children: "At"
 					}), /* @__PURE__ */ B("div", {
 						className: "mt-1",
-						children: /* @__PURE__ */ B(Ne, { terms: e.terms })
+						children: /* @__PURE__ */ B(Pe, { terms: e.terms })
 					})] }),
 					e.item_rules.length + e.group_rules.length > 0 && /* @__PURE__ */ B(Ve, { program: e })
 				]
@@ -634,7 +634,7 @@ function ze({ program: e, base: t, quoteLink: i }) {
 		})]
 	});
 }
-function Be({ terms: t, inherited: n }) {
+function Y({ terms: t, inherited: n }) {
 	let r = n ? "opacity-60" : "";
 	return t.disallowed ? /* @__PURE__ */ B(e, {
 		tone: "danger",
@@ -644,7 +644,7 @@ function Be({ terms: t, inherited: n }) {
 		className: `font-mono text-xs text-muted ${r}`,
 		children: [
 			t.tax > 0 ? "+" : "",
-			Y(t.tax),
+			J(t.tax),
 			" tax"
 		]
 	}) : /* @__PURE__ */ B("span", {
@@ -659,7 +659,7 @@ function Ve({ program: e }) {
 	let [t, n] = I(!1), r = [...e.group_rules.map((e) => ({
 		key: `g${e.market_group_id}`,
 		terms: e,
-		cell: /* @__PURE__ */ B(J, {
+		cell: /* @__PURE__ */ B(q, {
 			icon: null,
 			name: e.name,
 			sub: `Category · ${e.count} items`
@@ -667,7 +667,7 @@ function Ve({ program: e }) {
 	})), ...e.item_rules.map((e) => ({
 		key: `t${e.type_id}`,
 		terms: e,
-		cell: /* @__PURE__ */ B(J, {
+		cell: /* @__PURE__ */ B(q, {
 			icon: e.icon,
 			name: e.name
 		})
@@ -683,7 +683,7 @@ function Ve({ program: e }) {
 				className: "flex items-center justify-between gap-3 px-2.5 py-1.5 text-sm",
 				children: [e.cell, /* @__PURE__ */ B("span", {
 					className: "shrink-0",
-					children: /* @__PURE__ */ B(Be, { terms: e.terms })
+					children: /* @__PURE__ */ B(Y, { terms: e.terms })
 				})]
 			}, e.key))
 		}),
@@ -708,7 +708,7 @@ function He({ lines: t, items: n }) {
 		children: "The contract's items haven't been read yet."
 	}) : /* @__PURE__ */ B("div", {
 		className: "overflow-x-auto",
-		children: /* @__PURE__ */ V(te, { children: [/* @__PURE__ */ B(S, { children: /* @__PURE__ */ V("tr", { children: [
+		children: /* @__PURE__ */ V(C, { children: [/* @__PURE__ */ B(S, { children: /* @__PURE__ */ V("tr", { children: [
 			/* @__PURE__ */ B(T, { children: "Item" }),
 			/* @__PURE__ */ B(T, {
 				align: "right",
@@ -722,7 +722,7 @@ function He({ lines: t, items: n }) {
 		] }) }), /* @__PURE__ */ V("tbody", { children: [o.map((t) => {
 			let n = r.get(t), a = i.get(t), o = n?.quantity ?? 0, s = a?.quantity ?? 0;
 			return /* @__PURE__ */ V(ie, { children: [
-				/* @__PURE__ */ B(w, { children: /* @__PURE__ */ B(J, {
+				/* @__PURE__ */ B(w, { children: /* @__PURE__ */ B(q, {
 					icon: n?.icon ?? a?.item.icon ?? null,
 					name: n?.name ?? a?.item.name ?? `Type ${t}`
 				}) }),
@@ -746,7 +746,7 @@ function He({ lines: t, items: n }) {
 				}) })
 			] }, t);
 		}), a.map((t) => /* @__PURE__ */ V(ie, { children: [
-			/* @__PURE__ */ B(w, { children: /* @__PURE__ */ B(J, {
+			/* @__PURE__ */ B(w, { children: /* @__PURE__ */ B(q, {
 				icon: t.icon,
 				name: t.name,
 				sub: "Asked for in return"
@@ -772,13 +772,13 @@ var X = "/p/buyback";
 function Ue() {
 	return F({
 		queryKey: ["buyback", "programs"],
-		queryFn: () => D.get(`${q}/programs`)
+		queryFn: () => D.get(`${K}/programs`)
 	});
 }
 function We() {
 	return F({
 		queryKey: ["buyback", "me"],
-		queryFn: () => D.get(`${q}/me`)
+		queryFn: () => D.get(`${K}/me`)
 	});
 }
 function Ge({ program: t, to: n }) {
@@ -813,8 +813,8 @@ function Ge({ program: t, to: n }) {
 							})]
 						})]
 					}),
-					/* @__PURE__ */ B(Ne, { terms: t.terms }),
-					/* @__PURE__ */ B(Me, { program: t }),
+					/* @__PURE__ */ B(Pe, { terms: t.terms }),
+					/* @__PURE__ */ B(Ne, { program: t }),
 					/* @__PURE__ */ V("div", {
 						className: "flex flex-wrap gap-1.5",
 						children: [!t.active && /* @__PURE__ */ B(e, {
@@ -822,7 +822,7 @@ function Ge({ program: t, to: n }) {
 							children: "Closed"
 						}), t.public && /* @__PURE__ */ V(e, {
 							tone: "info",
-							children: [/* @__PURE__ */ B(Se, { className: "size-3" }), " Public"]
+							children: [/* @__PURE__ */ B(Ce, { className: "size-3" }), " Public"]
 						})]
 					})
 				]
@@ -841,11 +841,11 @@ function Ke() {
 			actions: /* @__PURE__ */ V(z, { children: [/* @__PURE__ */ V(L, {
 				to: `${X}/me`,
 				className: O({ variant: "secondary" }),
-				children: [/* @__PURE__ */ B(G, {}), " My quotes"]
+				children: [/* @__PURE__ */ B(W, {}), " My quotes"]
 			}), (e?.manages || e?.can_create) && /* @__PURE__ */ V(L, {
 				to: "/p/buyback/manage",
 				className: O({ variant: "secondary" }),
-				children: [/* @__PURE__ */ B(he, {}), " Run programs"]
+				children: [/* @__PURE__ */ B(ge, {}), " Run programs"]
 			})] })
 		}),
 		n.data && (n.data.totals.open > 0 || n.data.totals.sold_value > 0) && /* @__PURE__ */ V("div", {
@@ -895,7 +895,7 @@ function Z({ to: e, children: t }) {
 		to: e,
 		className: "mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text",
 		children: [
-			/* @__PURE__ */ B(ve, {}),
+			/* @__PURE__ */ B(ye, {}),
 			" ",
 			t
 		]
@@ -908,7 +908,7 @@ function qe() {
 			"program",
 			e
 		],
-		queryFn: () => D.get(`${q}/programs/${e}`)
+		queryFn: () => D.get(`${K}/programs/${e}`)
 	});
 	return n ? /* @__PURE__ */ B(_, { className: "h-96" }) : t ? /* @__PURE__ */ V("div", { children: [
 		/* @__PURE__ */ B(Z, {
@@ -923,16 +923,16 @@ function qe() {
 			actions: t.can_manage && /* @__PURE__ */ V(L, {
 				to: `/p/buyback/manage/${t.id}`,
 				className: O({ variant: "secondary" }),
-				children: [/* @__PURE__ */ B(he, {}), " Manage"]
+				children: [/* @__PURE__ */ B(ge, {}), " Manage"]
 			})
 		}),
 		!t.active && /* @__PURE__ */ B("p", {
 			className: "mb-4 text-sm text-warning-fg",
 			children: "This program is closed; only its managers see it."
 		}),
-		/* @__PURE__ */ B(ze, {
+		/* @__PURE__ */ B(Be, {
 			program: t,
-			base: q,
+			base: K,
 			quoteLink: (e) => `${X}/quotes/${e}`
 		})
 	] }) : /* @__PURE__ */ B(u, {
@@ -949,7 +949,7 @@ function Je() {
 			children: "Buyback"
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(G, {}),
+			icon: /* @__PURE__ */ B(W, {}),
 			title: "My quotes",
 			description: "Every quote you made and what happened to its contract. Quotes without a contract are removed after a while."
 		}),
@@ -978,11 +978,11 @@ function Je() {
 				}), /* @__PURE__ */ V("div", {
 					className: "flex items-center gap-3",
 					children: [
-						e.contract && e.contract.problems.length > 0 && /* @__PURE__ */ B(je, {
+						e.contract && e.contract.problems.length > 0 && /* @__PURE__ */ B(Me, {
 							problems: e.contract.problems,
 							compact: !0
 						}),
-						/* @__PURE__ */ B(Ae, {
+						/* @__PURE__ */ B(je, {
 							status: e.state,
 							label: e.contract?.status_label
 						}),
@@ -994,7 +994,7 @@ function Je() {
 				})]
 			}) }, e.tracking_number))
 		}) }) : /* @__PURE__ */ B(i, { children: /* @__PURE__ */ B(u, {
-			icon: /* @__PURE__ */ B(G, {}),
+			icon: /* @__PURE__ */ B(W, {}),
 			title: "No quotes yet",
 			action: /* @__PURE__ */ B(L, {
 				to: X,
@@ -1040,7 +1040,7 @@ function Ye({ c: e, lines: t }) {
 			] }), /* @__PURE__ */ V("div", {
 				className: "text-right",
 				children: [
-					/* @__PURE__ */ B(Ae, {
+					/* @__PURE__ */ B(je, {
 						status: e.status,
 						label: e.status_label
 					}),
@@ -1054,7 +1054,7 @@ function Ye({ c: e, lines: t }) {
 					})
 				]
 			})]
-		}), /* @__PURE__ */ B(je, { problems: e.problems })]
+		}), /* @__PURE__ */ B(Me, { problems: e.problems })]
 	}), t && /* @__PURE__ */ B(He, {
 		lines: t,
 		items: e.items
@@ -1067,7 +1067,7 @@ function Xe() {
 			"quote",
 			e
 		],
-		queryFn: () => D.get(`${q}/quotes/${e}`)
+		queryFn: () => D.get(`${K}/quotes/${e}`)
 	});
 	return n ? /* @__PURE__ */ B(_, { className: "h-96" }) : t ? /* @__PURE__ */ V("div", { children: [
 		/* @__PURE__ */ B(Z, {
@@ -1075,14 +1075,14 @@ function Xe() {
 			children: t.mine ? "My quotes" : "Back"
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(G, {}),
+			icon: /* @__PURE__ */ B(W, {}),
 			eyebrow: t.program.name,
 			title: /* @__PURE__ */ V("span", {
 				className: "inline-flex flex-wrap items-center gap-3 font-mono",
 				children: [
 					t.tracking_number,
 					" ",
-					/* @__PURE__ */ B(De, { value: t.tracking_number })
+					/* @__PURE__ */ B(Oe, { value: t.tracking_number })
 				]
 			}),
 			description: `Quoted ${A(t.created_at)}${t.hub ? ` at ${t.hub} prices` : ""}${t.seller && !t.mine ? ` for ${t.seller}` : ""}${t.public ? " (public calculator)" : ""}.`
@@ -1100,8 +1100,8 @@ function Xe() {
 						className: "hud-label text-subtle",
 						children: "Quote"
 					})
-				}), /* @__PURE__ */ B(Ie, { lines: t.lines })] })]
-			}), /* @__PURE__ */ B("div", { children: t.contracts.length === 0 ? /* @__PURE__ */ B(Re, { quote: t }) : /* @__PURE__ */ B(i, { children: /* @__PURE__ */ V(a, { children: [
+				}), /* @__PURE__ */ B(Le, { lines: t.lines })] })]
+			}), /* @__PURE__ */ B("div", { children: t.contracts.length === 0 ? /* @__PURE__ */ B(ze, { quote: t }) : /* @__PURE__ */ B(i, { children: /* @__PURE__ */ V(a, { children: [
 				/* @__PURE__ */ B("div", {
 					className: "hud-label text-subtle",
 					children: "Quoted"
@@ -1117,7 +1117,7 @@ function Xe() {
 			] }) }) })]
 		})
 	] }) : /* @__PURE__ */ B(u, {
-		icon: /* @__PURE__ */ B(G, {}),
+		icon: /* @__PURE__ */ B(W, {}),
 		title: "No such quote",
 		description: "It may have been removed because no contract was made for it."
 	});
@@ -1129,7 +1129,7 @@ function Ze() {
 			"contract",
 			e
 		],
-		queryFn: () => D.get(`${q}/contracts/${e}`)
+		queryFn: () => D.get(`${K}/contracts/${e}`)
 	});
 	return n ? /* @__PURE__ */ B(_, { className: "h-96" }) : t ? /* @__PURE__ */ V("div", { children: [
 		t.program && /* @__PURE__ */ B(Z, {
@@ -1137,7 +1137,7 @@ function Ze() {
 			children: t.program.name
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(G, {}),
+			icon: /* @__PURE__ */ B(W, {}),
 			eyebrow: t.program?.name ?? "Buyback",
 			title: t.title || `Contract ${t.contract_id}`,
 			actions: t.tracking_number && /* @__PURE__ */ B(L, {
@@ -1155,7 +1155,7 @@ function Ze() {
 			children: "No quote has this contract's tracking number, so there's nothing to compare it with. Check every item by hand, or reject it."
 		})
 	] }) : /* @__PURE__ */ B(u, {
-		icon: /* @__PURE__ */ B(G, {}),
+		icon: /* @__PURE__ */ B(W, {}),
 		title: "No such contract"
 	});
 }
@@ -1198,7 +1198,7 @@ function $e() {
 function et() {
 	let { data: t, isLoading: n, error: r } = F({
 		queryKey: ["buyback", "manage"],
-		queryFn: () => D.get(`${q}/manage`)
+		queryFn: () => D.get(`${K}/manage`)
 	}), o = se("buyback.manage_all_programs");
 	return /* @__PURE__ */ V("div", { children: [
 		/* @__PURE__ */ B(Z, {
@@ -1206,7 +1206,7 @@ function et() {
 			children: "Buyback"
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(he, {}),
+			icon: /* @__PURE__ */ B(ge, {}),
 			eyebrow: "Buyback",
 			title: "Run programs",
 			description: "Contracts are read from each owner's login every 15 minutes and checked against their quotes.",
@@ -1214,17 +1214,17 @@ function et() {
 				t?.can_create && /* @__PURE__ */ V(L, {
 					to: `${Q}/locations`,
 					className: O({ variant: "secondary" }),
-					children: [/* @__PURE__ */ B(_e, {}), " Locations"]
+					children: [/* @__PURE__ */ B(ve, {}), " Locations"]
 				}),
 				o && /* @__PURE__ */ V(L, {
 					to: "/p/buyback/settings",
 					className: O({ variant: "secondary" }),
-					children: [/* @__PURE__ */ B(he, {}), " Prices"]
+					children: [/* @__PURE__ */ B(ge, {}), " Prices"]
 				}),
 				t?.can_create && /* @__PURE__ */ V(L, {
 					to: `${Q}/new`,
 					className: O({ variant: "primary" }),
-					children: [/* @__PURE__ */ B(pe, {}), " New program"]
+					children: [/* @__PURE__ */ B(me, {}), " New program"]
 				})
 			] })
 		}),
@@ -1350,7 +1350,7 @@ function nt() {
 			"stats",
 			e
 		],
-		queryFn: () => D.get(`${q}/manage/programs/${e}/stats`)
+		queryFn: () => D.get(`${K}/manage/programs/${e}/stats`)
 	}), v = F({
 		queryKey: [
 			"buyback",
@@ -1359,9 +1359,9 @@ function nt() {
 			l,
 			f
 		],
-		queryFn: () => D.get(`${q}/manage/programs/${e}/contracts?status=${l}&q=${encodeURIComponent(f)}`)
+		queryFn: () => D.get(`${K}/manage/programs/${e}/contracts?status=${l}&q=${encodeURIComponent(f)}`)
 	}), b = P({
-		mutationFn: () => D.post(`${q}/manage/programs/${e}/sync`),
+		mutationFn: () => D.post(`${K}/manage/programs/${e}/sync`),
 		onSuccess: () => {
 			N.success("Checking contracts now; refresh in a minute"), setTimeout(s, 15e3);
 		},
@@ -1385,17 +1385,17 @@ function nt() {
 				/* @__PURE__ */ V(n, {
 					onClick: () => b.mutate(),
 					loading: b.isPending,
-					children: [/* @__PURE__ */ B(ge, {}), " Check now"]
+					children: [/* @__PURE__ */ B(_e, {}), " Check now"]
 				}),
 				/* @__PURE__ */ V(L, {
 					to: `${Q}/${x.program.id}/items`,
 					className: O({ variant: "secondary" }),
-					children: [/* @__PURE__ */ B(xe, {}), " Items"]
+					children: [/* @__PURE__ */ B(Se, {}), " Items"]
 				}),
 				/* @__PURE__ */ V(L, {
 					to: `${Q}/${x.program.id}/edit`,
 					className: O({ variant: "primary" }),
-					children: [/* @__PURE__ */ B(ye, {}), " Edit"]
+					children: [/* @__PURE__ */ B(be, {}), " Edit"]
 				})
 			] })] })
 		}),
@@ -1424,7 +1424,7 @@ function nt() {
 					value: j(x.month_value),
 					mono: !0,
 					hint: `${x.month_count} contracts`,
-					icon: /* @__PURE__ */ B(be, {})
+					icon: /* @__PURE__ */ B(xe, {})
 				}),
 				/* @__PURE__ */ B(y, {
 					label: x.wallet ? `Wallet division ${x.wallet.division}` : "Bought, all time",
@@ -1512,14 +1512,14 @@ function nt() {
 						},
 						{
 							header: "Checks",
-							cell: (e) => /* @__PURE__ */ B(je, {
+							cell: (e) => /* @__PURE__ */ B(Me, {
 								problems: e.problems,
 								compact: !0
 							})
 						},
 						{
 							header: "State",
-							cell: (e) => /* @__PURE__ */ B(Ae, {
+							cell: (e) => /* @__PURE__ */ B(je, {
 								status: e.status,
 								label: e.status_label
 							})
@@ -1564,7 +1564,7 @@ function nt() {
 						className: "divide-y divide-border",
 						children: x.top_items.map((e) => /* @__PURE__ */ V("li", {
 							className: "flex items-center justify-between gap-3 px-4 py-2 text-sm",
-							children: [/* @__PURE__ */ B(J, {
+							children: [/* @__PURE__ */ B(q, {
 								icon: e.icon,
 								name: e.name,
 								sub: `${M(e.quantity)} units`
@@ -1656,29 +1656,29 @@ function it({ items: e, selected: t, onChange: n, empty: r }) {
 function at() {
 	let { id: e } = R(), t = !e, r = le(), c = $e(), l = F({
 		queryKey: ["buyback", "options"],
-		queryFn: () => D.get(`${q}/manage/options`)
+		queryFn: () => D.get(`${K}/manage/options`)
 	}), u = F({
 		queryKey: [
 			"buyback",
 			"managed",
 			e
 		],
-		queryFn: () => D.get(`${q}/manage/programs/${e}`),
+		queryFn: () => D.get(`${K}/manage/programs/${e}`),
 		enabled: !t
-	}), [m, v] = I(null), [y, b] = I(!1), [S, te] = I(!1), w = t ? rt : u.data ? {
+	}), [m, v] = I(null), [y, b] = I(!1), [S, C] = I(!1), w = t ? rt : u.data ? {
 		...rt,
 		...ot(u.data)
 	} : null, T = m ?? w, E = (e) => T && v({
 		...T,
 		...e
 	}), ie = P({
-		mutationFn: (n) => t ? D.post(`${q}/manage/programs`, n) : D.put(`${q}/manage/programs/${e}`, n),
+		mutationFn: (n) => t ? D.post(`${K}/manage/programs`, n) : D.put(`${K}/manage/programs/${e}`, n),
 		onSuccess: (e) => {
 			c(), N.success(t ? "Program created" : "Saved"), r(`${Q}/${e.id}`);
 		},
 		onError: (e) => N.error(e.message)
 	}), O = P({
-		mutationFn: () => D.delete(`${q}/manage/programs/${e}`),
+		mutationFn: () => D.delete(`${K}/manage/programs/${e}`),
 		onSuccess: () => {
 			c(), r(Q);
 		}
@@ -1698,12 +1698,12 @@ function at() {
 			children: t ? "Programs" : T.name
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(ye, {}),
+			icon: /* @__PURE__ */ B(be, {}),
 			title: t ? "New buyback program" : `Edit ${u.data?.name}`,
 			actions: /* @__PURE__ */ V(z, { children: [!t && /* @__PURE__ */ V(n, {
 				variant: "ghost",
 				onClick: () => b(!0),
-				children: [/* @__PURE__ */ B(me, {}), " Delete"]
+				children: [/* @__PURE__ */ B(he, {}), " Delete"]
 			}), /* @__PURE__ */ B(n, {
 				variant: "primary",
 				loading: ie.isPending,
@@ -1732,7 +1732,7 @@ function at() {
 				}
 			],
 			children: [
-				/* @__PURE__ */ B(C, {
+				/* @__PURE__ */ B(te, {
 					value: "basics",
 					children: /* @__PURE__ */ V("div", {
 						className: "grid gap-6 lg:grid-cols-2",
@@ -1853,14 +1853,14 @@ function at() {
 								empty: "No locations yet."
 							}), /* @__PURE__ */ V("button", {
 								type: "button",
-								onClick: () => te(!0),
+								onClick: () => C(!0),
 								className: "inline-flex items-center gap-1.5 text-sm text-accent-ink hover:underline",
-								children: [/* @__PURE__ */ B(pe, {}), " Add a location"]
+								children: [/* @__PURE__ */ B(me, {}), " Add a location"]
 							})]
 						})] })]
 					})
 				}),
-				/* @__PURE__ */ B(C, {
+				/* @__PURE__ */ B(te, {
 					value: "pricing",
 					children: /* @__PURE__ */ B(i, { children: /* @__PURE__ */ V(a, {
 						className: "grid gap-6 lg:grid-cols-2",
@@ -1965,7 +1965,7 @@ function at() {
 						]
 					}) })
 				}),
-				/* @__PURE__ */ B(C, {
+				/* @__PURE__ */ B(te, {
 					value: "ore",
 					children: /* @__PURE__ */ B(i, { children: /* @__PURE__ */ V(a, {
 						className: "grid gap-6 lg:grid-cols-2",
@@ -2046,7 +2046,7 @@ function at() {
 						})]
 					}) })
 				}),
-				/* @__PURE__ */ B(C, {
+				/* @__PURE__ */ B(te, {
 					value: "access",
 					children: /* @__PURE__ */ V("div", {
 						className: "grid gap-6 lg:grid-cols-3",
@@ -2112,7 +2112,7 @@ function at() {
 		}),
 		S && /* @__PURE__ */ B(lt, {
 			location: null,
-			onClose: () => te(!1),
+			onClose: () => C(!1),
 			onSaved: (e) => E({ location_ids: [...T.location_ids, e.id] })
 		})
 	] });
@@ -2130,7 +2130,7 @@ function st({ kind: e, placeholder: t, onPick: n }) {
 			e,
 			r
 		],
-		queryFn: () => D.get(`${q}/manage/search/${e}?q=${encodeURIComponent(r)}`),
+		queryFn: () => D.get(`${K}/manage/search/${e}?q=${encodeURIComponent(r)}`),
 		enabled: r.trim().length >= 2
 	});
 	return /* @__PURE__ */ V("div", {
@@ -2149,7 +2149,7 @@ function st({ kind: e, placeholder: t, onPick: n }) {
 				onClick: () => {
 					n(e), i("");
 				},
-				children: e.icon ? /* @__PURE__ */ B(J, {
+				children: e.icon ? /* @__PURE__ */ B(q, {
 					icon: e.icon,
 					name: e.name,
 					sub: e.subtitle
@@ -2167,9 +2167,9 @@ function st({ kind: e, placeholder: t, onPick: n }) {
 function ct() {
 	let t = $e(), r = F({
 		queryKey: ["buyback", "options"],
-		queryFn: () => D.get(`${q}/manage/options`)
+		queryFn: () => D.get(`${K}/manage/options`)
 	}), [a, o] = I(null), s = P({
-		mutationFn: (e) => D.delete(`${q}/manage/locations/${e}`),
+		mutationFn: (e) => D.delete(`${K}/manage/locations/${e}`),
 		onSuccess: t,
 		onError: (e) => N.error(e.message)
 	});
@@ -2179,17 +2179,17 @@ function ct() {
 			children: "Programs"
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(_e, {}),
+			icon: /* @__PURE__ */ B(ve, {}),
 			title: "Locations",
 			description: "Where sellers make their contracts. Programs pick one or more.",
 			actions: /* @__PURE__ */ V(n, {
 				variant: "primary",
 				onClick: () => o("new"),
-				children: [/* @__PURE__ */ B(pe, {}), " Add location"]
+				children: [/* @__PURE__ */ B(me, {}), " Add location"]
 			})
 		}),
 		/* @__PURE__ */ B(i, { children: r.data ? r.data.locations.length === 0 ? /* @__PURE__ */ B(u, {
-			icon: /* @__PURE__ */ B(_e, {}),
+			icon: /* @__PURE__ */ B(ve, {}),
 			title: "No locations yet",
 			action: /* @__PURE__ */ B(n, {
 				variant: "primary",
@@ -2205,7 +2205,7 @@ function ct() {
 					children: t.name
 				}), /* @__PURE__ */ V("div", {
 					className: "text-sm",
-					children: [/* @__PURE__ */ B(Oe, { system: t.system }), t.structure_id ? /* @__PURE__ */ V("span", {
+					children: [/* @__PURE__ */ B(ke, { system: t.system }), t.structure_id ? /* @__PURE__ */ V("span", {
 						className: "ml-2 font-mono text-xs text-subtle",
 						children: ["#", t.structure_id]
 					}) : /* @__PURE__ */ B(e, {
@@ -2219,12 +2219,12 @@ function ct() {
 						size: "sm",
 						variant: "ghost",
 						onClick: () => o(t),
-						children: [/* @__PURE__ */ B(ye, {}), " Edit"]
+						children: [/* @__PURE__ */ B(be, {}), " Edit"]
 					}), /* @__PURE__ */ V(n, {
 						size: "sm",
 						variant: "ghost",
 						onClick: () => s.mutate(t.id),
-						children: [/* @__PURE__ */ B(me, {}), " Remove"]
+						children: [/* @__PURE__ */ B(he, {}), " Remove"]
 					})]
 				})]
 			}, t.id))
@@ -2246,7 +2246,7 @@ function lt({ location: e, onClose: t, onSaved: r }) {
 				solar_system_id: s?.id,
 				structure_id: u ? Number(u) : null
 			};
-			return e ? D.put(`${q}/manage/locations/${e.id}`, t) : D.post(`${q}/manage/locations`, t);
+			return e ? D.put(`${K}/manage/locations/${e.id}`, t) : D.post(`${K}/manage/locations`, t);
 		},
 		onSuccess: (e) => {
 			i(), r?.(e), t();
@@ -2455,7 +2455,7 @@ function pt({ value: e, market: t, onChange: n }) {
 function mt() {
 	let e = ce(), t = ["buyback", "settings"], { data: r } = F({
 		queryKey: t,
-		queryFn: () => D.get(`${q}/settings`)
+		queryFn: () => D.get(`${K}/settings`)
 	}), [s, c] = I(null), l = s ?? (r ? {
 		...r,
 		janice_api_key: "",
@@ -2464,13 +2464,13 @@ function mt() {
 		...l,
 		...e
 	}), m = P({
-		mutationFn: (e) => D.put(`${q}/settings`, e),
+		mutationFn: (e) => D.put(`${K}/settings`, e),
 		onSuccess: (n) => {
 			e.setQueryData(t, n), c(null), e.invalidateQueries({ queryKey: ["buyback"] }), N.success("Saved");
 		},
 		onError: (e) => N.error(e.message)
 	}), h = P({
-		mutationFn: () => D.post(`${q}/settings/refresh-prices`),
+		mutationFn: () => D.post(`${K}/settings/refresh-prices`),
 		onSuccess: (e) => N.success(e.queued ? "Reading the market now; it takes a minute or two" : `${e.refreshed} prices refreshed`),
 		onError: (e) => N.error(e.message)
 	});
@@ -2482,7 +2482,7 @@ function mt() {
 			children: "Programs"
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(he, {}),
+			icon: /* @__PURE__ */ B(ge, {}),
 			title: "Buyback settings",
 			description: "Prices and tracking for every program.",
 			actions: /* @__PURE__ */ V(z, { children: [/* @__PURE__ */ V(n, {
@@ -2490,7 +2490,7 @@ function mt() {
 				loading: h.isPending,
 				disabled: !!s,
 				children: [
-					/* @__PURE__ */ B(ge, {}),
+					/* @__PURE__ */ B(_e, {}),
 					" ",
 					y ? "Read the market now" : `Refresh ${M(l.prices_stored)} prices`
 				]
@@ -2782,7 +2782,7 @@ function mt() {
 function ht() {
 	let { data: t, isLoading: n } = F({
 		queryKey: ["buyback", "manage"],
-		queryFn: () => D.get(`${q}/manage`),
+		queryFn: () => D.get(`${K}/manage`),
 		refetchInterval: 3e5
 	});
 	if (n || !t) return /* @__PURE__ */ B(_, { className: "h-16" });
@@ -2825,7 +2825,7 @@ function _t(e) {
 			"managed",
 			e
 		],
-		queryFn: () => D.get(`${q}/manage/programs/${e}`)
+		queryFn: () => D.get(`${K}/manage/programs/${e}`)
 	});
 }
 function vt(e) {
@@ -2853,13 +2853,13 @@ function yt() {
 			children: t.name
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(xe, {}),
+			icon: /* @__PURE__ */ B(Se, {}),
 			title: "Items",
 			description: t.allow_all_items ? `Everything is bought at the program's terms (${t.tax}% tax). Click an item or a category to give it its own: extra tax (or less), a fixed price, or not bought.` : "Only the items and categories you add here are bought. Click one to add it.",
 			actions: /* @__PURE__ */ V(L, {
 				to: `${gt}/${e}/edit`,
 				className: O({ variant: "secondary" }),
-				children: [/* @__PURE__ */ B(ye, {}), " Program terms"]
+				children: [/* @__PURE__ */ B(be, {}), " Program terms"]
 			})
 		}),
 		/* @__PURE__ */ V("div", {
@@ -2950,7 +2950,7 @@ function St() {
 			}),
 			/* @__PURE__ */ V("span", {
 				className: "flex items-center gap-1.5",
-				children: [/* @__PURE__ */ B(W, { className: "size-3.5 text-warning-fg" }), " checked by hand"]
+				children: [/* @__PURE__ */ B(pe, { className: "size-3.5 text-warning-fg" }), " checked by hand"]
 			})
 		]
 	});
@@ -2963,7 +2963,7 @@ function Ct({ programId: e, group: t, path: n, depth: r, open: i, toggle: a, onO
 			e,
 			t ?? "top"
 		],
-		queryFn: () => D.get(`${q}/manage/programs/${e}/market${t == null ? "" : `?group=${t}`}`),
+		queryFn: () => D.get(`${K}/manage/programs/${e}/market${t == null ? "" : `?group=${t}`}`),
 		staleTime: 6e4
 	});
 	return c || !s ? /* @__PURE__ */ V("div", {
@@ -3014,11 +3014,11 @@ var wt = (e) => 8 + e * 16;
 function Tt({ node: t }) {
 	return /* @__PURE__ */ V("span", {
 		className: "flex shrink-0 items-center gap-1.5",
-		children: [(t.watch || t.watched) && /* @__PURE__ */ B(W, { className: k("size-3.5 text-warning-fg", !t.watch && "opacity-50") }), t.rule ? /* @__PURE__ */ V(z, { children: [/* @__PURE__ */ B(e, {
+		children: [(t.watch || t.watched) && /* @__PURE__ */ B(pe, { className: k("size-3.5 text-warning-fg", !t.watch && "opacity-50") }), t.rule ? /* @__PURE__ */ V(z, { children: [/* @__PURE__ */ B(e, {
 			tone: "accent",
 			size: "sm",
 			children: "own"
-		}), /* @__PURE__ */ B(Be, { terms: t.rule })] }) : t.effective && /* @__PURE__ */ B(Be, {
+		}), /* @__PURE__ */ B(Y, { terms: t.rule })] }) : t.effective && /* @__PURE__ */ B(Y, {
 			terms: t.effective,
 			inherited: !0
 		})]
@@ -3035,8 +3035,8 @@ function Et({ node: e, depth: t, expanded: n, onToggle: r, onOpen: i }) {
 				className: "flex min-w-0 flex-1 items-center gap-1.5 text-left",
 				"aria-label": `${n ? "Close" : "Open"} ${e.name}`,
 				children: [
-					/* @__PURE__ */ B(Ce, { className: k("size-3.5 shrink-0 text-subtle transition-transform", n && "rotate-90") }),
-					n ? /* @__PURE__ */ B(we, { className: "size-4 shrink-0 text-accent-ink" }) : /* @__PURE__ */ B(K, { className: "size-4 shrink-0 text-muted" }),
+					/* @__PURE__ */ B(we, { className: k("size-3.5 shrink-0 text-subtle transition-transform", n && "rotate-90") }),
+					n ? /* @__PURE__ */ B(Te, { className: "size-4 shrink-0 text-accent-ink" }) : /* @__PURE__ */ B(G, { className: "size-4 shrink-0 text-muted" }),
 					/* @__PURE__ */ B("span", {
 						className: "truncate",
 						children: e.name
@@ -3094,7 +3094,7 @@ function Ot({ programId: e, q: t, onOpen: n }) {
 			"search",
 			t
 		],
-		queryFn: () => D.get(`${q}/manage/programs/${e}/market/search?q=${encodeURIComponent(t)}`),
+		queryFn: () => D.get(`${K}/manage/programs/${e}/market/search?q=${encodeURIComponent(t)}`),
 		placeholderData: (e) => e
 	});
 	if (i || !r) return /* @__PURE__ */ V("div", {
@@ -3102,7 +3102,7 @@ function Ot({ programId: e, q: t, onOpen: n }) {
 		children: [/* @__PURE__ */ B(v, { className: "size-3.5" }), " Searching…"]
 	});
 	if (!r.groups.length && !r.types.length) return /* @__PURE__ */ B(u, {
-		icon: /* @__PURE__ */ B(G, {}),
+		icon: /* @__PURE__ */ B(W, {}),
 		title: "Nothing found",
 		description: "Only items sold on the market are listed."
 	});
@@ -3122,7 +3122,7 @@ function Ot({ programId: e, q: t, onOpen: n }) {
 		}),
 		className: "flex min-h-7 w-full items-center gap-2 py-0.5 pl-2 pr-2 text-left hover:bg-hover",
 		children: [
-			/* @__PURE__ */ B(K, { className: "size-4 shrink-0 text-muted" }),
+			/* @__PURE__ */ B(G, { className: "size-4 shrink-0 text-muted" }),
 			/* @__PURE__ */ V("span", {
 				className: "min-w-0 flex-1",
 				children: [/* @__PURE__ */ V("span", {
@@ -3160,23 +3160,23 @@ function Ot({ programId: e, q: t, onOpen: n }) {
 }
 function kt({ program: e, onOpen: t }) {
 	let r = String(e.id), a = vt(r), [o, c] = I(e.group_rules.length || !e.item_rules.length ? "groups" : "items"), [l, u] = I(""), [d, f] = I(!1), p = P({
-		mutationFn: (e) => D.post(`${q}/manage/programs/${r}/rules`, {
+		mutationFn: (e) => D.post(`${K}/manage/programs/${r}/rules`, {
 			...e,
 			rule: null
 		}),
 		onSuccess: a,
 		onError: (e) => N.error(e.message)
 	}), h = P({
-		mutationFn: (e) => D.delete(`${q}/manage/programs/${r}/watchlist/${e}`),
+		mutationFn: (e) => D.delete(`${K}/manage/programs/${r}/watchlist/${e}`),
 		onSuccess: (t) => a({
 			item_rules: e.item_rules,
 			group_rules: e.group_rules,
 			watch_rules: t
 		})
 	}), g = P({
-		mutationFn: () => D.delete(`${q}/manage/programs/${r}/items`),
+		mutationFn: () => D.delete(`${K}/manage/programs/${r}/items`),
 		onSuccess: a
-	}), _ = l.toLowerCase(), v = (e) => e.toLowerCase().includes(_), y = (e) => e.map((e) => e.name).join(" › ") || "Market", b = e.group_rules.filter((e) => v(e.name)), x = e.item_rules.filter((e) => v(e.name)), S = e.watch_rules.filter((e) => v(e.name)), C = e.group_rules.length + e.item_rules.length;
+	}), _ = l.toLowerCase(), v = (e) => e.toLowerCase().includes(_), y = (e) => e.map((e) => e.name).join(" › ") || "Market", b = e.group_rules.filter((e) => v(e.name)), x = e.item_rules.filter((e) => v(e.name)), S = e.watch_rules.filter((e) => v(e.name)), te = e.group_rules.length + e.item_rules.length;
 	return /* @__PURE__ */ V(i, {
 		className: "flex h-[calc(100vh-14rem)] min-h-[480px] flex-col overflow-hidden",
 		children: [
@@ -3188,11 +3188,11 @@ function kt({ program: e, onOpen: t }) {
 						children: [/* @__PURE__ */ B("div", {
 							className: "hud-label text-subtle",
 							children: "This program"
-						}), C > 0 && /* @__PURE__ */ V(n, {
+						}), te > 0 && /* @__PURE__ */ V(n, {
 							size: "xs",
 							variant: "ghost",
 							onClick: () => f(!0),
-							children: [/* @__PURE__ */ B(me, {}), " Remove all terms"]
+							children: [/* @__PURE__ */ B(he, {}), " Remove all terms"]
 						})]
 					}),
 					/* @__PURE__ */ B("p", {
@@ -3212,6 +3212,10 @@ function kt({ program: e, onOpen: t }) {
 							}),
 							" is off in the program's pricing."
 						] })
+					}),
+					/* @__PURE__ */ B("p", {
+						className: "text-xs text-muted",
+						children: "The closest terms win: an item's own terms beat its category's, and a category's terms beat those of any category above it. So a category at +0% isn't neutral: its items stay at the program's tax even if a category above adds more."
 					}),
 					/* @__PURE__ */ B(ee, {
 						size: "sm",
@@ -3242,54 +3246,54 @@ function kt({ program: e, onOpen: t }) {
 			/* @__PURE__ */ V("ul", {
 				className: "min-h-0 flex-1 divide-y divide-border overflow-y-auto",
 				children: [
-					o === "groups" && (b.length === 0 ? /* @__PURE__ */ B(At, { text: e.group_rules.length ? "No match" : "No categories yet. In the market, hover a category and Set terms, or click an item and pick its category." }) : b.map((e) => /* @__PURE__ */ B(jt, {
-						icon: /* @__PURE__ */ B(K, { className: "size-4 text-muted" }),
+					o === "groups" && (b.length === 0 ? /* @__PURE__ */ B(At, { text: e.group_rules.length ? "No match" : "No categories yet. In the market, hover a category and Set terms, or click an item and pick its category." }) : b.map((n) => /* @__PURE__ */ B(jt, {
+						icon: /* @__PURE__ */ B(G, { className: "size-4 text-muted" }),
 						name: /* @__PURE__ */ V(z, { children: [
-							e.name,
+							n.name,
 							" ",
 							/* @__PURE__ */ V("span", {
 								className: "text-[11px] text-subtle",
-								children: [e.count, " items"]
+								children: [n.count, " items"]
 							})
 						] }),
-						sub: y(e.path),
-						terms: /* @__PURE__ */ B(Be, { terms: e }),
+						sub: Ft(y(n.path), e, n.path),
+						terms: /* @__PURE__ */ B(Y, { terms: n }),
 						onEdit: () => t({
 							kind: "group",
-							path: [...e.path, {
-								id: e.market_group_id,
-								name: e.name,
-								count: e.count
+							path: [...n.path, {
+								id: n.market_group_id,
+								name: n.name,
+								count: n.count
 							}]
 						}),
-						onRemove: () => p.mutate({ market_group_id: e.market_group_id })
-					}, e.market_group_id))),
-					o === "items" && (x.length === 0 ? /* @__PURE__ */ B(At, { text: e.item_rules.length ? "No match" : "No items with their own terms. Click an item in the market." }) : x.map((e) => /* @__PURE__ */ B(jt, {
+						onRemove: () => p.mutate({ market_group_id: n.market_group_id })
+					}, n.market_group_id))),
+					o === "items" && (x.length === 0 ? /* @__PURE__ */ B(At, { text: e.item_rules.length ? "No match" : "No items with their own terms. Click an item in the market." }) : x.map((n) => /* @__PURE__ */ B(jt, {
 						icon: /* @__PURE__ */ B("img", {
-							src: e.icon,
+							src: n.icon,
 							alt: "",
 							className: "size-6 border border-border bg-bg",
 							loading: "lazy"
 						}),
-						name: e.name,
-						sub: y(e.path),
-						terms: /* @__PURE__ */ B(Be, { terms: e }),
+						name: n.name,
+						sub: Ft(y(n.path), e, n.path),
+						terms: /* @__PURE__ */ B(Y, { terms: n }),
 						onEdit: () => t({
 							kind: "type",
-							id: e.type_id,
-							name: e.name,
-							icon: e.icon,
-							path: e.path
+							id: n.type_id,
+							name: n.name,
+							icon: n.icon,
+							path: n.path
 						}),
-						onRemove: () => p.mutate({ type_id: e.type_id })
-					}, e.type_id))),
+						onRemove: () => p.mutate({ type_id: n.type_id })
+					}, n.type_id))),
 					o === "watch" && (S.length === 0 ? /* @__PURE__ */ B(At, { text: e.watch_rules.length ? "No match" : "Nothing is checked by hand. Officer modules, rare loot, anything easy to manipulate: tick Check by hand when setting its terms." }) : S.map((e) => /* @__PURE__ */ B(jt, {
 						icon: e.icon ? /* @__PURE__ */ B("img", {
 							src: e.icon,
 							alt: "",
 							className: "size-6 border border-border bg-bg",
 							loading: "lazy"
-						}) : /* @__PURE__ */ B(K, { className: "size-4 text-muted" }),
+						}) : /* @__PURE__ */ B(G, { className: "size-4 text-muted" }),
 						name: /* @__PURE__ */ V(z, { children: [
 							e.name,
 							" ",
@@ -3299,7 +3303,7 @@ function kt({ program: e, onOpen: t }) {
 							})
 						] }),
 						sub: e.kind === "group" ? "Item group" : y(e.path),
-						terms: /* @__PURE__ */ B(W, { className: "size-3.5 text-warning-fg" }),
+						terms: /* @__PURE__ */ B(pe, { className: "size-3.5 text-warning-fg" }),
 						onEdit: e.kind === "group" ? void 0 : () => t(e.kind === "type" ? {
 							kind: "type",
 							id: e.target_id,
@@ -3320,7 +3324,7 @@ function kt({ program: e, onOpen: t }) {
 			}),
 			/* @__PURE__ */ V("p", {
 				className: "flex items-center gap-1.5 border-t border-border bg-surface-2 px-4 py-2 text-[11px] text-subtle",
-				children: [/* @__PURE__ */ B(W, { className: "size-3.5" }), " Sellers see which of their items will be checked by hand."]
+				children: [/* @__PURE__ */ B(pe, { className: "size-3.5" }), " Sellers see which of their items will be checked by hand."]
 			}),
 			/* @__PURE__ */ B(s, {
 				open: d,
@@ -3370,7 +3374,7 @@ function jt({ icon: e, name: t, sub: r, terms: i, onEdit: a, onRemove: o }) {
 				variant: "ghost",
 				"aria-label": "Remove",
 				onClick: o,
-				children: /* @__PURE__ */ B(me, {})
+				children: /* @__PURE__ */ B(he, {})
 			})
 		]
 	});
@@ -3391,21 +3395,21 @@ function Mt(e) {
 	}, ...t] : t;
 }
 function Nt({ program: e, subject: t, onClose: r }) {
-	let i = String(e.id), a = vt(i), o = Mt(t), [s, c] = I(0), u = o[s], p = Pt(e, u), m = e.watch_rules.some((e) => (u.kind === "type" ? e.kind === "type" : e.kind === "market") && e.target_id === u.id), [h, g] = I(() => It(p, m)), _ = (t) => {
+	let i = String(e.id), a = vt(i), o = Mt(t), [s, c] = I(0), u = o[s], p = Pt(e, u), m = e.watch_rules.some((e) => (u.kind === "type" ? e.kind === "type" : e.kind === "market") && e.target_id === u.id), [h, g] = I(() => Rt(p, m)), _ = (t) => {
 		c(t);
 		let n = o[t];
-		g(It(Pt(e, n), e.watch_rules.some((e) => (n.kind === "type" ? e.kind === "type" : e.kind === "market") && e.target_id === n.id)));
-	}, v = Ft(e, o.slice(s + 1)), y = u.kind === "type" ? { type_id: u.id } : { market_group_id: u.id }, b = P({
-		mutationFn: (e) => D.post(`${q}/manage/programs/${i}/rules`, {
-			...y,
+		g(Rt(Pt(e, n), e.watch_rules.some((e) => (n.kind === "type" ? e.kind === "type" : e.kind === "market") && e.target_id === n.id)));
+	}, v = Lt(e, o.slice(s + 1)), y = u.kind === "group" ? It(e, u.id) : [], b = u.kind === "type" ? { type_id: u.id } : { market_group_id: u.id }, S = P({
+		mutationFn: (e) => D.post(`${K}/manage/programs/${i}/rules`, {
+			...b,
 			rule: e,
 			watch: h.watch
 		}),
 		onSuccess: (e, t) => {
-			a(e), N.success(t ? `${u.name}: ${Lt(t)}${u.kind === "group" ? `, ${u.count} items` : ""}` : `${u.name}: back to ${v ? v.label : "the program's terms"}`), r();
+			a(e), N.success(t ? `${u.name}: ${zt(t)}${u.kind === "group" ? `, ${u.count} items` : ""}` : `${u.name}: back to ${v ? v.label : "the program's terms"}`), r();
 		},
 		onError: (e) => N.error(e.message)
-	}), S = {
+	}), te = {
 		tax: h.mode === "buy" && Number(h.tax) || 0,
 		disallowed: h.mode === "none",
 		static_price: h.mode === "fixed" ? Number(h.price) || 0 : null
@@ -3422,7 +3426,7 @@ function Nt({ program: e, subject: t, onClose: r }) {
 				className: "size-10 border border-border bg-bg"
 			}) : /* @__PURE__ */ B("span", {
 				className: "flex size-10 items-center justify-center border border-border bg-surface-2",
-				children: /* @__PURE__ */ B(K, { className: "size-5 text-muted" })
+				children: /* @__PURE__ */ B(G, { className: "size-5 text-muted" })
 			}), /* @__PURE__ */ V("span", {
 				className: "min-w-0",
 				children: [/* @__PURE__ */ B("span", {
@@ -3438,9 +3442,9 @@ function Nt({ program: e, subject: t, onClose: r }) {
 			p && /* @__PURE__ */ V(n, {
 				variant: "ghost",
 				className: "mr-auto",
-				loading: b.isPending && b.variables === null,
-				onClick: () => b.mutate(null),
-				children: [/* @__PURE__ */ B(me, {}), " Remove its terms"]
+				loading: S.isPending && S.variables === null,
+				onClick: () => S.mutate(null),
+				children: [/* @__PURE__ */ B(he, {}), " Remove its terms"]
 			}),
 			/* @__PURE__ */ B(n, {
 				variant: "ghost",
@@ -3449,8 +3453,8 @@ function Nt({ program: e, subject: t, onClose: r }) {
 			}),
 			/* @__PURE__ */ B(n, {
 				variant: "primary",
-				loading: b.isPending && b.variables !== null,
-				onClick: () => b.mutate(S),
+				loading: S.isPending && S.variables !== null,
+				onClick: () => S.mutate(te),
 				children: p ? "Save" : C.kind === "type" && s === 0 ? "Add item" : "Add category"
 			})
 		] }),
@@ -3479,7 +3483,7 @@ function Nt({ program: e, subject: t, onClose: r }) {
 										src: t.icon,
 										alt: "",
 										className: "size-6 border border-border bg-bg"
-									}) : /* @__PURE__ */ B(K, { className: "size-5 shrink-0 text-muted" }),
+									}) : /* @__PURE__ */ B(G, { className: "size-5 shrink-0 text-muted" }),
 									/* @__PURE__ */ V("span", {
 										className: "min-w-0 flex-1",
 										children: [/* @__PURE__ */ B("span", {
@@ -3490,7 +3494,7 @@ function Nt({ program: e, subject: t, onClose: r }) {
 											children: t.kind === "type" ? "This item only" : `${t.count} item${t.count === 1 ? "" : "s"}${t.above.length ? ` · in ${t.above.map((e) => e.name).join(" › ")}` : ""}`
 										})]
 									}),
-									i && /* @__PURE__ */ B(Be, { terms: i })
+									i && /* @__PURE__ */ B(Y, { terms: i })
 								]
 							}, `${t.kind}${t.id}`);
 						})
@@ -3502,14 +3506,24 @@ function Nt({ program: e, subject: t, onClose: r }) {
 						"Now: ",
 						/* @__PURE__ */ B("span", {
 							className: "text-text",
-							children: Lt(p)
+							children: zt(p)
 						}),
-						", its own terms."
+						", its own terms.",
+						v && /* @__PURE__ */ V(z, { children: [
+							" They override ",
+							v.label,
+							" (",
+							/* @__PURE__ */ B("span", {
+								className: "text-text",
+								children: zt(v.terms)
+							}),
+							")."
+						] })
 					] }) : v ? /* @__PURE__ */ V(z, { children: [
 						"Now: ",
 						/* @__PURE__ */ B("span", {
 							className: "text-text",
-							children: Lt(v.terms)
+							children: zt(v.terms)
 						}),
 						", from ",
 						v.label,
@@ -3528,7 +3542,21 @@ function Nt({ program: e, subject: t, onClose: r }) {
 							children: "not bought"
 						}),
 						"."
-					] }), u.kind === "group" && " Items and categories inside it with terms of their own keep them."]
+					] }), y.length > 0 && /* @__PURE__ */ V("div", {
+						className: "mt-1.5 text-warning-fg",
+						children: [
+							y.length === 1 ? "This has" : `These ${y.length} have`,
+							" terms of ",
+							y.length === 1 ? "its" : "their",
+							" own and won't follow this category's:",
+							" ",
+							y.slice(0, 8).map((e) => `${e.name} (${zt(e.terms)})`).join(", "),
+							y.length > 8 && ", …",
+							". Remove ",
+							y.length === 1 ? "its terms" : "theirs",
+							" in the rules list if they should."
+						]
+					})]
 				}),
 				/* @__PURE__ */ B(d, {
 					label: "Terms",
@@ -3556,7 +3584,7 @@ function Nt({ program: e, subject: t, onClose: r }) {
 				}),
 				h.mode === "buy" && /* @__PURE__ */ B(d, {
 					label: "Extra tax",
-					hint: `On top of the program's ${e.tax}%. Negative for less; 0 buys it at the program's terms${e.allow_all_items ? "" : " (and adds it to the list)"}.`,
+					hint: `On top of the program's ${e.tax}%. Negative for less; 0 is the program's tax alone${v ? `, ignoring ${v.label}` : ""}${e.allow_all_items ? "" : " (and adds it to the list)"}.`,
 					children: /* @__PURE__ */ V("div", {
 						className: "flex items-center gap-2",
 						children: [/* @__PURE__ */ B(f, {
@@ -3623,7 +3651,26 @@ function Nt({ program: e, subject: t, onClose: r }) {
 function Pt(e, t) {
 	return t.kind === "type" ? e.item_rules.find((e) => e.type_id === t.id) ?? null : e.group_rules.find((e) => e.market_group_id === t.id) ?? null;
 }
-function Ft(e, t) {
+function Ft(e, t, n) {
+	let r = Lt(t, [...n].reverse().map((e) => ({
+		kind: "group",
+		...e,
+		above: []
+	})));
+	return r ? `${e} · overrides ${r.label} (${zt(r.terms)})` : e;
+}
+function It(e, t) {
+	return [...e.group_rules.filter((e) => e.path.some((e) => e.id === t)).map((e) => ({
+		key: `g${e.market_group_id}`,
+		name: e.name,
+		terms: e
+	})), ...e.item_rules.filter((e) => e.path.some((e) => e.id === t)).map((e) => ({
+		key: `t${e.type_id}`,
+		name: e.name,
+		terms: e
+	}))];
+}
+function Lt(e, t) {
 	for (let n of t) {
 		let t = Pt(e, n);
 		if (t) return {
@@ -3633,7 +3680,7 @@ function Ft(e, t) {
 	}
 	return null;
 }
-function It(e, t) {
+function Rt(e, t) {
 	return {
 		mode: e?.disallowed ? "none" : e?.static_price == null ? "buy" : "fixed",
 		tax: String(e && !e.disallowed ? e.tax : 0),
@@ -3641,20 +3688,20 @@ function It(e, t) {
 		watch: t
 	};
 }
-function Lt(e) {
+function zt(e) {
 	return e.disallowed ? "not bought" : e.static_price == null ? e.tax ? `${e.tax > 0 ? "+" : ""}${e.tax}% tax` : "bought at the program's terms" : `${j(e.static_price, { full: !0 })} each`;
 }
 //#endregion
 //#region src/public.tsx
-var Rt = "/public/p/buyback";
-function zt() {
+var Bt = "/public/p/buyback";
+function Vt() {
 	let { data: e, isLoading: t } = F({
 		queryKey: [
 			"buyback",
 			"public",
 			"programs"
 		],
-		queryFn: () => D.get(`${Te}/programs`)
+		queryFn: () => D.get(`${Ee}/programs`)
 	});
 	return /* @__PURE__ */ V("div", { children: [/* @__PURE__ */ B(p, {
 		icon: /* @__PURE__ */ B(U, {}),
@@ -3665,14 +3712,14 @@ function zt() {
 		className: "grid gap-4 md:grid-cols-2 xl:grid-cols-3",
 		children: e.programs.map((e) => /* @__PURE__ */ B(Ge, {
 			program: e,
-			to: `${Rt}/${e.id}`
+			to: `${Bt}/${e.id}`
 		}, e.id))
 	}) : /* @__PURE__ */ B(i, { children: /* @__PURE__ */ B(u, {
 		icon: /* @__PURE__ */ B(U, {}),
 		title: "No public buyback programs"
 	}) })] });
 }
-function Bt() {
+function Ht() {
 	let { id: e } = R(), { data: t, isLoading: n } = F({
 		queryKey: [
 			"buyback",
@@ -3680,11 +3727,11 @@ function Bt() {
 			"program",
 			e
 		],
-		queryFn: () => D.get(`${Te}/programs/${e}`)
+		queryFn: () => D.get(`${Ee}/programs/${e}`)
 	});
 	return n ? /* @__PURE__ */ B(_, { className: "h-96" }) : t ? /* @__PURE__ */ V("div", { children: [
 		/* @__PURE__ */ B(Z, {
-			to: Rt,
+			to: Bt,
 			children: "All programs"
 		}),
 		/* @__PURE__ */ B(p, {
@@ -3693,10 +3740,10 @@ function Bt() {
 			title: t.name,
 			description: t.description || void 0
 		}),
-		/* @__PURE__ */ B(ze, {
+		/* @__PURE__ */ B(Be, {
 			program: t,
-			base: Te,
-			quoteLink: (e) => `${Rt}/quotes/${e}`
+			base: Ee,
+			quoteLink: (e) => `${Bt}/quotes/${e}`
 		})
 	] }) : /* @__PURE__ */ B(u, {
 		icon: /* @__PURE__ */ B(U, {}),
@@ -3704,7 +3751,7 @@ function Bt() {
 		description: "It may be closed, or no longer public."
 	});
 }
-function Vt() {
+function Ut() {
 	let { tracking: e } = R(), { data: t, isLoading: n } = F({
 		queryKey: [
 			"buyback",
@@ -3712,29 +3759,29 @@ function Vt() {
 			"quote",
 			e
 		],
-		queryFn: () => D.get(`${Te}/quotes/${e}`)
+		queryFn: () => D.get(`${Ee}/quotes/${e}`)
 	});
 	return n ? /* @__PURE__ */ B(_, { className: "h-96" }) : t ? /* @__PURE__ */ V("div", { children: [
 		/* @__PURE__ */ B(Z, {
-			to: `${Rt}/${t.program.id}`,
+			to: `${Bt}/${t.program.id}`,
 			children: t.program.name
 		}),
 		/* @__PURE__ */ B(p, {
-			icon: /* @__PURE__ */ B(G, {}),
+			icon: /* @__PURE__ */ B(W, {}),
 			eyebrow: t.program.name,
 			title: /* @__PURE__ */ V("span", {
 				className: "inline-flex flex-wrap items-center gap-3 font-mono",
 				children: [
 					t.tracking_number,
 					" ",
-					/* @__PURE__ */ B(De, { value: t.tracking_number })
+					/* @__PURE__ */ B(Oe, { value: t.tracking_number })
 				]
 			}),
 			description: "Keep this page's address to follow the contract."
 		}),
 		/* @__PURE__ */ V("div", {
 			className: "grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]",
-			children: [/* @__PURE__ */ B(i, { children: /* @__PURE__ */ B(Ie, { lines: t.lines ?? [] }) }), /* @__PURE__ */ B("div", {
+			children: [/* @__PURE__ */ B(i, { children: /* @__PURE__ */ B(Le, { lines: t.lines ?? [] }) }), /* @__PURE__ */ B("div", {
 				className: "space-y-4",
 				children: t.contract ? /* @__PURE__ */ B(i, { children: /* @__PURE__ */ V(a, {
 					className: "space-y-2",
@@ -3743,7 +3790,7 @@ function Vt() {
 							className: "hud-label text-subtle",
 							children: "Contract"
 						}),
-						/* @__PURE__ */ B(Ae, {
+						/* @__PURE__ */ B(je, {
 							status: t.contract.status,
 							label: t.contract.status_label
 						}),
@@ -3756,18 +3803,18 @@ function Vt() {
 							children: [M(t.volume), " m³"]
 						})
 					]
-				}) }) : /* @__PURE__ */ B(Re, { quote: t })
+				}) }) : /* @__PURE__ */ B(ze, { quote: t })
 			})]
 		})
 	] }) : /* @__PURE__ */ B(u, {
-		icon: /* @__PURE__ */ B(G, {}),
+		icon: /* @__PURE__ */ B(W, {}),
 		title: "No such quote",
 		description: "It may have been removed because no contract was made for it."
 	});
 }
 //#endregion
 //#region src/index.tsx
-var Ht = ae({
+var Wt = ae({
 	routes: [
 		{
 			path: "",
@@ -3821,15 +3868,15 @@ var Ht = ae({
 	publicRoutes: [
 		{
 			path: "",
-			Component: zt
+			Component: Vt
 		},
 		{
 			path: ":id",
-			Component: Bt
+			Component: Ht
 		},
 		{
 			path: "quotes/:tracking",
-			Component: Vt
+			Component: Ut
 		}
 	],
 	widgets: [{
@@ -3848,6 +3895,6 @@ var Ht = ae({
 	}]
 });
 //#endregion
-export { Ht as default };
+export { Wt as default };
 
-export const classes = ["!data","!isNew","!o","---","--------------------------------------------------------------------","-------------------------------------------------------------------------------------","-----------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------------","-------------------------------------------------------------------------------------------------","--------------------------------------------------------------------------------------------------","----------------------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------------------","---------------------------------------------------------------------------------------------------------","-day","@conduit/sdk","@tanstack/react-query","a","able","about","above","absolute","accent","accept","accepted","accepted_count","access","action","actions","active","actually","add","address","adds","after","again","against","age","align","all","allow_all_items","allow_unpacked","alt","always","an","and","another","any","anything","anywhere","apply","are","aren","aria-checked","aria-expanded","aria-label","aria-pressed","as","asked","asks","assembled","assignee","at","autoComplete","autoFocus","average","averaged","back","balance","base","basics","bb-paste","be","because","been","before","below","best","bg-accent","bg-accent-soft","bg-bg","bg-danger-soft","bg-surface-2","bg-surface-raised","bg-warning-soft","block","blocked","blue_loot_npc","body","boolean","border","border-accent","border-accent/40","border-b","border-border","border-border-strong","border-danger/40","border-t","border-warning/40","bought","box","broken","browse","bulky","but","button","buy","buyback","buys","by","calculator","can","can_create","can_manage","can_read","can_see_leaderboards","categories","category","cell","changed","changes","character","characters","chat","checked","checks","children","className","clear","clears","click","closed","closest","code","color","columns","come","compact","compare","compressed","compressed_volume","compresses","confirmLabel","const","content","contract","contract_id","contracted","contracts","copy","corporation","cost","costs","count","covers","create","created","created_at","crystals","current","currentColor","cursor-help","cursor-pointer","cx","cy","danger","dashboard","data","date","date_completed","date_expired","date_issued","day","days","days_traded","decoration-border-strong","decoration-dotted","default","default_prefix","definePlugin","delete","deleted","density","density_tax","depth","description","desk","deviation","dialog","disabled","disabled:cursor-default","disallowed","divide-border","divide-y","division","dock","doesn","don","drops","each","easier","easy","effective","else","elsewhere","empty","en","enabled","enough","entire","error","esi","esi_character","esi_character_id","even","every","everything","exchange","existing","expanded","expiration_days","expire","expired","export","extends","extra","eyebrow","f","facts","failed","faint","far","fast","faster","fetched","few","fewer","fill","filter","find","finished","finished_contractor","finished_issuer","first","fixed","flagged","flex","flex-1","flex-col","flex-wrap","focus:opacity-100","follow","font-medium","font-mono","font-normal","font-semibold","footer","for","form","format","found","free","from","full","full_name","function","fuzzwork","g","game","gap-1","gap-1.5","gap-2","gap-2.5","gap-3","gap-4","gap-6","gap-x-4","gap-y-1","get","gets","ghost","give","given","go","goes","grid","grid-cols-3","grid-cols-[28px_1fr]","group","group-hover/row:opacity-100","group/row","group_ids","group_rules","groups","guard","guard_both_ways","guard_days","guard_enabled","guard_min_days","guard_threshold","h-16","h-32","h-48","h-56","h-64","h-7","h-96","h-[calc(100vh-14rem)]","h-full","hand","happened","has","has_children","hasn","haul","hauling","hauling_fuel_cost","hauling_unit","have","haven","head","header","height","here","hint","history","history_region","hit","hours","hover","hover:bg-hover","hover:text-text","hover:underline","how","htmlFor","hub","hubId","hubName","hub_id","hub_kind","hub_name","hubs","hud-label","hundred","i","ice","icon","icon-xs","icons","id","ids","if","import","in","in-game","in_progress","included","indent","index","info","inherited","inline","inline-flex","inside","instant","instant_prices","instead","interactive","interface","into","invalidate","inventory","is","isLoading","isNew","isPending","is_corporation","isn","issuer","issuer_corporation","it","item","item_rules","items","items-center","items-end","items-start","its","janice","janice_api_key","janice_key_set","just","justify-between","justify-center","k","keep","keeps","key","keyof","kind","known","l","label","laid","last","lately","lazy","leaderboard","leading-none","leave","ledger","length","less","level","lg","lg:col-span-2","lg:grid-cols-2","lg:grid-cols-3","like","line","line-clamp-2","lines","link","list","listed","lists","lives","loading","location","location_ids","locations","log","logged","login","login_ok","longer","look","loot","low","lower","m","m-4","m12","m15","m16.71","m21.73","m3.3","m6","m9","made","main","make","manage","manage/locations","manage/new","manage_all_programs","manage_programs","managed","manager","managerChoices","manager_ids","managers","manages","manages_all","manipulate","manipulation","manual","market","market_group_id","market_note","market_pulled_at","market_unit","markets","match","matches","materials","max-h-72","may","mb-4","mb-6","md:grid-cols-2","me","member","members","method","min","min-h-0","min-h-7","min-h-[480px]","min-w-0","mine","minerals","mining","minute","minutes","ml-1","ml-1.5","ml-2","mode","modules","mono","month","month_count","month_value","months","moon","more","move","mr-2","mr-auto","mt-0.5","mt-1","mt-1.5","mt-2","mt-3","mt-4","mt-6","must","mutationFn","n","name","navigate","need","needed","needs","neutral","new","no","nobody","node","none","normally","not","note","nothing","notify_managers","now","nowhere","npc","null","number","numeric","o","of","off","often","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onEdit","onError","onOpen","onOpenChange","onPick","onRemove","onRowClick","onSaved","onSuccess","onToggle","one","only","opacity-0","opacity-50","opacity-60","open","open_value","opened","options","or","order","ore","ores","others","out","outstanding","over","overflow-hidden","overflow-x-auto","overflow-y-auto","overview","own","owner","ownerChoices","owner_id","p-3","p-4","p-5","p-6","paddingLeft","page","pages","panel","parts","password","paste","patch","path","pay","pays","pb-1","pct","per","permission","pick","pickTarget","pl-2","place","place-items-center","placeholder","placeholderData","places","player","post","pr-2","prefix","preset","price","price_density_tax","price_density_threshold","price_max_age_hours","price_source","price_type","priced","prices","prices_stored","pricing","primary","problems","program","programId","programs","propped-up","pt-2","public","publicRoutes","pulled_at","put","px-1.5","px-2","px-2.5","px-3","px-4","py-0.5","py-1","py-1.5","py-2","py-3","py-6","q","qc","quantity","queryFn","queryKey","queued","quote","quoteLink","quoted","quotes","r","radio","radiogroup","rare","rarely","rate","rather","raw","re","react","react-router","read","reads","reason","receive","recent","recognised","red_loot_npc","refetchInterval","refined","refines","refining","refining_rate","refresh","refreshed","region","reject","reject_disallowed","rejected","rejected_count","relative","reliable","remove","removeAll","removed","repackaged","replace","reprocess","reprocessed","reprocessing","required","rest","restrict_quotes","result","return","reversed","review","right","right-click","role","rotate-90","round","rounded-full","routes","row","rowKey","rows","rule","ruleId","rules","run","rx","ry","s","sales","save","saved","says","search","searches","searching","secondary","security","see","seen","select","selected","sell","seller","sellers","set","setAddingLocation","setClearAll","setConfirmDelete","setDone","setEditing","setFilter","setForm","setIndex","setName","setOpen","setOther","setQ","setQueryData","setStructureId","setSubject","setSystem","setTab","setText","setting","settings","settled","severe","shadow-e3","ships","short","shows","shrink-0","signed","sit","site","size","size-10","size-2","size-3","size-3.5","size-4","size-5","size-6","size-7","size-8","sm","sm:grid-cols-2","sm:grid-cols-3","smaller","so","solar","solar_system_id","solar_system_name","sold","sold_value","sortValue","source","source_name","space-y-1","space-y-1.5","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","special","split","src","staleTime","standard","starts","state","state_ids","states","static_price","station","stations","statistics","stats","status","status_label","stay","step","stored","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","structure","structureId","structure_id","style","sub","subject","subjectKey","subtitle","success","such","suffix","sync","synced","system","systems","t","t1_refined","t1_refining_rate","tabIndex","tabular-nums","take","taken","takes","target","target_id","targets","tax","terms","text","text-2xl","text-3xl","text-[11px]","text-[13px]","text-[15px]","text-[34px]","text-accent-ink","text-center","text-danger-fg","text-info-fg","text-left","text-lg","text-muted","text-right","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-xs","than","that","the","their","them","then","there","these","they","third-party","this","those","threshold","through","tick","ticked","time","timeAgo","title","to","toggle","told","tone","top","top_items","total","total_count","total_value","totals","tracking","tracking-wider","tracking_number","tracking_prefix","trade","traded","trades","trading","transition","transition-transform","tree","treeitem","true","truncate","trust","two","type","type_id","typed","typeof","types","undefined","under","underline","underline-offset-4","unit","unit_price","units","unknown","unless","unlinked_purge_hours","until","unusual","unwatch","up","updated","updated_at","uppercase","us","use","useMutation","useParams","useQuery","useQueryClient","useState","use_compressed","use_raw","use_refined","used","v","value","valued","variables","variant","view","viewBox","void","volume","w-28","w-32","w-36","w-40","w-44","w-56","w-full","waiting","wallet","wallet_division","want","warning","was","watch","watch_rules","watched","way","ways","were","what","when","where","whether","which","who","whole","wider","widgets","width","will","window","with","within","without","won","words","worth","x","xl:grid-cols-3","xl:grid-cols-4","xl:grid-cols-[minmax(0,1fr)_360px]","xl:grid-cols-[minmax(0,1fr)_400px]","xl:grid-cols-[minmax(0,1fr)_420px]","xs","yet","you","your","z-20"];
+export const classes = ["!data","!isNew","!o","---","--------------------------------------------------------------------","-------------------------------------------------------------------------------------","-----------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------------","-------------------------------------------------------------------------------------------------","--------------------------------------------------------------------------------------------------","----------------------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------------------","---------------------------------------------------------------------------------------------------------","-day","@conduit/sdk","@tanstack/react-query","a","able","about","above","absolute","accent","accept","accepted","accepted_count","access","action","actions","active","actually","add","address","adds","after","again","against","age","align","all","allow_all_items","allow_unpacked","alt","always","an","and","another","any","anything","anywhere","apply","are","aren","aria-checked","aria-expanded","aria-label","aria-pressed","as","asked","asks","assembled","assignee","at","autoComplete","autoFocus","average","averaged","back","balance","base","basics","bb-paste","be","beat","because","been","before","below","best","bg-accent","bg-accent-soft","bg-bg","bg-danger-soft","bg-surface-2","bg-surface-raised","bg-warning-soft","block","blocked","blue_loot_npc","body","boolean","border","border-accent","border-accent/40","border-b","border-border","border-border-strong","border-danger/40","border-t","border-warning/40","bought","box","broken","browse","bulky","but","button","buy","buyback","buys","by","calculator","can","can_create","can_manage","can_read","can_see_leaderboards","categories","category","cell","changed","changes","character","characters","chat","checked","checks","children","className","clear","clears","click","closed","closest","code","color","columns","come","compact","compare","compressed","compressed_volume","compresses","confirmLabel","const","content","contract","contract_id","contracted","contracts","copy","corporation","cost","costs","count","covers","create","created","created_at","crystals","current","currentColor","cursor-help","cursor-pointer","cx","cy","danger","dashboard","data","date","date_completed","date_expired","date_issued","day","days","days_traded","decoration-border-strong","decoration-dotted","default","default_prefix","definePlugin","delete","deleted","density","density_tax","depth","description","desk","deviation","dialog","disabled","disabled:cursor-default","disallowed","divide-border","divide-y","division","dock","doesn","don","drops","each","easier","easy","effective","else","elsewhere","empty","en","enabled","enough","entire","error","esi","esi_character","esi_character_id","even","every","everything","exchange","existing","expanded","expiration_days","expire","expired","export","extends","extra","eyebrow","f","facts","failed","faint","far","fast","faster","fetched","few","fewer","fill","filter","find","finished","finished_contractor","finished_issuer","first","fixed","flagged","flex","flex-1","flex-col","flex-wrap","focus:opacity-100","follow","font-medium","font-mono","font-normal","font-semibold","footer","for","form","format","found","free","from","full","full_name","function","fuzzwork","g","game","gap-1","gap-1.5","gap-2","gap-2.5","gap-3","gap-4","gap-6","gap-x-4","gap-y-1","get","gets","ghost","give","given","go","goes","grid","grid-cols-3","grid-cols-[28px_1fr]","group","group-hover/row:opacity-100","group/row","groupId","group_ids","group_rules","groups","guard","guard_both_ways","guard_days","guard_enabled","guard_min_days","guard_threshold","h-16","h-32","h-48","h-56","h-64","h-7","h-96","h-[calc(100vh-14rem)]","h-full","hand","happened","has","has_children","hasn","haul","hauling","hauling_fuel_cost","hauling_unit","have","haven","head","header","height","here","hint","history","history_region","hit","hours","hover","hover:bg-hover","hover:text-text","hover:underline","how","htmlFor","hub","hubId","hubName","hub_id","hub_kind","hub_name","hubs","hud-label","hundred","i","ice","icon","icon-xs","icons","id","ids","if","ignoring","import","in","in-game","in_progress","included","indent","index","info","inherited","inline","inline-flex","inside","instant","instant_prices","instead","interactive","interface","into","invalidate","inventory","is","isLoading","isNew","isPending","is_corporation","isn","issuer","issuer_corporation","it","item","item_rules","items","items-center","items-end","items-start","its","janice","janice_api_key","janice_key_set","just","justify-between","justify-center","k","keep","keeps","key","keyof","kind","known","l","label","laid","last","lately","lazy","leaderboard","leading-none","leave","ledger","length","less","level","lg","lg:col-span-2","lg:grid-cols-2","lg:grid-cols-3","like","line","line-clamp-2","lines","link","list","listed","lists","lives","loading","location","location_ids","locations","log","logged","login","login_ok","longer","look","loot","low","lower","m","m-4","m12","m15","m16.71","m21.73","m3.3","m6","m9","made","main","make","manage","manage/locations","manage/new","manage_all_programs","manage_programs","managed","manager","managerChoices","manager_ids","managers","manages","manages_all","manipulate","manipulation","manual","market","market_group_id","market_note","market_pulled_at","market_unit","markets","match","matches","materials","max-h-72","may","mb-4","mb-6","md:grid-cols-2","me","member","members","method","min","min-h-0","min-h-7","min-h-[480px]","min-w-0","mine","minerals","mining","minute","minutes","ml-1","ml-1.5","ml-2","mode","modules","mono","month","month_count","month_value","months","moon","more","move","mr-2","mr-auto","mt-0.5","mt-1","mt-1.5","mt-2","mt-3","mt-4","mt-6","must","mutationFn","n","name","navigate","need","needed","needs","neutral","new","no","nobody","node","none","normally","not","note","nothing","notify_managers","now","nowhere","npc","null","number","numeric","o","of","off","often","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onEdit","onError","onOpen","onOpenChange","onPick","onRemove","onRowClick","onSaved","onSuccess","onToggle","one","only","opacity-0","opacity-50","opacity-60","open","open_value","opened","options","or","order","ore","ores","others","out","outstanding","over","overflow-hidden","overflow-x-auto","overflow-y-auto","override","overrides","overview","own","owner","ownerChoices","owner_id","p-3","p-4","p-5","p-6","paddingLeft","page","pages","panel","parts","password","paste","patch","path","pay","pays","pb-1","pct","per","permission","pick","pickTarget","pl-2","place","place-items-center","placeholder","placeholderData","places","player","plus","post","pr-2","prefix","preset","price","price_density_tax","price_density_threshold","price_max_age_hours","price_source","price_type","priced","prices","prices_stored","pricing","primary","problems","program","programId","programs","propped-up","pt-2","public","publicRoutes","pulled_at","put","px-1.5","px-2","px-2.5","px-3","px-4","py-0.5","py-1","py-1.5","py-2","py-3","py-6","q","qc","quantity","queryFn","queryKey","queued","quote","quoteLink","quoted","quotes","r","radio","radiogroup","rare","rarely","rate","rather","raw","re","react","react-router","read","reads","reason","receive","recent","recognised","red_loot_npc","refetchInterval","refined","refines","refining","refining_rate","refresh","refreshed","region","reject","reject_disallowed","rejected","rejected_count","relative","reliable","remove","removeAll","removed","repackaged","replace","reprocess","reprocessed","reprocessing","required","rest","restrict_quotes","result","return","reversed","review","right","right-click","role","rotate-90","round","rounded-full","routes","row","rowKey","rows","rule","ruleId","rules","run","rx","ry","s","sales","save","saved","says","search","searches","searching","secondary","security","see","seen","select","selected","sell","seller","sellers","set","setAddingLocation","setClearAll","setConfirmDelete","setDone","setEditing","setFilter","setForm","setIndex","setName","setOpen","setOther","setQ","setQueryData","setStructureId","setSubject","setSystem","setTab","setText","setting","settings","settled","severe","shadow-e3","ships","short","shows","shrink-0","signed","sit","site","size","size-10","size-2","size-3","size-3.5","size-4","size-5","size-6","size-7","size-8","sm","sm:grid-cols-2","sm:grid-cols-3","smaller","so","solar","solar_system_id","solar_system_name","sold","sold_value","sortValue","source","source_name","space-y-1","space-y-1.5","space-y-2","space-y-3","space-y-4","space-y-5","space-y-6","special","split","src","staleTime","standard","starts","state","state_ids","states","static_price","station","stations","statistics","stats","status","status_label","stay","step","stored","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","structure","structureId","structure_id","style","sub","subject","subjectKey","subtitle","success","such","suffix","sync","synced","system","systems","t","t1_refined","t1_refining_rate","tabIndex","tabular-nums","take","taken","takes","target","target_id","targets","tax","terms","text","text-2xl","text-3xl","text-[11px]","text-[13px]","text-[15px]","text-[34px]","text-accent-ink","text-center","text-danger-fg","text-info-fg","text-left","text-lg","text-muted","text-right","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-xs","than","that","the","their","theirs","them","then","there","these","they","third-party","this","those","threshold","through","tick","ticked","time","timeAgo","title","to","toggle","told","tone","top","top_items","total","total_count","total_value","totals","tracking","tracking-wider","tracking_number","tracking_prefix","trade","traded","trades","trading","transition","transition-transform","tree","treeitem","true","truncate","trust","two","type","type_id","typed","typeof","types","undefined","under","underline","underline-offset-4","unit","unit_price","units","unknown","unless","unlinked_purge_hours","until","unusual","unwatch","up","updated","updated_at","uppercase","us","use","useMutation","useParams","useQuery","useQueryClient","useState","use_compressed","use_raw","use_refined","used","v","value","valued","variables","variant","view","viewBox","void","volume","w-28","w-32","w-36","w-40","w-44","w-56","w-full","waiting","wallet","wallet_division","want","warning","was","watch","watch_rules","watched","way","ways","were","what","whatever","when","where","whether","which","who","whole","whose","wider","widgets","width","will","win","window","with","within","without","won","words","worth","x","xl:grid-cols-3","xl:grid-cols-4","xl:grid-cols-[minmax(0,1fr)_360px]","xl:grid-cols-[minmax(0,1fr)_400px]","xl:grid-cols-[minmax(0,1fr)_420px]","xs","yet","you","your","z-20"];
