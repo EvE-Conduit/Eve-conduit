@@ -1,5 +1,5 @@
-"""Market prices at the hub, from Fuzzwork (free), Janice (with an API key) or ESI (see ``market``), kept in
-``ItemPrice``."""
+"""Market prices at each hub in use, from Fuzzwork (free), Janice (with an API key) or ESI (see ``market``), kept
+in ``ItemPrice``."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ from django.utils import timezone
 from conduit.db import upsert
 from conduit.esi.client import user_agent
 
-from .models import BuybackSettings, ItemPrice
+from .market import Hub, hubs_in_use, site_hub
+from .models import BuybackSettings, ItemPrice, MarketRead
 
 log = logging.getLogger(__name__)
 
@@ -43,11 +44,11 @@ def hub_param(hub_id: int) -> str:
     return "station"
 
 
-def _fuzzwork(type_ids: list[int], s: BuybackSettings, client: httpx.Client) -> dict[int, tuple[Decimal, Decimal]]:
+def _fuzzwork(type_ids: list[int], s: BuybackSettings, hub: Hub, client: httpx.Client) -> dict[int, tuple[Decimal, Decimal]]:
     out = {}
     for i in range(0, len(type_ids), BATCH):
         chunk = type_ids[i : i + BATCH]
-        resp = client.get(FUZZWORK_URL, params={hub_param(s.hub_id): s.hub_id, "types": ",".join(map(str, chunk))})
+        resp = client.get(FUZZWORK_URL, params={hub_param(hub.id): hub.id, "types": ",".join(map(str, chunk))})
         resp.raise_for_status()
         for key, row in resp.json().items():
             buy, sell = row.get("buy") or {}, row.get("sell") or {}
@@ -58,7 +59,7 @@ def _fuzzwork(type_ids: list[int], s: BuybackSettings, client: httpx.Client) -> 
     return out
 
 
-def _janice(type_ids: list[int], s: BuybackSettings, client: httpx.Client) -> dict[int, tuple[Decimal, Decimal]]:
+def _janice(type_ids: list[int], s: BuybackSettings, hub: Hub, client: httpx.Client) -> dict[int, tuple[Decimal, Decimal]]:
     out = {}
     for i in range(0, len(type_ids), BATCH):
         chunk = type_ids[i : i + BATCH]
@@ -77,10 +78,11 @@ def _janice(type_ids: list[int], s: BuybackSettings, client: httpx.Client) -> di
     return out
 
 
-def fetch(type_ids, settings: BuybackSettings | None = None, client: httpx.Client | None = None) -> int:
-    """Fetch and store prices for the types. Types the source doesn't know are stored at 0, so they aren't asked
-    for again until they are stale."""
+def fetch(type_ids, settings: BuybackSettings | None = None, client: httpx.Client | None = None, hub: Hub | None = None) -> int:
+    """Fetch and store prices for the types at the hub (the site's by default). Types the source doesn't know are
+    stored at 0, so they aren't asked for again until they are stale."""
     s = settings or BuybackSettings.load()
+    hub = hub or site_hub(s)
     ids = sorted({int(t) for t in type_ids})
     if not ids:
         return 0
@@ -91,7 +93,7 @@ def fetch(type_ids, settings: BuybackSettings | None = None, client: httpx.Clien
     own = client is None
     client = client or httpx.Client(timeout=30, headers={"User-Agent": user_agent()}, follow_redirects=True)
     try:
-        found = (_janice if s.price_source == BuybackSettings.Source.JANICE else _fuzzwork)(ids, s, client)
+        found = (_janice if s.price_source == BuybackSettings.Source.JANICE else _fuzzwork)(ids, s, hub, client)
     except (httpx.HTTPError, ValueError) as exc:
         raise PriceError(f"Couldn't get prices from {s.get_price_source_display()}: {exc}") from exc
     finally:
@@ -101,8 +103,8 @@ def fetch(type_ids, settings: BuybackSettings | None = None, client: httpx.Clien
     zero = Decimal(0)
     upsert(
         ItemPrice,
-        [ItemPrice(type_id=t, buy=found.get(t, (zero, zero))[0], sell=found.get(t, (zero, zero))[1], updated_at=now) for t in ids],
-        unique_fields=["type_id"],
+        [ItemPrice(hub_id=hub.id, type_id=t, buy=found.get(t, (zero, zero))[0], sell=found.get(t, (zero, zero))[1], updated_at=now) for t in ids],
+        unique_fields=["hub_id", "type_id"],
         update_fields=["buy", "sell", "updated_at"],
     )
     return len(ids)
@@ -113,15 +115,16 @@ def stale_before(settings: BuybackSettings | None = None):
     return timezone.now() - timedelta(hours=max(s.price_max_age_hours, 1))
 
 
-def get(type_ids, settings: BuybackSettings | None = None) -> dict[int, ItemPrice]:
-    """Prices for the types, fetching the ones missing or stale first. If the source is down, stale prices are
-    used rather than none; types never priced are left out."""
+def get(type_ids, settings: BuybackSettings | None = None, hub: Hub | None = None) -> dict[int, ItemPrice]:
+    """Prices for the types at the hub (the site's by default), fetching the ones missing or stale first. If the
+    source is down, stale prices are used rather than none; types never priced are left out."""
     s = settings or BuybackSettings.load()
+    hub = hub or site_hub(s)
     ids = {int(t) for t in type_ids}
-    have = {p.type_id: p for p in ItemPrice.objects.filter(type_id__in=ids)}
+    have = {p.type_id: p for p in ItemPrice.objects.filter(hub_id=hub.id, type_id__in=ids)}
     if s.price_source == BuybackSettings.Source.ESI:
         # Read in the background as a whole; before the first read there's nothing yet.
-        if s.market_pulled_at is None:
+        if not MarketRead.objects.filter(hub_id=hub.id).exclude(pulled_at=None).exists():
             from .tasks import pull_market
 
             pull_market.delay()
@@ -130,18 +133,29 @@ def get(type_ids, settings: BuybackSettings | None = None) -> dict[int, ItemPric
     todo = [t for t in ids if t not in have or have[t].updated_at < cutoff]
     if todo:
         try:
-            fetch(todo, s)
+            fetch(todo, s, hub=hub)
         except PriceError as exc:
             log.warning("%s", exc)
         else:
-            have = {p.type_id: p for p in ItemPrice.objects.filter(type_id__in=ids)}
+            have = {p.type_id: p for p in ItemPrice.objects.filter(hub_id=hub.id, type_id__in=ids)}
     return have
+
+
+def refresh(stale_only: bool = True, limit: int = 5000) -> int:
+    """Re-fetch stored prices at every hub in use: those older than the maximum age, or all of them."""
+    s = BuybackSettings.load()
+    if s.price_source == BuybackSettings.Source.ESI:
+        return 0  # the market is read as a whole every half hour
+    total = 0
+    for hub in hubs_in_use(s):
+        qs = ItemPrice.objects.filter(hub_id=hub.id)
+        if stale_only:
+            qs = qs.filter(updated_at__lt=stale_before(s))
+        ids = list(qs.order_by("updated_at").values_list("type_id", flat=True)[: max(limit - total, 0)])
+        total += fetch(ids, s, hub=hub) if ids else 0
+    return total
 
 
 def refresh_stale(limit: int = 5000) -> int:
     """Re-fetch stored prices that are older than the maximum age."""
-    s = BuybackSettings.load()
-    if s.price_source == BuybackSettings.Source.ESI:
-        return 0  # the market is read as a whole every half hour
-    ids = list(ItemPrice.objects.filter(updated_at__lt=stale_before(s)).order_by("updated_at").values_list("type_id", flat=True)[:limit])
-    return fetch(ids, s) if ids else 0
+    return refresh(True, limit)

@@ -12,7 +12,7 @@ from pydantic import Field
 from conduit.audit.services import client_ip
 
 from . import services
-from .models import Program, Quote
+from .models import BuybackSettings, Program, Quote
 
 router = Router(tags=["buyback (public)"])
 #: Quotes per visitor (by IP address) in ``WINDOW`` seconds.
@@ -30,12 +30,13 @@ def _public(program_id: int) -> Program:
 @router.get("/programs")
 def programs(request):
     qs = Program.objects.filter(public=True, active=True).select_related("owner__corporation").prefetch_related("locations", "item_rules")
-    return {"programs": [services.program_out(p) for p in qs], "prices": services.prices_out()}
+    s = BuybackSettings.load()
+    return {"programs": [services.program_out(p, settings=s) for p in qs], "prices": services.prices_out(s)}
 
 
 @router.get("/programs/{program_id}")
 def program(request, program_id: int):
-    return {**services.program_out(_public(program_id)), "prices": services.prices_out()}
+    return services.program_out(_public(program_id))
 
 
 class QuoteIn(Schema):
