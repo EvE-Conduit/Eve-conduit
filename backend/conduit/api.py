@@ -53,10 +53,15 @@ api.add_router("/admin", admin_health_router, auth=django_auth)
 api.add_router("/admin", admin_updates_router, auth=django_auth)
 
 for plugin_id, plugin in registry.installed().items():
-    if not plugin.api:
-        continue
-    try:
-        path, _, attr = plugin.api.partition(":")
-        api.add_router(f"/p/{plugin_id}", getattr(importlib.import_module(path), attr), auth=django_auth)
-    except Exception:
-        log.exception("Could not mount the API of plugin %s", plugin_id)
+    if plugin.api:
+        try:
+            path, _, attr = plugin.api.partition(":")
+            api.add_router(f"/p/{plugin_id}", getattr(importlib.import_module(path), attr), auth=django_auth)
+        except Exception:
+            log.exception("Could not mount the API of plugin %s", plugin_id)
+    if plugin.public_api:
+        try:
+            path, _, attr = plugin.public_api.partition(":")
+            api.add_router(f"/public/p/{plugin_id}", getattr(importlib.import_module(path), attr))
+        except Exception:
+            log.exception("Could not mount the public API of plugin %s", plugin_id)

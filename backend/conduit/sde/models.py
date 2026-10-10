@@ -96,6 +96,8 @@ class ItemType(models.Model):
     #: "turret", "launcher", "cpu", "power", "calibration", "rig_size"}``; subsystems also have ``"adds"`` with the slots
     #: and hardpoints they give the ship.
     fitting = models.JSONField(null=True, default=None)
+    #: The compressed variant of an ore or ice (one unit compresses into one unit of it), from ``compressibleTypes``.
+    compressed_type_id = models.IntegerField(null=True, default=None)
 
     def __str__(self):
         return self.name
@@ -103,6 +105,17 @@ class ItemType(models.Model):
     @property
     def icon_url(self) -> str:
         return type_icon_url(self.id)
+
+
+class TypeMaterial(models.Model):
+    """What reprocessing one portion (``ItemType.portion_size`` units) of a type gives at 100% yield."""
+
+    type = models.ForeignKey(ItemType, on_delete=models.DO_NOTHING, db_constraint=False, related_name="materials")
+    material_type_id = models.IntegerField()
+    quantity = models.IntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["type", "material_type_id"], name="sde_type_material_unique")]
 
 
 class SkillInfo(models.Model):

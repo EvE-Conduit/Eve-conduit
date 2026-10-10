@@ -17,7 +17,7 @@ from conduit import __version__
 from conduit.audit.services import record
 from conduit.esi.tokens import sso_configured
 from conduit.plugins import registry
-from conduit.plugins.services import can_use, sync_installed
+from conduit.plugins.services import can_use, is_enabled, sync_installed
 from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
 from conduit.updates.services import progress as update_progress
@@ -84,6 +84,8 @@ class PluginEntry(Schema):
     version: str
     nav: list[dict]
     entry: str | None
+    #: Not usable by this visitor except for its public pages.
+    public_only: bool = False
 
 
 class BootstrapOut(Schema):
@@ -157,20 +159,25 @@ def bootstrap(request):
     get_token(request)
     site = SiteSettings.load()
     plugins = []
-    if request.user.is_authenticated:
-        for mid, mod in registry.installed().items():
-            if can_use(request.user, mid):
-                plugins.append(
-                    {
-                        "id": mid,
-                        "name": mod.name,
-                        "version": mod.version,
-                        "nav": [vars(n) for n in mod.nav if not n.permission or request.user.has_perm(n.permission)],
-                        # The version in the URL makes browsers fetch a plugin's new bundle after an update
-                        # (static files keep their name and may be cached for days).
-                        "entry": f"{static(mod.frontend)}?v={mod.version}" if mod.frontend else None,
-                    }
-                )
+    for mid, mod in registry.installed().items():
+        if request.user.is_authenticated and can_use(request.user, mid):
+            nav, public_only = [vars(n) for n in mod.nav if not n.permission or request.user.has_perm(n.permission)], False
+        elif mod.public_pages and mod.frontend and is_enabled(mid):
+            nav, public_only = [], True  # signed out or not a member: only its public pages
+        else:
+            continue
+        plugins.append(
+            {
+                "id": mid,
+                "name": mod.name,
+                "version": mod.version,
+                "nav": nav,
+                # The version in the URL makes browsers fetch a plugin's new bundle after an update
+                # (static files keep their name and may be cached for days).
+                "entry": f"{static(mod.frontend)}?v={mod.version}" if mod.frontend else None,
+                "public_only": public_only,
+            }
+        )
     out = {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
     if not request.user.is_authenticated:
         # Sidebar links may point at members-only places (a Discord invite, the wiki); keep them off the login page.

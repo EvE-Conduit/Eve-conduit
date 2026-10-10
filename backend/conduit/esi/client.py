@@ -91,9 +91,13 @@ class EsiClient:
 
     # -- public API ---------------------------------------------------------
 
-    def get(self, path: str, *, character=None, params: dict | None = None) -> EsiResponse:
-        """GET a route, e.g. ``client.get("/characters/{id}/wallet", character=c)``."""
-        return self._request("GET", path, character=character, params=params)
+    def get(self, path: str, *, character=None, params: dict | None = None, cache_response: bool = True) -> EsiResponse:
+        """GET a route, e.g. ``client.get("/characters/{id}/wallet", character=c)``.
+
+        ``cache_response=False`` keeps the response out of the cache, for big one-off reads such as a region's whole
+        order book (hundreds of pages, read once). The caller then makes sure not to ask again before ESI's copy
+        expires (``EsiResponse.headers["expires"]``)."""
+        return self._request("GET", path, character=character, params=params, use_cache=cache_response)
 
     def get_all_pages(self, path: str, *, character=None, params: dict | None = None) -> list:
         first = self.get(path, character=character, params=params)
@@ -145,9 +149,9 @@ class EsiClient:
             cache.set(RATE_PAUSE_KEY.format(group=bucket, character=character_id), time.time() + retry, retry + 1)
             raise EsiRateLimited(retry, bucket)
 
-    def _request(self, method, path, *, character=None, params=None, body=None) -> EsiResponse:
+    def _request(self, method, path, *, character=None, params=None, body=None, use_cache=True) -> EsiResponse:
         character_id = character.pk if character is not None else None
-        key = _cache_key(method, path, params, character_id) if method == "GET" else None
+        key = _cache_key(method, path, params, character_id) if method == "GET" and use_cache else None
         cached = cache.get(key) if key else None
         # Never ask ESI again before its cache expires; doing so can get an app banned.
         if cached and cached["fresh_until"] > time.time():

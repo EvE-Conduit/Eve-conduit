@@ -161,6 +161,8 @@ admin API, so show it only to people with `site.manage_access`, and check that p
 The static data import keeps, for every item, the skills it needs (`ItemType.required_skills`, direct requirements
 as `[[skill_id, level], ...]`), and for ships, modules and subsystems their fitting data (`ItemType.fitting`: slots,
 hardpoints, CPU, powergrid and calibration, and which slot a module goes in). See `conduit/sde/models.py`.
+Reprocessing output is in `TypeMaterial` (per portion of `ItemType.portion_size` units, at 100 % yield), and ores and
+ice point at their compressed variant with `ItemType.compressed_type_id` (one unit compresses into one unit).
 
 `conduit.sheet.skills.training` does the skill maths for everyone:
 
@@ -191,6 +193,30 @@ class RecruitmentPlugin(Plugin):
 ```
 
 The external API (`/api/v1/p/<id>/`) isn't affected; API keys have their own scopes.
+
+## Public pages
+
+A plugin can have pages anyone may open, signed in or not, like the Buyback plugin's public programs:
+
+```python
+class BuybackPlugin(Plugin):
+    public_api = "conduit_buyback.public_api:router"  # /api/public/p/buyback/, no user check
+    public_pages = True                                # its bundle loads for everyone
+```
+
+```tsx
+export default definePlugin({
+  routes: [...],                                        // members, inside the site
+  publicRoutes: [{ path: ":id", Component: Program }],  // everyone, at /public/p/buyback/:id
+});
+```
+
+Public pages sit in a plain frame with the site's name and a sign-in link, without the sidebar. Visitors who may
+only use them (signed out, or not members of a members-only plugin) get `public_only: true` in
+`/api/core/bootstrap` and only the plugin's `publicRoutes`; its widgets, tabs and other pages aren't loaded for them.
+The public API is mounted only while the plugin is enabled, and its routes get no user check at all: decide in
+each route what a stranger may see, don't let `request.user` make a stranger's request act in a member's name
+(another site can send it from a member's browser), and rate-limit anything that writes.
 
 ## Character sheet access
 

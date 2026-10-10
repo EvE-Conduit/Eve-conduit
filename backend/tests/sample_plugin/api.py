@@ -8,6 +8,15 @@ def hello(request):
     return {"hello": request.user.display_name}
 
 
+# For everyone, signed in or not; see SamplePlugin.public_api.
+public_router = Router()
+
+
+@public_router.get("/ping")
+def public_ping(request):
+    return {"signed_in": request.user.is_authenticated}
+
+
 # For external services (API keys); see SamplePlugin.external_api.
 from conduit.external.auth import require_scope  # noqa: E402
 

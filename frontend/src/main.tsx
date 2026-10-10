@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider, type RouteObject } from "react-rou
 import { Toaster } from "sonner";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { PublicShell } from "@/components/layout/PublicShell";
 import { UPDATING_KEY } from "@/components/layout/Banners";
 import { updateTitle } from "@/components/updates/UpdateSteps";
 import { PluginBoundary } from "@/components/PluginBoundary";
@@ -57,9 +58,9 @@ const queryClient = new QueryClient({
   },
 });
 
-function pluginRoutes(plugins: LoadedPlugin[]): RouteObject[] {
+function pluginRoutes(plugins: LoadedPlugin[], key: "routes" | "publicRoutes" = "routes"): RouteObject[] {
   return plugins.flatMap(({ info, frontend }) =>
-    (frontend.routes ?? []).map((r) => ({
+    (frontend[key] ?? []).map((r) => ({
       path: `p/${info.id}${r.path ? `/${r.path.replace(/^\//, "")}` : ""}`,
       element: (
         <PluginBoundary name={info.name}>
@@ -89,6 +90,7 @@ async function start() {
   const router = createBrowserRouter([
     { path: "/login", element: <Login /> },
     { path: "/setup", element: <Setup /> },
+    { path: "/public", element: <PublicShell />, children: [...pluginRoutes(plugins, "publicRoutes"), { path: "*", element: <NotFound /> }] },
     {
       path: "/",
       element: <AppShell />,

@@ -9,6 +9,7 @@ class SamplePlugin(Plugin):
     api = "tests.sample_plugin.api:router"
     external_api = "tests.sample_plugin.api:external_router"
     external_scopes = {"read": "Read sample data"}
+    public_api = "tests.sample_plugin.api:public_router"
     frontend = "sample/plugin.js"
     esi_scopes = ("esi-fleets.read_fleet.v1",)
     nav = (NavItem("Sample", "", "flask-conical"),)

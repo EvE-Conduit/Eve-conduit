@@ -49,6 +49,11 @@ export interface LandingSection {
 
 export interface PluginFrontend {
   routes?: ModuleRoute[];
+  /**
+   * Pages anyone may open, signed in or not, at /public/p/<id>/<path> (the plugin sets `public_pages = True`).
+   * They sit in a plain frame without the sidebar, and may call only the plugin's public API.
+   */
+  publicRoutes?: ModuleRoute[];
   widgets?: DashboardWidget[];
   characterTabs?: CharacterTab[];
   landingSections?: LandingSection[];
@@ -72,7 +77,13 @@ export async function loadPlugins(entries: PluginEntry[]): Promise<LoadedPlugin[
       if (!info.entry) return { info, frontend: {} };
       try {
         const mod = await import(/* @vite-ignore */ info.entry);
-        return { info, frontend: (mod.default ?? {}) as PluginFrontend, classes: Array.isArray(mod.classes) ? mod.classes : [] };
+        const frontend = (mod.default ?? {}) as PluginFrontend;
+        return {
+          info,
+          // Visitors who may only use the public pages get nothing else (widgets, tabs and pages would call its API).
+          frontend: info.public_only ? { publicRoutes: frontend.publicRoutes } : frontend,
+          classes: Array.isArray(mod.classes) ? mod.classes : [],
+        };
       } catch (err) {
         console.error(`Plugin ${info.id} failed to load`, err);
         return { info, frontend: {}, error: err instanceof Error ? err.message : String(err) };

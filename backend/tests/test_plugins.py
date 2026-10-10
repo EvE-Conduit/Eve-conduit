@@ -89,6 +89,37 @@ def test_members_only_plugins_are_hidden_from_guests(client, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_public_api_and_pages_are_for_everyone(client, monkeypatch):
+    from conduit.access.models import State
+
+    from .conftest import make_user
+
+    assert client.get("/api/public/p/sample/ping").status_code == 404  # not enabled
+    set_enabled("sample", True)
+    assert client.get("/api/public/p/sample/ping").json() == {"signed_in": False}
+    assert client.get("/api/p/sample/hello").status_code == 401  # the rest still needs signing in
+
+    # Guests of a members-only plugin get its public API, not the rest.
+    guest = make_user(90000022, "Guest Pilot", member=False)
+    guest.state = State.objects.create(name="Guest", priority=0, public=True)
+    guest.save()
+    client.force_login(guest)
+    assert client.get("/api/public/p/sample/ping").json() == {"signed_in": True}
+    assert client.get("/api/p/sample/hello").status_code == 403
+
+    # With public pages its bundle loads for them, marked public-only and without sidebar entries.
+    assert client.get("/api/core/bootstrap").json()["plugins"] == []
+    monkeypatch.setattr(registry.installed()["sample"], "public_pages", True)
+    entry = client.get("/api/core/bootstrap").json()["plugins"][0]
+    assert (entry["id"], entry["public_only"], entry["nav"]) == ("sample", True, [])
+    client.logout()
+    assert client.get("/api/core/bootstrap").json()["plugins"][0]["public_only"] is True
+    client.force_login(make_user(90000023, "Member Pilot"))
+    entry = client.get("/api/core/bootstrap").json()["plugins"][0]
+    assert entry["public_only"] is False and entry["nav"]
+
+
+@pytest.mark.django_db
 def test_admins_use_members_only_plugins_whatever_their_state(client):
     from .conftest import make_user
 

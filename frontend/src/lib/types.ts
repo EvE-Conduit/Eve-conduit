@@ -92,6 +92,8 @@ export interface PluginEntry {
   version: string;
   nav: NavItem[];
   entry: string | null;
+  /** This visitor (signed out, or not a member) gets only the plugin's public pages. */
+  public_only?: boolean;
 }
 
 /** What the install's updater is doing right now (from its progress file). */

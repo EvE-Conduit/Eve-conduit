@@ -114,6 +114,16 @@ def test_authenticated_call_uses_character_token(user):
     assert calls[0].headers["Authorization"] == "Bearer access"
 
 
+def test_big_one_off_reads_can_stay_out_of_the_cache():
+    """A region's order book is hundreds of pages read once: kept out of the cache, they're asked for every time."""
+    from django.core.cache import cache
+
+    esi, calls = client_with(lambda r, n: httpx.Response(200, json=[n], headers={"Cache-Control": "max-age=300"}))
+    assert esi.get("/markets/1/orders", cache_response=False).data == [1]
+    assert esi.get("/markets/1/orders", cache_response=False).data == [2]
+    assert not [k for k in cache._cache if "esi:resp:" in k]
+
+
 def test_cache_control_max_age_is_respected():
     esi, calls = client_with(lambda r, n: httpx.Response(200, json=[n], headers={"Cache-Control": "public, max-age=300"}))
     assert esi.get("/y").data == [1]
