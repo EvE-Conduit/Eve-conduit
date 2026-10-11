@@ -26,7 +26,7 @@ COPY backend/docker-entrypoint.sh /usr/local/bin/conduit
 # /srv/seat-import and /srv/plugins: owned by conduit so the shared volumes mounted there (docker-compose.yml) start
 # writable. staticfiles too: the web container collects plugins' static files again after installing plugins.
 RUN chmod +x /usr/local/bin/conduit && useradd --system --uid 1000 conduit \
-    && mkdir -p /srv/seat-import /srv/plugins && chown conduit /srv/seat-import /srv/plugins /app/staticfiles
+    && mkdir -p /srv/seat-import /srv/plugins && chown -R conduit /srv/seat-import /srv/plugins /app/staticfiles
 USER conduit
 
 EXPOSE 8000
