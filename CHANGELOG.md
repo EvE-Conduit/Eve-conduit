@@ -3,7 +3,7 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.38
 
 ### Added
 - **New plugin: Wiki** (Administration → Plugins → Browse). Guides, rules and reference pages in a tree, written in
@@ -14,9 +14,8 @@ Versions follow `MAJOR.MINOR.PATCH`.
   `/public/p/wiki/<address>`. Pages turn up in Ctrl+K search and a dashboard widget lists the latest changes.
 
 ### Changed
-- **Administration has its own rail on the right.** On wide screens (1280px and up) the Administration links sit
-  in a rail on the right of the page, with its own collapse button, so the left sidebar is just the member side of
-  the site. On narrower screens and in the phone menu they stay in the left sidebar as before.
+- **Your role tag sits under your name.** In the sidebar footer the Super admin, Admin or member-state tag now
+  shows on its own line below your name, above the corporation, instead of being squeezed in to the right.
 
 ## 0.5.37
 
