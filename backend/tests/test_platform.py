@@ -256,6 +256,9 @@ def test_preferences_round_trip_and_bootstrap(user, api_client):
     assert api_client.call("put", "/api/me/preferences", {**prefs, "timezone": "Mars/Base"}).status_code == 400
     assert api_client.call("put", "/api/me/preferences", {**prefs, "theme": "sakura"}).json()["theme"] == "sakura"
     assert api_client.call("put", "/api/me/preferences", {**prefs, "theme": "pastel"}).status_code == 400
+    assert api_client.call("put", "/api/me/preferences", {**prefs, "text_scale": -2}).json()["text_scale"] == -2
+    assert api_client.call("put", "/api/me/preferences", {**prefs, "text_scale": -3}).status_code == 400
+    assert api_client.call("put", "/api/me/preferences", {**prefs, "text_scale": 3}).status_code == 400
     assert api_client.call("put", "/api/me/preferences", prefs).status_code == 200
     boot = api_client.call("get", "/api/core/bootstrap").json()
     assert boot["user"]["preferences"]["theme"] == "light"
