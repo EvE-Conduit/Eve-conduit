@@ -6,9 +6,9 @@ Versions follow `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 ### Changed
-- **Text can go smaller too.** Settings → Appearance → Text size now has five steps instead of three: two below
-  normal (87.5% and about 81%) as well as the two larger ones. Everything on the site scales with it, plugins
-  included.
+- **Text is a little smaller, and can go smaller still.** The normal text size is now 15px instead of 16px,
+  and Settings → Appearance → Text size has five steps instead of three: 13, 14, 15, 17 or 19px. Everything on the
+  site scales with it, plugins included.
 
 ## 0.5.38
 
