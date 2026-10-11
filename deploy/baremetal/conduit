@@ -16,6 +16,7 @@
 #                                         renewing a Let's Encrypt IP address certificate
 #   conduit plugin install <package>      install a plugin (PyPI name, git URL or path)
 #   conduit plugin list                   list installed plugins
+#   conduit uninstall [--mode all|keep-data] remove EvE Conduit (asks what to keep; never deletes a user account)
 #   conduit run web|worker|beat           used by Supervisor to start the services
 set -euo pipefail
 
@@ -528,6 +529,19 @@ CRON
   echo "HTTPS is on: https://$ip (certificate renewed automatically)"
 }
 
+cmd_uninstall() {
+  require_root
+  # The script lives in the release being removed, so run a copy of it.
+  local src="$APP/deploy/baremetal/uninstall.sh" tmp
+  [[ -f "$src" ]] || die "$src is missing (older release?); download a release and run its deploy/baremetal/uninstall.sh"
+  tmp=$(mktemp /tmp/conduit-uninstall.XXXXXX.sh)
+  cp "$src" "$tmp" && chmod 700 "$tmp"
+  bash "$tmp" "$@"
+  local rc=$?
+  rm -f "$tmp"
+  return $rc
+}
+
 cmd_run() {
   load_env
   cd "$APP/backend"
@@ -555,6 +569,7 @@ case "${1:-}" in
   ip-cert) cmd_ip_cert ;;
   _apply-plugins) shift; cmd_apply_plugins "$@" ;;
   plugin) shift; cmd_plugin "$@" ;;
+  uninstall) shift; cmd_uninstall "$@" ;;
   run) shift; cmd_run "$@" ;;
-  *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

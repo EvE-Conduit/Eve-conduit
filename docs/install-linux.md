@@ -161,6 +161,7 @@ All of these need root (`sudo`):
 | Upgrade to a new release by hand | `conduit upgrade eve-conduit-X.Y.Z.tar.gz` |
 | Go back to the previous release | `conduit rollback` |
 | Request or repair the IP address certificate | `conduit ip-cert` |
+| Remove EvE Conduit | `conduit uninstall` (asks what to keep) |
 
 Supervisor's own tool works too: `supervisorctl status conduit:*`.
 
@@ -215,6 +216,32 @@ sudo conduit upgrade eve-conduit-X.Y.Z.tar.gz
 
 If the new version misbehaves, `sudo conduit rollback` switches back to the previous release. Database
 migrations are not undone; if the old version will not start, restore the backup taken during the upgrade.
+
+## Uninstalling
+
+```bash
+sudo conduit uninstall
+```
+
+It asks what to remove:
+
+1. **Everything, including the database and the configuration.** It first offers to save a final backup
+   to a folder you choose outside the install, then asks you to type `DELETE`.
+2. **The programs only.** It keeps `/etc/conduit` (settings and the key that decrypts members' stored EVE
+   logins), the database and `/var/backups/conduit`.
+
+It then stops and unregisters the Supervisor programs, removes the updater's systemd units and cron jobs
+and the nginx site, drops the database and its database role (option 1), and deletes `/opt/conduit`,
+`/var/www/conduit`, `/var/log/conduit`, `/var/lib/conduit` and the `conduit` command. It leaves the system
+packages (nginx, PostgreSQL or MariaDB, Redis, Supervisor, certbot), Let's Encrypt certificates and firewall
+rules in place, and it never deletes a user account, not even the `conduit` service account.
+
+For scripts: `sudo conduit uninstall --mode all --backup-to /root/conduit-final --yes` (or `--mode keep-data`,
+`--no-backup`). The same script is in every release as `deploy/baremetal/uninstall.sh`, for an install whose
+`conduit` command is gone.
+
+To reinstall afterwards, unpack a release and run the install script again; the packages it needs are
+still there, so it is quicker the second time.
 
 ## Sizing for larger installs
 
@@ -482,7 +509,7 @@ makes you the administrator and walks you through branding and plugins; see
 | EVE login fails with `invalid_scope` | A scope is missing on the EVE application. Edit it at developers.eveonline.com and select every scope. |
 | EVE login fails with a redirect or callback error | The callback URL on the EVE application must be exactly `https://<your domain>/sso/callback` and match `CONDUIT_SITE_URL`. |
 | `Bad Request (400)` after signing in | `CONDUIT_ALLOWED_HOSTS` in `conduit.env` does not contain the domain in the address bar. Fix it and `sudo conduit restart`. |
-| "EvE Conduit is already installed" from the script | There is a `/etc/conduit/conduit.env` from an earlier attempt. Use `sudo conduit upgrade <tarball>` for a new version, or remove `/etc/conduit`, `/opt/conduit`, `/var/www/conduit`, `/var/lib/conduit` and the database to start over. |
+| "EvE Conduit is already installed" from the script | There is a `/etc/conduit/conduit.env` from an earlier attempt. Use `sudo conduit upgrade <tarball>` for a new version, or `sudo conduit uninstall` (see [Uninstalling](#uninstalling)) to start over. |
 | Updates approved on the website never install | `systemctl status conduit-update.path` and `/etc/cron.d/conduit-update` must exist; `sudo conduit setup-updater` recreates the unit. `sudo conduit apply-update` runs it by hand and shows errors. |
 | Site not reachable from the internet | The server's firewall (`ufw status` or `firewall-cmd --list-all`), the cloud provider's firewall or security group, and the router's port forwarding on a home connection. |
 

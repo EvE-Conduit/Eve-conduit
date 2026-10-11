@@ -6,6 +6,11 @@ Versions follow `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 ### Added
+- **`conduit uninstall` on Linux.** Removes a bare-metal install the way the Windows one does: it asks whether to
+  keep the configuration, database and backups, offers a final backup first, then stops and unregisters the
+  services, the updater and the nginx site, drops the database and deletes the install's folders. It leaves the
+  system packages, certificates and firewall rules alone and never deletes a user account. The script is in every
+  release as `deploy/baremetal/uninstall.sh`.
 - **The setup wizard connects the EVE application.** At first visit the website asks for the application's
   Client ID and Secret Key together with the one-time setup code, checks them with EVE's login server and keeps
   them in the database (the secret encrypted with the token key, like members' logins). Nobody has to edit a
