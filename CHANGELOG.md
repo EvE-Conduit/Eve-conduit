@@ -3,6 +3,13 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.47
+
+### Fixed
+- **Docker: installing a plugin from the website stalled at "Waiting for the updater".** The site stopped one gunicorn
+  worker instead of the server, so the container never restarted and the install never ran. It now stops the gunicorn
+  master, the container restarts and installs the plugins on the way up as intended.
+
 ## 0.5.46
 
 ### Fixed
