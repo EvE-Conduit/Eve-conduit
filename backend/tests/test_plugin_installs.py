@@ -280,13 +280,13 @@ def test_daily_check_auto_updates_and_notifies(remote, dists, admin_user, tmp_pa
 
 
 @pytest.mark.django_db
-def test_docker_gets_instructions(remote, admin_user, settings):
-    settings.CONDUIT_INSTALL_KIND = "docker"
+def test_dev_checkouts_get_instructions(remote, admin_user, settings):
+    settings.CONDUIT_INSTALL_KIND = "dev"
     installs.refresh_catalog()
     out = installs.overview()
-    assert not out["can_install"] and "requirements-plugins.txt" in out["instructions"]
+    assert not out["can_install"] and "pip install" in out["instructions"]
     assert out["catalog"][0]["requirement"].startswith("conduit-discord @ https://github.com/")
-    with pytest.raises(installs.InstallError, match="docker compose"):
+    with pytest.raises(installs.InstallError, match="pip install"):
         installs.request(admin_user, [{"op": "install", "package": "conduit-discord"}])
 
 

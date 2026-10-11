@@ -28,8 +28,8 @@ At first visit a setup wizard asks for the EVE application's Client ID and Secre
 code the installer printed; whoever enters them and signs in becomes the administrator, and the wizard walks
 them through branding and plugins. Nothing has to be edited on the server.
 
-Plugins are installed from **Administration → Plugins → Browse** on Linux and Windows installs, and by
-adding a line to `requirements-plugins.txt` and rebuilding on Docker; see [plugins/README.md](plugins/README.md).
+Plugins are installed from **Administration → Plugins → Browse** on every kind of install; see
+[plugins/README.md](plugins/README.md).
 
 ## Updating
 

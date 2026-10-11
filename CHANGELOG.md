@@ -6,6 +6,12 @@ Versions follow `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 ### Added
+- **Docker installs install plugins from the website too.** Administration → Plugins → Browse works the same as on
+  Linux and Windows: tick, install, done. Plugins go into a new `plugins` volume shared by the web, worker and beat
+  containers (a virtualenv on top of the image's packages), the containers restart and install them on the way up,
+  and the previous plugins are put back if pip fails. No rebuild, no root, no Docker socket. Existing installs get
+  the volume on their next `docker compose up -d --build`; plugins baked into the image with
+  `requirements-plugins.txt` keep working and stay out of the website's reach, as before.
 - **A Docker install script.** `deploy/docker/install.sh`, run from a clone of the repository, asks how members reach
   the site (domain, public IP or plain HTTP on a LAN), your email and optionally the EVE application, then writes
   `.env` with generated secrets, builds and starts the stack and prints the setup code with the next steps. The

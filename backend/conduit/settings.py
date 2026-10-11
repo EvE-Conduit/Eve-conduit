@@ -275,9 +275,14 @@ CONDUIT_PLUGIN_CATALOG_URL = env(
 # Let administrators install plugins from any git URL over HTTPS. A plugin runs with the site's access to the
 # server and database, so only the server owner can turn this on (the updater reads it from the config file).
 CONDUIT_PLUGIN_URLS = env_bool("CONDUIT_PLUGIN_URLS")
-# The updater's list of plugins installed from Administration (read-only for the site).
+# Docker: the volume holding plugins installed from Administration (see conduit/plugins/docker_updater.py).
+CONDUIT_PLUGINS_DIR = env("CONDUIT_PLUGINS_DIR", "")
+# The updater's list of plugins installed from Administration (read-only for the site, except on Docker where
+# the web container applies requests itself).
 CONDUIT_PLUGIN_SITE_FILE = env(
-    "CONDUIT_PLUGIN_SITE_FILE", "/etc/conduit/plugins-site.txt" if CONDUIT_INSTALL_KIND == "baremetal" else "")
+    "CONDUIT_PLUGIN_SITE_FILE",
+    "/etc/conduit/plugins-site.txt" if CONDUIT_INSTALL_KIND == "baremetal"
+    else f"{CONDUIT_PLUGINS_DIR}/plugins-site.txt" if CONDUIT_PLUGINS_DIR else "")
 
 # Per-IP limits on EVE login, the setup code and failed API-key attempts (see conduit/site/ratelimit.py).
 CONDUIT_RATE_LIMITS = env_bool("CONDUIT_RATE_LIMITS", True)

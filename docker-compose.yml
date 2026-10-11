@@ -8,12 +8,16 @@ x-backend: &backend
   environment:
     DATABASE_URL: postgres://conduit:${POSTGRES_PASSWORD}@db:5432/conduit
     REDIS_URL: redis://redis:6379/0
-    # Docker installs update with git pull + docker compose up -d --build; the site only shows the changelog.
+    # Releases: git pull + docker compose up -d --build (the site shows the changelog). Plugins from Administration ->
+    # Plugins install into the plugins volume without a rebuild; see backend/conduit/plugins/docker_updater.py.
     CONDUIT_INSTALL_KIND: docker
+    CONDUIT_PLUGINS_DIR: /srv/plugins
+    CONDUIT_UPDATES_DIR: /srv/plugins/updates
     # The SeAT import program uploads through web; the worker imports from the same folder.
     CONDUIT_SEAT_IMPORT_DIR: /srv/seat-import
   volumes:
     - seat_import:/srv/seat-import
+    - plugins:/srv/plugins
   depends_on:
     db:
       condition: service_healthy
@@ -100,3 +104,4 @@ volumes:
   redis_data:
   caddy_data:
   seat_import:
+  plugins:

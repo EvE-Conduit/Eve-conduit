@@ -170,7 +170,10 @@ export function AdminPlugins() {
   const askInstall = (plugins: CatalogPlugin[]) =>
     setConfirm({
       title: plugins.length === 1 ? `Install ${plugins[0].name} ${plugins[0].version}?` : `Install ${plural(plugins.length, "plugin")}?`,
-      description: `The updater takes a backup, installs ${plugins.length === 1 ? "it" : "them"} and restarts the site, which is offline for a minute or so. If anything goes wrong, the previous plugins are put back.`,
+      description:
+        data?.kind === "docker"
+          ? `The containers restart and install ${plugins.length === 1 ? "it" : "them"} on the way up; the site is offline for a minute or so. If anything goes wrong, the previous plugins are put back.`
+          : `The updater takes a backup, installs ${plugins.length === 1 ? "it" : "them"} and restarts the site, which is offline for a minute or so. If anything goes wrong, the previous plugins are put back.`,
       actions: plugins.map((p) => ({ op: "install", package: p.package })),
     });
 
@@ -560,9 +563,7 @@ function SourcesCard({ data }: { data: Overview | undefined }) {
         {data && !data.can_install && (
           <>
             <p className="pt-2">This install can't change its own code, so plugins are added on the server. Pick them under Browse to get the lines:</p>
-            <pre className="overflow-x-auto rounded-lg border border-border bg-bg/70 p-3 font-mono text-xs text-text">
-              {data.kind === "docker" ? "# requirements-plugins.txt\n<the plugin's line>\n\ndocker compose up -d --build" : "pip install '<the plugin's line>'"}
-            </pre>
+            <pre className="overflow-x-auto rounded-lg border border-border bg-bg/70 p-3 font-mono text-xs text-text">{"pip install '<the plugin's line>'"}</pre>
           </>
         )}
         <p className="pt-2">Plugins that need ESI scopes ask members to re-authorise their characters.</p>
