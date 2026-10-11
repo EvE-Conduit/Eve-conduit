@@ -3,7 +3,7 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.39
 
 ### Changed
 - **Text is a little smaller, and can go smaller still.** The normal text size is now 15px instead of 16px,
