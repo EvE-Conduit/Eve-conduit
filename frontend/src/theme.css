@@ -8,7 +8,7 @@
  *   data-skin="sakura|neotokyo"  a named theme on top of its dark/light base (lib/preferences.ts SKINS)
  *   data-contrast="high"         stronger text, borders and focus rings
  *   data-density="compact"       tighter padding in cards and tables
- *   data-text-scale="0|1|2"      100% / 112.5% / 125% root font size
+ *   data-text-scale="-2..2"      81.25% / 87.5% / 100% / 112.5% / 125% root font size
  *   data-motion="reduce"         no animations or transitions
  *
  * The install's accent colour is set at runtime as --brand (site settings). --site-accent is
@@ -256,6 +256,8 @@
   --pad-cell-x: 0.875rem;
 }
 
+:root[data-text-scale="-2"] { font-size: 81.25%; }
+:root[data-text-scale="-1"] { font-size: 87.5%; }
 :root[data-text-scale="1"] { font-size: 112.5%; }
 :root[data-text-scale="2"] { font-size: 125%; }
 

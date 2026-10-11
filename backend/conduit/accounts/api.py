@@ -287,8 +287,8 @@ def put_preferences(request, payload: PreferencesIO):
         raise HttpError(400, "density must be comfortable or compact")
     if payload.timezone not in available_timezones():
         raise HttpError(400, "Unknown time zone")
-    if not 0 <= payload.text_scale <= 2:
-        raise HttpError(400, "text_scale must be 0, 1 or 2")
+    if not -2 <= payload.text_scale <= 2:
+        raise HttpError(400, "text_scale must be between -2 and 2")
     if len(payload.muted_categories) > 200 or _too_big(payload.dashboard):
         raise HttpError(400, "Those settings are too large")
     prefs = UserPreferences.for_user(request.user)
