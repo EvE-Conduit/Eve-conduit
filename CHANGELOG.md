@@ -3,6 +3,14 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.44
+
+### Fixed
+- **The Docker install script ended silently after "Continue?"** when nothing was listening on ports 80 and
+  443, which is the normal case. It now carries on.
+- **The Docker install script's URLs are on their own lines**, so the developer portal and callback URLs no
+  longer pick up a trailing comma or `).` when clicked or copied.
+
 ## 0.5.43
 
 ### Added
