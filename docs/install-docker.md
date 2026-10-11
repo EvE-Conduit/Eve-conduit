@@ -11,6 +11,10 @@ at the end. For an install without Docker, see the [Linux guide](install-linux.m
 
 **How long it takes:** about 30 minutes, most of it waiting for the first build.
 
+An install script asks the few questions that matter and does the rest; see
+[Quick install with the script](#quick-install-with-the-script). The numbered steps after it are the same work by
+hand, for people who want to see exactly what happens.
+
 ## What you get
 
 | Container | What it does |
@@ -39,6 +43,39 @@ so they survive rebuilds and updates.
   **No domain?** You can use the server's public IPv4 address instead; see [Using an IP address instead of a domain](#using-an-ip-address-instead-of-a-domain).
 - **An EVE Online account** to sign in with. The first person to sign in and enter the setup code
   becomes the administrator.
+
+## Quick install with the script
+
+You need Docker (step 1 below; the script offers to install it on Linux), a domain or public IP address pointing
+at the server (step 2), and `git`. Then:
+
+```bash
+git clone https://github.com/EvE-Conduit/Eve-conduit.git /opt/eve-conduit
+cd /opt/eve-conduit
+./deploy/docker/install.sh
+```
+
+(Put `sudo` in front of the last line if `docker info` only works with sudo.) The script asks:
+
+1. **How members reach the site:** a domain name (automatic HTTPS), the server's public IPv4 address (automatic
+   HTTPS, the address must not change), or plain HTTP on a local network or for a test.
+2. **Your email address**, for Let's Encrypt and as the contact CCP sees for ESI.
+3. **The EVE application's Client ID and Secret Key**, optional. Leave them empty and the setup wizard on the website
+   asks for them after the start. The script shows the callback URL to register either way.
+
+It then writes `.env` with freshly generated secrets (readable by you only), runs `docker compose up -d --build`,
+waits for the web container to print the one-time **setup code** and shows it with the next steps. Continue with
+[step 8](#8-first-login-and-the-setup-wizard).
+
+Every question can be answered on the command line instead (`--domain`, `--http`, `--email`, `--esi-client-id`,
+`--esi-secret`, `--yes`), and `--no-start` writes `.env` without starting anything. `./deploy/docker/install.sh --help`
+lists them. The script refuses to run when `.env` already exists: edit that file to change settings, or move it away
+to start over.
+
+On Windows with Docker Desktop the script runs in Git Bash (installed with Git for Windows); see
+[Windows with Docker Desktop](#windows-with-docker-desktop).
+
+## Step by step
 
 ## 1. Install Docker
 
@@ -326,7 +363,9 @@ for testing only: without HTTPS, sessions are only as safe as the network.
 ## Windows with Docker Desktop
 
 Docker Desktop runs the same Linux containers on Windows 10 or 11, using WSL 2 (Windows' built-in Linux
-layer). Nothing in EvE Conduit changes, so the steps above apply, with these differences.
+layer). Nothing in EvE Conduit changes, so the steps above apply, with these differences. The install script
+works too: open **Git Bash** (it comes with Git for Windows) in the EvE Conduit folder and run
+`./deploy/docker/install.sh`; it replaces steps 4 and 5 below.
 
 **What you need:** Windows 11, or Windows 10 22H2, 64-bit; hardware virtualisation switched on in the
 BIOS/UEFI (called Intel VT-x, AMD-V or SVM); 8 GB RAM or more and 20 GB free disk; a domain pointing at

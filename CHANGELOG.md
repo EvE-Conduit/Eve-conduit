@@ -3,6 +3,14 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Added
+- **A Docker install script.** `deploy/docker/install.sh`, run from a clone of the repository, asks how members reach
+  the site (domain, public IP or plain HTTP on a LAN), your email and optionally the EVE application, then writes
+  `.env` with generated secrets, builds and starts the stack and prints the setup code with the next steps. The
+  manual steps in the Docker guide stay for people who want to see what happens.
+
 ## 0.5.42
 
 ### Added
