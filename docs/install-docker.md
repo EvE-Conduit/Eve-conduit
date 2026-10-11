@@ -379,6 +379,7 @@ For the backup, redirect `pg_dump` to a file the same way; for the date, use `$(
 | Problem | What to check |
 |---|---|
 | Browser says the connection is not private, or the site does not load over HTTPS | Caddy could not get a certificate. `docker compose logs caddy` says why. Usually DNS does not point at this server yet, or port 80 is blocked (Let's Encrypt must reach it). Fix the cause; Caddy retries by itself. |
+| Signing in seems to do nothing, or **Claim admin** fails | You opened the site over `http://` while it is configured for `https://`. The browser then drops the login cookie. The site shows a red warning in that case. Open the `https://` address; if the browser refuses it, the certificate has not been issued yet (see the first row). |
 | The site loads but EVE login fails with `invalid_scope` | A scope is missing on the EVE application. Edit the application at developers.eveonline.com and select every scope. |
 | EVE login fails with a redirect or callback error | The callback URL on the EVE application must be exactly `https://<your domain>/sso/callback` and match `CONDUIT_SITE_URL`. |
 | `Bad Request (400)` after signing in | `CONDUIT_ALLOWED_HOSTS` does not contain the domain in the address bar. Fix it and run `docker compose up -d`. |
