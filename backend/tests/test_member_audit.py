@@ -108,14 +108,29 @@ def test_character_sheet_lists_the_owners_alts(people, client):
 
 
 @pytest.mark.django_db
-def test_search_logging_ignores_other_sites_and_long_queries(people, client):
+def test_search_logging_records_every_client_once_and_cuts_long_queries(people, client):
     auditor, *_ = people
     grant(auditor, "use_member_audit", "view_all_characters")
     client.force_login(auditor)
-    client.get("/api/member-audit/mail?q=planted", HTTP_SEC_FETCH_SITE="cross-site")  # a link on another site
-    assert not AuditEvent.objects.filter(action="member_audit.search").exists()
+    # A header any script can set doesn't keep a search out of the audit log.
+    client.get("/api/member-audit/mail?q=planted", HTTP_SEC_FETCH_SITE="cross-site")
+    client.get("/api/member-audit/mail?q=Planted", HTTP_SEC_FETCH_SITE="cross-site")  # the same again: once
+    assert [e.details["q"] for e in AuditEvent.objects.filter(action="member_audit.search")] == ["planted"]
     client.get("/api/member-audit/mail?q=" + "x" * 5000, HTTP_SEC_FETCH_SITE="same-origin")
-    assert len(AuditEvent.objects.get(action="member_audit.search").details["q"]) == 200
+    assert len(AuditEvent.objects.filter(action="member_audit.search").latest("id").details["q"]) == 200
+
+
+@pytest.mark.django_db
+def test_listing_mail_is_snooped_for_every_holder_shown(people, client):
+    """The list shows the first lines of each mail, so it counts like opening them."""
+    auditor, *_ = people
+    grant(auditor, "use_member_audit", "view_all_characters")
+    client.force_login(auditor)
+    assert client.get("/api/member-audit/mail?limit=1").json()["count"] == 3  # page: mail 1, held by both lines
+    assert sorted(SnoopEvent.objects.values_list("character_name", flat=True)) == ["Line One", "Line Two"]
+    assert set(SnoopEvent.objects.values_list("section", flat=True)) == {"mail"}
+    client.get("/api/member-audit/mail")  # the outsider's mail is on this page; the lines are within the window
+    assert sorted(SnoopEvent.objects.values_list("character_name", flat=True)) == ["Line One", "Line Two", "Outsider"]
 
 
 # --- counterparties, wallets, contracts, skill check ---------------------------------------------------------------

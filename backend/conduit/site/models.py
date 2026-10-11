@@ -52,8 +52,12 @@ class SiteSettings(models.Model):
 
     @classmethod
     def load(cls) -> "SiteSettings":
+        from django.contrib.auth import get_user_model
+
         obj, created = cls.objects.get_or_create(pk=1)
-        if not obj.setup_completed and not obj.setup_token:
+        # The code only exists until someone has claimed admin with it (claim_admin clears it); after that
+        # admins are appointed from Administration, so no new code is minted even while the wizard is open.
+        if not obj.setup_completed and not obj.setup_token and not get_user_model().objects.filter(is_superuser=True).exists():
             obj.setup_token = secrets.token_urlsafe(18)
             obj.save(update_fields=["setup_token"])
         return obj

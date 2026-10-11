@@ -8,6 +8,17 @@ def hello(request):
     return {"hello": request.user.display_name}
 
 
+# A plugin's administration routes (tests the impersonation guard's /api/p/<id>/admin rule).
+@router.get("/admin/stats")
+def admin_stats(request):
+    return {"widgets": 0}
+
+
+@router.post("/admin/reset")
+def admin_reset(request):
+    return {"ok": True}
+
+
 # For everyone, signed in or not; see SamplePlugin.public_api.
 public_router = Router()
 

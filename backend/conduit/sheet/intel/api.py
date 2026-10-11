@@ -11,6 +11,7 @@ from django.db.models import Count, Max
 from conduit.accounts.models import Character
 from conduit.eve.models import EveName
 from conduit.schemas import character_brief
+from conduit.sheet.access import can_view
 from conduit.sheet.api import router, viewable_character
 from conduit.sheet.contacts.api import entity_image
 from conduit.sheet.contacts.models import Contact
@@ -54,8 +55,17 @@ def intel(request, character_id: int):
     ranked = sorted(counts.items(), key=lambda kv: -(kv[1]["journal"] + kv[1]["market"] + kv[1]["mail"] + kv[1]["contracts"]))[:LIMIT]
     ids = [i for i, _ in ranked]
     names = {n.id: n for n in EveName.objects.filter(pk__in=ids)}
-    members = {c.pk: c for c in Character.objects.filter(pk__in=ids).select_related("user__main_character")}
+    members = {c.pk: c for c in Character.objects.filter(pk__in=ids).select_related("user__main_character", "corporation", "alliance")}
     standings = dict(Contact.objects.filter(character=character, contact_id__in=ids).values_list("contact_id", "standing"))
+
+    def member_out(member: Character) -> dict:
+        """Whose the registered counterparty is, but only as far as the viewer may look: someone allowed to see
+        this character isn't thereby allowed to learn which account a character outside their reach belongs to."""
+        if member.user_id == character.user_id:
+            return {"registered": True, "user_id": member.user_id, "main": _main_name(member), "same_account": True}
+        if can_view(request.user, member):
+            return {"registered": True, "user_id": member.user_id, "main": _main_name(member), "same_account": False}
+        return {"registered": True}
 
     interactions = []
     for entity_id, row in ranked:
@@ -75,19 +85,17 @@ def intel(request, character_id: int):
                 "total": row["journal"] + row["market"] + row["mail"] + row["contracts"],
                 "last": row["last"].isoformat() if row["last"] else None,
                 "standing": standings.get(entity_id),
-                "member": {
-                    "user_id": member.user_id,
-                    "main": member.user.main_character.name if member.user.main_character else None,
-                    "same_account": member.user_id == character.user_id,
-                }
-                if member
-                else None,
+                "member": member_out(member) if member else None,
             }
         )
 
     account = Character.objects.filter(user=character.user).exclude(pk=me).select_related("corporation", "alliance")
     return {
         "interactions": interactions,
-        "registered_counterparties": sum(1 for i in interactions if i["member"] and not i["member"]["same_account"]),
+        "registered_counterparties": sum(1 for i in interactions if i["member"] and not i["member"].get("same_account")),
         "account_characters": [character_brief(c) for c in account],
     }
+
+
+def _main_name(member: Character) -> str | None:
+    return member.user.main_character.name if member.user.main_character else None

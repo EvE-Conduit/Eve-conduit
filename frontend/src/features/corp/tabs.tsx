@@ -18,6 +18,7 @@ import { DescriptionList, EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { openOutside } from "@/lib/externalLinks";
 import { date, dateTime, duration, humanize, isk, num } from "@/lib/format";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -28,6 +29,23 @@ import type { CorpHeader, CorpMember, CorpOverview, CorpStructure, CorpWallets, 
 
 type TabProps = { header: CorpHeader };
 const shortIsk = (n: number | null | undefined) => isk(n).replace(" ISK", "");
+
+/** The corporation's website is text its CEO typed into EVE: only https:// links open, and only after asking. */
+function CorpWebsite({ url }: { url: string }) {
+  if (!/^https:\/\//i.test(url)) return <span className="break-all text-muted">{url}</span>;
+  return (
+    <a
+      href={url}
+      className="break-all text-accent-ink hover:underline"
+      onClick={(e) => {
+        e.preventDefault();
+        openOutside(url);
+      }}
+    >
+      {url}
+    </a>
+  );
+}
 
 function Loading() {
   return <Skeleton className="h-80 rounded-xl" />;
@@ -111,7 +129,7 @@ export function OverviewTab({ header }: TabProps) {
                 { label: "Home station", value: <PlaceLabel place={data.home_station} /> },
                 { label: "War eligible", value: data.war_eligible == null ? "—" : data.war_eligible ? "Yes" : "No" },
                 { label: "Shares", value: num(data.shares) },
-                ...(data.url ? [{ label: "Website", value: <a href={data.url} target="_blank" rel="noreferrer" className="text-accent-ink hover:underline">{data.url}</a> }] : []),
+                ...(data.url ? [{ label: "Website", value: <CorpWebsite url={data.url} /> }] : []),
               ]}
             />
             {data.description && <p className="whitespace-pre-line border-t border-border pt-4 text-sm leading-relaxed text-muted">{data.description}</p>}

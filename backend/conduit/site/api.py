@@ -1,5 +1,4 @@
 import re
-import secrets
 import uuid
 
 from django.conf import settings
@@ -23,6 +22,7 @@ from conduit.permissions import require_perm
 from conduit.schemas import CharacterBrief, StateBrief, character_brief
 from conduit.updates.services import progress as update_progress
 
+from .compare import same_secret
 from .landing import DEFAULT_LANDING, ICONS, LandingIn, _link, landing_content
 from . import images
 from .models import SiteImage, SiteSettings
@@ -241,7 +241,7 @@ class SetupSsoIn(Schema):
 
 
 def _check_setup_token(site: SiteSettings, token: str) -> bool:
-    return bool(site.setup_token) and secrets.compare_digest(site.setup_token, token.strip())
+    return bool(site.setup_token) and same_secret(site.setup_token, token.strip())
 
 
 @setup_router.get("/status", response=SetupOut)
@@ -288,7 +288,10 @@ def claim_admin(request, payload: ClaimIn):
     request.user.save(update_fields=["is_superuser", "is_staff"])
     if site.owner_id is None:
         site.owner = request.user
-        site.save(update_fields=["owner"])
+    # The code has done its job: nobody else becomes admin with it while the wizard is still open (the admin
+    # appoints further admins from Administration). SiteSettings.load() won't mint another one now.
+    site.setup_token = ""
+    site.save(update_fields=["owner", "setup_token"])
     record("setup.admin_claimed", "claimed the administrator role with the setup code", request=request)
     sync_installed()
     return {"ok": True}

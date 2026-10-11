@@ -233,6 +233,10 @@ def request_install(user) -> UpdateState:
         raise UpdateError("Download and verify the release first")
     if state.install_state in (UpdateState.Install.REQUESTED, UpdateState.Install.RUNNING):
         raise UpdateError("An install is already in progress")
+    # A signed release is still an old release: never go backwards (the updaters check this again themselves).
+    if versions.is_downgrade(state.download_version, __version__):
+        raise UpdateError(f"{state.download_version} is older than the running {__version__}; EvE Conduit doesn't "
+                          "install older versions (use 'conduit rollback' on the server to go back)")
     folder = updates_dir()
     target = folder / state.download_file
     try:  # the file could have been removed or changed since it was verified

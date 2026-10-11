@@ -84,21 +84,40 @@ publish_web() {
   rm -rf "$CONDUIT_WWW/web.old"
 }
 
+# Plugins depend on "conduit" by name, and PyPI has an unrelated package called conduit. Every pip run that installs
+# plugins gets this constraints file, so pip can only satisfy that dependency with the backend installed here and
+# never downloads a stranger's package in its place. Prints the file's path (inside the root-owned venv).
+pip_constraints() {
+  local file="$VENV/pip-constraints.txt"
+  "$VENV/bin/python" -I -m conduit.plugins.installer constraints >"$file"
+  echo "$file"
+}
+
 install_python() {
   # Backend plus every plugin in plugins.txt (paths are relative to the release) and plugins-site.txt.
   # Runs as root: the venv is root-owned so the service can't modify its own code.
-  local release="$1" extras=""
+  local release="$1" extras="" constraints
   require_root
   load_env
   [[ "${DATABASE_URL:-}" == mysql* ]] && extras="[mysql]"
   (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade "./backend$extras")
+  constraints=$(pip_constraints)   # after the backend: it pins the version just installed
   if [[ -s "$PLUGINS_FILE" ]]; then
-    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$PLUGINS_FILE")
+    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -c "$constraints" -r "$PLUGINS_FILE")
   fi
   if grep -qv '^\s*\(#\|$\)' "$PLUGINS_SITE_FILE" 2>/dev/null; then
-    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -r "$PLUGINS_SITE_FILE")
+    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -c "$constraints" -r "$PLUGINS_SITE_FILE")
   fi
 }
+
+# Root writes into two folders the service user owns: the updates folder (results, progress) and the log folder. A
+# compromised site could plant a symlink there for root to follow, so every such read and write goes through
+# conduit.updates.safeio, which opens nothing through a symlink and replaces files by rename.
+safeio() { "$VENV/bin/python" -I -m conduit.updates.safeio "$@"; }
+UPDATER_LOG="$CONDUIT_LOG/updater.log"
+log_line() { safeio append "$UPDATER_LOG" "$(date -Is) $*"; }
+# Run a command with its output appended to the updater log; returns the command's own exit status.
+log_run() { "$@" 2>&1 | safeio append "$UPDATER_LOG"; return "${PIPESTATUS[0]}"; }
 
 # How far an update has got, for Administration -> Updates / Plugins and the banner members see:
 # <updates>/progress.json, removed when the update is over. "progress <release|plugins> <version|-> <step>"
@@ -109,10 +128,7 @@ progress() {
   if [[ "$1" == clear ]]; then rm -f "$dir/progress.json"; return 0; fi
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   export PROGRESS_STARTED=${PROGRESS_STARTED:-$now}
-  printf '{"kind": "%s", "target": "%s", "step": "%s", "started_at": "%s", "at": "%s"}\n' \
-    "$1" "${2#-}" "$3" "$PROGRESS_STARTED" "$now" >"$dir/progress.json.tmp" || return 0
-  chmod 0644 "$dir/progress.json.tmp"
-  mv -f "$dir/progress.json.tmp" "$dir/progress.json"
+  safeio write-json "$dir/progress.json" "kind=$1" "target=${2#-}" "step=$3" "started_at=$PROGRESS_STARTED" "at=$now" || return 0
 }
 
 install_admin_script() {  # release dir
@@ -335,51 +351,58 @@ cmd_setup_updater() {
   install_update_watcher
 }
 
-# Nothing in the updates folder is trusted: the release is copied to a root-only temp dir and its signature checked
-# again with the installed EvE Conduit before the normal upgrade runs.
+# Nothing in the updates folder is trusted: the request is read without following symlinks, the release is copied
+# (plain files only) to a root-only temp dir and its signature checked again with the installed EvE Conduit, and a
+# release older than the running one is refused, before the normal upgrade runs.
 apply_release_request() {
   local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
   local request="$updates/install-request.json" result="$updates/install-result.json"
-  local log="$CONDUIT_LOG/updater.log"
-  [[ -f "$request" ]] || return 0
+  [[ -e "$request" || -L "$request" ]] || return 0
   local version
-  version=$("$VENV/bin/python" -I -c '
+  version=$(safeio read-json "$request" 2>/dev/null | "$VENV/bin/python" -I -c '
 import json, re, sys
-r = json.load(open(sys.argv[1]))
+r = json.load(sys.stdin)
 v = str(r.get("version", ""))
 ok = re.fullmatch(r"\d{1,4}\.\d{1,4}\.\d{1,4}", v) and r.get("file") == "eve-conduit-%s.tar.gz" % v
-print(v if ok else "")' "$request" 2>/dev/null || true)
+print(v if ok else "")' 2>/dev/null || true)
   rm -f "$request"   # one attempt per request
   if [[ -z "$version" ]]; then
-    echo "$(date -Is) rejected an invalid update request" >>"$log"
+    log_line "rejected an invalid update request"
     return 0
   fi
-  local file="eve-conduit-$version.tar.gz" work
-  work=$(mktemp -d)
   write_result() {  # status message
-    "$VENV/bin/python" -I -c 'import json, sys, datetime; json.dump({"version": sys.argv[2], "status": sys.argv[3], "message": sys.argv[4], "at": datetime.datetime.now(datetime.UTC).isoformat()}, open(sys.argv[1], "w"))' \
-      "$result" "$version" "$1" "$2"
-    chown "$CONDUIT_USER:$CONDUIT_USER" "$result" 2>/dev/null || true
+    safeio write-json "$result" --owner "$CONDUIT_USER" --stamp "version=$version" "status=$1" "message=$2"
   }
-  write_result running "Installing $version"
-  if ! cp "$updates/$file" "$updates/SHA256SUMS" "$updates/SHA256SUMS.sig" "$work/" 2>>"$log"; then
-    write_result failed "The downloaded release is missing (details in $log)"; rm -rf "$work"; return 0
+  # A signed release is still an old release: never go backwards (equal is a reinstall).
+  local running
+  if ! running=$("$VENV/bin/python" -I -m conduit.updates.versions check-upgrade "$version"); then
+    log_line "refused to install $version over the running $running"
+    write_result failed "$version is older than the running $running; EvE Conduit doesn't install older versions."
+    return 0
   fi
+  local file="eve-conduit-$version.tar.gz" work name
+  work=$(mktemp -d)
+  write_result running "Installing $version"
+  for name in "$file" SHA256SUMS SHA256SUMS.sig; do
+    if ! log_run safeio copy-regular "$updates/$name" "$work/$name"; then
+      write_result failed "The downloaded release is missing (details in $UPDATER_LOG)"; rm -rf "$work"; return 0
+    fi
+  done
   local check
   if ! check=$("$VENV/bin/python" -I -m conduit.updates.verify "$work/$file" "$work/SHA256SUMS" "$work/SHA256SUMS.sig" 2>&1); then
-    echo "$(date -Is) $check" >>"$log"
+    log_line "$check"
     write_result failed "The release failed its signature check: $check"; rm -rf "$work"; return 0
   fi
-  echo "$(date -Is) installing $version: $check" >>"$log"
-  if "$SELF" upgrade "$work/$file" >>"$log" 2>&1; then
+  log_line "installing $version: $check"
+  if log_run "$SELF" upgrade "$work/$file"; then
     progress clear
     write_result succeeded "EvE Conduit $version is running."
   else
-    echo "$(date -Is) upgrade to $version failed; putting the running release back" >>"$log"
-    install_python "$(readlink -f "$APP")" >>"$log" 2>&1 || true
-    supervisor restart "$SUPERVISOR_GROUP:*" >>"$log" 2>&1 || true
+    log_line "upgrade to $version failed; putting the running release back"
+    log_run install_python "$(readlink -f "$APP")" || true
+    log_run supervisor restart "$SUPERVISOR_GROUP:*" || true
     progress clear
-    write_result failed "The upgrade to $version failed and the previous version was put back (details in $log)."
+    write_result failed "The upgrade to $version failed and the previous version was put back (details in $UPDATER_LOG)."
   fi
   rm -rf "$work"
 }
@@ -389,16 +412,19 @@ print(v if ok else "")' "$request" 2>/dev/null || true)
 # restart; if anything fails, the previous plugin list is put back.
 apply_plugin_request() {
   local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
-  local log="$CONDUIT_LOG/updater.log"
-  [[ -f "$updates/plugins-request.json" ]] || return 0
+  local request="$updates/plugins-request.json"
+  [[ -e "$request" || -L "$request" ]] || return 0
   local helper=("$VENV/bin/python" -I -m conduit.plugins.installer)
-  local plan id="" summary="" kind value
+  local plan id="" summary="" kind value reason
   local -a uninstall=() reinstall=()
-  if ! plan=$("${helper[@]}" prepare "$updates" "$PLUGINS_SITE_FILE" "$PLUGIN_SERIAL_FILE" --env-file "$ENV_FILE" 2>>"$log"); then
-    echo "$(date -Is) refused a plugin request (reason above)" >>"$log"
-    chown "$CONDUIT_USER:$CONDUIT_USER" "$updates/plugins-result.json" 2>/dev/null || true
+  reason=$(mktemp)
+  # The helper reads the request through safeio (never a symlink) and leaves the result owned by the service user.
+  if ! plan=$("${helper[@]}" prepare "$updates" "$PLUGINS_SITE_FILE" "$PLUGIN_SERIAL_FILE" --env-file "$ENV_FILE" --owner "$CONDUIT_USER" 2>"$reason"); then
+    log_line "refused a plugin request: $(cat "$reason")"
+    rm -f "$reason"
     return 0
   fi
+  rm -f "$reason"
   while IFS=$'\t' read -r kind value; do
     case "$kind" in
       id) id=$value ;;
@@ -408,11 +434,10 @@ apply_plugin_request() {
     esac
   done <<<"$plan"
   plugin_result() {  # status message
-    "${helper[@]}" result "$updates" "$id" "$1" "$2"
-    chown "$CONDUIT_USER:$CONDUIT_USER" "$updates/plugins-result.json" 2>/dev/null || true
+    "${helper[@]}" result "$updates" "$id" "$1" "$2" --owner "$CONDUIT_USER"
   }
   plugin_result running "Installing: $summary"
-  echo "$(date -Is) plugins: $summary" >>"$log"
+  log_line "plugins: $summary"
   local before
   before=$("${helper[@]}" dists | sort)
   if [[ -f "$PLUGINS_SITE_FILE" ]]; then cp -p "$PLUGINS_SITE_FILE" "$PLUGINS_SITE_FILE.bak"; else : >"$PLUGINS_SITE_FILE.bak"; fi
@@ -422,21 +447,21 @@ apply_plugin_request() {
   local -a steps=()
   for pkg in "${uninstall[@]}"; do steps+=("uninstall=$pkg"); done
   for url in "${reinstall[@]}"; do steps+=("reinstall=$url"); done
-  if "$SELF" _apply-plugins "${steps[@]}" >>"$log" 2>&1; then
+  if log_run "$SELF" _apply-plugins "${steps[@]}"; then
     rm -f "$PLUGINS_SITE_FILE.bak"
     progress clear
     plugin_result succeeded "The site has restarted with the changes."
   else
-    echo "$(date -Is) plugin change failed; putting the previous plugins back" >>"$log"
+    log_line "plugin change failed; putting the previous plugins back"
     mv "$PLUGINS_SITE_FILE.bak" "$PLUGINS_SITE_FILE"
     local added
     added=$(comm -13 <(echo "$before") <("${helper[@]}" dists | sort))
-    for pkg in $added; do "$VENV/bin/python" -m pip uninstall --quiet --yes "$pkg" >>"$log" 2>&1 || true; done
-    install_python "$(readlink -f "$APP")" >>"$log" 2>&1 || true
-    finish_deploy >>"$log" 2>&1 || true
-    supervisor restart "$SUPERVISOR_GROUP:*" >>"$log" 2>&1 || true
+    for pkg in $added; do log_run "$VENV/bin/python" -m pip uninstall --quiet --yes "$pkg" || true; done
+    log_run install_python "$(readlink -f "$APP")" || true
+    log_run finish_deploy || true
+    log_run supervisor restart "$SUPERVISOR_GROUP:*" || true
     progress clear
-    plugin_result failed "That didn't work, so the previous plugins were put back (details in $log)."
+    plugin_result failed "That didn't work, so the previous plugins were put back (details in $UPDATER_LOG)."
   fi
 }
 
@@ -454,7 +479,7 @@ cmd_apply_plugins() {
   progress plugins - install
   install_python "$(readlink -f "$APP")"
   for step in "$@"; do
-    if [[ "$step" == reinstall=* ]]; then "$VENV/bin/python" -m pip install --quiet --force-reinstall --no-deps "${step#reinstall=}"; fi
+    if [[ "$step" == reinstall=* ]]; then "$VENV/bin/python" -m pip install --quiet --force-reinstall --no-deps -c "$(pip_constraints)" "${step#reinstall=}"; fi
   done
   progress plugins - migrate
   finish_deploy

@@ -221,9 +221,130 @@ def test_api_needs_manage_site_and_bootstrap_badge(github, admin_user, user, api
 
 
 def test_version_compare():
-    from conduit.updates.versions import is_newer, parse
+    from conduit.updates.versions import is_downgrade, is_newer, parse
 
     assert is_newer("v0.10.0", "0.9.9") and not is_newer("0.4.0", "0.4.0") and parse("1.2") is None
+    assert is_downgrade("0.0.1", __version__) and is_downgrade("garbage", __version__)
+    assert not is_downgrade(__version__, __version__) and not is_downgrade("99.0.0", __version__)
+
+
+def test_updaters_can_ask_whether_a_version_is_a_downgrade(capsys):
+    """The bash and PowerShell updaters run this before installing a signed release."""
+    from conduit.updates import versions
+
+    assert versions.main(["check-upgrade", NEXT]) == 0
+    assert versions.main(["check-upgrade", __version__]) == 0  # a reinstall
+    assert versions.main(["check-upgrade", "0.0.1"]) == 1
+    assert capsys.readouterr().out.split() == [__version__] * 3
+    assert versions.main(["check-upgrade", "1.0; rm -rf"]) == 2
+    assert versions.main(["bogus"]) == 2
+
+
+@pytest.mark.django_db
+def test_an_older_release_is_not_requested(github, admin_user, tmp_path):
+    services.check()
+    services.start_download(NEXT)
+    state = UpdateState.load()
+    state.download_version = "0.0.1"  # a signed, verified, but older release
+    state.save()
+    with pytest.raises(services.UpdateError, match=f"0.0.1 is older than the running {__version__}"):
+        services.request_install(admin_user)
+    assert not (tmp_path / "install-request.json").exists()
+
+
+# --- the root updater's file access --------------------------------------------------------------------------
+
+
+def test_safeio_never_follows_symlinks(tmp_path):
+    """The updater writes as root into folders the service user owns: a planted symlink must be replaced, never
+    followed, and nothing but a plain file is read or appended to."""
+    from conduit.updates import safeio
+
+    secret = tmp_path / "secret"
+    secret.write_text("keep")
+    folder = tmp_path / "updates"
+    folder.mkdir()
+    link = folder / "install-result.json"
+    link.symlink_to(secret)
+
+    safeio.write_json(link, {"status": "running"})
+    assert not link.is_symlink() and json.loads(link.read_text()) == {"status": "running"}
+    assert secret.read_text() == "keep"
+    assert link.stat().st_mode & 0o777 == 0o644 and not list(folder.glob(".*.tmp"))
+
+    log = folder / "updater.log"
+    log.symlink_to(secret)
+    with pytest.raises(OSError):
+        safeio.append(log, b"owned\n")
+    assert secret.read_text() == "keep"
+    log.unlink()
+    safeio.append(log, b"one\n")
+    safeio.append(log, b"two\n")
+    assert log.read_text() == "one\ntwo\n"
+    (folder / "hardlink.log").hardlink_to(log)
+    with pytest.raises(safeio.UnsafePath, match="more than one link"):
+        safeio.append(log, b"three\n")  # a hard link to someone else's file would collect our lines
+    (folder / "hardlink.log").unlink()
+    with pytest.raises(OSError):
+        safeio.append(folder, b"x")  # a directory
+
+    request = folder / "install-request.json"
+    request.symlink_to(secret)
+    with pytest.raises(OSError):
+        safeio.read_json(request)
+    request.unlink()
+    request.write_text(json.dumps({"version": NEXT}))
+    assert safeio.read_json(request) == {"version": NEXT}
+    (folder / "hardlink.json").hardlink_to(request)
+    with pytest.raises(safeio.UnsafePath, match="more than one link"):
+        safeio.read_json(request)
+    (folder / "hardlink.json").unlink()
+    request.write_text("[1, 2]")
+    with pytest.raises(safeio.UnsafePath):
+        safeio.read_json(request)
+
+    release = folder / "release.tar.gz"
+    release.symlink_to(secret)
+    with pytest.raises(OSError):
+        safeio.copy_regular(release, tmp_path / "work.tar.gz")
+    assert not (tmp_path / "work.tar.gz").exists()
+    (tmp_path / "work").mkdir()
+    safeio.copy_regular(request, tmp_path / "work" / "copy.json")
+    assert (tmp_path / "work" / "copy.json").read_text() == "[1, 2]"
+
+    # The folder itself may be the symlink.
+    (tmp_path / "dirlink").symlink_to(folder)
+    with pytest.raises(OSError):
+        safeio.write_json(tmp_path / "dirlink" / "progress.json", {})
+    assert not (folder / "progress.json").exists()
+
+
+def test_safeio_cli(tmp_path, capsys):
+    from conduit.updates import safeio
+
+    secret = tmp_path / "secret"
+    secret.write_text("keep")
+    result = tmp_path / "install-result.json"
+    assert safeio.main(["write-json", str(result), "--owner", "no-such-user-here", "status=x"]) == 1  # nothing written
+    assert not result.exists() and "no such user" in capsys.readouterr().err
+    assert safeio.main(["write-json", str(result), "--stamp", "version=1.2.3", "status=failed", "message=a=b --stamp"]) == 0
+    data = json.loads(result.read_text())
+    assert data == {**data, "version": "1.2.3", "status": "failed", "message": "a=b --stamp"} and data["at"]
+    assert safeio.main(["write-json", str(result), "not a field"]) == 2
+    assert safeio.main(["read-json", str(result)]) == 0
+    assert json.loads(capsys.readouterr().out) == data
+
+    log = tmp_path / "updater.log"
+    log.symlink_to(secret)
+    assert safeio.main(["append", str(log), "2026 hello"]) == 1
+    assert secret.read_text() == "keep"
+    log.unlink()
+    assert safeio.main(["append", str(log), "2026 hello"]) == 0
+    assert log.read_text() == "2026 hello\n"
+    assert safeio.main(["copy-regular", str(result), str(tmp_path / "copy.json")]) == 0
+    assert json.loads((tmp_path / "copy.json").read_text()) == data
+    assert safeio.main(["copy-regular", str(log.with_name("missing")), str(tmp_path / "x")]) == 1
+    assert safeio.main([]) == 2
 
 
 # --- progress while the updater works ----------------------------------------------------------------------

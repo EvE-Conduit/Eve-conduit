@@ -63,6 +63,12 @@ def test_group_join_emits_event(user, api_client, django_capture_on_commit_callb
 # --- webhooks -------------------------------------------------------------------
 
 
+def fake_delivery(monkeypatch, handler):
+    """Deliveries go to ``handler(request)`` (an httpx.Response) instead of the network."""
+    monkeypatch.setattr("conduit.events.webhooks._client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False))
+
+
 def test_render_formats():
     event = {"event": "group.joined", "at": "2026-10-07T10:00:00+00:00", "data": {"summary": "Pilot joined Caps", "link": "/groups"}}
     discord = render("discord", event)
@@ -92,16 +98,18 @@ def test_webhook_delivery_signs_and_logs(monkeypatch, django_capture_on_commit_c
     Webhook.objects.create(name="Other", kind="json", url="https://example.com/other", events=["group.joined"])
     sent = []
 
-    def fake_post(url, content, headers, timeout, follow_redirects):
-        sent.append((url, content, headers))
+    def handler(request):
+        sent.append((str(request.url), request.content, request.headers, request.extensions))
         return httpx.Response(204)
 
-    monkeypatch.setattr("conduit.events.webhooks.httpx.post", fake_post)
+    fake_delivery(monkeypatch, handler)
     with django_capture_on_commit_callbacks(execute=True):
         bus.emit("user.created", user_id=1, user="Pilot")
     assert len(sent) == 1
-    url, body, headers = sent[0]
-    assert url == "https://example.com/hook"
+    url, body, headers, extensions = sent[0]
+    # The request goes to the address that was vetted (no second DNS lookup), as that host name for TLS and HTTP.
+    assert url == "https://93.184.216.34/hook"
+    assert headers["Host"] == "example.com" and extensions["sni_hostname"] == "example.com"
     assert headers["X-Conduit-Signature"] == sign(hook.secret, body)
     assert json.loads(body)["data"]["user"] == "Pilot"
     delivery = WebhookDelivery.objects.get()
@@ -114,11 +122,11 @@ def test_private_events_only_go_to_webhooks_that_chose_them(monkeypatch, django_
     Webhook.objects.create(name="Everything", kind="json", url="https://example.com/all", events=[])
     Webhook.objects.create(name="Mod log", kind="json", url="https://example.com/mods", events=["notification.created"])
     sent = []
-    monkeypatch.setattr("conduit.events.webhooks.httpx.post", lambda url, **kw: sent.append(url) or httpx.Response(204))
+    fake_delivery(monkeypatch, lambda request: sent.append(request.url.path) or httpx.Response(204))
     with django_capture_on_commit_callbacks(execute=True):
         bus.emit("notification.created", user_id=1, title="SRP rejected")
         bus.emit("user.created", user_id=1, user="Pilot")
-    assert sorted(sent) == ["https://example.com/all", "https://example.com/mods"]
+    assert sorted(sent) == ["/all", "/mods"]
     assert bus.is_private("notification.created") and not bus.is_private("user.created")
 
 
@@ -127,7 +135,7 @@ def test_failed_delivery_is_recorded(monkeypatch):
     from conduit.events.webhooks import deliver
 
     hook = Webhook.objects.create(name="Discord", kind="discord", url="https://discord.example/x")
-    monkeypatch.setattr("conduit.events.webhooks.httpx.post", lambda *a, **k: httpx.Response(400, text="bad"))
+    fake_delivery(monkeypatch, lambda request: httpx.Response(400, text="bad"))
     assert deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, False]).get() == "failed"
     hook.refresh_from_db()
     assert hook.failures == 1 and hook.last_status == 400
@@ -145,12 +153,32 @@ def test_webhook_admin_api(admin_user, user, api_client, monkeypatch):
     resp = api_client.call("post", "/api/admin/webhooks", {"name": "Ops", "url": "https://discord.example/x", "kind": "discord", "events": ["token.invalid"]})
     assert resp.status_code == 200, resp.content
     hook = resp.json()
-    monkeypatch.setattr("conduit.events.webhooks.httpx.post", lambda *a, **k: httpx.Response(204))
+    assert hook["secret"] is None and hook["has_secret"] is False  # only signed (json) webhooks have one
+    fake_delivery(monkeypatch, lambda request: httpx.Response(204))
     test = api_client.call("post", f"/api/admin/webhooks/{hook['id']}/test").json()
     assert test["result"] == "ok"
     assert api_client.call("get", f"/api/admin/webhooks/{hook['id']}/deliveries").json()["count"] == 1
     assert any(e["name"] == "token.invalid" for e in api_client.call("get", "/api/admin/events").json())
     assert AuditEvent.objects.filter(action="webhook.created").exists()
+
+
+@pytest.mark.django_db
+def test_webhook_secret_is_shown_once(admin_user, api_client):
+    """The signing secret comes back from the call that made it and never again; a new one can be made."""
+    api_client.force_login(admin_user)
+    created = api_client.call("post", "/api/admin/webhooks", {"name": "SIEM", "url": "https://hooks.example/x", "kind": "json"}).json()
+    first = created["secret"]
+    assert first and created["has_secret"] is True
+    assert first == Webhook.objects.get(pk=created["id"]).secret
+    listed = api_client.call("get", "/api/admin/webhooks").json()[0]
+    assert listed["secret"] is None and listed["has_secret"] is True
+    body = {"name": "SIEM", "url": "https://hooks.example/x", "kind": "json", "events": [], "enabled": True, "mention": "", "mention_always": False}
+    assert api_client.call("put", f"/api/admin/webhooks/{created['id']}", body).json()["secret"] is None
+    rotated = api_client.call("post", f"/api/admin/webhooks/{created['id']}/rotate-secret").json()
+    assert rotated["secret"] and rotated["secret"] != first
+    assert Webhook.objects.get(pk=created["id"]).secret == rotated["secret"]
+    assert api_client.call("get", "/api/admin/webhooks").json()[0]["secret"] is None
+    assert AuditEvent.objects.filter(action="webhook.secret_rotated").exists()
 
 
 # --- notifications ----------------------------------------------------------------

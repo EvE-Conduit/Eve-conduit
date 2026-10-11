@@ -2,9 +2,9 @@
 with (counterparties), wallet journals, contracts and who has the skills for a ship or skill list.
 
 Who is included follows the character-sheet permissions (every member, the alliance or the corporation);
-``sheet.use_member_audit`` only opens the page. Seeing a character's wallet, contracts or counterparties here goes
-in the snooper log like opening that section of their character sheet; mail is logged when a mail is opened.
-Searches and skill checks go in the audit log.
+``sheet.use_member_audit`` only opens the page. Seeing a character's mail, wallet, contracts or counterparties
+here goes in the snooper log like opening that section of their character sheet (the mail list shows the first
+lines of each mail, so listing counts too). Searches and skill checks go in the audit log.
 """
 
 import hashlib
@@ -54,10 +54,8 @@ def _characters(request, corporation: int | None = None):
 
 
 def _note_search(request, what: str, q: str):
-    # Searches are GETs, so a link on another site could open one in an auditor's browser and put words in their
-    # mouth in the audit log. Browsers mark such requests; only the site's own pages are recorded.
-    if request.META.get("HTTP_SEC_FETCH_SITE", "same-origin") not in {"same-origin", "none"}:
-        return
+    # Every search is recorded, whatever sent it: a request header (Sec-Fetch-Site) is the client's to set, so it
+    # can't decide what goes in the audit log. The same viewer repeating a search is recorded once per window.
     key = hashlib.sha256(q.lower().encode()).hexdigest()
     if cache.add(f"member_audit:{request.user.pk}:{what}:{key}", 1, SEARCH_DEDUPE_SECONDS):
         record("member_audit.search", f"searched members' {what} in Member Audit for “{q}”"[:300], request=request, details={"section": what, "q": q})
@@ -143,6 +141,8 @@ def mail(request, q: str = "", corporation: int | None = None, sender: int | Non
     for m in Mail.objects.filter(mail_id__in=result["items"], character__in=chars).select_related("character__user").order_by("character__name"):
         copies.setdefault(m.mail_id, []).append(m)
     firsts = [copies[i][0] for i in result["items"] if i in copies]
+    # Each row shows the start of the mail, so every member whose copy is listed is snooped like opening it.
+    _snoop(request, [m.character for ms in copies.values() for m in ms], "mail")
     names = _people(firsts)
     result["items"] = [{**_row(m, names), "held_by": [_holder(c) for c in copies[m.mail_id]]} for m in firsts]
     return result

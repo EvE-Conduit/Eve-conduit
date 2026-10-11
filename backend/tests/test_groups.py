@@ -429,3 +429,18 @@ def test_only_access_managers_fill_groups_with_admin_permissions(admin_user):
         groups.add_member(alt, admins, "admin")  # nobody vouching for it
     assert not alt.groups.filter(pk=admins.pk).exists()
     assert groups.add_member(alt, admins, "admin", actor=admin_user)
+
+
+@pytest.mark.django_db
+def test_api_keys_cannot_empty_groups_with_admin_permissions(admin_user):
+    """The external endpoint refuses too; this catches any other caller passing via="api"."""
+    from django.contrib.auth.models import Permission
+
+    admins = Group.objects.create(name="Admins")
+    admins.permissions.add(Permission.objects.get(codename="manage_access"))
+    admin_user.groups.add(admins)
+    with pytest.raises(groups.GroupError) as exc:
+        groups.remove_member(admin_user, admins, "api")
+    assert exc.value.status == 403 and admin_user.groups.filter(pk=admins.pk).exists()
+    # Other ways of removing still work (an access manager through the admin UI, the member leaving).
+    assert groups.remove_member(admin_user, admins, "admin", actor=admin_user)

@@ -14,6 +14,12 @@
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
+		# Browsers only act on this over HTTPS (a plain-HTTP install sends it harmlessly).
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# No script-src on purpose: index.html carries an inline theme script and Vite's inline import map,
+		# whose hashes change with every build and can't be pinned here.
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
 

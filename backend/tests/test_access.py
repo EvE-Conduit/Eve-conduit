@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group, Permission
 
 from conduit.access.models import GroupProfile, State
 from conduit.access.services import recompute_user_state
+from conduit.audit.models import AuditEvent
 
 from .conftest import make_user
 
@@ -48,6 +49,26 @@ def test_losing_state_removes_restricted_groups(states, corp):
     insider.main_character.save()
     assert recompute_user_state(insider) == guest
     assert not insider.groups.filter(pk=profile.group.pk).exists()
+    # Like every other removal it is on the record and announced.
+    event = AuditEvent.objects.get(action="group.member_removed")
+    assert event.actor_type == "system" and "Insider from Fleet (state changed)" in event.summary
+    assert event.details["via"] == "state" and event.target_id == str(profile.group.pk)
+
+
+@pytest.mark.django_db
+def test_states_cannot_grant_administrator_permissions(admin_user, api_client):
+    """States follow whoever a member picks as their main, so admin rights would travel with corp membership."""
+    api_client.force_login(admin_user)
+    body = {"name": "Staff", "priority": 10, "permissions": ["site.manage_access"]}
+    resp = api_client.call("post", "/api/admin/states", body)
+    assert resp.status_code == 400 and "closed group" in resp.json()["detail"] and "site.manage_access" in resp.json()["detail"]
+    assert not State.objects.filter(name="Staff").exists()
+    # One that already carries them (made before this check) can still be edited to drop them.
+    state = State.objects.create(name="Legacy", priority=20)
+    state.permissions.add(Permission.objects.get(codename="manage_api"))
+    assert api_client.call("put", f"/api/admin/states/{state.pk}", {**body, "name": "Legacy", "priority": 20}).status_code == 400
+    resp = api_client.call("put", f"/api/admin/states/{state.pk}", {"name": "Legacy", "priority": 20, "permissions": ["site.view_members"]})
+    assert resp.status_code == 200 and resp.json()["permissions"] == ["site.view_members"]
 
 
 @pytest.mark.django_db

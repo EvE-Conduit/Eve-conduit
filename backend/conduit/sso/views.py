@@ -26,6 +26,7 @@ from conduit.esi.tokens import (
     verify_access_token,
 )
 from conduit.plugins.services import required_scopes
+from conduit.site.compare import same_secret
 
 log = logging.getLogger(__name__)
 SESSION_KEY = "conduit_sso"
@@ -97,7 +98,7 @@ def _back(flow: dict, **params) -> HttpResponseRedirect:
 @require_GET
 def callback(request):
     flow = request.session.pop(SESSION_KEY, None)
-    if not flow or not secrets.compare_digest(flow["state"], request.GET.get("state", "")):
+    if not flow or not same_secret(flow["state"], request.GET.get("state", "")):
         return HttpResponseBadRequest("Login session expired or invalid. Please try again.")
     code = request.GET.get("code")
     if not code:

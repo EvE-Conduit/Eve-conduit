@@ -65,8 +65,15 @@ def check_url(url: str) -> str:
     if url.startswith("https://"):
         url = "git+" + url
     m = URL_RE.match(url)
-    if not m or ".." in m["path"].split("/") or (m["sub"] and ".." in m["sub"].split("/")):
+    if not m or ".." in m["path"].split("/"):
         raise CatalogError("Use a git URL over HTTPS, e.g. git+https://github.com/someone/conduit-thing@v1.0.0")
+    # The ref becomes a git argument and the subdirectory a path under pip's checkout: neither may look like an
+    # option or climb out of the checkout.
+    if m["ref"] and m["ref"].startswith("-"):
+        raise CatalogError("the git ref after @ can't start with -")
+    sub = m["sub"] or ""
+    if sub and (sub.startswith("/") or "\\" in sub or ".." in sub.split("/")):
+        raise CatalogError("#subdirectory= must be a relative path inside the repository")
     return url
 
 

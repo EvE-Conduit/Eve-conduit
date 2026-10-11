@@ -3,23 +3,33 @@
 import ipaddress
 import logging
 
+from django.conf import settings
 from django.core.cache import cache
 
 from .models import AuditEvent, SnoopEvent
 
 log = logging.getLogger(__name__)
-LOOPBACK = (ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128"))
+
+
+def trusted_proxy(address: str | None) -> bool:
+    """Whether a peer at this address is one of CONDUIT_TRUSTED_PROXIES, whose forwarded headers we believe."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return any(ip in net for net in settings.CONDUIT_TRUSTED_PROXIES)
 
 
 def client_ip(request) -> str | None:
-    """The caller's address. Behind the bundled Caddy/nginx (which connect from loopback),
-    that's the last hop the proxy appended to X-Forwarded-For; otherwise REMOTE_ADDR."""
+    """The caller's address: the last hop of X-Forwarded-For when a trusted proxy sent it (Caddy and nginx
+    append the real client last), otherwise REMOTE_ADDR. TrustedProxyMiddleware already drops the header from
+    other peers; the check here covers requests that didn't pass through it."""
     if request is None:
         return None
     remote = request.META.get("REMOTE_ADDR") or None
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
     try:
-        if remote and forwarded and any(ipaddress.ip_address(remote) in net for net in LOOPBACK):
+        if forwarded and trusted_proxy(remote):
             hop = forwarded.split(",")[-1].strip()
             ipaddress.ip_address(hop)
             return hop
@@ -28,14 +38,25 @@ def client_ip(request) -> str | None:
     return remote
 
 
-def actor_of(request) -> tuple[str, int | None, str]:
+def _actor(request) -> tuple[str, int | None, str, object | None]:
+    """Who is acting, plus the user they're signed in as when that's someone else (impersonation)."""
     key = getattr(request, "api_key", None) if request is not None else None
     if key is not None:
-        return AuditEvent.Actor.API_KEY, key.pk, f"API key {key.name}"
+        return AuditEvent.Actor.API_KEY, key.pk, f"API key {key.name}", None
     user = getattr(request, "user", None)
     if user is not None and user.is_authenticated and user.pk:
-        return AuditEvent.Actor.USER, user.pk, user.display_name
-    return AuditEvent.Actor.SYSTEM, None, "System"
+        from conduit.site.impersonation import impersonator  # it imports record() from here
+
+        real = impersonator(request)
+        if real is not None and real.pk != user.pk:
+            # The admin behind the session did it, not the person they're helping.
+            return AuditEvent.Actor.USER, real.pk, f"{real.display_name} (as {user.display_name})", user
+        return AuditEvent.Actor.USER, user.pk, user.display_name, None
+    return AuditEvent.Actor.SYSTEM, None, "System", None
+
+
+def actor_of(request) -> tuple[str, int | None, str]:
+    return _actor(request)[:3]
 
 
 def record(action: str, summary: str, *, request=None, target=None, target_type: str = "",
@@ -46,7 +67,9 @@ def record(action: str, summary: str, *, request=None, target=None, target_type:
     if actor is not None:
         actor_type, actor_id, actor_name = AuditEvent.Actor.USER, actor.pk, actor.display_name
     else:
-        actor_type, actor_id, actor_name = actor_of(request)
+        actor_type, actor_id, actor_name, impersonated = _actor(request)
+        if impersonated is not None:
+            details = {**(details or {}), "impersonating": impersonated.pk}
     try:
         return AuditEvent.objects.create(
             action=action,

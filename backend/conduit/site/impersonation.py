@@ -1,5 +1,7 @@
 """Signing in as another user to see what they see. Every start and stop is audited."""
 
+import re
+
 from django.conf import settings
 from django.contrib.auth import login
 
@@ -36,17 +38,31 @@ def can_impersonate(actor, target) -> str | None:
     return None
 
 
-# While signed in as someone else, nothing that changes the site itself: no admin changes, no setup,
-# no back-office, no linking characters to their account. Looking around and the user's own actions are fine.
-BLOCKED_WRITE_PREFIXES = ("/api/admin/", "/api/setup/")
+# While signed in as someone else, nothing that changes the site itself (admin changes, setup, the back-office,
+# plugin administration) and nothing that spends the other person's standing: leading their groups (leadership
+# isn't a permission, so can_impersonate's check doesn't see it and a leader's helper could add themselves to a
+# group), joining or leaving groups and asking to, linking or unlinking characters or changing their main (which
+# feeds their state). Looking around and harmless writes such as preferences and notifications are fine.
+BLOCKED_WRITE_PREFIXES = (
+    "/api/admin/",
+    "/api/setup/",
+    "/api/groups/",  # group-leader API
+    "/api/me/groups/",
+    "/api/me/group-requests/",
+    "/api/me/characters/",
+)
+BLOCKED_WRITE_PATTERNS = (re.compile(r"^/api/p/[^/]+/admin(/|$)"),)  # a plugin's admin routes
 BLOCKED_ANY_PREFIXES = ("/django-admin/", "/sso/add-character")
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 
 def blocked(request) -> bool:
     path = request.path
     if path.startswith(BLOCKED_ANY_PREFIXES):
         return True
-    return request.method not in ("GET", "HEAD", "OPTIONS") and path.startswith(BLOCKED_WRITE_PREFIXES)
+    if request.method in SAFE_METHODS:
+        return False
+    return path.startswith(BLOCKED_WRITE_PREFIXES) or any(p.match(path) for p in BLOCKED_WRITE_PATTERNS)
 
 
 def start(request, target):

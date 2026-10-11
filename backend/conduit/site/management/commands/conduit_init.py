@@ -48,7 +48,7 @@ class Command(BaseCommand):
                 "No EVE application yet; EVE login is off. Open the site: the setup wizard asks for the Client ID and Secret Key\n"
                 "  (or set ESI_CLIENT_ID / ESI_SECRET_KEY in the config file)."
             ))
-        if not site.setup_completed:
+        if not site.setup_completed and site.setup_token:  # empty once an admin has claimed the site
             bar = "=" * 64
             self.stdout.write(
                 self.style.SUCCESS(

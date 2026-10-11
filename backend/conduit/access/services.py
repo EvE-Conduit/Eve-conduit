@@ -39,11 +39,11 @@ def recompute_user_state(user) -> State | None:
         bus.emit("user.state_changed", user_id=user.pk, user=user.display_name,
                  old_state=old.name if old else None, new_state=state.name if state else None,
                  summary=f"{user.display_name}: {old.name if old else 'no state'} → {state.name if state else 'no state'}")
-    for profile in GroupProfile.objects.filter(group__user=user).prefetch_related("allowed_states"):
+    for profile in GroupProfile.objects.filter(group__user=user).select_related("group").prefetch_related("allowed_states"):
         if not profile.allows(user):
-            user.groups.remove(profile.group)
-            bus.emit("group.left", user_id=user.pk, user=user.display_name, group_id=profile.group_id,
-                     group=profile.group.name, via="state", summary=f"{user.display_name} lost {profile.group.name} (state changed)")
+            from .groups import remove_member  # audited and announced as group.left like every other removal
+
+            remove_member(user, profile.group, "state", note="state changed")
     return state
 
 
@@ -69,3 +69,35 @@ def admin_permissions_in(permissions) -> list[str]:
     """The administrator permissions among ``permissions`` (a Permission queryset)."""
     names = {f"{app}.{code}" for app, code in permissions.values_list("content_type__app_label", "codename")}
     return sorted(ADMIN_PERMISSIONS & names)
+
+
+def is_administrator(user) -> bool:
+    """Superusers and anyone holding an administrator permission, however it was granted (state or group)."""
+    return bool(user.is_superuser or ADMIN_PERMISSIONS & set(user.get_all_permissions()))
+
+
+#: Shown when a state edit would move an administrator to another state.
+ADMIN_STATE_CHANGE = "That would change the state of an administrator; only an administrator can do that"
+
+
+def administrators_in(kind: str, entity) -> list:
+    """Administrators whose state could change when ``entity`` (a character, corporation or alliance,
+    ``kind`` says which) is added to or removed from a state.
+
+    States are resolved from the main character, so for a corporation or alliance these are the users whose main
+    character is in it; for a character, its owner. A state edit can demote an administrator without touching the
+    state's own permissions (a higher-priority state that outranks theirs, or the only state their admin group
+    allows), so anyone who isn't an administrator themselves is refused these edits.
+    """
+    from conduit.accounts.models import User
+
+    users = User.objects.filter(is_active=True).select_related("state", "main_character")
+    if kind == "character":
+        users = users.filter(characters__pk=entity.pk)
+    elif kind == "corporation":
+        users = users.filter(main_character__corporation_id=entity.pk)
+    elif kind == "alliance":
+        users = users.filter(main_character__alliance_id=entity.pk)
+    else:
+        return []
+    return [u for u in users.distinct() if is_administrator(u)]

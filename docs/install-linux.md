@@ -464,6 +464,10 @@ systemctl enable --now cron     # RHEL family: crond
 conduit setup-updater           # the systemd path unit that starts within seconds; cron is the backup
 ```
 
+The updater runs as root but trusts nothing in `/var/lib/conduit/updates` or `/var/log/conduit`, which the
+service user owns: it never follows a symlink there, checks the release's signature again in a root-only folder,
+and refuses a version older than the running one. Refused requests are noted in `/var/log/conduit/updater.log`.
+
 ### 10. Register the EVE application
 
 Follow [step 4 of the quick install](#4-register-an-eve-application) and keep the Client ID and Secret Key

@@ -12,8 +12,8 @@ through the external API at `/api/v1/`. Its interactive docs are at `/api/v1/doc
    |---|---|---|
    | Directory | `directory:read` | Users, main/alt characters, corporations, alliances, states, groups |
    | Character sheets | `sheet:<section>` (e.g. `sheet:skills`) | Synced character data, one scope per section |
-   | Group membership | `groups:write` | Add/remove users from groups (state restrictions still apply; never groups that grant administrator permissions) |
-   | State membership | `states:write` | Add/remove characters, corporations, alliances from a state (never states that grant administrator permissions) |
+   | Group membership | `groups:write` | Add/remove users from groups (state restrictions and the group's requirement rules still apply; never add to or remove from groups that grant administrator permissions) |
+   | State membership | `states:write` | Add/remove characters, corporations, alliances from a state (never states that grant administrator permissions, and never a change that would move an administrator to another state) |
    | Notifications | `notify:write`, `notify:links` | Send in-app notifications to users, character owners or group members |
    | Logs | `logs:audit`, `logs:snooper`, `logs:requests`, `logs:service`, `logs:esi` | Audit, snooper, API request, service and ESI call logs |
    | SeAT import | `import:seat` | Used only by the [SeAT import tool](../tools/seat-import/README.md); switch it on for the migration and off again after |
@@ -62,8 +62,9 @@ curl -H "Authorization: Bearer evk_..." "https://auth.example.com/api/v1/logs/au
   which character and whose it is, which section, and from which IP. Looking at your own characters is
   never recorded. The same person, character and section is recorded once per 10 minutes. While an admin
   is signed in as someone else, the admin is named as the viewer.
-- **API request log:** every call to `/api/v1/`, refused ones included: key, method, path, status,
-  duration, IP and user agent.
+- **API request log:** every call to `/api/v1/` that presents a key (`Authorization` or `X-API-Key`), refused
+  and wrong-key ones included: key, method, path, status, duration, IP and user agent. Requests with no key
+  header at all are refused without a row, so anonymous traffic can't fill the log.
 - **Service log:** warnings and errors the web server and worker log (turn this off with
   `CONDUIT_SERVICE_LOG_DB=false`). The Windows install also shows its log files there.
   Every plugin also gets its own log here, filtered by plugin and under **Administration > Plugins > Logs**: it
@@ -123,7 +124,9 @@ curl -X POST -H "Authorization: Bearer evk_..." -H "Content-Type: application/js
 ```
 
 Recipients are the union of `user_ids`, the owners of `character_ids` and the members of `group_ids`. `level` is
-`info`, `success`, `warning` or `danger`; `category` (default `system`) lets people mute kinds of notifications.
+`info`, `success`, `warning` or `danger`; `category` (default `system`) lets people mute kinds of notifications and
+must be one the site knows (`system`, `groups`, `tokens`, `compliance`, `admin` or one a plugin registers), otherwise
+the call is refused with `400`. `title` is cut to 200 characters and `body` to 4000.
 `link` is a path on the site (`/p/fleets`). Links to other sites (`https://...`) also need the `notify:links` scope,
 so a leaked bot key can't be used to send members phishing links; people are still asked before they leave the site. The reply says how many people got it (`sent`) out of how many
 were addressed (`recipients`); the difference muted that category.

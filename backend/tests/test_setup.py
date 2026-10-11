@@ -88,10 +88,10 @@ def test_whoever_claims_the_site_is_the_super_admin(user, api_client):
     assert api_client.call("post", "/api/setup/claim", {"token": site.setup_token}).status_code == 200
     assert SiteSettings.load().owner_id == user.pk
     assert api_client.call("get", "/api/core/bootstrap").json()["user"]["is_owner"]
-    # A second claim (before setup is finished) makes another admin, not another owner.
+    # The code is spent by the claim (even before setup is finished): nobody else becomes admin or owner with it.
     other = make_user(90000002, "Other Pilot")
     api_client.force_login(other)
-    api_client.call("post", "/api/setup/claim", {"token": site.setup_token})
+    assert api_client.call("post", "/api/setup/claim", {"token": site.setup_token}).status_code == 403
     assert SiteSettings.load().owner_id == user.pk
 
 

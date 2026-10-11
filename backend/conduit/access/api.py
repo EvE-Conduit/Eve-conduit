@@ -98,6 +98,11 @@ def _ensure_entities(payload: StateIn):
 
 @transaction.atomic
 def _save_state(state: State, payload: StateIn) -> State:
+    # Only the permissions being set are checked, so a state that already carries them can be edited to drop them.
+    granted = sorted(ADMIN_PERMISSIONS & set(payload.permissions))
+    if granted:
+        raise HttpError(400, f"Administrator permissions ({', '.join(granted)}) can't be granted by a state: states follow "
+                             "whichever character a member picks as their main. Use a closed group instead.")
     _ensure_entities(payload)
     for field in ("name", "priority", "description", "color", "public"):
         setattr(state, field, getattr(payload, field))

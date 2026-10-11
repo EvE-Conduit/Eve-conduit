@@ -1,5 +1,6 @@
 """EvE Conduit settings. Everything an operator changes comes from environment variables."""
 
+import ipaddress
 import os
 from pathlib import Path
 
@@ -78,6 +79,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "conduit.site.middleware.TrustedProxyMiddleware",  # first: everything below trusts the forwarded headers
     "django.middleware.security.SecurityMiddleware",
     "conduit.site.middleware.NoCacheMiddleware",  # outside WhiteNoise, so static files get it too
     "conduit.site.ratelimit.RateLimitMiddleware",
@@ -90,8 +92,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "conduit.site.middleware.ImpersonationGuardMiddleware",
     "conduit.site.middleware.MaintenanceMiddleware",
+    "conduit.external.middleware.ApiRequestLogMiddleware",  # before the module check, so refused plugin API calls are logged too
     "conduit.plugins.middleware.DisabledModuleMiddleware",
-    "conduit.external.middleware.ApiRequestLogMiddleware",
 ]
 
 ROOT_URLCONF = "conduit.urls"
@@ -149,6 +151,8 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 SESSION_COOKIE_SECURE = SITE_URL.startswith("https://")
 CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 SESSION_COOKIE_SAMESITE = "Lax"
+# Only believed when a trusted proxy sent it: TrustedProxyMiddleware drops the header from anyone else
+# (see CONDUIT_TRUSTED_PROXIES below).
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
@@ -286,6 +290,24 @@ CONDUIT_PLUGIN_SITE_FILE = env(
 
 # Per-IP limits on EVE login, the setup code and failed API-key attempts (see conduit/site/ratelimit.py).
 CONDUIT_RATE_LIMITS = env_bool("CONDUIT_RATE_LIMITS", True)
+
+
+def trusted_proxy_networks(value: str, install_kind: str) -> list:
+    """CONDUIT_TRUSTED_PROXIES parsed into networks. Empty means the default: loopback, and on Docker also the
+    private ranges, because there Caddy is another container on the compose network (not loopback) and gunicorn
+    isn't reachable from anywhere else."""
+    ranges = [v.strip() for v in value.split(",") if v.strip()]
+    if not ranges:
+        ranges = ["127.0.0.0/8", "::1/128"]
+        if install_kind == "docker":
+            ranges += ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fd00::/8"]
+    return [ipaddress.ip_network(r, strict=False) for r in ranges]
+
+
+# Addresses (IPs or CIDRs, comma separated) of the reverse proxy in front of the app. Only their X-Forwarded-For /
+# X-Forwarded-Proto headers are believed; from anyone else the headers are dropped (conduit/site/middleware.py), so
+# a visitor can't choose the address the rate limits, API-key allow-lists and logs see, or pretend to use https.
+CONDUIT_TRUSTED_PROXIES = trusted_proxy_networks(env("CONDUIT_TRUSTED_PROXIES", ""), CONDUIT_INSTALL_KIND)
 # The Django back-office at /django-admin/ (superusers only). false removes it entirely.
 CONDUIT_DJANGO_ADMIN = env_bool("CONDUIT_DJANGO_ADMIN", True)
 # Let webhooks post to private/internal addresses (off: only public internet hosts).

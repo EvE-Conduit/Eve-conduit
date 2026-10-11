@@ -13,6 +13,9 @@ from .dump import iter_rows
 
 #: Rows per insert batch while loading.
 BATCH = 5000
+#: Columns that are never staged, whatever the table: the import only needs to know which characters SeAT had
+#: and when it last saw them, never their EVE tokens (``refresh_tokens.refresh_token``, ``token``, ...).
+SECRET_COLUMNS = frozenset({"refresh_token", "access_token", "token"})
 
 
 class Row(dict):
@@ -24,6 +27,11 @@ class Row(dict):
 
 def _q(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
+
+
+def public_columns(columns) -> list[str]:
+    """``columns`` without the ones that hold tokens."""
+    return [c for c in columns if c.lower() not in SECRET_COLUMNS]
 
 
 class Staging:
@@ -59,7 +67,7 @@ class Staging:
 
         for name, row in iter_rows(dump_path, wanted, dump_columns):
             if name not in self.columns:
-                cols = list(row)
+                cols = public_columns(row)
                 self.db.execute(f"DROP TABLE IF EXISTS {_q(name)}")
                 self.db.execute(f"CREATE TABLE {_q(name)} ({', '.join(_q(c) for c in cols)})")
                 self.columns[name] = cols
@@ -76,10 +84,14 @@ class Staging:
         return counts
 
     def append(self, table: str, columns: list[str], rows: list[list]) -> int:
-        """Add rows sent in pieces (by the import program). Columns are fixed by the first piece for a table."""
+        """Add rows sent in pieces (by the import program). Columns are fixed by the first piece for a table;
+        token columns are dropped whatever the program sent."""
         if table not in self.columns:
-            self.db.execute(f"CREATE TABLE {_q(table)} ({', '.join(_q(c) for c in columns)})")
-            self.columns[table] = list(columns)
+            kept = public_columns(columns)
+            if not kept:
+                raise ValueError(f"{table}: every column sent holds a token")
+            self.db.execute(f"CREATE TABLE {_q(table)} ({', '.join(_q(c) for c in kept)})")
+            self.columns[table] = kept
         cols = self.columns[table]
         pos = [columns.index(c) if c in columns else None for c in cols]
         self.db.executemany(f"INSERT INTO {_q(table)} VALUES ({', '.join('?' * len(cols))})",

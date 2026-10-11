@@ -10,6 +10,8 @@ import pytest
 from conduit.plugins import docker_updater, installer, installs
 from conduit.plugins.models import PluginInstaller
 
+from .test_plugin_installs import PUB, SHA2, catalog_bytes, entry, put_catalog
+
 
 def _request(root: Path, *actions) -> str:
     rid = uuid.uuid4().hex
@@ -23,10 +25,13 @@ def _result(root: Path) -> dict:
 
 
 class FakePip:
-    """Stands in for `python -m venv` and `pip install`: records the calls, and builds a fake venv."""
+    """Stands in for `python -m venv` and `pip install`: records the calls (and what the -r and -c files held,
+    since they're gone afterwards), and builds a fake venv."""
 
     def __init__(self, fail: bool = False):
         self.calls: list[list[str]] = []
+        self.installed: list[list[str]] = []
+        self.constraints: list[str] = []
         self.fail = fail
 
     def __call__(self, cmd, p):
@@ -37,6 +42,9 @@ class FakePip:
             (target / "bin" / "python").write_text("#!fake\n")
         elif self.fail:
             raise subprocess.CalledProcessError(1, cmd)
+        else:
+            self.installed.append(Path(cmd[cmd.index("-r") + 1]).read_text().splitlines())
+            self.constraints.append(Path(cmd[cmd.index("-c") + 1]).read_text())
 
 
 def test_apply_writes_the_list_and_tells_the_site(tmp_path, monkeypatch):
@@ -81,6 +89,9 @@ def test_sync_builds_the_venv_once_and_finish_reports(tmp_path, monkeypatch):
     assert [c[:3] for c in pip.calls] == [["py", "-m", "venv"], [str(root / "venv.new" / "bin" / "python"), "-m", "pip"]]
     assert (root / "venv" / "bin" / "python").exists() and not (root / "venv.new").exists()
     assert (root / "installed.txt").read_text() == "git+https://github.com/someone/conduit-thing\n"
+    # pip only ever satisfies "conduit" with the image's own install, never from PyPI.
+    assert pip.installed == [["git+https://github.com/someone/conduit-thing"]]
+    assert pip.constraints == [installer.pip_constraints()] and pip.constraints[0].startswith("conduit==")
     first = docker_updater.generation(root)
     assert first and not (root / "plugins-site.txt.bak").exists()
     assert json.loads((root / "updates" / "progress.json").read_text())["step"] == "migrate"
@@ -117,6 +128,68 @@ def test_sync_puts_the_old_list_back_when_pip_fails(tmp_path, monkeypatch):
     # Nothing left to do on the next start.
     pip = FakePip()
     assert docker_updater.sync(root, python="py", run=pip) is True and pip.calls == []
+
+
+def test_sync_installs_only_what_a_signed_catalog_or_the_environment_vouches_for(tmp_path, monkeypatch):
+    """The volume is web-writable, so plugins-site.txt alone proves nothing."""
+    monkeypatch.setattr("conduit.updates.verify.check_signature.__defaults__", ((PUB,),))
+    allow = {"urls": False}
+    monkeypatch.setattr("conduit.plugins.installer.read_env_flag", lambda env_file, key: allow["urls"])
+    root = tmp_path / "plugins"
+    put_catalog(root / "updates", entry())
+    good = entry()["requirement"]
+    forged = entry(sha=SHA2)["requirement"]  # catalog format, but a commit the catalog never signed
+    url = "git+https://github.com/someone/conduit-thing"
+    (root / "plugins-site.txt").write_text(f"{good}\n{forged}\n{url}\nconduit-evil==1.0\n")
+
+    pip = FakePip()
+    assert docker_updater.sync(root, python="py", run=pip) is True
+    assert pip.installed == [[good]]
+    assert (root / "installed.txt").read_text() == f"{good}\n"
+    log = (root / "updater.log").read_text()
+    assert f"skipping {forged!r}" in log and f"skipping {url!r}" in log and "skipping 'conduit-evil==1.0'" in log
+    assert "CONDUIT_PLUGIN_URLS" in log
+
+    # Git URLs count once the container's environment allows them (never a file on the volume).
+    allow["urls"] = True
+    pip = FakePip()
+    assert docker_updater.sync(root, python="py", run=pip) is True
+    assert pip.installed == [[good, url]]
+
+    # Without a valid catalog nothing catalog-shaped installs.
+    (root / "updates" / installer.CATALOG_SIG).write_bytes(b"bm90IGEgc2lnbmF0dXJl")
+    pip = FakePip()
+    assert docker_updater.sync(root, python="py", run=pip) is True
+    assert pip.installed == [[url]] and "ignoring plugin-catalog.json" in (root / "updater.log").read_text()
+
+
+def test_sync_keeps_trusting_pins_from_the_catalog_a_request_used(tmp_path, monkeypatch):
+    """The site fetches newer catalogs (each listing only the latest versions); plugins installed from an older
+    one must survive a restart, so apply keeps the catalog it planned from."""
+    monkeypatch.setattr("conduit.updates.verify.check_signature.__defaults__", ((PUB,),))
+    monkeypatch.setattr("conduit.plugins.installer.installed_dists", lambda: {})
+    monkeypatch.setattr("conduit.plugins.installer.read_env_flag", lambda env_file, key: False)
+    root = tmp_path / "plugins"
+    put_catalog(root / "updates", entry(), serial=100)
+    _request(root, {"op": "install", "package": "conduit-discord"})
+    docker_updater.apply(root)
+    assert (root / "updates" / "catalogs" / "100.json").exists() and (root / "updates" / "catalogs" / "100.json.sig").exists()
+    assert installer.read_site_file(root / "plugins-site.txt") == [entry()["requirement"]]
+
+    put_catalog(root / "updates", entry(version="1.1.0", sha=SHA2), serial=101)  # the catalog moved on
+    pip = FakePip()
+    assert docker_updater.sync(root, python="py", run=pip) is True
+    assert pip.installed == [[entry()["requirement"]]]
+    docker_updater.finish(root)
+    assert _result(root)["status"] == "succeeded"
+
+    # A tampered archive copy is just ignored, like any other unsigned file on the volume.
+    (root / "updates" / "catalogs" / "100.json").write_bytes(catalog_bytes(entry(sha="c" * 40), serial=100))
+    pip = FakePip()
+    assert docker_updater.sync(root, python="py", run=pip) is True
+    assert pip.installed == [] and len(pip.calls) == 1  # an empty venv, nothing for pip to do
+    assert (root / "installed.txt").read_text() == ""
+    assert "ignoring 100.json" in (root / "updater.log").read_text()
 
 
 def test_sync_never_raises(tmp_path):
