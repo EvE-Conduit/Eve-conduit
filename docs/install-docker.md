@@ -34,7 +34,8 @@ so they survive rebuilds and updates.
 - **Ports 80 and 443 open** to the internet. On a cloud server, check the provider's firewall or
   "security group" as well as the server's own firewall.
 - **A domain name** (for example `auth.example.com`) with a DNS **A record** pointing at the server's
-  public IP address. Subdomains of a domain you already own work fine.
+  public IP address. Subdomains of a domain you already own work fine. Never set up DNS before? Read
+  [Pointing a domain at your server](dns.md) first.
   **No domain?** You can use the server's public IPv4 address instead; see [Using an IP address instead of a domain](#using-an-ip-address-instead-of-a-domain).
 - **An EVE Online account** to sign in with. The first person to sign in and enter the setup code
   becomes the administrator.
@@ -65,8 +66,8 @@ on Ubuntu/Debian).
 ## 2. Point your domain at the server
 
 In your DNS provider's control panel, create an **A record** for your chosen name (for example
-`auth.example.com`) with the server's public IPv4 address. DNS changes can take a few minutes to spread.
-Check from the server:
+`auth.example.com`) with the server's public IPv4 address. [dns.md](dns.md) walks through it, including
+what to do on a home connection. DNS changes can take a few minutes to spread. Check from the server:
 
 ```bash
 getent hosts auth.example.com

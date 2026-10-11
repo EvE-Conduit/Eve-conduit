@@ -38,7 +38,8 @@ it by hand) are in [windows/README.md](../windows/README.md).
 - **Internet access during the install** (it downloads about 500 MB of components).
 - **A domain name** (for example `auth.example.com`) with a DNS **A record** pointing at your public IP
   address, and **TCP ports 80 and 443 reachable** from the internet. At home that means forwarding both
-  ports on your router to this PC. **No domain?** See [Using an IP address instead of a domain](#using-an-ip-address-instead-of-a-domain).
+  ports on your router to this PC. [dns.md](dns.md) explains DNS records, port forwarding and what to do
+  when your home IP address changes. **No domain?** See [Using an IP address instead of a domain](#using-an-ip-address-instead-of-a-domain).
 - **A PC that stays on.** EvE Conduit is a website; members cannot sign in while the PC sleeps.
 - **An EVE Online account** to sign in with. The first person to sign in and enter the setup code
   becomes the administrator.
@@ -52,7 +53,7 @@ it by hand) are in [windows/README.md](../windows/README.md).
    (shown by `ipconfig` as *IPv4 Address*). Give the PC a fixed local address in the router (often called
    a DHCP reservation) so the forwarding keeps working after a reboot.
 
-DNS changes can take a few minutes. Check in PowerShell with `Resolve-DnsName auth.example.com`; it should
+[dns.md](dns.md) has more detail on each of these steps. DNS changes can take a few minutes. Check in PowerShell with `Resolve-DnsName auth.example.com`; it should
 print your public IP.
 
 ## 2. Register an EVE application

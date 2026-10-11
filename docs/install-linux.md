@@ -47,7 +47,7 @@ Where things live:
 - **Ports 80 and 443 open** to the internet. On a cloud server, check the provider's firewall or
   "security group" as well as the server's own.
 - **A domain name** (for example `auth.example.com`) with a DNS **A record** pointing at the server's
-  public IP address. **No domain?** See [Using an IP address instead of a domain](#using-an-ip-address-instead-of-a-domain).
+  public IP address; [dns.md](dns.md) explains how to set one up. **No domain?** See [Using an IP address instead of a domain](#using-an-ip-address-instead-of-a-domain).
 - **An EVE Online account** to sign in with. The first person to sign in and enter the setup code
   becomes the administrator.
 
@@ -56,7 +56,7 @@ Where things live:
 ### 1. Point your domain at the server
 
 In your DNS provider's control panel, create an **A record** for your chosen name with the server's public
-IPv4 address. Check from the server with `getent hosts auth.example.com`; it should print the server's
+IPv4 address ([dns.md](dns.md) walks through it). Check from the server with `getent hosts auth.example.com`; it should print the server's
 public IP. The HTTPS certificate cannot be issued until this is right.
 
 ### 2. Download and unpack the release
