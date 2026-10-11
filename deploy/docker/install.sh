@@ -112,8 +112,11 @@ SITE_URL="$SCHEME://$HOST"
 
 if [[ -z "$ESI_ID" && $ASSUME_YES -eq 0 ]]; then
   echo
-  echo "EVE application (from https://developers.eveonline.com/applications, callback URL $SITE_URL/sso/callback)."
-  echo "Leave it empty: the setup wizard on the website asks for it after the start."
+  echo "EVE application. Create one at"
+  echo "  https://developers.eveonline.com/applications"
+  echo "with Authentication & API Access, every scope selected, and this callback URL:"
+  echo "  $SITE_URL/sso/callback"
+  echo "Leave the Client ID empty to enter both in the setup wizard on the website after the start."
   ask ESI_ID "Client ID" ""
   if [[ -n "$ESI_ID" ]]; then
     read -r -s -p "Secret Key: " ESI_SECRET; echo
@@ -124,7 +127,7 @@ fi
 echo
 echo "About to set up EvE Conduit in $REPO:"
 echo "  site:     $SITE_URL"
-echo "  callback: $SITE_URL/sso/callback (register this on the EVE application)"
+echo "  callback: $SITE_URL/sso/callback"
 echo "  email:    $EMAIL"
 echo "  EVE app:  ${ESI_ID:-entered in the setup wizard later}"
 if [[ $SCHEME == https && "$DOMAIN" =~ ^[0-9.]+$ ]]; then
