@@ -87,16 +87,16 @@ export function UserSettings() {
                   ]}
                 />
               </Row>
-              <Row label="Text size" description="Scales text and spacing across the site, smaller or larger than normal.">
+              <Row label="Text size" description="Scales text and spacing across the site. The smallest is the default.">
                 <Segmented
                   aria-label="Text size"
                   value={String(prefs.text_scale) as "-2" | "-1" | "0" | "1" | "2"}
                   onChange={(v) => set({ text_scale: Number(v) })}
                   options={[
-                    { value: "-2", label: <span className="text-[10px]">Aa<span className="sr-only"> smallest</span></span> },
-                    { value: "-1", label: <span className="text-[11px]">Aa<span className="sr-only"> smaller</span></span> },
-                    { value: "0", label: <span className="text-xs">Aa<span className="sr-only"> normal</span></span> },
-                    { value: "1", label: <span className="text-sm">Aa<span className="sr-only"> larger</span></span> },
+                    { value: "-2", label: <span className="text-[10px]">Aa<span className="sr-only"> smallest (default)</span></span> },
+                    { value: "-1", label: <span className="text-[11px]">Aa<span className="sr-only"> small</span></span> },
+                    { value: "0", label: <span className="text-xs">Aa<span className="sr-only"> medium</span></span> },
+                    { value: "1", label: <span className="text-sm">Aa<span className="sr-only"> large</span></span> },
                     { value: "2", label: <span className="text-base">Aa<span className="sr-only"> largest</span></span> },
                   ]}
                 />

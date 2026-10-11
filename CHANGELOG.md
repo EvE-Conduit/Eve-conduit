@@ -3,6 +3,13 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Changed
+- **The smallest text size is the default.** New accounts start on the smallest of the five text sizes (13px),
+  and everyone still on the old default moves to it on update; a size you picked yourself stays. Pages also
+  start at that size before your preferences load, and when signed out.
+
 ## 0.5.39
 
 ### Changed

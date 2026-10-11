@@ -90,8 +90,8 @@ class UserPreferences(models.Model):
     timezone = models.CharField(max_length=64, default="UTC")
     clock_24h = models.BooleanField(default=True)
     reduce_motion = models.BooleanField(default=False)
-    #: Text size step: -2 smallest, -1 smaller, 0 normal, 1 larger, 2 largest.
-    text_scale = models.SmallIntegerField(default=0)
+    #: Text size step: -2 smallest (the default), -1, 0, 1, 2 largest.
+    text_scale = models.SmallIntegerField(default=-2)
     high_contrast = models.BooleanField(default=False)
     muted_categories = models.JSONField(default=list, blank=True)
     #: Hidden/ordered dashboard widgets: {"hidden": ["Wallet:networth"], "order": [...]}.

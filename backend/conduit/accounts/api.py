@@ -253,7 +253,7 @@ class PreferencesIO(Schema):
     timezone: str = "UTC"
     clock_24h: bool = True
     reduce_motion: bool = False
-    text_scale: int = 0
+    text_scale: int = -2
     high_contrast: bool = False
     muted_categories: list[str] = []
     dashboard: dict = {}
