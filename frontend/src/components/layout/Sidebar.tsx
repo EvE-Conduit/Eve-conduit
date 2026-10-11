@@ -272,19 +272,23 @@ export function Sidebar({
               <Avatar src={user.main?.portrait} name={user.name} size="sm" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-text">{user.name}</div>
-                <div className="truncate text-xs text-muted">{user.main?.corporation?.name ?? "No corporation"}</div>
+                {user.is_admin ? (
+                  <div className="mt-0.5 flex">
+                    <Badge tone="accent" variant="dot" size="xs">
+                      {user.is_owner ? "Super admin" : "Admin"}
+                    </Badge>
+                  </div>
+                ) : (
+                  user.state && (
+                    <div className="mt-0.5 flex">
+                      <Badge color={user.state.color} variant="dot" size="xs">
+                        {user.state.name}
+                      </Badge>
+                    </div>
+                  )
+                )}
+                <div className="mt-0.5 truncate text-xs text-muted">{user.main?.corporation?.name ?? "No corporation"}</div>
               </div>
-              {user.is_admin ? (
-                <Badge tone="accent" variant="dot" size="xs">
-                  {user.is_owner ? "Super admin" : "Admin"}
-                </Badge>
-              ) : (
-                user.state && (
-                  <Badge color={user.state.color} variant="dot" size="xs">
-                    {user.state.name}
-                  </Badge>
-                )
-              )}
             </NavLink>
           )}
           {onToggleCollapsed && (
