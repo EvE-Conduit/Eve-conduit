@@ -201,9 +201,12 @@ code=""
 for _ in $(seq 1 60); do
   code=$(docker compose logs web 2>/dev/null | sed -n 's/.*setup code: \([A-Za-z0-9_-]*\).*/\1/p' | tail -1)
   [[ -n "$code" ]] && break
-  if docker compose ps --status exited 2>/dev/null | grep -q .; then
-    echo "A container exited. Its log:"
-    docker compose ps --status exited --format '{{.Service}}' | head -1 | xargs -r docker compose logs --tail 30
+  # --format prints no header, so an empty result really means no container is down.
+  down=$(docker compose ps --status exited --status restarting --format '{{.Service}}' 2>/dev/null | sort -u | tr '\n' ' ' || true)
+  if [[ -n "${down// /}" ]]; then
+    echo "Container(s) not running: $down. Their log:"
+    # shellcheck disable=SC2086
+    docker compose logs --tail 30 $down || true
     die "fix the cause and run: docker compose up -d"
   fi
   sleep 5
