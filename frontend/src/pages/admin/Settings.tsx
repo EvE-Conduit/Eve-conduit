@@ -491,7 +491,7 @@ function EveApplication() {
               <Input type="password" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="font-mono" autoComplete="new-password" />
             </Field>
             <div className="flex gap-2 sm:col-span-2">
-              <Button variant="primary" loading={save.isPending} disabled={!clientId.trim() || !secretKey.trim()}>
+              <Button type="submit" variant="primary" loading={save.isPending} disabled={!clientId.trim() || !secretKey.trim()}>
                 <Save /> {data.configured ? "Change application" : "Connect EVE login"}
               </Button>
               {data.configured && (

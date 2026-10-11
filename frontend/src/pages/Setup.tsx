@@ -254,7 +254,7 @@ function ClaimStep({ verified, installKind, onClaimed }: { verified: boolean; in
           }}
         >
           <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Paste the setup code" className="h-11 font-mono" autoFocus />
-          <Button variant="primary" size="lg" loading={claim.isPending} disabled={!code.trim()}>
+          <Button type="submit" variant="primary" size="lg" loading={claim.isPending} disabled={!code.trim()}>
             Claim admin
           </Button>
         </form>
