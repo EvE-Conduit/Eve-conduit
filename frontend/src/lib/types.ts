@@ -136,7 +136,16 @@ export interface Bootstrap {
     /** An install waiting for the updater to pick it up (usually within seconds); admins only. */
     update_pending?: { kind: "release" | "plugins"; target: string; summary?: string; requested_at: string | null } | null;
   };
-  setup: { completed: boolean; sso_configured: boolean; callback_url: string; admin_claimed: boolean };
+  setup: {
+    completed: boolean;
+    sso_configured: boolean;
+    /** Where the EVE application comes from: "env" (the config file), "site" (entered on the website) or "". */
+    sso_source: "env" | "site" | "";
+    callback_url: string;
+    admin_claimed: boolean;
+    /** This browser entered the setup code with the EVE application, so "become admin" needs no code. */
+    verified: boolean;
+  };
   user: CurrentUser | null;
   plugins: PluginEntry[];
 }

@@ -164,3 +164,116 @@ def test_sidebar_links_must_differ(admin_user, api_client):
     twice = [{"label": "A", "url": "https://a.example"}, {"label": "B", "url": "https://a.example"}]
     resp = api_client.call("put", "/api/admin/site", {"name": "Brave Auth", "accent": "#f59e0b", "nav_links": twice})
     assert resp.status_code in (400, 422)
+
+
+# --- the EVE application entered on the website ---------------------------------------------------
+
+
+def raw_site_secret() -> str:
+    """The esi_secret_key column as stored, without the field's decryption."""
+    from django.db import connection
+
+    with connection.cursor() as cur:
+        cur.execute(f"SELECT esi_secret_key FROM {SiteSettings._meta.db_table} WHERE id = 1")
+        return cur.fetchone()[0]
+
+
+@pytest.fixture
+def no_env_sso(db, settings, monkeypatch):
+    """The config file doesn't name an EVE application, and EVE accepts whatever the wizard sends."""
+    settings.ESI_CLIENT_ID = ""
+    settings.ESI_SECRET_KEY = ""
+    monkeypatch.setattr("conduit.esi.credentials.check", lambda cid, key: "")
+
+
+def test_wizard_connects_the_eve_application(no_env_sso, user, api_client, client):
+    from conduit.esi.credentials import credentials
+    from conduit.esi.tokens import sso_configured
+
+    assert not sso_configured()
+    setup = client.get("/api/core/bootstrap").json()["setup"]
+    assert setup["sso_configured"] is False and setup["sso_source"] == "" and setup["verified"] is False
+
+    code = SiteSettings.load().setup_token
+    body = {"token": "wrong", "client_id": "abc123", "secret_key": "s3cret"}
+    assert api_client.call("post", "/api/setup/sso", body).status_code == 403
+    resp = api_client.call("post", "/api/setup/sso", {**body, "token": code})
+    assert resp.status_code == 200
+    assert resp.json()["sso_configured"] is True and resp.json()["sso_source"] == "site" and resp.json()["verified"] is True
+    assert credentials() == ("abc123", "s3cret") and sso_configured()
+    # The secret is stored encrypted, not as typed.
+    assert raw_site_secret() != "s3cret"
+    assert SiteSettings.load().esi_secret_key == "s3cret"
+
+    # Having entered the code with the application, the same browser becomes admin without typing it again.
+    api_client.force_login(user)
+    assert api_client.call("post", "/api/setup/claim", {}).status_code == 200
+    user.refresh_from_db()
+    assert user.is_superuser
+    # ...and only once.
+    api_client.call("post", "/api/setup/complete")
+    assert api_client.call("post", "/api/setup/sso", {**body, "token": code}).status_code == 400
+
+
+def test_wizard_rejects_credentials_eve_refuses(no_env_sso, monkeypatch, api_client):
+    monkeypatch.setattr("conduit.esi.credentials.check", lambda cid, key: "EVE's login server doesn't know this Client ID and Secret Key.")
+    code = SiteSettings.load().setup_token
+    resp = api_client.call("post", "/api/setup/sso", {"token": code, "client_id": "abc", "secret_key": "nope"})
+    assert resp.status_code == 400 and "doesn't know" in resp.json()["detail"]
+    assert SiteSettings.load().esi_client_id == ""
+
+
+def test_config_file_wins_over_the_website(user, api_client):
+    """ESI_CLIENT_ID / ESI_SECRET_KEY in the config file (set in tests/settings.py) take precedence, and the
+    wizard and Settings say so instead of silently storing something that isn't used."""
+    from conduit.esi.credentials import credentials, source
+
+    SiteSettings.objects.filter(pk=1).update(esi_client_id="site-id")
+    site = SiteSettings.load()
+    site.esi_secret_key = "site-secret"
+    site.save()
+    assert source() == "env" and credentials() == ("test-client", "test-secret-key")
+    code = site.setup_token
+    resp = api_client.call("post", "/api/setup/sso", {"token": code, "client_id": "x", "secret_key": "y"})
+    assert resp.status_code == 400 and "config file" in resp.json()["detail"]
+
+
+def test_admins_change_the_eve_application(no_env_sso, admin_user, api_client):
+    from conduit.esi.credentials import credentials
+
+    api_client.force_login(admin_user)
+    current = api_client.call("get", "/api/admin/site/sso").json()
+    assert current["configured"] is False and current["source"] == "" and current["callback_url"].endswith("/sso/callback")
+    assert api_client.call("put", "/api/admin/site/sso", {"client_id": "only-id", "secret_key": ""}).status_code == 400
+    resp = api_client.call("put", "/api/admin/site/sso", {"client_id": "new-id", "secret_key": "new-secret"})
+    assert resp.status_code == 200 and resp.json()["source"] == "site" and resp.json()["client_id"] == "new-id"
+    assert credentials() == ("new-id", "new-secret")
+    # Both empty removes it.
+    resp = api_client.call("put", "/api/admin/site/sso", {"client_id": "", "secret_key": ""})
+    assert resp.status_code == 200 and resp.json()["configured"] is False
+    assert credentials() == ("", "")
+
+
+def test_only_site_managers_see_the_eve_application(no_env_sso, user, api_client):
+    api_client.force_login(user)
+    assert api_client.call("get", "/api/admin/site/sso").status_code == 403
+    assert api_client.call("put", "/api/admin/site/sso", {"client_id": "a", "secret_key": "b"}).status_code == 403
+
+
+def test_rotate_token_key_covers_the_site_secret(no_env_sso, settings):
+    from django.core.management import call_command
+
+    from conduit.accounts import crypto
+
+    site = SiteSettings.load()
+    site.esi_secret_key = "s3cret"
+    site.save()
+    old_cipher = raw_site_secret()
+    from cryptography.fernet import Fernet
+
+    settings.CONDUIT_TOKEN_KEY = Fernet.generate_key().decode()
+    crypto._fernet.cache_clear()
+    call_command("rotate_token_key")
+    assert raw_site_secret() != old_cipher
+    assert SiteSettings.load().esi_secret_key == "s3cret"
+    crypto._fernet.cache_clear()

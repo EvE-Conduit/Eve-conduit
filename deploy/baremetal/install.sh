@@ -281,8 +281,8 @@ cat <<DONE
 Next steps:
   1. Create an EVE application at https://developers.eveonline.com/applications
      with callback URL: $SCHEME://$DOMAIN/sso/callback
-  2. Put its Client ID and Secret Key in $CONDUIT_ETC/conduit.env, then: sudo conduit restart
-  3. Open $SCHEME://$DOMAIN, sign in, and enter the setup code above.
+  2. Open $SCHEME://$DOMAIN. The setup wizard asks for its Client ID and Secret Key and the setup code above.
+  3. Sign in with your main character: you become the administrator.
 
 Day to day: sudo conduit status | logs | backup | upgrade <release.tar.gz>
 DONE

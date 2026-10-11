@@ -15,6 +15,7 @@ from pydantic import Field, field_validator
 
 from conduit import __version__
 from conduit.audit.services import record
+from conduit.esi import credentials as esi_credentials
 from conduit.esi.tokens import sso_configured
 from conduit.plugins import registry
 from conduit.plugins.services import can_use, is_enabled, sync_installed
@@ -57,8 +58,12 @@ class SiteOut(Schema):
 class SetupOut(Schema):
     completed: bool
     sso_configured: bool
+    # Where the EVE application comes from: "env" (the config file), "site" (entered on the website) or "".
+    sso_source: str
     callback_url: str
     admin_claimed: bool
+    # This browser already proved it runs the server (it entered the setup code with the EVE application).
+    verified: bool
 
 
 class UserOut(Schema):
@@ -111,14 +116,16 @@ def site_out(site: SiteSettings) -> dict:
     }
 
 
-def setup_out(site: SiteSettings) -> dict:
+def setup_out(site: SiteSettings, request=None) -> dict:
     from conduit.accounts.models import User
 
     return {
         "completed": site.setup_completed,
         "sso_configured": sso_configured(),
+        "sso_source": esi_credentials.source(),
         "callback_url": settings.ESI_CALLBACK_URL,
         "admin_claimed": User.objects.filter(is_superuser=True).exists(),
+        "verified": bool(request is not None and request.session.get(SETUP_VERIFIED_KEY)),
     }
 
 
@@ -178,7 +185,7 @@ def bootstrap(request):
                 "public_only": public_only,
             }
         )
-    out = {"site": site_out(site), "setup": setup_out(site), "user": user_out(request.user, request), "plugins": plugins}
+    out = {"site": site_out(site), "setup": setup_out(site, request), "user": user_out(request.user, request), "plugins": plugins}
     if not request.user.is_authenticated:
         # Sidebar links may point at members-only places (a Discord invite, the wiki); keep them off the login page.
         out["site"]["nav_links"] = []
@@ -214,13 +221,51 @@ def impersonate_stop(request):
 # --- first-run setup ---------------------------------------------------------
 
 
+SETUP_VERIFIED_KEY = "conduit_setup_verified"
+
+
 class ClaimIn(Schema):
+    token: str = ""
+
+
+class SetupSsoIn(Schema):
     token: str
+    client_id: str = Field(..., min_length=1, max_length=64)
+    secret_key: str = Field(..., min_length=1, max_length=128)
+
+
+def _check_setup_token(site: SiteSettings, token: str) -> bool:
+    return bool(site.setup_token) and secrets.compare_digest(site.setup_token, token.strip())
 
 
 @setup_router.get("/status", response=SetupOut)
 def setup_status(request):
-    return setup_out(SiteSettings.load())
+    return setup_out(SiteSettings.load(), request)
+
+
+@setup_router.post("/sso")
+def setup_sso(request, payload: SetupSsoIn):
+    """Connect the EVE application from the wizard, before anyone can sign in. The setup code from the server
+    proves the caller runs this install; the credentials are checked with EVE and kept in the site settings."""
+    site = SiteSettings.load()
+    if site.setup_completed:
+        raise HttpError(400, "Setup is already complete")
+    if esi_credentials.source() == esi_credentials.ENV:
+        raise HttpError(400, "The EVE application is set in the server's config file; change it there")
+    if not _check_setup_token(site, payload.token):
+        raise HttpError(403, "That setup code is not correct")
+    client_id, secret_key = payload.client_id.strip(), payload.secret_key.strip()
+    problem = esi_credentials.check(client_id, secret_key)
+    if problem:
+        raise HttpError(400, problem)
+    site.esi_client_id = client_id
+    site.esi_secret_key = secret_key
+    site.save(update_fields=["esi_client_id", "esi_secret_key"])
+    # Entering the code here counts for the "become admin" step after signing in, so it isn't asked twice.
+    request.session[SETUP_VERIFIED_KEY] = True
+    record("setup.sso_configured", f"connected the EVE application {client_id} in the setup wizard", request=request,
+           target_type="site")
+    return setup_out(site, request)
 
 
 @setup_router.post("/claim", auth=django_auth)
@@ -229,8 +274,9 @@ def claim_admin(request, payload: ClaimIn):
     site = SiteSettings.load()
     if site.setup_completed:
         raise HttpError(400, "Setup is already complete")
-    if not site.setup_token or not secrets.compare_digest(site.setup_token, payload.token.strip()):
+    if not (request.session.get(SETUP_VERIFIED_KEY) or _check_setup_token(site, payload.token)):
         raise HttpError(403, "That setup code is not correct")
+    request.session.pop(SETUP_VERIFIED_KEY, None)
     request.user.is_superuser = True
     request.user.is_staff = True
     request.user.save(update_fields=["is_superuser", "is_staff"])
@@ -250,7 +296,60 @@ def complete_setup(request):
     site.setup_token = ""
     site.save(update_fields=["setup_completed", "setup_token"])
     record("setup.completed", "completed the first-run setup", request=request)
-    return setup_out(site)
+    return setup_out(site, request)
+
+
+# --- admin: the EVE application --------------------------------------------------
+
+
+class SsoOut(Schema):
+    configured: bool
+    source: str  # "env", "site" or ""
+    client_id: str
+    callback_url: str
+
+
+class SsoIn(Schema):
+    # Both empty clears the application entered on the website.
+    client_id: str = Field("", max_length=64)
+    secret_key: str = Field("", max_length=128)
+
+
+def sso_out() -> dict:
+    return {
+        "configured": sso_configured(),
+        "source": esi_credentials.source(),
+        "client_id": esi_credentials.client_id(),
+        "callback_url": settings.ESI_CALLBACK_URL,
+    }
+
+
+@admin_router.get("/site/sso", response=SsoOut)
+@require_perm("site.manage_site")
+def get_sso(request):
+    return sso_out()
+
+
+@admin_router.put("/site/sso", response=SsoOut)
+@require_perm("site.manage_site")
+def update_sso(request, payload: SsoIn):
+    """Change the EVE application. Members' stored tokens only refresh for the application that issued them, so
+    switching applications means everyone signs in again; the page says so before asking."""
+    if esi_credentials.source() == esi_credentials.ENV:
+        raise HttpError(400, "The EVE application is set in the server's config file (ESI_CLIENT_ID / ESI_SECRET_KEY); change it there")
+    site = SiteSettings.load()
+    client_id, secret_key = payload.client_id.strip(), payload.secret_key.strip()
+    if bool(client_id) != bool(secret_key):
+        raise HttpError(400, "Enter both the Client ID and the Secret Key, or leave both empty to remove the application")
+    if client_id:
+        problem = esi_credentials.check(client_id, secret_key)
+        if problem:
+            raise HttpError(400, problem)
+    site.esi_client_id = client_id
+    site.esi_secret_key = secret_key
+    site.save(update_fields=["esi_client_id", "esi_secret_key"])
+    record("site.sso_changed", f"changed the EVE application to {client_id or 'none'}", request=request, target_type="site")
+    return sso_out()
 
 
 # --- admin: site settings ----------------------------------------------------

@@ -118,28 +118,26 @@ with CCP:
    `invalid_scope`.
 6. **Callback URL:** exactly `https://auth.example.com/sso/callback`, with your own domain. No trailing
    slash. (With `--no-tls`, it starts with `http://`.)
-7. Create the application, then open it and copy the **Client ID** and **Secret Key**.
-
-Put them into the configuration and restart:
-
-```bash
-sudo nano /etc/conduit/conduit.env      # fill in ESI_CLIENT_ID= and ESI_SECRET_KEY=
-sudo conduit restart
-```
-
-Skip the edit if you passed `--esi-client-id` and `--esi-secret` to the installer.
+7. Create the application, then open it and keep the **Client ID** and **Secret Key** for the next step. The
+   setup wizard on the website asks for them; nothing has to be typed on the server. (If you prefer to keep
+   them in the config file, pass `--esi-client-id` and `--esi-secret` to the installer or set `ESI_CLIENT_ID`
+   and `ESI_SECRET_KEY` in `/etc/conduit/conduit.env`; the file then takes precedence and the wizard skips
+   the question.)
 
 ### 5. First login and the setup wizard
 
 1. Open `https://auth.example.com` in a browser. You should see the EvE Conduit sign-in page with a
    valid certificate (a padlock).
-2. Click **Log in with EVE Online** and sign in with your **main character**. EVE asks you to approve the
-   scopes once.
-3. The setup wizard opens. At **Prove you run this server**, paste the setup code and click **Claim admin**.
-   (The wizard shows a `docker compose` command for finding the code; on this install the command is
-   `sudo conduit setup-code`.) Your account is now the administrator.
+2. The setup wizard opens on **Connect EVE Online login**. It shows the callback URL again and asks for three
+   things: the **Client ID** and **Secret Key** of the EVE application, and the one-time **setup code** the
+   installer printed. Paste all three and click **Connect EVE login**. EvE Conduit checks the credentials with
+   EVE's login server and keeps them, encrypted, in its database. Nothing on the server needs editing or
+   restarting. Lost the code? `sudo conduit setup-code` prints it again.
+3. Click **Log in with EVE Online** and sign in with your **main character**. EVE asks you to approve the
+   scopes once. Because this browser already entered the setup code, you become the administrator as soon as
+   you are back.
 4. The wizard then asks for the site's name and branding, and which plugins to switch on. Everything can be
-   changed later under **Administration**.
+   changed later under **Administration**, including the EVE application (**Settings → EVE application**).
 
 You are done. Members can now sign in at your domain. They start in the **Guest** state until you set up
 states and groups under **Administration → States** and **Administration → Groups**. On the first start the worker imports EVE's static
@@ -391,7 +389,7 @@ Set:
 | `CONDUIT_INSTALL_KIND` | `baremetal` (tells the website this install can update itself) |
 | `CONDUIT_UPDATES_DIR` | `/var/lib/conduit/updates` |
 | `ESI_USER_AGENT_CONTACT` | your email address (CCP asks every ESI application to identify its operator) |
-| `ESI_CLIENT_ID`, `ESI_SECRET_KEY` | from the EVE application; can wait until step 10 |
+| `ESI_CLIENT_ID`, `ESI_SECRET_KEY` | leave empty: the setup wizard on the website asks for them (step 12). Fill them in only to keep them in the file |
 
 Then list the plugins that ship with the release so they get installed:
 
@@ -441,8 +439,8 @@ conduit setup-updater           # the systemd path unit that starts within secon
 
 ### 10. Register the EVE application
 
-Follow [step 4 of the quick install](#4-register-an-eve-application), put the Client ID and Secret Key
-into `/etc/conduit/conduit.env` and run `conduit restart`.
+Follow [step 4 of the quick install](#4-register-an-eve-application) and keep the Client ID and Secret Key
+for the wizard in step 12.
 
 ### 11. nginx and HTTPS
 
@@ -469,8 +467,10 @@ For a site on an IP address, run `conduit ip-cert` instead of certbot.
 
 ### 12. First login
 
-Open your site, sign in with your main character, and enter the setup code from step 8 (`conduit
-setup-code` prints it again). The wizard then walks you through branding and plugins.
+Open your site. The setup wizard asks for the EVE application's Client ID and Secret Key and the setup
+code from step 8 (`conduit setup-code` prints it again), then has you sign in with your main character,
+makes you the administrator and walks you through branding and plugins; see
+[step 5 of the quick install](#5-first-login-and-the-setup-wizard).
 
 ## Troubleshooting
 

@@ -508,13 +508,14 @@ def seat_import_info(request):
     from django.conf import settings
 
     from conduit.accounts.seat_import import wanted_scopes
+    from conduit.esi.credentials import client_id
     from conduit.esi.tokens import sso_configured
 
     return {
         "version": __version__,
         "sso_configured": sso_configured(),
         # Public anyway (it is in every login link); the tool compares it with the one SeAT's tokens were issued to.
-        "client_id": settings.ESI_CLIENT_ID,
+        "client_id": client_id(),
         "wanted_scopes": sorted(wanted_scopes()),
         "users": User.objects.count(),
     }

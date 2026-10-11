@@ -512,8 +512,8 @@ Write-Host @"
 Next steps:
   1. Create an EVE application at https://developers.eveonline.com/applications
      with callback URL: $siteUrl/sso/callback
-  2. Put its Client ID and Secret Key in $($p.EnvFile), then run: conduit restart
-  3. Open $siteUrl, sign in, and enter the setup code above.
+  2. Open $siteUrl. The setup wizard asks for its Client ID and Secret Key and the setup code above.
+  3. Sign in with your main character: you become the administrator.
 
 Day to day (in an Administrator terminal): conduit status | logs | backup | upgrade <zip>
 "@

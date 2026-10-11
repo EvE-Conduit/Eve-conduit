@@ -7,7 +7,7 @@ What EvE Conduit does to protect an install, and what the operator should set.
 | Setting | Why |
 |---|---|
 | `CONDUIT_SECRET_KEY`: 50+ random characters | Signs sessions and CSRF tokens. |
-| `CONDUIT_TOKEN_KEY`: its own Fernet key | Encrypts stored EVE logins (refresh tokens). Without it a key is derived from the secret key, so one leaked value exposes both. The bare-metal installer sets it; for Docker, generate one (`python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`). |
+| `CONDUIT_TOKEN_KEY`: its own Fernet key | Encrypts stored EVE logins (refresh tokens) and the EVE application's Secret Key when it was entered on the website. Without it a key is derived from the secret key, so one leaked value exposes both. The bare-metal installer sets it; for Docker, generate one (`python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`). |
 | No `CONDUIT_DEBUG` | Debug pages show source code and settings to visitors. |
 | `CONDUIT_SITE_URL` on `https://` | Session and CSRF cookies are only marked Secure on HTTPS. |
 | `CONDUIT_DJANGO_ADMIN=false`, or an IP allow-list in the proxy | The Django back-office is a second admin login surface. The nginx example has a commented allow-list. |

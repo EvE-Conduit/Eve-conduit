@@ -4,6 +4,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from conduit.accounts.crypto import EncryptedTextField
+
 
 class SiteSettings(models.Model):
     """Per-install branding and first-run setup state. There is only ever one row."""
@@ -27,6 +29,10 @@ class SiteSettings(models.Model):
     # Extra sidebar links admins add, e.g. the alliance wiki or killboard: [{label, url, icon}].
     nav_links = models.JSONField(default=list, blank=True)
     nav_links_title = models.CharField(max_length=40, default="Links")
+    # The EVE application, when it was entered on the website (the setup wizard or Settings) rather than in the
+    # config file. ESI_CLIENT_ID / ESI_SECRET_KEY in the config file take precedence; see conduit.esi.credentials.
+    esi_client_id = models.CharField(max_length=64, blank=True, default="")
+    esi_secret_key = EncryptedTextField(blank=True, default="")
 
     class Meta:
         verbose_name_plural = "site settings"

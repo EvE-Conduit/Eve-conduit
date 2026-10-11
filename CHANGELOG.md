@@ -3,6 +3,17 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Added
+- **The setup wizard connects the EVE application.** At first visit the website asks for the application's
+  Client ID and Secret Key together with the one-time setup code, checks them with EVE's login server and keeps
+  them in the database (the secret encrypted with the token key, like members' logins). Nobody has to edit a
+  config file on the server or restart anything, and having entered the code there, the same browser becomes
+  administrator after signing in without typing it again. Administrators can see, change or remove the
+  application under Settings → EVE application. `ESI_CLIENT_ID` / `ESI_SECRET_KEY` in the config file still
+  work and take precedence; `rotate_token_key` re-encrypts the stored secret along with the tokens.
+
 ## 0.5.41
 
 ### Fixed
