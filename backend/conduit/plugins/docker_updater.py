@@ -137,10 +137,21 @@ def apply(root: Path | str, env_file: str | None = None) -> dict:
     return out
 
 
+def gunicorn_master(proc: str = "/proc") -> int | None:
+    """The gunicorn master's pid when this is one of its workers (in the container it is pid 1). Stopping a
+    worker alone is useless: the master just starts another one."""
+    ppid = os.getppid()
+    try:
+        cmdline = Path(proc, str(ppid), "cmdline").read_bytes()
+    except OSError:
+        return None
+    return ppid if b"gunicorn" in cmdline else None
+
+
 def restart_web(delay: float = 1.5) -> None:
     """Stop the web server shortly (after the current response is sent); Docker starts the container again and
-    ``sync`` installs the new list. Under gunicorn the request runs in a worker whose parent is the master."""
-    target = os.getppid() if os.getppid() > 1 else os.getpid()
+    ``sync`` installs the new list."""
+    target = gunicorn_master() or os.getpid()
 
     def _exit():
         time.sleep(delay)

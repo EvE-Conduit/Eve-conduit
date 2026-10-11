@@ -171,3 +171,15 @@ def test_docker_installs_apply_and_restart(admin_user, settings, tmp_path, monke
     with pytest.raises(installs.InstallError, match="isn't installed"), django_capture_on_commit_callbacks(execute=True):
         installs.request(admin_user, [{"op": "remove", "package": "conduit-nothing"}])
     assert restarted == [1]
+
+
+def test_restart_targets_the_gunicorn_master_not_the_worker(tmp_path):
+    import os
+
+    proc = tmp_path / "proc" / str(os.getppid())
+    proc.mkdir(parents=True)
+    (proc / "cmdline").write_bytes(b"/usr/local/bin/python\x00-m\x00gunicorn\x00conduit.wsgi\x00")
+    assert docker_updater.gunicorn_master(str(tmp_path / "proc")) == os.getppid()
+    (proc / "cmdline").write_bytes(b"bash\x00")
+    assert docker_updater.gunicorn_master(str(tmp_path / "proc")) is None
+    assert docker_updater.gunicorn_master(str(tmp_path / "nowhere")) is None
