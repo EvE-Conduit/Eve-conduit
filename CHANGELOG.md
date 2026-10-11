@@ -3,7 +3,7 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.40
 
 ### Changed
 - **The smallest text size is the default.** New accounts start on the smallest of the five text sizes (13px),
