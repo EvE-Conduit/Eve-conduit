@@ -24,8 +24,9 @@ first time:
 
 Whichever you choose, you need a domain name pointing at the machine (or a fixed public IP address; see
 [docs/dns.md](docs/dns.md) if you have never set up a DNS record), ports 80 and 443 open, and an EVE application registered at <https://developers.eveonline.com/applications>.
-The first person to sign in and enter the one-time setup code becomes the administrator; a wizard then
-walks them through branding and plugins.
+At first visit a setup wizard asks for the EVE application's Client ID and Secret Key and the one-time setup
+code the installer printed; whoever enters them and signs in becomes the administrator, and the wizard walks
+them through branding and plugins. Nothing has to be edited on the server.
 
 Plugins are installed from **Administration → Plugins → Browse** on Linux and Windows installs, and by
 adding a line to `requirements-plugins.txt` and rebuilding on Docker; see [plugins/README.md](plugins/README.md).

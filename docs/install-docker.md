@@ -105,7 +105,8 @@ with CCP:
    `invalid_scope`.
 6. **Callback URL:** exactly `https://auth.example.com/sso/callback`, with your own domain. No trailing
    slash.
-7. Create the application, then open it and keep the **Client ID** and **Secret Key** for the next step.
+7. Create the application, then open it and keep the **Client ID** and **Secret Key**. The setup wizard on the
+   website asks for them in [step 8](#8-first-login-and-the-setup-wizard).
 
 ## 5. Configure
 
@@ -125,8 +126,7 @@ Fill in everything under **Required**. These are the values and where they come 
 | `CONDUIT_DOMAIN` | Your domain, for example `auth.example.com`. Caddy gets the HTTPS certificate for it. |
 | `CONDUIT_SITE_URL` | `https://auth.example.com` (your domain with `https://`, no trailing slash) |
 | `CONDUIT_ALLOWED_HOSTS` | `auth.example.com` (your domain again) |
-| `ESI_CLIENT_ID` | The Client ID from step 4 |
-| `ESI_SECRET_KEY` | The Secret Key from step 4 |
+| `ESI_CLIENT_ID`, `ESI_SECRET_KEY` | Leave both empty: the setup wizard asks for them in step 8 and keeps them in the database. Fill them in only if you prefer to keep them in this file (the file then takes precedence). |
 | `ESI_USER_AGENT_CONTACT` | Your email address. CCP asks every application that talks to ESI to identify its operator. |
 | `CONDUIT_TOKEN_KEY` | The key that encrypts members' stored EVE logins. Generate one with the command below. |
 
@@ -194,12 +194,16 @@ The code stays valid until the setup is completed.
 1. Open `https://auth.example.com` in a browser. You should see the EvE Conduit sign-in page with a
    valid certificate (a padlock). If the browser warns about the certificate, see
    [Troubleshooting](#troubleshooting).
-2. Click **Log in with EVE Online** and sign in with your **main character**. EVE asks you to approve the
-   scopes once.
-3. The setup wizard opens. At **Prove you run this server**, paste the setup code and click **Claim admin**.
-   Your account is now the administrator.
+2. The setup wizard opens on **Connect EVE Online login**. It shows the callback URL again and asks for three
+   things: the **Client ID** and **Secret Key** of the EVE application, and the one-time **setup code** the
+   installer printed. Paste all three and click **Connect EVE login**. EvE Conduit checks the credentials with
+   EVE's login server and keeps them, encrypted, in its database. Nothing on the server needs editing or
+   restarting. Lost the code? See [step 7](#7-get-the-setup-code).
+3. Click **Log in with EVE Online** and sign in with your **main character**. EVE asks you to approve the
+   scopes once. Because this browser already entered the setup code, you become the administrator as soon as
+   you are back.
 4. The wizard then asks for the site's name and branding, and which plugins to switch on. Everything can be
-   changed later under **Administration**.
+   changed later under **Administration**, including the EVE application (**Settings → EVE application**).
 
 You are done. Members can now sign in at your domain. They start in the **Guest** state until you set up
 states and groups under **Administration → States** and **Administration → Groups**.

@@ -15,6 +15,7 @@ from django.views.decorators.http import require_GET
 
 from conduit.accounts.services import CharacterOwnedElsewhere, link_character
 from conduit.audit.services import record
+from conduit.esi.credentials import client_id
 from conduit.esi.exceptions import TokenInvalid
 from conduit.esi.scopes import ALL_SCOPES
 from conduit.esi.tokens import (
@@ -51,7 +52,7 @@ def _start(request, mode: str, scopes: list[str]):
         {
             "response_type": "code",
             "redirect_uri": settings.ESI_CALLBACK_URL,
-            "client_id": settings.ESI_CLIENT_ID,
+            "client_id": client_id(),
             "scope": " ".join(sorted(set(scopes))),
             "state": state,
             "code_challenge": challenge,

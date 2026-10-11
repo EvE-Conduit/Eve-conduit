@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Construction, DoorOpen, Link2, Palette, PencilLine, Plus, Save, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
+import { ArrowDown, ArrowUp, Construction, DoorOpen, KeyRound, Link2, Palette, PencilLine, Plus, Save, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -132,6 +132,8 @@ export function AdminSettings() {
           saving={save.isPending}
           onSave={submit}
         />
+
+        <EveApplication />
 
         {user?.is_admin && <Administrators />}
 
@@ -410,6 +412,118 @@ function Administrators() {
         }
         confirmLabel={<><UserMinus /> Remove</>}
         onConfirm={() => removing && remove.mutateAsync(removing.id)}
+      />
+    </Card>
+  );
+}
+
+interface SsoInfo {
+  configured: boolean;
+  source: "env" | "site" | "";
+  client_id: string;
+  callback_url: string;
+}
+
+/** The EVE application members sign in through. Entered here (or in the setup wizard) unless the config file sets it. */
+function EveApplication() {
+  const qc = useQueryClient();
+  const refresh = useRefreshBootstrap();
+  const key = ["admin", "sso"];
+  const { data } = useQuery({ queryKey: key, queryFn: () => api.get<SsoInfo>("/api/admin/site/sso") });
+  const [editing, setEditing] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [secretKey, setSecretKey] = useState("");
+  const [confirm, setConfirm] = useState<"change" | "remove" | null>(null);
+  const save = useMutation({
+    mutationFn: (v: { client_id: string; secret_key: string }) => api.put<SsoInfo>("/api/admin/site/sso", v),
+    onSuccess: (info) => {
+      qc.setQueryData(key, info);
+      setEditing(false);
+      setClientId("");
+      setSecretKey("");
+      refresh();
+      toast.success(info.configured ? "EVE application saved" : "EVE application removed");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  if (!data) return null;
+  const fromEnv = data.source === "env";
+  const submit = () => (data.configured ? setConfirm("change") : save.mutate({ client_id: clientId, secret_key: secretKey }));
+
+  return (
+    <Card>
+      <CardHeader
+        icon={<KeyRound />}
+        title="EVE application"
+        description="Members sign in through an application registered with CCP at developers.eveonline.com. Its callback URL must be exactly the one shown here, with every scope selected."
+      />
+      <CardBody className="space-y-4">
+        <div className="grid gap-3 text-sm sm:grid-cols-[10rem_1fr]">
+          <span className="text-muted">Status</span>
+          <span>
+            {data.configured ? (
+              <Badge tone="success">Connected</Badge>
+            ) : (
+              <Badge tone="warning">Not connected: nobody can sign in</Badge>
+            )}
+          </span>
+          <span className="text-muted">Client ID</span>
+          <code className="font-mono text-xs">{data.client_id || "—"}</code>
+          <span className="text-muted">Callback URL</span>
+          <code className="font-mono text-xs">{data.callback_url}</code>
+          <span className="text-muted">Set in</span>
+          <span>{fromEnv ? "the server's config file (ESI_CLIENT_ID / ESI_SECRET_KEY)" : data.configured ? "this page" : "nowhere yet"}</span>
+        </div>
+        {fromEnv ? (
+          <Alert tone="info">To change the application, edit the config file on the server and restart EvE Conduit.</Alert>
+        ) : editing || !data.configured ? (
+          <form
+            className="grid gap-3 sm:grid-cols-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <Field label="Client ID" required>
+              <Input value={clientId} onChange={(e) => setClientId(e.target.value)} className="font-mono" autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label="Secret Key" required>
+              <Input type="password" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="font-mono" autoComplete="new-password" />
+            </Field>
+            <div className="flex gap-2 sm:col-span-2">
+              <Button variant="primary" loading={save.isPending} disabled={!clientId.trim() || !secretKey.trim()}>
+                <Save /> {data.configured ? "Change application" : "Connect EVE login"}
+              </Button>
+              {data.configured && (
+                <Button variant="ghost" type="button" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </form>
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="subtle" onClick={() => setEditing(true)}>
+              <PencilLine /> Change application
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirm("remove")}>
+              <Trash2 /> Remove
+            </Button>
+          </div>
+        )}
+      </CardBody>
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        danger
+        title={confirm === "remove" ? "Remove the EVE application?" : "Switch to a different EVE application?"}
+        description={
+          confirm === "remove"
+            ? "Nobody can sign in, and no character data is synced, until one is connected again."
+            : "Stored EVE logins only work for the application that issued them. Every member will have to sign in again, and character data stops syncing until they do."
+        }
+        confirmLabel={confirm === "remove" ? "Remove" : "Switch application"}
+        onConfirm={() => save.mutateAsync(confirm === "remove" ? { client_id: "", secret_key: "" } : { client_id: clientId, secret_key: secretKey })}
       />
     </Card>
   );

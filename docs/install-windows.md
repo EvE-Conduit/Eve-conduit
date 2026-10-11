@@ -59,8 +59,8 @@ print your public IP.
 ## 2. Register an EVE application
 
 EvE Conduit signs people in through EVE's official login (SSO). Each site registers its own application
-with CCP. You can do this before or after the install; the wizard asks for the details but works without
-them.
+with CCP. You can do this before or after the install: the setup wizard on the PC has an optional page for
+the details, and if you leave it empty the site's own setup wizard asks for them at first login.
 
 1. Go to <https://developers.eveonline.com/applications> and sign in with your EVE account.
 2. Click **Create new application**.
@@ -90,7 +90,7 @@ them.
    | **Database** | **PostgreSQL** (recommended) or MariaDB. |
    | **Ports** | Keep the defaults (80, 443, 8000, 6379 and 5432 or 3306) unless another program already uses one; the wizard checks and tells you. Only the two web ports are reachable from outside. |
    | **Public ports** | Only shown if you changed the web ports. Say whether your router forwards the public 80 and 443 to them (the address stays `https://auth.example.com`), or members use the chosen ports directly (the address becomes `https://auth.example.com:8443`, for example). |
-   | **EVE Online login** | The Client ID and Secret Key from step 2. Optional: leave them empty to add them later. The page shows the callback URL to register. |
+   | **EVE Online login** | Optional. The Client ID and Secret Key from step 2, if you have them; otherwise leave both empty and the site's setup wizard asks for them in step 4. The page shows the callback URL to register. |
 
 4. The **Ready** page lists your answers. The wizard checks the folder, the domain and every port on
    the real machine before it lets you continue.
@@ -105,25 +105,23 @@ If the install fails, the wizard shows the last lines of its log. The full log i
 created). Fix the cause and run the setup again. If the folder was created, remove it first or choose
 another: the installer wants an empty folder.
 
-### If you skipped the EVE application in the wizard
-
-Open `<install folder>\config\conduit.env` in Notepad (as administrator), fill in `ESI_CLIENT_ID=` and
-`ESI_SECRET_KEY=`, save, then run `conduit restart` in an Administrator terminal. The callback URL to
-register is in the same file.
-
 ## 4. First login and the setup wizard
 
 1. Open `https://auth.example.com` in a browser. You should see the EvE Conduit sign-in page with a
    valid certificate (a padlock). Caddy asks Let's Encrypt for the certificate when it starts; that takes a
    few seconds once DNS and the port forwarding are right. If the browser warns about the certificate, see
    [Troubleshooting](#troubleshooting).
-2. Click **Log in with EVE Online** and sign in with your **main character**. EVE asks you to approve the
-   scopes once.
-3. The setup wizard opens. At **Prove you run this server**, paste the setup code and click **Claim admin**.
-   (The wizard shows a `docker compose` command for finding the code; on this install the command is
-   `conduit setup-code`.) Your account is now the administrator.
+2. If you entered the EVE application in the setup wizard on the PC, skip to the next step. Otherwise the
+   site's setup wizard opens on **Connect EVE Online login**: it shows the callback URL again and asks for the
+   **Client ID** and **Secret Key** of the EVE application and the one-time **setup code** from the finish
+   page. Paste all three and click **Connect EVE login**. EvE Conduit checks the credentials with EVE's login
+   server and keeps them, encrypted, in its database. Lost the code? `conduit setup-code` prints it again.
+3. Click **Log in with EVE Online** and sign in with your **main character**. EVE asks you to approve the
+   scopes once. If this browser entered the setup code in the previous step you become the administrator as
+   soon as you are back; otherwise the wizard asks for the code now (**Prove you run this server**).
 4. The wizard then asks for the site's name and branding, and which plugins to switch on. Everything can be
-   changed later under **Administration**.
+   changed later under **Administration**, including the EVE application (**Settings → EVE application**,
+   unless it was entered on the PC, in which case it lives in `config\conduit.env`).
 
 You are done. Members can now sign in at your domain. They start in the **Guest** state until you set up
 states and groups under **Administration → States** and **Administration → Groups**. On the first start the

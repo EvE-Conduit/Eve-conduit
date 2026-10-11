@@ -44,7 +44,10 @@ class Command(BaseCommand):
                 )
             )
         if not sso_configured():
-            self.stdout.write(self.style.WARNING("ESI_CLIENT_ID / ESI_SECRET_KEY are not set; EVE login is off."))
+            self.stdout.write(self.style.WARNING(
+                "No EVE application yet; EVE login is off. Open the site: the setup wizard asks for the Client ID and Secret Key\n"
+                "  (or set ESI_CLIENT_ID / ESI_SECRET_KEY in the config file)."
+            ))
         if not site.setup_completed:
             bar = "=" * 64
             self.stdout.write(

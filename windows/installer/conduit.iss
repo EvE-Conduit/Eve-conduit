@@ -335,8 +335,8 @@ begin
       'Members sign in with their EVE characters through an application you register with CCP. Create one at ' +
       'https://developers.eveonline.com/applications with this callback URL:' + #13#10#13#10 +
       '    ' + ComputeSiteUrl() + '/sso/callback' + #13#10#13#10 +
-      'and paste its Client ID and Secret Key here. You can also leave both empty and add them later in ' +
-      'config\conduit.env (then run: conduit restart).'
+      'and paste its Client ID and Secret Key here. You can also leave both empty: the site''s setup wizard ' +
+      'asks for them when you first open it.'
   else if CurPageID = wpFinished then
   begin
     if Upgrading then
@@ -466,7 +466,7 @@ begin
     'Database:' + NewLine + Space;
   if UseMariaDb() then Result := Result + 'MariaDB' else Result := Result + 'PostgreSQL';
   Result := Result + ' (inside the install folder)' + NewLine + NewLine + 'Ports:' + NewLine + Space + Ports + NewLine + NewLine + 'EVE application:' + NewLine + Space;
-  if Trim(EsiPage.Values[0]) <> '' then Result := Result + 'Client ID ' + Trim(EsiPage.Values[0]) else Result := Result + 'add later in config\conduit.env';
+  if Trim(EsiPage.Values[0]) <> '' then Result := Result + 'Client ID ' + Trim(EsiPage.Values[0]) else Result := Result + 'the site''s setup wizard asks for it';
 end;
 
 { --- running the install ---------------------------------------------------------------------- }

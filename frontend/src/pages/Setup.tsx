@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Check, ClipboardCopy, ExternalLink, KeyRound, LogIn, Palette, Puzzle, Rocket, ShieldCheck } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router";
 import { toast } from "sonner";
 
@@ -8,7 +8,8 @@ import { BrandingForm, type BrandingValues } from "@/components/BrandingForm";
 import { BrandMark } from "@/components/layout/Brand";
 import { PluginList } from "@/components/PluginList";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/feedback";
+import { Field, Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { applyBranding, useBootstrap, useRefreshBootstrap } from "@/lib/bootstrap";
 import type { Bootstrap } from "@/lib/types";
@@ -58,7 +59,7 @@ export function Setup() {
         </ol>
 
         <div className="panel animate-fade-up rounded-2xl" key={current}>
-          {current === "sso" && <SsoStep callbackUrl={setup.callback_url} onRecheck={refresh} />}
+          {current === "sso" && <SsoStep callbackUrl={setup.callback_url} source={setup.sso_source} onDone={refresh} />}
           {current === "login" && (
             <Step title="Sign in with your main character" description="This account becomes the site's first administrator.">
               <a href="/sso/login?next=/setup">
@@ -68,7 +69,7 @@ export function Setup() {
               </a>
             </Step>
           )}
-          {current === "claim" && <ClaimStep onClaimed={refresh} />}
+          {current === "claim" && <ClaimStep verified={setup.verified} onClaimed={refresh} />}
           {current === "brand" && (
             <BrandStep
               branding={branding}
@@ -109,13 +110,35 @@ function Step({ title, description, children, footer }: { title: string; descrip
   );
 }
 
-function SsoStep({ callbackUrl, onRecheck }: { callbackUrl: string; onRecheck: () => void }) {
+function SsoStep({ callbackUrl, source, onDone }: { callbackUrl: string; source: Bootstrap["setup"]["sso_source"]; onDone: () => void }) {
+  const [clientId, setClientId] = useState("");
+  const [secretKey, setSecretKey] = useState("");
+  const [token, setToken] = useState("");
   const copy = () => navigator.clipboard.writeText(callbackUrl).then(() => toast.success("Callback URL copied"));
+  const save = useMutation({
+    mutationFn: () => api.post("/api/setup/sso", { token, client_id: clientId, secret_key: secretKey }),
+    onSuccess: () => {
+      toast.success("EVE login connected");
+      onDone();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const ready = clientId.trim() && secretKey.trim() && token.trim();
   return (
     <Step
       title="Connect EVE Online login"
       description="EvE Conduit signs people in through EVE's official SSO. Each site registers its own application with CCP."
-      footer={<Button variant="primary" onClick={onRecheck}>I've done this, check again</Button>}
+      footer={
+        source === "env" ? (
+          <Button variant="primary" onClick={onDone}>
+            I've done this, check again
+          </Button>
+        ) : (
+          <Button variant="primary" loading={save.isPending} disabled={!ready} onClick={() => save.mutate()}>
+            Connect EVE login
+          </Button>
+        )
+      }
     >
       <ol className="space-y-5 text-sm">
         <Instruction n={1}>
@@ -135,11 +158,34 @@ function SsoStep({ callbackUrl, onRecheck }: { callbackUrl: string; onRecheck: (
           </div>
         </Instruction>
         <Instruction n={3}>Select all scopes. Sign-in asks for every one, and a missing scope makes the EVE login fail.</Instruction>
-        <Instruction n={4}>
-          Put the Client ID and Secret Key in your <code className="font-mono text-xs text-accent-ink">.env</code> file as{" "}
-          <code className="font-mono text-xs">ESI_CLIENT_ID</code> and <code className="font-mono text-xs">ESI_SECRET_KEY</code>, then restart:{" "}
-          <code className="font-mono text-xs">docker compose up -d</code>
-        </Instruction>
+        {source === "env" ? (
+          <Instruction n={4}>
+            Put the application's Client ID and Secret Key in the server's config file as <code className="font-mono text-xs">ESI_CLIENT_ID</code> and{" "}
+            <code className="font-mono text-xs">ESI_SECRET_KEY</code>, then restart EvE Conduit.
+          </Instruction>
+        ) : (
+          <Instruction n={4}>
+            Paste the application's <b>Client ID</b> and <b>Secret Key</b> here, with the one-time <b>setup code</b> the installer printed (it is
+            also in the server log). EvE Conduit checks them with EVE and keeps them, encrypted, in its database.
+            <form
+              className="mt-3 grid gap-3 sm:grid-cols-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (ready) save.mutate();
+              }}
+            >
+              <Field label="Client ID" required>
+                <Input value={clientId} onChange={(e) => setClientId(e.target.value)} className="font-mono" autoComplete="off" spellCheck={false} />
+              </Field>
+              <Field label="Secret Key" required>
+                <Input type="password" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="font-mono" autoComplete="new-password" />
+              </Field>
+              <Field label="Setup code" required hint="Printed by the installer; or run the setup-code command from your install guide." className="sm:col-span-2">
+                <Input value={token} onChange={(e) => setToken(e.target.value)} className="font-mono" autoComplete="off" spellCheck={false} />
+              </Field>
+            </form>
+          </Instruction>
+        )}
       </ol>
     </Step>
   );
@@ -154,27 +200,44 @@ function Instruction({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
-function ClaimStep({ onClaimed }: { onClaimed: () => void }) {
+function ClaimStep({ verified, onClaimed }: { verified: boolean; onClaimed: () => void }) {
   const [code, setCode] = useState("");
+  const [needCode, setNeedCode] = useState(!verified);
   const claim = useMutation({
-    mutationFn: () => api.post("/api/setup/claim", { token: code }),
+    mutationFn: (token: string) => api.post("/api/setup/claim", { token }),
     onSuccess: () => {
       toast.success("You're now the administrator");
       onClaimed();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      setNeedCode(true);
+      toast.error(e.message);
+    },
   });
+  // The code was already entered with the EVE application, so this browser is trusted: claim straight away.
+  useEffect(() => {
+    if (verified) claim.mutate("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verified]);
+  if (!needCode) {
+    return (
+      <Step title="Making you the administrator" description="You proved you run this server when you connected the EVE application.">
+        <Spinner />
+      </Step>
+    );
+  }
   return (
-    <Step title="Prove you run this server" description="To stop anyone else claiming your fresh install, enter the one-time setup code from the server logs.">
+    <Step title="Prove you run this server" description="To stop anyone else claiming your fresh install, enter the one-time setup code the installer printed. It is also in the server log.">
       <div className="space-y-4">
-        <pre className="overflow-x-auto rounded-lg border border-border bg-bg/70 px-4 py-3 font-mono text-xs text-muted">
-          docker compose logs web | grep "setup code"
-        </pre>
+        <p className="text-sm text-muted">
+          Lost it? It is printed again by <code className="font-mono text-xs">conduit setup-code</code> on Linux and Windows installs, or{" "}
+          <code className="font-mono text-xs">docker compose logs web | grep "setup code"</code> on Docker.
+        </p>
         <form
           className="flex flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
-            claim.mutate();
+            claim.mutate(code);
           }}
         >
           <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Paste the setup code" className="h-11 font-mono" autoFocus />

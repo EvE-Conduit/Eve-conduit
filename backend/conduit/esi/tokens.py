@@ -26,11 +26,16 @@ VALID_ISSUERS = {"login.eveonline.com", SSO_HOST}
 
 
 def sso_configured() -> bool:
-    return bool(settings.ESI_CLIENT_ID and settings.ESI_SECRET_KEY)
+    from .credentials import credentials
+
+    client_id, secret = credentials()
+    return bool(client_id and secret)
 
 
 def _basic_auth() -> str:
-    raw = f"{settings.ESI_CLIENT_ID}:{settings.ESI_SECRET_KEY}".encode()
+    from .credentials import credentials
+
+    raw = ":".join(credentials()).encode()
     return "Basic " + base64.b64encode(raw).decode()
 
 
@@ -77,7 +82,9 @@ def verify_access_token(access_token: str) -> dict:
     if claims["iss"] not in VALID_ISSUERS:
         raise jwt.InvalidIssuerError(claims["iss"])
     aud = claims["aud"] if isinstance(claims["aud"], list) else [claims["aud"]]
-    if settings.ESI_CLIENT_ID not in aud:
+    from .credentials import client_id
+
+    if client_id() not in aud:
         raise jwt.InvalidAudienceError("token was issued to another application")
     return claims
 

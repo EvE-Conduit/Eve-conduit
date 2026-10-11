@@ -29,7 +29,7 @@ class Limit:
 
 LIMITS = (
     Limit("sso", ("/sso/login", "/sso/add-character", "/sso/callback"), limit=40, window=300),
-    Limit("setup-claim", ("/api/setup/claim",), limit=5, window=900, methods=("POST",)),
+    Limit("setup-claim", ("/api/setup/claim", "/api/setup/sso"), limit=5, window=900, methods=("POST",)),
     Limit("api-key-failures", ("/api/v1/",), limit=30, window=600, count_statuses=(401,)),
 )
 

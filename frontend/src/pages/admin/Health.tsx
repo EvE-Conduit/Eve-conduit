@@ -178,7 +178,7 @@ export function AdminHealth() {
                 }
               />
               <CardBody className="space-y-3">
-                <Row label="EVE SSO application" ok={data.esi.sso_configured} value={data.esi.sso_configured ? "Configured" : "Missing ESI_CLIENT_ID / ESI_SECRET_KEY"} />
+                <Row label="EVE SSO application" ok={data.esi.sso_configured} value={data.esi.sso_configured ? "Configured" : "Not connected: Administration → Settings → EVE application"} />
                 <Row
                   label="Error budget"
                   ok={data.esi.error_limit_remain == null || data.esi.error_limit_remain > data.esi.error_limit_threshold * 3}
