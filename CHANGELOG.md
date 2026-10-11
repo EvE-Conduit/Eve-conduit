@@ -3,6 +3,16 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.45
+
+### Fixed
+- **Docker: the web container restarted forever on a fresh build.** Since 0.5.43 the image handed the static-file
+  folder to the app user, but not its subfolders, so collecting static files at start failed with a permission error
+  and the container never came up. Rebuild with `docker compose up -d --build`.
+- **The Docker install script claimed a container had exited** as soon as it started waiting for the setup code,
+  because it took `docker compose ps`'s header line for a container. It now checks properly, and also notices
+  containers stuck restarting.
+
 ## 0.5.44
 
 ### Fixed
