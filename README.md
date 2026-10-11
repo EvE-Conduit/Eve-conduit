@@ -18,7 +18,7 @@ first time:
 
 | Guide | Best for |
 |---|---|
-| [Docker](docs/install-docker.md) | Any Linux server, and Windows PCs with Docker Desktop. Everything in containers; the same on every OS. **Recommended if you're unsure.** |
+| [Docker](docs/install-docker.md) | Any Linux server, and Windows PCs with Docker Desktop. Everything in containers; the same on every OS. An install script asks three questions and does the rest. **Recommended if you're unsure.** |
 | [Linux without Docker](docs/install-linux.md) | Ubuntu, Debian or Rocky/Alma/RHEL with PostgreSQL or MariaDB, Supervisor and nginx, in the style of the Alliance Auth and SeAT manual installs. An install script does it all. |
 | [Windows](docs/install-windows.md) | Windows 10/11 or Windows Server as Windows services, with no Docker or WSL, from a setup wizard. Experimental. |
 
