@@ -34,7 +34,7 @@ from datetime import datetime
 import seat_dump
 
 #: Kept equal to Conduit's version (a test checks), so a report or error says which build it came from.
-VERSION = "0.5.47"
+VERSION = "0.5.48"
 #: Users per request. With tokens and scopes this stays well under Conduit's request size limit.
 BATCH = 25
 #: Seconds between polls of the token check.
@@ -598,6 +598,11 @@ PIECE_BYTES = 4 * 1024 * 1024
 HISTORY_POLL = 3
 
 
+#: Columns never sent: Conduit only needs to know which characters SeAT had and when it last saw them, not their
+#: EVE tokens (those go over in the account import, encrypted at rest on arrival). Conduit drops them too.
+SECRET_COLUMNS = frozenset({"refresh_token", "access_token", "token"})
+
+
 def _pieces(dump_path: str, tables):
     """(table, columns, rows) pieces of the dump's rows for these tables, in file order."""
     columns: dict = {}
@@ -607,7 +612,7 @@ def _pieces(dump_path: str, tables):
             if name != table or len(rows) >= PIECE_ROWS or size >= PIECE_BYTES:
                 if rows:
                     yield table, cols, rows
-                table, cols, rows, size = name, list(row), [], 0
+                table, cols, rows, size = name, [c for c in row if c.lower() not in SECRET_COLUMNS], [], 0
             values = [row.get(c) for c in cols]
             rows.append(values)
             size += sum(len(v) if isinstance(v, str) else 8 for v in values) + 4 * len(values)

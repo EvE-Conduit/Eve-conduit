@@ -3,6 +3,69 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.48
+
+Security release: the findings of a code review. Update as soon as you can, Linux installs first.
+
+### Security
+- **Linux: the root updater could be made to overwrite or chown any file.** `conduit apply-update` runs as root
+  and wrote its result, progress and log files by name into folders the service user owns, so a symlink planted
+  there (by a compromised site or plugin) would have been followed. Every read and write in those folders now goes
+  through `conduit.updates.safeio`, which never follows a symlink, refuses anything but a plain file and replaces
+  files by rename. A planted link makes the updater refuse that request and note it in `updater.log`.
+- **Releases can't be downgraded.** A signed older release was still installable; Administration → Updates now
+  refuses to request a version older than the running one, and the Linux and Windows updaters check again before
+  touching anything. `conduit rollback` remains the way back.
+- **Plugins can't pull the wrong "conduit" from PyPI.** Plugins depend on `conduit` by name and PyPI has an
+  unrelated package of that name; every pip run that installs plugins now passes a constraints file pinning
+  `conduit` to the installed version (Docker build, the Docker plugins volume, Linux, Windows). A plugin that needs
+  a newer EvE Conduit fails with a dependency conflict instead of installing a stranger's package.
+- **Docker: the plugins volume is no longer trusted blindly.** On start, a `plugins-site.txt` line is installed only
+  when a signed plugin catalog pins it exactly, or it is a git URL and `CONDUIT_PLUGIN_URLS` is on in the container
+  environment; anything else is skipped and logged. Catalogs an install used are kept under `updates/catalogs/`
+  so earlier installs stay valid after the catalog moves on. Plugin git URLs must use a relative `#subdirectory=`
+  and a `@ref` that doesn't start with `-`.
+- **Docker: rate limits and API-key IP allow-lists now see the real client address.** The app only believed
+  `X-Forwarded-For` from loopback, but in the Docker install Caddy is another container, so every visitor shared
+  one rate-limit bucket (a few dozen anonymous requests blocked all EVE logins for five minutes), IP-limited API
+  keys were checked against the proxy's address and the logs recorded it. New setting `CONDUIT_TRUSTED_PROXIES`
+  (see docs/security.md); Docker installs trust the compose network by default, nothing to do. Forwarded headers
+  from any other peer are dropped, including `X-Forwarded-Proto`.
+- **API keys could remove administrators.** `groups:write` and `states:write` keys were stopped from adding to
+  groups and states carrying administrator permissions, but not from removing. Both are refused now, and so is a
+  state change that would move an administrator to another state. API group adds also check the group's
+  requirement rules.
+- **Signing in as another user could be used to gain permissions.** The read-only rule only covered
+  Administration, so a helper signed in as a group leader could add themselves to the led group. While signed in
+  as someone else, the group-leader API, joining and leaving groups, join requests, the account's characters and
+  plugins' admin routes are read-only too. Actions taken meanwhile are audited as "Helper (as Member)" instead of
+  as the member, and a helper whose own account is disabled is signed out on the next request.
+- **Administrator permissions can no longer be granted by a state** (membership follows whichever character a
+  member picks as their main). Existing states keeping them can still be edited to drop them.
+- **Member Audit's mail list is in the snooper log** for every member whose mail appears (it shows the first lines
+  of each mail), and Member Audit searches are recorded whatever client sent them.
+- **The SeAT import no longer stages EVE refresh tokens** in its working file; the file and folder are private to
+  the app's user. Update the SeAT import program with the release.
+- **Webhooks connect to the address that passed the safety check** (no second DNS lookup), never read the reply
+  body, and NAT64 / IPv4-translated IPv6 addresses are judged by the IPv4 inside. JSON webhook signing secrets are
+  shown once, on creation or **New secret**; lists no longer return them.
+- **Unauthenticated requests to `/api/v1/` no longer create request-log rows**, so they can't fill the database;
+  calls that present a key are logged as before. Refused calls to plugin APIs are now attributed to the plugin.
+- Notification `category` from the external API must be one the site knows (so mutes work); titles and bodies are
+  capped at 200 / 4000 characters, for plugins too.
+- Nobody can move characters into their own account; another administrator has to.
+- Group removals caused by a state change or an account merge are audited like every other removal.
+- The intel section only names a counterparty's account when the viewer may see that character; otherwise it
+  just says the character is registered here.
+- The Django back-office login is rate-limited (20 per 10 minutes per IP) and its site-settings form no longer
+  shows the EVE application's secret. The setup code is single use and gone once an administrator exists.
+- Non-ASCII input to the setup code or the SSO `state` is refused instead of raising an error page.
+- The bundled proxies send `Strict-Transport-Security`, a `Content-Security-Policy` (`frame-ancestors 'none'`,
+  `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`) and a `Permissions-Policy`. Existing bare-metal
+  and Windows installs keep their old proxy config until it is re-run or merged by hand.
+- The corporation sheet's "Website" link only opens `https://` addresses, after the usual leave-site confirmation,
+  and `/login?next=` only accepts a path on this site.
+
 ## 0.5.47
 
 ### Fixed
