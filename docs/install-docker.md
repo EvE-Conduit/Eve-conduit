@@ -277,7 +277,10 @@ from the website, the same as on Linux and Windows:
 
 Plugins installed this way live in the `plugins` Docker volume, next to the database, so they survive
 `git pull` and rebuilds and update themselves when a new version is published. Plugins from other git
-repositories can be installed there too once you set `CONDUIT_PLUGIN_URLS=true` in `.env`.
+repositories can be installed there too once you set `CONDUIT_PLUGIN_URLS=true` in `.env`. On every start the
+containers only install lines of the volume's `plugins-site.txt` that a signed plugin catalog pins, or git URLs
+when `CONDUIT_PLUGIN_URLS` is on; anything else is skipped and noted in the volume's `updater.log`, so editing
+that file by hand doesn't install arbitrary packages.
 
 You can also bake plugins into the image instead: add the line **Browse** shows to `requirements-plugins.txt`
 and run `docker compose up -d --build`. Plugins installed that way can't be removed from the website; delete

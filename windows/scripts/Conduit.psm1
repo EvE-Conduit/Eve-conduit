@@ -733,6 +733,40 @@ function Invoke-ConduitPython {
     Invoke-NativeCommand -FilePath $python -ArgumentList (@($launcher) + $Arguments) -FailMessage "Command failed: $($Arguments -join ' ')"
 }
 
+function Get-ConduitPipConstraintFile {
+    <#
+      Writes and returns the pip constraints file every plugin install must get (-c). Plugins depend on "conduit" by
+      name, and PyPI has an unrelated package called conduit: pinned to the version installed in the venv, pip can
+      only satisfy that dependency locally and never downloads a stranger's package in its place.
+    #>
+    param([Parameter(Mandatory)][string]$Root)
+    $p = Get-ConduitPath $Root
+    $python = Join-Path $p.Venv 'Scripts\python.exe'
+    New-Item -ItemType Directory -Force -Path $p.Tmp | Out-Null
+    $file = Join-Path $p.Tmp 'pip-constraints.txt'
+    $lines = @(Invoke-NativeCommand -FilePath $python -ArgumentList @('-I', '-m', 'conduit.plugins.installer', 'constraints') `
+        -FailMessage 'Could not work out the installed EvE Conduit version')
+    [IO.File]::WriteAllText($file, (($lines | ForEach-Object { "$_" }) -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
+    return $file
+}
+
+function Assert-ConduitUpgradeVersion {
+    <#
+      Throws when $Version is older than the EvE Conduit installed in the venv. A signed release is still an old
+      release: the updater never goes backwards (the same version is a reinstall and allowed).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$Version
+    )
+    $p = Get-ConduitPath $Root
+    $python = Join-Path $p.Venv 'Scripts\python.exe'
+    $running = @(Invoke-NativeCommand -FilePath $python -ArgumentList @('-I', '-m', 'conduit.updates.versions', 'check-upgrade', $Version)) -join ' '
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Version is older than the running $($running.Trim()); EvE Conduit doesn't install older versions."
+    }
+}
+
 function Install-ConduitPythonPackage {
     <# Installs the backend, waitress and every plugin (plugins.txt and plugins-site.txt) into the venv. #>
     param(
@@ -753,12 +787,14 @@ function Install-ConduitPythonPackage {
         # Not --quiet: pip's "Collecting ..." lines and download bars are the progress indicator.
         Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', $backend, 'waitress>=3') `
             -FailMessage 'Installing the EvE Conduit backend failed' | Out-Host
+        # After the backend: the constraint pins the version just installed.
+        $constraints = Get-ConduitPipConstraintFile -Root $Root
         if ((Test-Path -LiteralPath $p.Plugins) -and (Get-PluginRequirement $p.Plugins)) {
-            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-r', $p.Plugins) `
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-c', $constraints, '-r', $p.Plugins) `
                 -FailMessage 'Installing plugins failed' | Out-Host
         }
         if ((Test-Path -LiteralPath $p.PluginsSite) -and (Get-PluginRequirement $p.PluginsSite)) {
-            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-r', $p.PluginsSite) `
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--upgrade', '--disable-pip-version-check', '-c', $constraints, '-r', $p.PluginsSite) `
                 -FailMessage 'Installing plugins from Administration -> Plugins failed' | Out-Host
         }
     }

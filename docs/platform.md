@@ -27,7 +27,7 @@ when an event is shown to people, e.g. in a Discord embed.
 Core events: `user.created`, `user.state_changed`, `character.added`, `character.removed`,
 `character.main_changed`, `character.moved`, `user.merged` (an administrator moved every character of an
 account into another; `from_user_id`, `to_user_id`, `records_moved`), `token.invalid`, `group.joined`, `group.left` (both with `via`: `self`, `request`,
-`admin`, `auto` or `state`), `group.request_created`, `group.request_decided`, `sync.failed`,
+`admin`, `auto`, `state` or, for `group.left`, `merge`), `group.request_created`, `group.request_decided`, `sync.failed`,
 `compliance.changed`, `notification.created`. Plugins add their own.
 
 **Administration → Integrations** sends chosen events (or all) to a URL:
@@ -38,15 +38,20 @@ account into another; `from_user_id`, `to_user_id`, `records_moved`), `token.inv
   when it asks for a ping. Nothing else can ping: text people typed is never a mention.
 - **Slack**: a text message.
 - **JSON**: `{"event", "at", "data"}` with `X-Conduit-Event` and `X-Conduit-Signature: sha256=<hex>`, the
-  HMAC-SHA256 of the raw body keyed with the webhook's secret. Verify it before trusting the body.
+  HMAC-SHA256 of the raw body keyed with the webhook's secret. Verify it before trusting the body. The secret is
+  shown once, when the webhook is created or when **New secret** is pressed (`POST
+  /api/admin/webhooks/{id}/rotate-secret`); the old one stops working at once. Lists and edits only say whether a
+  secret exists (`has_secret`).
 
 Failed deliveries (network errors, 429 and 5xx) are retried four times with growing delays. Every attempt is
 listed under the webhook's history, with the status code only: replies are never stored.
 
 Webhook URLs must be `https://` addresses on the public internet. Hosts that resolve to private, loopback,
 link-local (cloud metadata) or reserved addresses are refused when the webhook is saved and again before every
-delivery, and redirects are not followed. `CONDUIT_WEBHOOK_ALLOW_PRIVATE=true` lifts this for installs that
-deliberately post to internal services.
+delivery; the delivery then connects to the address that passed the check, with the host name kept for the
+`Host` header and the certificate check, so a DNS answer that changes in between gets nowhere. Redirects are not
+followed and the reply body is never read. `CONDUIT_WEBHOOK_ALLOW_PRIVATE=true` lifts the address check for
+installs that deliberately post to internal services.
 
 ## Notifications
 
@@ -249,9 +254,15 @@ Holders of `site.impersonate_users` can press **Sign in as** next to a member (A
 see the site exactly as that person does, for support. Only administrators may sign in as an administrator,
 and anyone else may only sign in as people whose permissions they hold themselves, so it can never be used
 to gain power. While signed in as someone else, nothing in Administration can be changed, setup and the
-back-office are closed, and no characters can be linked.
+back-office are closed, and the person's own account can't be changed in ways that carry weight: no linking,
+unlinking or main-character changes, no joining or leaving groups or join requests, nothing through the
+group-leader API (`/api/groups/`, since leading a group isn't a permission the helper was checked for) and
+nothing under a plugin's admin routes (`/api/p/<plugin>/admin/...`). Looking around, preferences and
+notifications work as usual.
 A banner stays on screen with a button back to your own account; signing out also returns you. Starting and
-stopping are both in the audit log.
+stopping are both in the audit log, and everything done in between is recorded against the helper as
+"Helper (as Member)" with `details.impersonating` naming the member. If the helper's account is disabled while
+signed in as someone else, the next request ends the session (`401` for the API, `/login` for pages).
 
 ## Maintenance mode
 

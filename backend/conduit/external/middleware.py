@@ -7,24 +7,36 @@ from .models import ApiRequest
 
 log = logging.getLogger(__name__)
 PREFIX = "/api/v1/"
+PLUGIN_PREFIX = PREFIX + "p/"  # plugin routers are mounted at /api/v1/p/<plugin id>/
 NOT_LOGGED = ("/api/v1/docs", "/api/v1/openapi.json")
+KEY_HEADERS = ("Authorization", "X-API-Key")
+
+
+def presented_key(request) -> bool:
+    """Whether the request tried to authenticate at all (see ``auth.ApiKeyAuth``)."""
+    return any(request.headers.get(h, "").strip() for h in KEY_HEADERS)
 
 
 class ApiRequestLogMiddleware:
-    """Records every call to the external API, including refused ones."""
+    """Records every call to the external API that presents a key, including refused ones.
+
+    Requests without any key header are not stored: there is nothing to attribute them to, and anyone on the
+    internet could otherwise grow the request log without limit by hitting unknown ``/api/v1/`` paths (failed
+    keys are rate-limited per IP, see ``site.ratelimit``).
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if not request.path.startswith(PREFIX) or request.path.startswith(NOT_LOGGED):
+        if not request.path.startswith(PREFIX) or request.path.startswith(NOT_LOGGED) or not presented_key(request):
             return self.get_response(request)
         started = time.monotonic()
         response = self.get_response(request)
         key = getattr(request, "api_key", None)
         area = getattr(request, "api_area", "")
-        if not area and request.path.startswith(PREFIX + "m/"):
-            area = "p." + request.path[len(PREFIX) + 2 :].split("/", 1)[0]
+        if not area and request.path.startswith(PLUGIN_PREFIX):
+            area = "p." + request.path[len(PLUGIN_PREFIX):].split("/", 1)[0]
         try:
             ApiRequest.objects.create(
                 key=key,

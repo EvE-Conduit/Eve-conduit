@@ -61,6 +61,8 @@ class WebhookIn(Schema):
 
 
 def hook_out(h: Webhook, with_secret: bool = False) -> dict:
+    """``secret`` is only filled in by the calls that make one (create, rotate); it is shown once. Every other
+    answer says whether there is one (``has_secret``) and nothing more."""
     return {
         "id": h.pk,
         "name": h.name,
@@ -71,6 +73,7 @@ def hook_out(h: Webhook, with_secret: bool = False) -> dict:
         "mention": h.mention,
         "mention_always": h.mention_always,
         "secret": h.secret if with_secret and h.kind == "json" else None,
+        "has_secret": h.kind == "json" and bool(h.secret),
         "last_status": h.last_status,
         "last_error": h.last_error,
         "last_delivery_at": h.last_delivery_at.isoformat() if h.last_delivery_at else None,
@@ -89,7 +92,7 @@ def event_types(request):
 @router.get("/webhooks")
 @require_perm("site.manage_api")
 def list_webhooks(request):
-    return [hook_out(h, with_secret=True) for h in Webhook.objects.all()]
+    return [hook_out(h) for h in Webhook.objects.all()]
 
 
 @router.post("/webhooks")
@@ -110,7 +113,7 @@ def update_webhook(request, hook_id: int, payload: WebhookIn):
     hook.save()
     record("webhook.updated", f"changed webhook {hook.name}", request=request, target=hook,
            details={"kind": hook.kind, "events": hook.events, "enabled": hook.enabled})
-    return hook_out(hook, with_secret=True)
+    return hook_out(hook)
 
 
 @router.delete("/webhooks/{hook_id}")
@@ -125,6 +128,7 @@ def delete_webhook(request, hook_id: int):
 @router.post("/webhooks/{hook_id}/rotate-secret")
 @require_perm("site.manage_api")
 def rotate_secret(request, hook_id: int):
+    """A new signing secret, shown in this answer only; the old one stops working at once."""
     hook = get_object_or_404(Webhook, pk=hook_id)
     hook.secret = new_secret()
     hook.save(update_fields=["secret"])
@@ -143,7 +147,7 @@ def test_webhook(request, hook_id: int):
     event = bus.Event("webhook.test", {"title": "Webhook test", "summary": f"{request.user.display_name} sent a test from EvE Conduit.", "level": "success"})
     result = deliver.apply(args=[hook.pk, event.as_dict(), False], throw=False).result
     hook.refresh_from_db()
-    return {"result": result if isinstance(result, str) else "failed", "webhook": hook_out(hook, with_secret=True)}
+    return {"result": result if isinstance(result, str) else "failed", "webhook": hook_out(hook)}
 
 
 @router.get("/webhooks/{hook_id}/deliveries")

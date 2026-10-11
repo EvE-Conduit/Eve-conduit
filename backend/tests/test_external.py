@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 import pytest
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.utils import timezone
 
 from conduit.access.models import GroupProfile, State
@@ -118,6 +118,96 @@ def test_group_write_respects_state_restrictions(client, user):
 
 
 @pytest.mark.django_db
+def test_group_write_checks_the_groups_requirements(client, user):
+    on("groups")
+    _, secret = make_key(["groups:write"])
+    group = Group.objects.create(name="Veterans")
+    GroupProfile.objects.create(group=group, requirements={"match": "all", "rules": [
+        {"type": "character_count", "params": {"op": "gte", "count": 2}}]})
+    resp = call(client, "put", f"/api/v1/groups/{group.pk}/members/{user.pk}", secret)
+    assert resp.status_code == 400 and "doesn't meet the requirements" in resp.json()["detail"]
+    assert not user.groups.filter(pk=group.pk).exists()
+
+
+@pytest.mark.django_db
+def test_api_keys_cannot_touch_administrator_groups(client, user):
+    """Adding is refused already; removing must be too, or a key could strip every administrator."""
+    on("groups")
+    _, secret = make_key(["groups:write"])
+    officers = Group.objects.create(name="Officers")
+    officers.permissions.add(Permission.objects.get(codename="manage_access"))
+    user.groups.add(officers)
+    resp = call(client, "put", f"/api/v1/groups/{officers.pk}/members/{user.pk}", secret)
+    assert resp.status_code == 403
+    resp = call(client, "delete", f"/api/v1/groups/{officers.pk}/members/{user.pk}", secret)
+    assert resp.status_code == 403 and "administrator" in resp.json()["detail"]
+    assert user.groups.filter(pk=officers.pk).exists()
+    assert not AuditEvent.objects.filter(action="group.member_removed").exists()
+
+
+@pytest.mark.django_db
+def test_api_keys_cannot_touch_administrator_states(client, corp):
+    on("states")
+    _, secret = make_key(["states:write"])
+    state = State.objects.create(name="Staff", priority=50)
+    state.permissions.add(Permission.objects.get(codename="manage_api"))
+    state.member_corporations.add(corp)
+    assert call(client, "post", f"/api/v1/states/{state.pk}/members", secret, data={"type": "alliance", "id": corp.alliance_id}).status_code == 403
+    resp = call(client, "delete", f"/api/v1/states/{state.pk}/members/corporation/{corp.pk}", secret)
+    assert resp.status_code == 403 and "administrator" in resp.json()["detail"]
+    assert state.member_corporations.filter(pk=corp.pk).exists()
+
+
+@pytest.mark.django_db
+def test_state_edits_that_would_move_an_administrator_are_refused(client, user, admin_user, corp):
+    """Even a state without permissions of its own can demote an administrator: a higher-priority one takes over,
+    or losing their current state drops the group that makes them one."""
+    on("states")
+    _, secret = make_key(["states:write"])
+    blue = State.objects.create(name="Blue", priority=10)
+    admin_main = admin_user.main_character
+    admin_main.corporation = corp
+    admin_main.alliance = corp.alliance
+    admin_main.save()
+    expected = "That would change the state of an administrator; only an administrator can do that"
+    for kind, entity_id in (("character", admin_main.pk), ("corporation", corp.pk), ("alliance", corp.alliance_id)):
+        resp = call(client, "post", f"/api/v1/states/{blue.pk}/members", secret, data={"type": kind, "id": entity_id})
+        assert resp.status_code == 403 and resp.json()["detail"] == expected, kind
+    assert not blue.member_characters.exists() and not blue.member_corporations.exists() and not blue.member_alliances.exists()
+    # Someone who isn't an administrator is fine.
+    assert call(client, "post", f"/api/v1/states/{blue.pk}/members", secret, data={"type": "character", "id": user.main_character_id}).status_code == 200
+    # Removing: the administrator's corporation is in a state; taking it out would change their state too.
+    blue.member_corporations.add(corp)
+    resp = call(client, "delete", f"/api/v1/states/{blue.pk}/members/corporation/{corp.pk}", secret)
+    assert resp.status_code == 403 and blue.member_corporations.filter(pk=corp.pk).exists()
+    # Administrators by permission count too, not just superusers.
+    officers = Group.objects.create(name="Officers")
+    officers.permissions.add(Permission.objects.get(codename="manage_site"))
+    user.groups.add(officers)
+    assert call(client, "delete", f"/api/v1/states/{blue.pk}/members/character/{user.main_character_id}", secret).status_code == 403
+    user.groups.remove(officers)
+    assert call(client, "delete", f"/api/v1/states/{blue.pk}/members/character/{user.main_character_id}", secret).status_code == 200
+
+
+@pytest.mark.django_db
+def test_notifications_api_respects_categories_and_limits(client, user):
+    from conduit.accounts.models import UserPreferences
+    from conduit.notify.models import Notification
+
+    on("notify")
+    _, secret = make_key(["notify:write"])
+    url = "/api/v1/notifications"
+    resp = call(client, "post", url, secret, data={"user_ids": [user.pk], "title": "Hi", "category": "made-up"})
+    assert resp.status_code == 400 and "category" in resp.json()["detail"]
+    UserPreferences.objects.create(user=user, muted_categories=["groups"])
+    assert call(client, "post", url, secret, data={"user_ids": [user.pk], "title": "Hi", "category": "groups"}).json()["sent"] == 0
+    resp = call(client, "post", url, secret, data={"user_ids": [user.pk], "title": "T" * 300, "body": "B" * 5000})
+    assert resp.status_code == 200 and resp.json()["sent"] == 1
+    n = Notification.objects.get()
+    assert len(n.title) == 200 and len(n.body) == 4000 and n.category == "system"
+
+
+@pytest.mark.django_db
 def test_state_write_recomputes_states(client, user, django_capture_on_commit_callbacks):
     on("states")
     _, secret = make_key(["states:write"])
@@ -161,13 +251,40 @@ def test_module_api_needs_module_and_api_on(client):
 
 
 @pytest.mark.django_db
-def test_every_call_is_logged(client):
+def test_every_call_with_a_key_is_logged(client):
     key, secret = make_key()
     call(client, "get", "/api/v1/me", secret)
-    client.get("/api/v1/me")
+    client.get("/api/v1/me", HTTP_AUTHORIZATION="Bearer evk_wrong_key")  # a failed key still shows up
+    client.get("/api/v1/me", HTTP_X_API_KEY="evk_wrong_key")
     rows = list(ApiRequest.objects.order_by("id"))
-    assert [(r.key_id, r.status) for r in rows] == [(key.pk, 200), (None, 401)]
-    assert client.get("/api/v1/docs").status_code == 200 and ApiRequest.objects.count() == 2
+    assert [(r.key_id, r.status) for r in rows] == [(key.pk, 200), (None, 401), (None, 401)]
+    assert client.get("/api/v1/docs").status_code == 200 and ApiRequest.objects.count() == 3
+
+
+@pytest.mark.django_db
+def test_requests_without_a_key_are_not_stored(client):
+    """Anyone can hit /api/v1/ with no key; storing those would let the internet grow the request log without limit."""
+    assert client.get("/api/v1/me").status_code == 401
+    assert client.get("/api/v1/does-not-exist").status_code == 404
+    assert client.post("/api/v1/me").status_code == 405
+    assert ApiRequest.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_refused_plugin_calls_are_attributed_to_the_plugin(client):
+    """A plugin route that never ran its scope check (unknown path) is still filed under the plugin's API."""
+    from conduit.external.middleware import ApiRequestLogMiddleware
+
+    set_module_enabled("sample", True)
+    _, secret = make_key()
+    assert call(client, "get", "/api/v1/p/sample/nope", secret).status_code == 404
+    assert ApiRequest.objects.get().area == "p.sample"
+    # The derivation itself, for plugins the outer DisabledModuleMiddleware would have refused before this point.
+    from django.test import RequestFactory
+
+    middleware = ApiRequestLogMiddleware(lambda request: type("R", (), {"status_code": 404})())
+    middleware(RequestFactory().get("/api/v1/p/foo/x", HTTP_AUTHORIZATION="Bearer evk_x"))
+    assert ApiRequest.objects.order_by("-id").first().area == "p.foo"
 
 
 @pytest.mark.django_db

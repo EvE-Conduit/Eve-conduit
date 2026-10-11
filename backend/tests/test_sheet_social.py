@@ -102,8 +102,15 @@ def test_intel_aggregates_interactions(pilot, fake, client):
     data = client.get(f"/api/characters/{CID}/intel").json()
     top = data["interactions"][0]
     assert top["name"] == "Market Buddy" and top["mail"] == 2 and top["market"] == 1 and top["contracts"] == 2
-    assert top["standing"] == 10.0 and top["member"]["main"] == "Market Buddy" and not top["member"]["same_account"]
+    # Registered elsewhere, but the pilot may not look at that character, so not whose it is.
+    assert top["standing"] == 10.0 and top["member"] == {"registered": True}
     assert data["registered_counterparties"] == 1
+    from django.contrib.auth.models import Permission
+
+    pilot.user_permissions.add(Permission.objects.get(codename="view_all_characters"))
+    client.force_login(type(pilot).objects.get(pk=pilot.pk))
+    top = client.get(f"/api/characters/{CID}/intel").json()["interactions"][0]
+    assert top["member"] == {"registered": True, "user_id": buddy.pk, "main": "Market Buddy", "same_account": False}
     assert all(i["id"] >= 4_000_000 for i in data["interactions"])  # NPCs like CONCORD are left out
     header = client.get(f"/api/characters/{CID}").json()
     intel = next(s for s in header["sections"] if s["key"] == "intel")

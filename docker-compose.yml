@@ -10,6 +10,8 @@ x-backend: &backend
     REDIS_URL: redis://redis:6379/0
     # Releases: git pull + docker compose up -d --build (the site shows the changelog). Plugins from Administration ->
     # Plugins install into the plugins volume without a rebuild; see backend/conduit/plugins/docker_updater.py.
+    # docker also makes the app believe X-Forwarded-* headers from private addresses: Caddy is another container on
+    # this network and web:8000 isn't published. Set CONDUIT_TRUSTED_PROXIES in .env if you change that.
     CONDUIT_INSTALL_KIND: docker
     CONDUIT_PLUGINS_DIR: /srv/plugins
     CONDUIT_UPDATES_DIR: /srv/plugins/updates

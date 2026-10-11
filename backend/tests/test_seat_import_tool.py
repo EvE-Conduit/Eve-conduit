@@ -560,6 +560,47 @@ def test_history_api_takes_pieces_once_and_imports_them(client, key, history_dir
 
 
 @pytest.mark.django_db
+def test_history_api_never_stages_tokens_and_keeps_the_file_private(client, key, history_dir):
+    """An older import program may still send refresh_tokens whole; the token columns are dropped on arrival,
+    and the working file is only readable by the server's own user."""
+    import os
+    import sqlite3
+    import sys
+
+    from .test_external import call
+
+    run_id = call(client, "post", "/api/v1/import/seat/history", key).json()["run_id"]
+    tokens = {"table": "refresh_tokens", "columns": ["character_id", "refresh_token", "Token", "updated_at"],
+              "rows": [[91000001, "rt-secret-91000001", "access-secret", "2025-03-01 12:00:00"]], "seq": 0}
+    assert _post_rows(client, key, run_id, tokens).json() == {"added": 1}
+    only_tokens = {"table": "refresh_tokens", "columns": ["refresh_token"], "rows": [["rt-x"]], "seq": 1}
+    assert _post_rows(client, key, run_id, only_tokens).status_code == 409  # nothing the import reads
+    path = history_dir / f"{run_id}.sqlite3"
+    db = sqlite3.connect(path)
+    try:
+        columns = [c[1] for c in db.execute("PRAGMA table_info(refresh_tokens)")]
+        assert columns == ["character_id", "updated_at"]
+        assert list(db.execute("SELECT * FROM refresh_tokens")) == [(91000001, "2025-03-01 12:00:00")]
+    finally:
+        db.close()
+    assert b"rt-secret" not in path.read_bytes()
+    if sys.platform != "win32":
+        assert os.stat(path).st_mode & 0o777 == 0o600
+        assert os.stat(history_dir).st_mode & 0o777 == 0o700
+
+
+def test_pieces_leave_the_tokens_out(tmp_path):
+    dump = tmp_path / "seat.sql"
+    dump.write_text(HISTORY_DUMP, encoding="utf-8")
+    pieces = list(tool._pieces(str(dump), ["refresh_tokens", "character_wallet_journals"]))
+    tokens = [(cols, rows) for table, cols, rows in pieces if table == "refresh_tokens"]
+    assert tokens, pieces
+    for cols, rows in tokens:
+        assert "refresh_token" not in cols and "token" not in cols and "character_id" in cols
+        assert not any(isinstance(v, str) and v.startswith("rt-") for row in rows for v in row)
+
+
+@pytest.mark.django_db
 def test_history_api_needs_the_scope(client, history_dir):
     from .test_external import call
 

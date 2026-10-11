@@ -16,7 +16,7 @@ from ninja.errors import HttpError
 
 from conduit import __version__
 from conduit.access.models import State
-from conduit.access.services import admin_permissions_in, recompute_all_states
+from conduit.access.services import ADMIN_STATE_CHANGE, admin_permissions_in, administrators_in, recompute_all_states
 from conduit.accounts.models import Character, User
 from conduit.audit.api import audit_out, filter_audit, filter_service, filter_snoop, service_out, snoop_out
 from conduit.audit.models import AuditEvent, ServiceLog, SnoopEvent
@@ -262,9 +262,16 @@ def add_group_member(request, group_id: int, user_id: int):
         raise HttpError(403, "This group grants administrator permissions; only an administrator can add members")
     if profile and not profile.allows(user):
         raise HttpError(400, "That user's state is not allowed in this group")
-    from conduit.access.groups import add_member
+    from conduit.access.groups import GroupError, add_member, failed_requirements
 
-    add_member(user, group, "api", request=request)
+    if profile:
+        problems = failed_requirements(user, profile)
+        if problems:
+            raise HttpError(400, f"{user.display_name} doesn't meet the requirements: " + "; ".join(problems))
+    try:
+        add_member(user, group, "api", request=request)
+    except GroupError as exc:
+        raise HttpError(exc.status, str(exc)) from None
     return {"ok": True}
 
 
@@ -273,9 +280,14 @@ def add_group_member(request, group_id: int, user_id: int):
 def remove_group_member(request, group_id: int, user_id: int):
     group = get_object_or_404(Group, pk=group_id)
     user = get_object_or_404(User, pk=user_id)
-    from conduit.access.groups import remove_member
+    if admin_permissions_in(group.permissions.all()):
+        raise HttpError(403, "This group grants administrator permissions; only an administrator can remove members")
+    from conduit.access.groups import GroupError, remove_member
 
-    remove_member(user, group, "api", request=request)
+    try:
+        remove_member(user, group, "api", request=request)
+    except GroupError as exc:
+        raise HttpError(exc.status, str(exc)) from None
     return {"ok": True}
 
 
@@ -317,6 +329,8 @@ def add_state_member(request, state_id: int, payload: StateMemberIn):
     if admin_permissions_in(state.permissions.all()):
         raise HttpError(403, "This state grants administrator permissions; only an administrator can change who is in it")
     entity = _entity(payload.type, payload.id)
+    if administrators_in(payload.type, entity):
+        raise HttpError(403, ADMIN_STATE_CHANGE)
     with transaction.atomic():
         _state_relation(state, payload.type).add(entity)
         transaction.on_commit(recompute_all_states)
@@ -329,9 +343,13 @@ def add_state_member(request, state_id: int, payload: StateMemberIn):
 @require_scope("states:write")
 def remove_state_member(request, state_id: int, kind: str, entity_id: int):
     state = get_object_or_404(State, pk=state_id)
+    if admin_permissions_in(state.permissions.all()):
+        raise HttpError(403, "This state grants administrator permissions; only an administrator can change who is in it")
     relation = _state_relation(state, kind)
     entity = relation.filter(pk=entity_id).first()
     if entity is not None:
+        if administrators_in(kind, entity):
+            raise HttpError(403, ADMIN_STATE_CHANGE)
         with transaction.atomic():
             relation.remove(entity)
             transaction.on_commit(recompute_all_states)
@@ -428,15 +446,17 @@ class NotificationIn(Schema):
 @require_scope("notify:write")
 def send_notification(request, payload: NotificationIn):
     """Send an in-app notification to users, the owners of characters, or every member of groups.
-    Users who muted the category don't get it."""
+    Users who muted the category don't get it. ``category`` must be one the site knows (``/api/me/preferences/categories``
+    lists them), so muting works; ``title`` is cut to 200 characters and ``body`` to 4000."""
     from conduit.notify.models import Notification
-    from conduit.notify.services import notify
+    from conduit.notify.services import CATEGORIES, is_external_url, is_site_path, notify
 
     if payload.level not in Notification.Level.values:
         raise HttpError(400, f"level must be one of {', '.join(Notification.Level.values)}")
+    if payload.category not in CATEGORIES:  # free text would get past the categories people muted
+        raise HttpError(400, f"category must be one of {', '.join(sorted(CATEGORIES))}")
     if not payload.title.strip():
         raise HttpError(400, "title is required")
-    from conduit.notify.services import is_external_url, is_site_path
 
     if payload.link and not is_site_path(payload.link):
         if not is_external_url(payload.link):

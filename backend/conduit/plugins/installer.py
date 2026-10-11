@@ -7,7 +7,8 @@ SYSTEM scheduled task on Windows) runs this module with the install's own Python
 
     python -I -m conduit.plugins.installer prepare <updates dir> <plugins-site.txt> <serial file> [--env-file F]
     python -I -m conduit.plugins.installer dists
-    python -I -m conduit.plugins.installer result <updates dir> <request id> <status> <message>
+    python -I -m conduit.plugins.installer result <updates dir> <request id> <status> <message> [--owner USER]
+    python -I -m conduit.plugins.installer constraints
 
 ``prepare`` trusts nothing in the updates folder: it checks the catalog's signature (and that it isn't older
 than one already used), takes catalog plugins only as the catalog pins them, accepts other git URLs only when
@@ -15,6 +16,10 @@ the server's own config file allows them, and only removes plugins that were ins
 new list to ``<plugins-site.txt>.new`` and prints the plan for the updater script, one ``kind<TAB>value`` per
 line: ``id``, ``summary``, ``uninstall`` (package names) and ``reinstall`` (git URLs to fetch again). The
 updater then runs pip, migrates and restarts, and puts the old list back if anything fails.
+
+Files in the updates folder are read and written through :mod:`conduit.updates.safeio`, which never follows
+a symlink the website could have planted there. ``constraints`` prints the pip constraints file every plugin
+install must use (see :func:`pip_constraints`).
 
 Free of Django on purpose.
 """
@@ -26,10 +31,11 @@ import os
 import re
 import sys
 from datetime import UTC, datetime
-from importlib.metadata import distributions
+from importlib.metadata import PackageNotFoundError, distributions, version as dist_version
 from pathlib import Path
 
 from conduit import __version__
+from conduit.updates import safeio
 
 from . import catalog as cat
 
@@ -126,12 +132,12 @@ def read_env_flag(env_file: str | None, key: str) -> bool:
 def load_request(updates: Path) -> dict:
     path = updates / REQUEST_FILE
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = safeio.read_json(path)  # never a symlink: this may run as root
     except (OSError, ValueError) as exc:
         raise RequestError(f"unreadable request ({exc.__class__.__name__})") from None
     finally:
         path.unlink(missing_ok=True)  # one attempt per request
-    if not isinstance(raw, dict) or not ID_RE.match(str(raw.get("id", ""))):
+    if not ID_RE.match(str(raw.get("id", ""))):
         raise RequestError("the request has no valid id")
     actions = raw.get("actions")
     if not isinstance(actions, list) or not 0 < len(actions) <= MAX_ACTIONS:
@@ -141,8 +147,8 @@ def load_request(updates: Path) -> dict:
 
 def load_catalog(updates: Path, serial_file: Path) -> dict:
     try:
-        data = (updates / CATALOG_FILE).read_bytes()
-        sig = (updates / CATALOG_SIG).read_bytes()
+        data = safeio.read_bytes(updates / CATALOG_FILE)
+        sig = safeio.read_bytes(updates / CATALOG_SIG)
     except OSError:
         raise RequestError("the plugin catalog is missing from the updates folder") from None
     try:
@@ -210,7 +216,7 @@ def plan(request: dict, lines: list[str], catalog: dict | None, dists: dict[str,
     return {"lines": lines, "uninstall": uninstall, "reinstall": reinstall, "summary": ", ".join(summary)}
 
 
-def prepare(updates: Path, site_file: Path, serial_file: Path, env_file: str | None) -> dict:
+def prepare(updates: Path, site_file: Path, serial_file: Path, env_file: str | None, owner: str | None = None) -> dict:
     request = load_request(updates)
     needs_catalog = any(isinstance(a, dict) and a.get("op") == "install" and "package" in a for a in request["actions"])
     try:
@@ -218,27 +224,40 @@ def prepare(updates: Path, site_file: Path, serial_file: Path, env_file: str | N
         result = plan(request, read_site_file(site_file), catalog, installed_dists(),
                       read_env_flag(env_file, "CONDUIT_PLUGIN_URLS"))
     except RequestError as exc:  # tell the admin who asked
-        write_result(updates, request["id"], "failed", str(exc))
+        write_result(updates, request["id"], "failed", str(exc), owner)
         raise
     new = site_file.with_name(site_file.name + ".new")
     new.write_text(SITE_FILE_HEADER + "".join(f"{ln}\n" for ln in result["lines"]), encoding="utf-8")
     return {"id": request["id"], **result}
 
 
-def write_result(updates: Path, request_id: str, status: str, message: str) -> None:
-    path = updates / RESULT_FILE
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps({"id": request_id, "status": status, "message": message[:4000],
-                               "at": datetime.now(UTC).isoformat()}))
-    os.replace(tmp, path)
+def write_result(updates: Path, request_id: str, status: str, message: str, owner: str | None = None) -> None:
+    """plugins-result.json for the site. ``owner`` (the service account) is for the root updater; the web process
+    on Docker writes it as itself."""
+    safeio.write_json(updates / RESULT_FILE, {"id": request_id, "status": status, "message": message[:4000],
+                                              "at": datetime.now(UTC).isoformat()}, owner)
+
+
+def pip_constraints() -> str:
+    """Constraints every pip run that installs plugins must get (``-c``). Plugins depend on ``conduit`` by name,
+    and PyPI has an unrelated package called conduit: pinned to the version installed here, pip can only satisfy
+    the dependency with that install and never downloads a stranger's package in its place."""
+    try:
+        installed = dist_version("conduit")
+    except PackageNotFoundError:
+        installed = __version__
+    return f"conduit=={installed}\n"
 
 
 def main(argv: list[str]) -> int:
     cmd = argv[0] if argv else ""
+    owner = None
+    if len(argv) >= 3 and argv[-2] == "--owner":
+        owner, argv = argv[-1], argv[:-2]
     if cmd == "prepare" and len(argv) in (4, 6):
         env_file = argv[5] if len(argv) == 6 and argv[4] == "--env-file" else None
         try:
-            out = prepare(Path(argv[1]), Path(argv[2]), Path(argv[3]), env_file)
+            out = prepare(Path(argv[1]), Path(argv[2]), Path(argv[3]), env_file, owner)
         except RequestError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -254,7 +273,14 @@ def main(argv: list[str]) -> int:
             print(d["name"])
         return 0
     if cmd == "result" and len(argv) == 5 and ID_RE.match(argv[2]) and argv[3] in ("running", "succeeded", "failed"):
-        write_result(Path(argv[1]), argv[2], argv[3], argv[4])
+        try:
+            write_result(Path(argv[1]), argv[2], argv[3], argv[4], owner)
+        except OSError as exc:  # including safeio.UnsafePath: a planted symlink, an unknown owner
+            print(f"couldn't write the result: {exc}", file=sys.stderr)
+            return 1
+        return 0
+    if cmd == "constraints" and len(argv) == 1:
+        sys.stdout.write(pip_constraints())
         return 0
     print(__doc__, file=sys.stderr)
     return 2

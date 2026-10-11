@@ -1,5 +1,6 @@
 """Regression tests for the security review of 2026-10-07."""
 
+import ipaddress
 import json
 import socket
 
@@ -9,8 +10,8 @@ from django.contrib.auth.models import Group, Permission
 from django.test import override_settings
 
 from conduit.access.models import GroupProfile, State
-from conduit.events.models import Webhook
-from conduit.events.safety import UnsafeUrl, check_url
+from conduit.events.models import Webhook, WebhookDelivery
+from conduit.events.safety import UnsafeUrl, _bad, check_url, pin
 from conduit.notify.models import Notification
 from conduit.notify.services import notify
 
@@ -49,6 +50,75 @@ def test_admin_changes_are_blocked_while_impersonating(admin_user, user, api_cli
     assert api_client.call("post", "/api/admin/states", {"name": "X", "priority": 5}).status_code == 200
 
 
+@pytest.mark.django_db
+def test_impersonating_a_leader_cannot_spend_their_standing(api_client):
+    """Leadership isn't a permission, so a helper may sign in as a leader; they must not use that to add
+    themselves to the group (and so gain its permissions), nor act on the person's account otherwise."""
+    from conduit.plugins.services import set_enabled
+
+    set_enabled("sample", True)
+    helper = grant(make_user(90000013, "Helper"), "impersonate_users")
+    leader = make_user(90000014, "Leader")
+    group = Group.objects.create(name="Fleet")
+    group.permissions.add(Permission.objects.get(codename="view_members"))
+    GroupProfile.objects.create(group=group, join_mode="open").leaders.add(leader)
+    api_client.force_login(helper)
+    assert api_client.call("post", f"/api/admin/impersonate/{leader.pk}").status_code == 200
+
+    resp = api_client.call("post", f"/api/groups/{group.pk}/members/{helper.pk}")
+    assert resp.status_code == 403 and "Return to your own account" in resp.json()["detail"]
+    assert api_client.call("post", f"/api/me/groups/{group.pk}/join").status_code == 403
+    assert api_client.call("delete", f"/api/me/characters/{leader.main_character_id}").status_code == 403
+    assert api_client.call("post", f"/api/me/characters/{leader.main_character_id}/main").status_code == 403
+    assert api_client.call("post", "/api/p/sample/admin/reset").status_code == 403
+    assert not helper.groups.filter(pk=group.pk).exists() and not type(helper).objects.get(pk=helper.pk).has_perm("site.view_members")
+    assert leader.characters.filter(pk=leader.main_character_id).exists()
+    # Looking around and harmless writes still work.
+    assert api_client.call("get", f"/api/groups/{group.pk}/members").status_code == 200
+    assert api_client.call("get", "/api/me/characters").status_code == 200
+    assert api_client.call("get", "/api/p/sample/admin/stats").status_code == 200
+    prefs = api_client.call("get", "/api/me/preferences").json()
+    assert api_client.call("put", "/api/me/preferences", prefs).status_code == 200
+
+
+@pytest.mark.django_db
+def test_audit_names_the_admin_while_impersonating(admin_user, user):
+    from django.test import RequestFactory
+
+    from conduit.audit.services import record
+    from conduit.site.impersonation import SESSION_KEY
+
+    request = RequestFactory().get("/")
+    request.user = user
+    request.session = {SESSION_KEY: admin_user.pk}
+    event = record("test.action", "changed something", request=request, details={"x": 1})
+    assert event.actor_type == "user" and event.actor_id == admin_user.pk
+    assert event.actor_name == "Admin Pilot (as Pilot One)" and event.summary.startswith("Admin Pilot (as Pilot One) changed")
+    assert event.details == {"x": 1, "impersonating": user.pk}
+    # Not impersonating: the user themselves, and no marker.
+    request.session = {}
+    event = record("test.action", "changed something", request=request)
+    assert event.actor_id == user.pk and event.actor_name == "Pilot One" and "impersonating" not in event.details
+
+
+@pytest.mark.django_db
+def test_disabling_the_admin_ends_their_impersonation(admin_user, user, api_client):
+    User = type(admin_user)
+
+    def impersonate_then_disable():
+        User.objects.filter(pk=admin_user.pk).update(is_active=True)
+        api_client.force_login(admin_user)
+        assert api_client.call("post", f"/api/admin/impersonate/{user.pk}").status_code == 200
+        User.objects.filter(pk=admin_user.pk).update(is_active=False)
+
+    impersonate_then_disable()
+    assert api_client.call("get", "/api/me/characters").status_code == 401  # the API says so once...
+    assert api_client.call("get", "/api/core/bootstrap").json()["user"] is None  # ...and the session is gone
+    impersonate_then_disable()
+    assert api_client.get("/sso/add-character")["Location"] == "/login"  # pages go to the login page
+    assert api_client.call("get", "/api/core/bootstrap").json()["user"] is None
+
+
 # --- webhooks ---------------------------------------------------------------------------
 
 
@@ -76,7 +146,32 @@ def test_hostname_resolving_to_private_address_is_refused(monkeypatch):
 
 
 def test_public_webhook_url_is_fine():
-    check_url("https://discord.example/api/webhooks/1/abc")
+    assert [str(a) for a in check_url("https://discord.example/api/webhooks/1/abc")] == ["93.184.216.34"]
+
+
+@pytest.mark.parametrize("address, bad", [
+    ("64:ff9b::7f00:1", True),  # NAT64 of 127.0.0.1
+    ("64:ff9b::a00:1", True),  # NAT64 of 10.0.0.1
+    ("64:ff9b::5db8:d822", False),  # NAT64 of 93.184.216.34
+    ("::ffff:0:c0a8:101", True),  # IPv4-translated 192.168.1.1
+    ("::ffff:c0a8:101", True),  # IPv4-mapped 192.168.1.1
+    ("2606:4700::6810:84e5", False),
+    ("fe80::1", True),
+    ("127.0.0.1", True),
+])
+def test_embedded_ipv4_addresses_are_judged_by_the_ipv4_inside(address, bad):
+    assert _bad(ipaddress.ip_address(address)) is bad
+
+
+def test_pin_keeps_host_name_for_tls_and_http():
+    url, headers, extensions = pin("https://hooks.example:8443/x?y=1", [ipaddress.ip_address("93.184.216.34")])
+    assert url == "https://93.184.216.34:8443/x?y=1"
+    assert headers == {"Host": "hooks.example:8443"} and extensions == {"sni_hostname": "hooks.example"}
+    url, headers, extensions = pin("https://hooks.example/x", [ipaddress.ip_address("2606:4700::6810:84e5")])
+    assert url == "https://[2606:4700::6810:84e5]/x" and headers["Host"] == "hooks.example"
+    # An address in the URL, or private addresses allowed (nothing vetted): sent as written.
+    assert pin("https://[2606:4700::1]/x", [ipaddress.ip_address("2606:4700::1")]) == ("https://[2606:4700::1]/x", {}, {})
+    assert pin("https://hooks.example/x", []) == ("https://hooks.example/x", {}, {})
 
 
 @override_settings(CONDUIT_WEBHOOK_ALLOW_PRIVATE=True)
@@ -97,23 +192,44 @@ def test_delivery_rechecks_dns_and_never_stores_reply_bodies(monkeypatch):
 
     hook = Webhook.objects.create(name="H", kind="json", url="https://hooks.example/x")
     calls = []
+    read = []
 
-    def fake_post(url, **kwargs):
-        calls.append(kwargs)
-        return httpx.Response(500, text="root:x:0:0:secret-internal-data")
+    class Body(httpx.SyncByteStream):
+        def __iter__(self):  # noticed if the delivery reads the reply body
+            read.append(1)
+            yield b"root:x:0:0:secret-internal-data"
 
-    monkeypatch.setattr("conduit.events.webhooks.httpx.post", fake_post)
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(500, stream=Body())
+
+    monkeypatch.setattr("conduit.events.webhooks._client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False))
     deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, False])
     hook.refresh_from_db()
-    assert calls[0]["follow_redirects"] is False
+    # Sent to the vetted address, under the real host name, and the reply body is never read.
+    assert str(calls[0].url) == "https://93.184.216.34/x" and calls[0].headers["Host"] == "hooks.example"
+    assert calls[0].extensions["sni_hostname"] == "hooks.example"
+    assert not read
     assert hook.last_error == "HTTP 500" and "secret" not in hook.last_error
+    delivery = WebhookDelivery.objects.get()
+    assert delivery.status == 500 and "secret" not in delivery.error
+
+    # A redirect is reported, not followed.
+    calls.clear()
+    monkeypatch.setattr("conduit.events.webhooks._client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(302, headers={"Location": "https://127.0.0.1/"})),
+                                             follow_redirects=False))
+    deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, False])
+    hook.refresh_from_db()
+    assert hook.last_error == "HTTP 302 (redirects are not followed)"
 
     # DNS now points inside: refused before any request is made.
     monkeypatch.setattr("conduit.events.safety.socket.getaddrinfo",
                         lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.0.10", 443))])
     deliver.apply(args=[hook.pk, {"event": "webhook.test", "at": "x", "data": {}}, True])
     hook.refresh_from_db()
-    assert len(calls) == 1 and "private" in hook.last_error
+    assert not calls and "private" in hook.last_error
 
 
 # --- groups that carry administrator permissions -------------------------------------------
@@ -275,6 +391,53 @@ def test_failed_api_keys_are_rate_limited(client):
 def test_rate_limits_can_be_switched_off(client):
     for _ in range(35):
         assert client.get("/api/v1/me", HTTP_AUTHORIZATION="Bearer evk_bad_x").status_code == 401
+
+
+@pytest.mark.django_db
+def test_django_admin_login_is_rate_limited(client):
+    codes = [client.post("/django-admin/login/", {"username": "x", "password": "y"}).status_code for _ in range(21)]
+    assert 429 not in codes[:20] and codes[20] == 429
+    assert client.get("/django-admin/login/").status_code == 200  # only password attempts count
+
+
+# --- secrets people type in -----------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_non_ascii_secrets_are_refused_not_crashed(user, api_client, client):
+    api_client.force_login(user)
+    assert api_client.call("post", "/api/setup/claim", {"token": "é"}).status_code == 403
+    client.get("/sso/login")  # starts a login flow in the session
+    assert client.get("/sso/callback", {"state": "é", "code": "x"}).status_code == 400
+
+
+@pytest.mark.django_db
+def test_setup_code_is_spent_by_the_claim(user, api_client):
+    from conduit.site.models import SiteSettings
+
+    code = SiteSettings.load().setup_token
+    api_client.force_login(user)
+    assert api_client.call("post", "/api/setup/claim", {"token": code}).status_code == 200
+    assert SiteSettings.load().setup_token == ""  # and no new one is minted while the wizard is still open
+    other = make_user(90000002, "Other Pilot")
+    api_client.force_login(other)
+    assert api_client.call("post", "/api/setup/claim", {"token": code}).status_code == 403
+    other.refresh_from_db()
+    assert not other.is_superuser
+
+
+@pytest.mark.django_db
+def test_back_office_never_shows_the_eve_secret(admin_user, client):
+    from conduit.site.models import SiteSettings
+
+    site = SiteSettings.load()
+    site.esi_secret_key = "s3cret-app-key"
+    site.save()
+    admin_user.is_staff = True
+    admin_user.save()
+    client.force_login(admin_user)
+    page = client.get(f"/django-admin/site/sitesettings/{site.pk}/change/")
+    assert page.status_code == 200 and b"s3cret-app-key" not in page.content
 
 
 # --- security checks ------------------------------------------------------------------------------

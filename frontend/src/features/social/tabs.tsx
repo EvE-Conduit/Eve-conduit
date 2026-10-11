@@ -559,7 +559,9 @@ interface Interaction {
   total: number;
   last: string | null;
   standing: number | null;
-  member: { user_id: number; main: string | null; same_account: boolean } | null;
+  // Who the registered counterparty belongs to, only as far as the viewer may look: a bare `registered` when
+  // the owner's identity is outside their reach.
+  member: { registered: true; user_id?: number; main?: string | null; same_account?: boolean } | null;
 }
 
 export function IntelTab({ header }: { header: CharacterHeader }) {
@@ -585,7 +587,9 @@ export function IntelTab({ header }: { header: CharacterHeader }) {
                     <span className="truncate text-sm font-medium">{i.name}</span>
                     {i.standing != null && <StandingPill value={i.standing} />}
                     {i.member && (
-                      <Badge color={i.member.same_account ? "var(--subtle)" : "#f59e0b"}>{i.member.same_account ? "Same account" : `Member · ${i.member.main ?? "?"}`}</Badge>
+                      <Badge color={i.member.same_account ? "var(--subtle)" : "#f59e0b"}>
+                        {i.member.same_account ? "Same account" : i.member.user_id != null ? `Member · ${i.member.main ?? "?"}` : "Registered here"}
+                      </Badge>
                     )}
                   </div>
                   <div className="mt-1 flex h-1.5 max-w-sm overflow-hidden rounded-none bg-surface-3" style={{ width: `${(i.total / max) * 100}%` }}>

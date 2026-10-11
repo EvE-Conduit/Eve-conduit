@@ -15,10 +15,12 @@ COPY backend/pyproject.toml backend/manage.py backend/README.md ./
 COPY backend/conduit ./conduit
 RUN pip install .
 
-# Plugins: anything listed in requirements-plugins.txt (PyPI names, git URLs or paths relative to /app).
+# Plugins: anything listed in requirements-plugins.txt (PyPI names, git URLs or paths relative to /app). They depend
+# on "conduit" by name, and PyPI has an unrelated package called conduit: the constraint pins it to the one above.
 COPY plugins ./plugins
 COPY requirements-plugins.txt ./
-RUN pip install -r requirements-plugins.txt
+RUN python -I -m conduit.plugins.installer constraints > /tmp/constraints.txt \
+    && pip install -c /tmp/constraints.txt -r requirements-plugins.txt && rm /tmp/constraints.txt
 
 RUN CONDUIT_SECRET_KEY=build python manage.py collectstatic --noinput -v0
 

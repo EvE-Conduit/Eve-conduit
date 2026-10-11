@@ -2,7 +2,7 @@
 
 Every membership change goes through ``add_member``/``remove_member`` so it is audited and
 announced as ``group.joined``/``group.left`` with ``via`` set to self, request, admin, leader,
-api, auto or state.
+api, auto, state (the user's state no longer allows the group) or merge (the account was merged into another).
 """
 
 from __future__ import annotations
@@ -129,9 +129,15 @@ def add_member(user, group: Group, via: str, *, request=None, actor=None, note: 
 def remove_member(user, group: Group, via: str, *, request=None, actor=None, note: str = "") -> bool:
     if not is_member(user, group):
         return False
+    if via == "api":
+        from .services import admin_permissions_in
+
+        # API keys may not strip administrators either (the endpoint checks too; this catches other callers).
+        if admin_permissions_in(group.permissions.all()) and not _may_grant_admin(via, request, actor):
+            raise GroupError(f"{group.name} grants administrator permissions, so only an administrator can remove members", 403)
     user.groups.remove(group)
     AutoGroupGrace.objects.filter(user=user, group=group).delete()
-    who = actor.display_name if actor else ("System" if via in ("auto", "state") else user.display_name)
+    who = actor.display_name if actor else ("System" if via in ("auto", "state", "merge") else user.display_name)
     summary = f"{user.display_name} left {group.name}" if via == "self" else f"{who} removed {user.display_name} from {group.name}"
     if via == "self":
         record("group.left", f"left {group.name}", request=request, target=group, actor=actor)

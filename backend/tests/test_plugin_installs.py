@@ -115,12 +115,26 @@ def test_git_urls_accepted(url):
     "git+https://github.com/a/b --index-url https://evil.example",
     "-e git+https://github.com/a/b",
     "git+https://github.com/a/../../b",
+    "git+https://github.com/a/b@-v1.0.0",
+    "git+https://github.com/a/b@--upload-pack=evil",
+    "git+https://github.com/a/b#subdirectory=/etc",
+    "git+https://github.com/a/b@main#subdirectory=x/../../y",
+    "git+https://github.com/a/b#subdirectory=..\\x",
     "file:///etc/passwd",
     "conduit-thing",
 ])
 def test_git_urls_refused(url):
     with pytest.raises(cat.CatalogError):
         cat.check_url(url)
+
+
+def test_pip_constraints_pin_conduit_to_the_installed_version(capsys):
+    """Every plugin install passes this to pip so "conduit" can never come from PyPI."""
+    from importlib.metadata import version
+
+    assert installer.pip_constraints() == f"conduit=={version('conduit')}\n"
+    assert installer.main(["constraints"]) == 0
+    assert capsys.readouterr().out == installer.pip_constraints()
 
 
 # --- the updater's planning step --------------------------------------------------------------------------
@@ -185,6 +199,29 @@ def test_prepare_refuses_and_reports(tmp_path, dists):
     refused("older than one already used", {"op": "install", "package": "conduit-discord"})
     put_catalog(updates, entry(min_conduit="99.0.0"), serial=300)
     refused("needs EvE Conduit 99.0.0", {"op": "install", "package": "conduit-discord"})
+
+
+def test_prepare_never_reads_a_request_through_a_symlink(tmp_path, dists):
+    """The updater runs prepare as root; the site owns the updates folder."""
+    updates, site = tmp_path / "u", tmp_path / "plugins-site.txt"
+    updates.mkdir()
+    elsewhere = tmp_path / "elsewhere.json"
+    elsewhere.write_text(json.dumps({"id": "c" * 32, "actions": [{"op": "remove", "package": "x"}]}))
+    (updates / installer.REQUEST_FILE).symlink_to(elsewhere)
+    with pytest.raises(installer.RequestError, match="unreadable request"):
+        installer.prepare(updates, site, tmp_path / "serial", None)
+    assert not (updates / installer.REQUEST_FILE).exists() and elsewhere.exists()  # one attempt, link removed
+    # The result file is written through the same door, with the owner the updater asks for.
+    import os
+    import pwd
+
+    (updates / installer.RESULT_FILE).symlink_to(elsewhere)
+    me = pwd.getpwuid(os.getuid()).pw_name
+    assert installer.main(["result", str(updates), "c" * 32, "failed", "nope", "--owner", me]) == 0
+    assert not (updates / installer.RESULT_FILE).is_symlink()
+    assert json.loads((updates / installer.RESULT_FILE).read_text())["message"] == "nope"
+    assert json.loads(elsewhere.read_text())["id"] == "c" * 32
+    assert installer.main(["result", str(updates), "c" * 32, "failed", "nope", "--owner", "no-such-user-here"]) != 0
 
 
 def test_prepare_git_url_and_removal(tmp_path, dists, capsys):

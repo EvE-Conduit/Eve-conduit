@@ -5,6 +5,7 @@ import { BrandMark } from "@/components/layout/Brand";
 import { Alert } from "@/components/ui/feedback";
 import { useBootstrap } from "@/lib/bootstrap";
 import { InsecureWarning } from "@/components/InsecureWarning";
+import { isSitePath } from "@/lib/externalLinks";
 import { SSO_ERRORS } from "@/lib/messages";
 
 const FEATURES = [
@@ -16,7 +17,9 @@ const FEATURES = [
 export function Login() {
   const { user, site, setup } = useBootstrap();
   const [params] = useSearchParams();
-  const next = params.get("next") || "/";
+  // ?next= comes from the address bar: only a path on this site is followed (the router throws on anything else).
+  const wanted = params.get("next") || "/";
+  const next = isSitePath(wanted) ? wanted : "/";
   const error = params.get("error");
   const signedOut = params.has("signed_out");
 

@@ -7,6 +7,7 @@ from a dump on this machine; the program polls for progress. The working file is
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
 import tempfile
@@ -16,7 +17,7 @@ from pathlib import Path
 from django.core.cache import cache
 
 from . import history
-from .staging import Staging
+from .staging import Staging, public_columns
 
 #: How long a run's progress stays readable, and how long an abandoned upload is kept.
 STATE_TTL = 7 * 24 * 3600
@@ -30,11 +31,16 @@ class RunError(Exception):
 
 def run_dir() -> Path:
     """Where uploads wait. The web app writes it and the worker reads it, so both must see the same folder
-    (Docker gives them a shared volume; elsewhere they share the system temp folder)."""
+    (Docker gives them a shared volume; elsewhere they share the system temp folder). Only this user may look
+    inside: the files hold members' mail, wallets and so on while they wait."""
     from django.conf import settings
 
     path = Path(settings.CONDUIT_SEAT_IMPORT_DIR or Path(tempfile.gettempdir()) / "conduit-seat-history")
-    path.mkdir(parents=True, exist_ok=True)
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:  # a volume owned by someone else: leave its mode to them
+        pass
     return path
 
 
@@ -72,7 +78,10 @@ def create() -> str:
         except OSError:
             pass
     run_id = secrets.token_hex(8)
-    Staging(str(_file(run_id))).close()
+    path = _file(run_id)
+    # Made here, not by SQLite, so it is private (0600) from the start whatever the umask.
+    os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+    Staging(str(path)).close()
     _set(run_id, status="uploading", rows=0)
     return run_id
 
@@ -90,6 +99,8 @@ def append(run_id: str, table: str, columns: list[str], rows: list[list], seq: i
         raise RunError(f"{table} isn't a table the import reads")
     if not columns or not all(_NAME.match(c) for c in columns) or len(set(columns)) != len(columns):
         raise RunError("bad column names")
+    if not public_columns(columns):
+        raise RunError("bad column names")  # only token columns: nothing the import reads
     if any(not isinstance(r, list) or len(r) != len(columns) for r in rows):
         raise RunError("every row needs one value per column")
     store = Staging(str(path))

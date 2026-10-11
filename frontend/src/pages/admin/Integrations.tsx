@@ -26,7 +26,9 @@ interface Hook {
   /** Discord: "" (nobody), "here", "everyone" or a role id. */
   mention: string;
   mention_always: boolean;
+  /** Only in the answer that made it (create, new secret): shown once, never listed again. */
   secret: string | null;
+  has_secret: boolean;
   last_status: number | null;
   last_error: string;
   last_delivery_at: string | null;
@@ -174,8 +176,8 @@ export function AdminIntegrations() {
           hook={editing === "new" ? null : editing}
           events={events.data ?? []}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
+          onSaved={(close) => {
+            if (close) setEditing(null);
             refresh();
           }}
         />
@@ -200,7 +202,11 @@ function HealthBadge({ hook }: { hook: Hook }) {
   );
 }
 
-function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; events: EventType[]; onClose: () => void; onSaved: () => void }) {
+function HookEditor({ hook: existing, events, onClose, onSaved }: { hook: Hook | null; events: EventType[]; onClose: () => void; onSaved: (close: boolean) => void }) {
+  // A JSON webhook's signing secret is only ever sent once, in the answer that made it. Creating one keeps this
+  // window open with the secret on show; ``created`` is that webhook from then on.
+  const [created, setCreated] = useState<Hook | null>(null);
+  const hook = existing ?? created;
   const [name, setName] = useState(hook?.name ?? "");
   const [kind, setKind] = useState<Kind>(hook?.kind ?? "discord");
   const [url, setUrl] = useState(hook?.url ?? "");
@@ -222,7 +228,14 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
     },
     onSuccess: (h) => {
       toast.success(hook ? "Webhook saved" : `Webhook ${h.name} created`);
-      onSaved();
+      if (!hook && h.secret) {
+        // Stay open: this is the only time the secret is shown.
+        setCreated(h);
+        setSecret(h.secret);
+        onSaved(false);
+      } else {
+        onSaved(true);
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -230,8 +243,10 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
     mutationFn: () => api.post<Hook>(`/api/admin/webhooks/${hook!.id}/rotate-secret`),
     onSuccess: (h) => {
       setSecret(h.secret);
+      setCopied(false);
       toast.success("New secret created. Update the receiving service.");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const grouped = useMemo(() => {
@@ -261,7 +276,7 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
             Cancel
           </Button>
           <Button variant="primary" loading={save.isPending} disabled={!name.trim() || !url.trim() || (!all && selected.size === 0) || (kind === "discord" && mentionKind === "role" && !/^\d{1,32}$/.test(roleId.trim()))} onClick={() => save.mutate()}>
-            {hook ? "Save" : "Create webhook"}
+            {created ? "Done" : hook ? "Save" : "Create webhook"}
           </Button>
         </>
       }
@@ -333,23 +348,40 @@ function HookEditor({ hook, events, onClose, onSaved }: { hook: Hook | null; eve
           </div>
         )}
 
-        {kind === "json" && hook && secret && (
-          <Field label="Signing secret" hint="Keep this in the receiving service only.">
+        {kind === "json" && hook && (
+          <Field
+            label="Signing secret"
+            hint={
+              secret
+                ? "Shown once: copy it into the receiving service now. It isn't shown again after this window closes."
+                : "Shown once, when the webhook was created. If it was lost, create a new one; the old one stops working at once."
+            }
+          >
             <div className="flex gap-2">
-              <Input readOnly value={secret} className="font-mono" />
+              {secret ? (
+                <>
+                  <Input readOnly value={secret} className="font-mono" />
+                  <Button
+                    size="icon"
+                    aria-label="Copy secret"
+                    onClick={() => {
+                      navigator.clipboard.writeText(secret);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    }}
+                  >
+                    {copied ? <Check /> : <Copy />}
+                  </Button>
+                </>
+              ) : (
+                <Input readOnly value={hook.has_secret ? "••••••••••••••••" : "No secret yet"} className="font-mono text-subtle" />
+              )}
               <Button
-                size="icon"
-                aria-label="Copy secret"
-                onClick={() => {
-                  navigator.clipboard.writeText(secret);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                }}
+                variant="ghost"
+                onClick={() => confirm(`Create a new signing secret for "${hook.name}"? The old one stops working at once; update the receiving service with the new one.`) && rotate.mutate()}
+                loading={rotate.isPending}
               >
-                {copied ? <Check /> : <Copy />}
-              </Button>
-              <Button size="icon" aria-label="Create a new secret" onClick={() => rotate.mutate()} loading={rotate.isPending}>
-                {!rotate.isPending && <RotateCcw />}
+                {!rotate.isPending && <RotateCcw />} New secret
               </Button>
             </div>
           </Field>

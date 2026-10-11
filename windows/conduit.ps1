@@ -251,6 +251,13 @@ function Invoke-ApplyUpdate {
     Remove-Item -LiteralPath $request -Force   # one attempt per request, even if this fails
     try { $req = Get-ConduitUpdateRequest -Json $json }
     catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) rejected request: $_"; return }
+    # A signed release is still an old release: never go backwards.
+    try { Assert-ConduitUpgradeVersion -Root $Root -Version $req.Version }
+    catch {
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) refused request: $_"
+        Write-ConduitUpdateResult -Path $result -Version $req.Version -Status failed -Message "$($_.Exception.Message)"
+        return
+    }
     $work = Join-Path $p.Tmp ('update-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $work | Out-Null
     try {
@@ -347,8 +354,9 @@ function Invoke-ApplyPluginRequest {
         }
         Set-ConduitProgress -Root $Root -Kind plugins -Step install
         Install-ConduitPythonPackage -Root $Root -ReleaseDir $current -MariaDb:(Test-MariaDb) *>&1 | Write-Log
+        $constraints = Get-ConduitPipConstraintFile -Root $Root
         foreach ($url in $reinstall) {
-            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--force-reinstall', '--no-deps', '--disable-pip-version-check', $url) `
+            Invoke-NativeCommand -FilePath $python -ArgumentList @('-m', 'pip', 'install', '--force-reinstall', '--no-deps', '--disable-pip-version-check', '-c', $constraints, $url) `
                 -FailMessage "Fetching $url again failed" | Write-Log
         }
         Set-ConduitProgress -Root $Root -Kind plugins -Step migrate

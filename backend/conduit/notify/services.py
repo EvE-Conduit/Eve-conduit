@@ -65,19 +65,26 @@ def muted(user, category: str) -> bool:
     return bool(prefs and category in prefs.muted_categories)
 
 
+#: Longer titles and bodies are cut, whoever sends them (plugins, the external API...).
+TITLE_MAX = Notification._meta.get_field("title").max_length
+BODY_MAX = 4000
+
+
 def notify(target, title: str, body: str = "", *, link: str = "", level: str = "info",
            category: str = "system", data: dict | None = None, force: bool = False) -> list[Notification]:
     """Send a notification to a user, a user id, or an iterable of either.
 
-    Users who muted ``category`` don't get it unless ``force`` is set.
+    Users who muted ``category`` don't get it unless ``force`` is set. ``title`` is cut to ``TITLE_MAX``
+    characters and ``body`` to ``BODY_MAX``.
     """
     link = safe_link(link)
+    body = body[:BODY_MAX]
     out = []
     for user in _users(target):
         if not force and muted(user, category):
             continue
         n = Notification.objects.create(
-            user=user, title=title[:200], body=body, link=link[:500], level=level, category=category[:40], data=data or {}
+            user=user, title=title[:TITLE_MAX], body=body, link=link[:500], level=level, category=category[:40], data=data or {}
         )
         out.append(n)
         bus.emit("notification.created", user_id=user.pk, user=user.display_name, title=n.title, summary=body[:500],

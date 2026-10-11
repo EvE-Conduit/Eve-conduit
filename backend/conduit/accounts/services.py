@@ -105,6 +105,10 @@ def can_move_characters(actor: User, source: User, target: User) -> str | None:
         return "You don't have permission to move characters between accounts"
     if source.pk == target.pk:
         return "Pick a different account to move them to"
+    if target.pk == actor.pk:
+        # Otherwise anyone managing access could pull a member's characters (and their logins and synced data) into
+        # their own account and read them without a snooper entry.
+        return "Ask another administrator to move characters into your own account"
     if not target.is_active:
         return "That account is switched off"
     if (source.is_superuser or target.is_superuser) and not actor.is_superuser:
@@ -202,6 +206,12 @@ def move_characters(actor: User, source: User, target: User, character_ids: list
     moved_main = source.main_character_id in ids
     remaining = list(Character.objects.filter(user=source).order_by("name"))
     emptied = not remaining
+    if emptied:
+        from conduit.access.groups import remove_member
+
+        # One by one (while the account still has its name), so each leaves an audit entry and a group.left event.
+        for group in list(source.groups.all()):
+            remove_member(source, group, "merge", request=request, actor=actor, note="account merged")
     fields = []
     if moved_main:
         source.main_character = remaining[0] if remaining else None
@@ -211,8 +221,6 @@ def move_characters(actor: User, source: User, target: User, character_ids: list
         fields.append("is_active")
     if fields:
         source.save(update_fields=fields)
-    if emptied:
-        source.groups.clear()
     # Merging (every character moved): optionally the person's records too, so nothing stays on the dead account.
     records = move_records(source, target) if emptied and move_records_too else None
     if target.main_character_id is None:

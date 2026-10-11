@@ -14,7 +14,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from . import bus
-from .safety import UnsafeUrl, check_url
+from .safety import UnsafeUrl, check_url, pin
 
 log = logging.getLogger(__name__)
 LEVEL_COLORS = {"info": 0x38BDF8, "success": 0x34D399, "warning": 0xFBBF24, "danger": 0xF43F5E}
@@ -88,6 +88,22 @@ def sign(secret: str, body: bytes) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
+def _client() -> httpx.Client:
+    # No redirects: a 3xx could bounce the request to an internal address.
+    return httpx.Client(timeout=10, follow_redirects=False)
+
+
+def send(url: str, body: bytes, headers: dict[str, str]) -> int:
+    """POST ``body`` to ``url`` and return the status. The host is checked and resolved first, and the request
+    goes to the address that was checked. Only the status comes back: the reply body is never read, so an admin
+    can't use a webhook to read whatever the URL returns."""
+    addresses = check_url(url)
+    target, pinned_headers, extensions = pin(url, addresses)
+    with _client() as client, client.stream("POST", target, content=body, headers={**headers, **pinned_headers},
+                                            extensions=extensions) as resp:
+        return resp.status_code
+
+
 @bus.on("*")
 def _queue(event: bus.Event):
     from .models import Webhook
@@ -114,13 +130,9 @@ def deliver(self, hook_id: int, event: dict, retry: bool = True) -> str:
     started = time.monotonic()
     status, error, unsafe = None, "", False
     try:
-        check_url(hook.url)
-        # No redirects: a 3xx could bounce the request to an internal address.
-        resp = httpx.post(hook.url, content=body, headers=headers, timeout=10, follow_redirects=False)
-        status = resp.status_code
-        if not resp.is_success:
-            # Only the status, never the reply body: it would let admins read whatever the URL returns.
-            error = f"HTTP {status}" + (" (redirects are not followed)" if resp.is_redirect else "")
+        status = send(hook.url, body, headers)
+        if not 200 <= status < 300:
+            error = f"HTTP {status}" + (" (redirects are not followed)" if 300 <= status < 400 else "")
     except UnsafeUrl as exc:
         error, unsafe = str(exc)[:300], True
     except httpx.TimeoutException:

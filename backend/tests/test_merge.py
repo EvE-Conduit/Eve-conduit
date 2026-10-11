@@ -46,6 +46,10 @@ def test_moving_every_character_merges_the_accounts(accounts, api_client, django
     assert main.main_character_id == 90000001  # the main account keeps its main
     assert seen and seen[0].payload["from_user_id"] == second.pk and seen[0].payload["to_user_id"] == main.pk
     assert AuditEvent.objects.filter(action="account.characters_moved").exists()
+    # Leaving its groups is on the record like any other removal, naming who merged the accounts.
+    left = AuditEvent.objects.get(action="group.member_removed")
+    assert left.details == {"user_id": second.pk, "user": "Pilot Two", "via": "merge"} and left.target_id == str(caps.pk)
+    assert left.actor_id == officer.pk and "(account merged)" in left.summary
     # The switched-off account no longer shows among members.
     api_client.force_login(give(officer, "view_members"))
     names = [m["name"] for m in api_client.call("get", "/api/admin/members").json()["items"]]
@@ -74,8 +78,14 @@ def test_moves_cant_be_used_to_take_over_accounts(accounts, api_client, admin_us
     resp = api_client.call("post", url, {"target": main.pk, "characters": [90000002]})
     assert resp.status_code == 403 and "manage_plugins" in resp.json()["detail"]
     # Someone else's characters, or none: no.
-    assert api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
-                           {"target": officer.pk, "characters": [90000001]}).status_code == 400
+    assert api_client.call("post", f"/api/admin/members/{main.pk}/move-characters",
+                           {"target": second.pk, "characters": [90000002]}).status_code == 400
+    # Into their own account: no, not even for administrators (they could then read the characters unlogged).
+    resp = api_client.call("post", url, {"target": officer.pk, "characters": [90000002]})
+    assert resp.status_code == 403 and "your own account" in resp.json()["detail"]
+    api_client.force_login(admin_user)
+    assert api_client.call("post", url, {"target": admin_user.pk, "characters": [90000002]}).status_code == 403
+    api_client.force_login(officer)
     assert Character.objects.get(pk=90000002).user_id == second.pk
     # An administrator may.
     api_client.force_login(admin_user)

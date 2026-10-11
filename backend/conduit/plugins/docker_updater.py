@@ -9,6 +9,7 @@ containers (``CONDUIT_PLUGINS_DIR``, ``/srv/plugins``)::
     installed.txt      the list ``venv`` was built from
     generation         changes when ``venv`` does; the worker and beat watch it and restart
     updates/           the site's request, result and progress files and the signed catalog
+    updates/catalogs/  the signed catalogs earlier requests were planned from (see :func:`trusted_lines`)
 
 How a request goes through, without anything privileged and without rebuilding:
 
@@ -21,6 +22,9 @@ How a request goes through, without anything privileged and without rebuilding:
    the lock, then see nothing to do. If pip fails, the old list is put back and the previous venv keeps serving.
 3. The worker and beat notice the new ``generation`` and exit; their containers restart on the new venv. The
    web container runs the migrations and ``finish`` reports the result to the site.
+
+The volume is writable by the web process, so ``sync`` doesn't take ``plugins-site.txt`` at its word: it installs
+a line only when a signed catalog pins it, or when it is a git URL and the container's environment allows those.
 
 Free of Django on purpose: it runs before the app does (``python -I -m conduit.plugins.docker_updater sync DIR``).
 """
@@ -36,16 +40,19 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from . import catalog as cat
 from . import installer
 
 log = logging.getLogger(__name__)
 
 SITE_FILE = "plugins-site.txt"
+CATALOG_ARCHIVE = "catalogs"
 WATCH_INTERVAL = 20  # seconds between the worker's and beat's looks at ``generation``
 PIP_TIMEOUT = 900
 
@@ -125,6 +132,7 @@ def apply(root: Path | str, env_file: str | None = None) -> dict:
     p = Paths(root)
     p.updates.mkdir(parents=True, exist_ok=True)
     out = installer.prepare(p.updates, p.site_file, p.serial, env_file)
+    _keep_catalog(p)
     if p.site_file.exists():
         shutil.copyfile(p.site_file, p.site_bak)
     else:
@@ -134,6 +142,65 @@ def apply(root: Path | str, env_file: str | None = None) -> dict:
     installer.write_result(p.updates, out["id"], "running", f"Installing: {out['summary']}. The containers are restarting.")
     _progress(p, "install")
     _note(p, f"request {out['id']}: {out['summary']}")
+    return out
+
+
+def _keep_catalog(p: Paths) -> None:
+    """Keep the signed catalog this request was planned from. The site replaces ``plugin-catalog.json`` whenever
+    it fetches a newer one, and a catalog lists only each plugin's latest version, so without the copy a later
+    ``sync`` could no longer vouch for the pins written now. Quietly skipped when there is no valid catalog."""
+    try:
+        data = (p.updates / installer.CATALOG_FILE).read_bytes()
+        sig = (p.updates / installer.CATALOG_SIG).read_bytes()
+        serial = cat.load_verified(data, sig)["serial"]
+    except (OSError, cat.CatalogError):
+        return
+    folder = p.updates / CATALOG_ARCHIVE
+    folder.mkdir(exist_ok=True)
+    (folder / f"{serial}.json").write_bytes(data)
+    (folder / f"{serial}.json.sig").write_bytes(sig)
+
+
+def _signed_requirements(p: Paths) -> set[str]:
+    """Every requirement line a signed catalog on the volume pins: the current one and the archived ones."""
+    out: set[str] = set()
+    paths = [p.updates / installer.CATALOG_FILE, *sorted((p.updates / CATALOG_ARCHIVE).glob("*.json"))]
+    for path in paths:
+        try:
+            parsed = cat.load_verified(path.read_bytes(), path.with_name(path.name + ".sig").read_bytes())
+        except FileNotFoundError:
+            continue
+        except (OSError, cat.CatalogError) as exc:
+            _note(p, f"ignoring {path.name}: {exc}")
+            continue
+        out.update(e["requirement"] for e in parsed["plugins"])
+    return out
+
+
+def _is_git_url(line: str) -> bool:
+    try:
+        return cat.check_url(line) == line
+    except cat.CatalogError:
+        return False
+
+
+def trusted_lines(p: Paths) -> list[str]:
+    """The lines of ``plugins-site.txt`` pip may install. The web process can write that file (and everything else
+    on the volume), so a line counts only when a signed catalog pins it exactly, or when it is a git URL and this
+    container's environment allows those (``CONDUIT_PLUGIN_URLS`` from docker-compose.yml, never from a file on
+    the volume). Anything else is logged and left out; the rest still installs."""
+    lines = installer.read_site_file(p.site_file)
+    if not lines:
+        return []
+    pinned = _signed_requirements(p)
+    allow_urls = installer.read_env_flag(None, "CONDUIT_PLUGIN_URLS")
+    out = []
+    for line in lines:
+        if line in pinned or (allow_urls and _is_git_url(line)):
+            out.append(line)
+        else:
+            _note(p, f"skipping {line!r}: not pinned by a signed plugin catalog"
+                  + ("" if allow_urls else ", and git URLs are off (CONDUIT_PLUGIN_URLS)"))
     return out
 
 
@@ -188,7 +255,7 @@ def sync(root: Path | str, python: str = sys.executable, run=_run) -> bool:
 
 
 def _sync_locked(p: Paths, python: str, run) -> bool:
-    lines = installer.read_site_file(p.site_file)
+    lines = trusted_lines(p)
     want = _text(lines)
     try:
         have = p.installed.read_text(encoding="utf-8")
@@ -202,8 +269,14 @@ def _sync_locked(p: Paths, python: str, run) -> bool:
     try:
         run([python, "-m", "venv", "--system-site-packages", "--without-pip", str(p.venv_new)], p)
         if lines:
-            run([str(p.venv_new / "bin" / "python"), "-m", "pip", "install", "--quiet", "--no-input",
-                 "--disable-pip-version-check", "-r", str(p.site_file)], p)
+            # pip gets the checked lines, not the file itself, and the constraint that keeps "conduit" local.
+            with tempfile.TemporaryDirectory(prefix="conduit-plugins-") as tmp:
+                requirements = Path(tmp, "plugins.txt")
+                requirements.write_text(want, encoding="utf-8")
+                constraints = Path(tmp, "constraints.txt")
+                constraints.write_text(installer.pip_constraints(), encoding="utf-8")
+                run([str(p.venv_new / "bin" / "python"), "-m", "pip", "install", "--quiet", "--no-input",
+                     "--disable-pip-version-check", "-c", str(constraints), "-r", str(requirements)], p)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         shutil.rmtree(p.venv_new, ignore_errors=True)
         _note(p, f"pip failed: {exc!r}; keeping the previous plugins")
@@ -236,7 +309,7 @@ def finish(root: Path | str) -> None:
     job = _read_job(p)
     if not job:
         return
-    lines = installer.read_site_file(p.site_file)
+    lines = trusted_lines(p)
     try:
         have = p.installed.read_text(encoding="utf-8")
     except OSError:

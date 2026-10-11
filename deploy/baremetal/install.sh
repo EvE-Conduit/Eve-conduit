@@ -215,7 +215,10 @@ step "Installing EvE Conduit $VERSION"
 EXTRAS=""
 [[ $DB == mariadb ]] && EXTRAS="[mysql]"
 (cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q "./backend$EXTRAS")
-(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q -r "$CONDUIT_ETC/plugins.txt")
+# Plugins depend on "conduit" by name, and PyPI has an unrelated package called conduit: pin it to the backend just
+# installed so pip never fetches that one instead (the conduit script keeps this file up to date on upgrades).
+"$CONDUIT_HOME/venv/bin/python" -I -m conduit.plugins.installer constraints > "$CONDUIT_HOME/venv/pip-constraints.txt"
+(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q -c "$CONDUIT_HOME/venv/pip-constraints.txt" -r "$CONDUIT_ETC/plugins.txt")
 cp -a "$RELEASE_DIR/web/." "$CONDUIT_WWW/web/"
 conduit manage migrate --noinput
 conduit manage collectstatic --noinput -v0
