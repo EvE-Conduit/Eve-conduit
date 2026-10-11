@@ -3,7 +3,7 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.43
 
 ### Added
 - **Docker installs install plugins from the website too.** Administration → Plugins → Browse works the same as on
