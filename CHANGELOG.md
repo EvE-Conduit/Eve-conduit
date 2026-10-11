@@ -3,7 +3,7 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.42
 
 ### Added
 - **`conduit uninstall` on Linux.** Removes a bare-metal install the way the Windows one does: it asks whether to
