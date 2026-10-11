@@ -7,12 +7,12 @@ system-wide (no winget, no Visual C++ or .NET installers).
 
 Outside that folder, only Windows' own registrations change: the EvE Conduit services, one firewall rule,
 the folder added to the system PATH (for the `conduit` command), the tray panel's sign-in entry and the
-"Apps & features" entry. The [uninstaller](#uninstalling) removes all of them.
+"Apps & features" entry. The uninstaller (`conduit uninstall`) removes all of them.
 
 > **Status: experimental.** Built and tested component by component (see [Testing](#testing)), but
 > not yet run on a real Windows machine. Two parts of the stack aren't officially supported on Windows
 > by their makers (see [Limitations](#limitations)). For the most proven setup on Windows, use
-> [Docker Desktop](../docs/install-windows-docker.md).
+> [Docker Desktop](../docs/install-docker.md#windows-with-docker-desktop).
 
 ## How it differs from Linux
 
@@ -26,77 +26,11 @@ the folder added to the system PATH (for the `conduit` command), the tray panel'
 | Web server and HTTPS | nginx + certbot | **Caddy** (automatic Let's Encrypt) |
 | Admin command | `conduit` (bash) | `conduit` (PowerShell) |
 
-## Requirements
+## Installing
 
-- Windows 10 1809+ / Windows 11, or Windows Server 2019+ (64-bit)
-- 4 GB RAM (8 GB recommended), and 5 GB free on the drive you install to
-- Internet access during installation (downloads about 500 MB of components)
-- A domain pointing at this machine, with the web ports reachable from the internet (router port
-  forwarding at home). **No domain?** Enter the machine's public IPv4 address instead (e.g. `203.0.113.7`, or
-  `-Domain 203.0.113.7`): Let's Encrypt issues an IP address certificate, valid six days and renewed automatically
-  by Caddy. The address must not change (ask your provider for a static IP): the EVE login's callback URL and the certificate are tied to it. Private addresses (192.168.x.x, 10.x.x.x) and connections behind carrier-grade NAT can't get a certificate; use plain HTTP for a site that's only on your local network.
-
-## Quick install
-
-1. Download **`EvE-Conduit-Setup-X.Y.Z.exe`** from the
-   [releases page](https://github.com/EvE-Conduit/Eve-conduit/releases) and run it. Windows asks for
-   administrator rights. The setup isn't code-signed yet, so SmartScreen may warn about an unrecognised
-   app: choose **More info → Run anyway**.
-2. The wizard asks for the install folder, your domain and email, HTTPS or plain HTTP, PostgreSQL or
-   MariaDB, the ports (checked against what's already in use), and optionally your EVE application's
-   Client ID and Secret Key. It shows the callback URL to register at
-   <https://developers.eveonline.com/applications>.
-3. Installing takes about 5 to 15 minutes; the wizard shows each step. The finish page shows your site's
-   address and the one-time **setup code**: open the site, sign in with your main character and enter it.
-
-If something fails, the wizard shows the last lines of the log; the full log is
-`<install folder>\logs\installer.log` (or `%TEMP%\EvE-Conduit-installer.log` if the folder wasn't
-created). Running a newer setup on a machine that already has EvE Conduit offers to upgrade it. See
-[installer/README.md](installer/README.md) for silent installs and how the setup is built.
-
-### Quick install with PowerShell (alternative)
-
-The setup runs the same `install.ps1` underneath; you can also run it yourself.
-
-1. Download `eve-conduit-X.Y.Z-windows.zip`. In PowerShell, **unblock it before extracting** so Windows
-   doesn't block the scripts:
-   ```powershell
-   Unblock-File $HOME\Downloads\eve-conduit-X.Y.Z-windows.zip
-   Expand-Archive $HOME\Downloads\eve-conduit-X.Y.Z-windows.zip -DestinationPath $HOME\Downloads
-   ```
-2. Open **PowerShell as Administrator** and run:
-   ```powershell
-   cd $HOME\Downloads\eve-conduit-X.Y.Z-windows
-   Set-ExecutionPolicy -Scope Process Bypass
-   .\windows\install.ps1 -Domain auth.example.com -Email you@example.com
-   ```
-3. Answer the questions (press Enter to accept each suggestion):
-   ```
-   Where should EvE Conduit be installed?
-   Install folder [C:\EvE-Conduit]: D:\EvE-Conduit
-
-   Which ports should EvE Conduit use? Press Enter to keep the suggested port.
-     Web server, HTTP (public) [80]:
-     Web server, HTTPS (public) [443]:
-     EvE Conduit application (this machine only) [8000]:
-     Garnet cache and task queue (this machine only) [6379]:
-     Postgres database (this machine only) [5432]:
-   ```
-   If you choose web ports other than 80/443, it also asks whether your router forwards the standard
-   ports to them (see [Ports](#ports)). It then shows a summary and asks you to confirm.
-4. The installer prints a **setup code**. Register the EVE application with the callback URL it shows,
-   put the Client ID and Secret Key in `<install folder>\config\conduit.env`, then run
-   `conduit restart` in an Administrator terminal.
-5. Open your site, sign in with your main character and enter the setup code.
-
-**Options:**
-- `-Database MariaDB` installs MariaDB instead of PostgreSQL.
-- `-DatabaseUrl postgres://...` uses an existing database server instead of installing one.
-- `-NoTls` serves plain HTTP (on a LAN, or behind another proxy).
-- `-EsiClientId` / `-EsiSecret` set the EVE application details up front.
-- `-InstallRoot`, `-HttpPort`, `-HttpsPort`, `-AppPort`, `-CachePort`, `-DatabasePort` and
-  `-PublicPorts Standard|AsChosen` answer the questions in advance.
-- `-Yes` asks nothing. It requires `-InstallRoot`; any ports not given use the defaults.
+The step-by-step guide for installing, first login, day-to-day commands, backups, updating and uninstalling
+is [docs/install-windows.md](../docs/install-windows.md). This page is the technical reference behind it:
+what the installer does, the folder layout, the ports, doing it by hand and what has been tested.
 
 ## Choosing the install folder
 
@@ -198,7 +132,7 @@ To do it by hand, follow the installer's steps above. Everything runs from the i
   `<folder>\bin\postgres`. Then run `initdb -D <folder>\data\postgres -U postgres --pwfile=... --encoding=UTF8
   --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C --auth=scram-sha-256 -c listen_addresses=127.0.0.1 -c port=5432`,
   and create the `conduit` user and database as in
-  [the bare-metal guide, step 6](../docs/install-baremetal.md#6-create-the-database).
+  [the Linux guide, manual install step 6](../docs/install-linux.md#6-create-the-database).
 - **Visual C++ DLLs:** if PostgreSQL or Garnet won't start with a missing `msvcp140.dll` or
   `vcruntime140.dll`, copy those DLLs next to their `.exe`.
 - **Configuration:** copy `windows\config\conduit.env.example` to `<folder>\config\conduit.env` and fill it
@@ -207,27 +141,6 @@ To do it by hand, follow the installer's steps above. Everything runs from the i
   then the same with `collectstatic --noinput` and `conduit_init`.
 - **Services:** for each `windows\winsw\<id>.xml`, replace the `{{...}}` placeholders, save it as
   `<folder>\services\<id>.xml` next to a copy of `WinSW-x64.exe` named `<id>.exe`, and run `<id>.exe install`.
-
-## Running EvE Conduit
-
-In an **Administrator** terminal:
-
-| Task | Command |
-|---|---|
-| Status and ports | `conduit status` |
-| Ports only | `conduit ports` |
-| Restart (e.g. after editing `conduit.env`) | `conduit restart` (or `conduit restart web`) |
-| Follow a log | `conduit logs web` (or `worker`, `beat`, `caddy`, `garnet`, `postgres`/`mariadb`) |
-| Any Django command | `conduit manage <command>` |
-| Setup code again | `conduit setup-code` |
-| Back up database and config | `conduit backup` |
-| Install a plugin | `conduit plugin install conduit-something` |
-| List plugins | `conduit plugin list` |
-
-| Open the tray control panel | `conduit tray` (`conduit tray on` / `off`: start it at sign-in or not) |
-| Remove EvE Conduit | `conduit uninstall` |
-
-The services also show up in **services.msc** as "EvE Conduit ...".
 
 ## Tray control panel
 
@@ -256,43 +169,6 @@ its port and details, with *Restart selected*, *Restart all*, *Open site* and *S
 
 The panel runs as the signed-in user and only reads service states and ports, so it needs no special
 rights; anything that changes the services asks for administrator rights.
-
-## Uninstalling
-
-Use **Settings → Apps → EvE Conduit → Uninstall**, or in an Administrator terminal:
-
-```powershell
-conduit uninstall
-```
-
-It asks what to remove:
-
-1. **Everything**, including the database. It first offers to save a final backup to a folder you
-   choose outside the install folder, then asks you to type `DELETE`.
-2. **The programs only.** It keeps `config` (settings and passwords), `data` (the database files) and
-   `backups` in the install folder.
-
-It then closes the tray panel, stops and removes the services, removes the firewall rule, the PATH
-entry, the sign-in entry and the Apps & features entry, and deletes the files. Anything it can't remove
-(say, a file still in use) is listed at the end.
-
-For scripts: `conduit uninstall -Mode All -BackupTo D:\Backups -Yes` (or `-Mode KeepData`, `-NoBackup`).
-
-## Updating
-
-Run the newer `EvE-Conduit-Setup-X.Y.Z.exe`: it finds the existing install and offers to upgrade it, which
-runs the same `conduit upgrade` as below. Or, in an Administrator terminal:
-
-```powershell
-Unblock-File .\eve-conduit-X.Y.Z-windows.zip
-conduit upgrade .\eve-conduit-X.Y.Z-windows.zip
-```
-
-This backs up first, stops the app (Windows locks files that are in use), installs the new release
-next to the old one, migrates, publishes the new front end and starts everything again. If installing
-fails, it puts the running release back and restarts it. If an upgrade stops half-way after switching releases (e.g. a service was down), fix the cause and run
-`conduit repair` to redo the remaining steps. `conduit rollback` returns to the previous
-release; database migrations aren't undone, so restore the backup if the old version won't start.
 
 ## Limitations
 
