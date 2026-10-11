@@ -22,8 +22,8 @@ first time:
 | [Linux without Docker](docs/install-linux.md) | Ubuntu, Debian or Rocky/Alma/RHEL with PostgreSQL or MariaDB, Supervisor and nginx, in the style of the Alliance Auth and SeAT manual installs. An install script does it all. |
 | [Windows](docs/install-windows.md) | Windows 10/11 or Windows Server as Windows services, with no Docker or WSL, from a setup wizard. Experimental. |
 
-Whichever you choose, you need a domain name pointing at the machine (or a fixed public IP address), ports
-80 and 443 open, and an EVE application registered at <https://developers.eveonline.com/applications>.
+Whichever you choose, you need a domain name pointing at the machine (or a fixed public IP address; see
+[docs/dns.md](docs/dns.md) if you have never set up a DNS record), ports 80 and 443 open, and an EVE application registered at <https://developers.eveonline.com/applications>.
 The first person to sign in and enter the one-time setup code becomes the administrator; a wizard then
 walks them through branding and plugins.
 
