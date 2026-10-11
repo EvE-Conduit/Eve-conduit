@@ -2,7 +2,8 @@
 
 Like EvE Conduit updates, the site never changes its own code. It fetches and verifies the signed catalog,
 leaves a request for the install's privileged updater (see ``conduit.plugins.installer``), and picks up the
-result. Docker and development installs can't do that; they get the lines to add to requirements-plugins.txt.
+result. On Docker the web container applies the request itself into a plugins volume and the containers restart
+(``conduit.plugins.docker_updater``). Development checkouts get the lines to install by hand.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from conduit import __version__
-from conduit.updates.services import INSTRUCTIONS, can_install, kind, progress, updates_dir
+from conduit.updates.services import kind, progress, updates_dir
 
 from . import catalog as cat
 from . import registry
@@ -38,9 +39,14 @@ CATALOG_MAX_AGE = timedelta(hours=6)
 STALE_REQUEST = timedelta(minutes=10)
 BUSY = (PluginInstaller.Job.REQUESTED, PluginInstaller.Job.RUNNING)
 PLUGIN_INSTRUCTIONS = {
-    "docker": "Add these lines to requirements-plugins.txt, then run: docker compose up -d --build",
     "dev": "Install them into your virtualenv: pip install <line>, then restart the server.",
 }
+
+
+def can_install() -> bool:
+    """Whether this install can add and remove plugins from the website. Unlike releases, Docker installs can:
+    plugins go into a volume, not the image."""
+    return kind() in ("windows", "baremetal", "docker")
 
 
 class InstallError(Exception):
@@ -194,7 +200,7 @@ def _switch_off(packages_to_remove: list[str]) -> None:
 def request(user, actions: list[dict], *, enable: bool = False, automatic: bool = False) -> PluginInstaller:
     """Ask the updater to install or remove plugins. ``enable`` switches new catalog plugins on afterwards."""
     if not can_install():
-        raise InstallError(INSTRUCTIONS.get(kind(), "This install can't install plugins by itself."))
+        raise InstallError(PLUGIN_INSTRUCTIONS.get(kind(), "This install can't install plugins by itself."))
     state = PluginInstaller.objects.select_for_update().get(pk=PluginInstaller.load().pk)
     if state.job_state in BUSY:
         raise InstallError("The updater is already working on plugins; wait for it to finish")
@@ -223,7 +229,21 @@ def request(user, actions: list[dict], *, enable: bool = False, automatic: bool 
 
     record("plugin.install_requested", f"asked the updater for: {state.job_summary}", actor=user,
            target_type="plugin", details={"actions": actions, "automatic": automatic})
+    if kind() == "docker":
+        _apply_on_docker(state)
     return state
+
+
+def _apply_on_docker(state: PluginInstaller) -> None:
+    """No privileged updater on Docker: plan the change now and restart the containers once this request's
+    response is out. A refused plan raises before anything changes (the transaction rolls the job back)."""
+    from . import docker_updater, installer
+
+    try:
+        docker_updater.apply(settings.CONDUIT_PLUGINS_DIR)
+    except installer.RequestError as exc:
+        raise InstallError(str(exc)) from None
+    transaction.on_commit(docker_updater.restart_web)
 
 
 def cancel(state: PluginInstaller | None = None) -> PluginInstaller:
@@ -254,9 +274,12 @@ def sync_result(state: PluginInstaller) -> PluginInstaller:
     elif (state.job_state == PluginInstaller.Job.REQUESTED and state.job_requested_at
           and timezone.now() - state.job_requested_at > STALE_REQUEST
           and not state.job_message):
-        state.job_message = ("The updater hasn't picked up the request yet. On Windows, check that the "
-                             "\"EvE Conduit updater\" scheduled task exists (reinstall to add it); on Linux, "
-                             "that /etc/cron.d/conduit-update is in place.")
+        state.job_message = (
+            "The containers haven't restarted with the change yet. Check docker compose ps and docker compose logs web."
+            if kind() == "docker" else
+            "The updater hasn't picked up the request yet. On Windows, check that the "
+            "\"EvE Conduit updater\" scheduled task exists (reinstall to add it); on Linux, "
+            "that /etc/cron.d/conduit-update is in place.")
         state.save(update_fields=["job_message"])
     return state
 

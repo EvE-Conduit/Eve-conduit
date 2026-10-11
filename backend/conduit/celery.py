@@ -1,7 +1,7 @@
 import os
 
 from celery import Celery
-from celery.signals import after_setup_logger, worker_ready
+from celery.signals import after_setup_logger, beat_init, worker_ready
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "conduit.settings")
 
@@ -20,6 +20,19 @@ def _keep_service_log(logger, **kwargs):
         from conduit.audit.logging import DatabaseLogHandler
 
         logger.addHandler(DatabaseLogHandler(level="WARNING"))
+
+
+@worker_ready.connect
+@beat_init.connect
+def _watch_plugins(sender=None, **kwargs):
+    """On Docker, plugins installed from Administration land on a shared volume; restart when they change so
+    this process picks them up (the container comes back on the new virtualenv)."""
+    from django.conf import settings
+
+    if settings.CONDUIT_INSTALL_KIND == "docker" and settings.CONDUIT_PLUGINS_DIR:
+        from conduit.plugins.docker_updater import start_watcher
+
+        start_watcher(settings.CONDUIT_PLUGINS_DIR)
 
 
 @worker_ready.connect

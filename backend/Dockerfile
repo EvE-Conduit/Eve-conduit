@@ -8,6 +8,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# git: plugins installed from Administration may come from git URLs (CONDUIT_PLUGIN_URLS).
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 COPY backend/pyproject.toml backend/manage.py backend/README.md ./
 COPY backend/conduit ./conduit
 RUN pip install .
@@ -20,9 +23,10 @@ RUN pip install -r requirements-plugins.txt
 RUN CONDUIT_SECRET_KEY=build python manage.py collectstatic --noinput -v0
 
 COPY backend/docker-entrypoint.sh /usr/local/bin/conduit
-# /srv/seat-import: owned by conduit so the shared volume mounted there (docker-compose.yml) starts writable.
+# /srv/seat-import and /srv/plugins: owned by conduit so the shared volumes mounted there (docker-compose.yml) start
+# writable. staticfiles too: the web container collects plugins' static files again after installing plugins.
 RUN chmod +x /usr/local/bin/conduit && useradd --system --uid 1000 conduit \
-    && mkdir -p /srv/seat-import && chown conduit /srv/seat-import
+    && mkdir -p /srv/seat-import /srv/plugins && chown conduit /srv/seat-import /srv/plugins /app/staticfiles
 USER conduit
 
 EXPOSE 8000

@@ -29,14 +29,16 @@ results, group rules and ESI scopes.
 
 ## Installing
 
-- **From the website (Windows and bare metal):** Administration → Plugins → Browse lists the official plugins.
-  Tick the ones you want and install them together; each can update itself when a new version is published.
-  The install's updater (the same one that installs EvE Conduit updates) starts within seconds,
-  takes a backup first and puts things back if anything fails. Plugins from other git repositories can be
-  installed there too once the server owner sets `CONDUIT_PLUGIN_URLS=true` in the config file.
-- **On the server:** add the package (PyPI name, git URL or path) to `requirements-plugins.txt` for Docker, or
-  run `conduit plugin install <package>` on bare metal and Windows. Then switch it on under
-  Administration → Plugins.
+- **From the website:** Administration → Plugins → Browse lists the official plugins. Tick the ones you want
+  and install them together; each can update itself when a new version is published. On Windows and Linux the
+  install's updater (the same one that installs EvE Conduit updates) starts within seconds, takes a backup first
+  and puts things back if anything fails. On Docker the containers restart and install them into the `plugins`
+  volume on the way up (`backend/conduit/plugins/docker_updater.py`), falling back to the previous plugins if
+  pip fails. Plugins from other git repositories can be installed there too once the server owner sets
+  `CONDUIT_PLUGIN_URLS=true` in the config file.
+- **On the server:** add the package (PyPI name, git URL or path) to `requirements-plugins.txt` and rebuild for
+  Docker, or run `conduit plugin install <package>` on bare metal and Windows. Then switch it on under
+  Administration → Plugins. Plugins installed this way can't be removed from the website.
 
 ## Publishing (maintainers)
 

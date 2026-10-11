@@ -26,8 +26,8 @@ hand, for people who want to see exactly what happens.
 | `db` | PostgreSQL 17, the database |
 | `redis` | Redis 7, the cache and job queue |
 
-The database, Redis data and HTTPS certificates live in Docker volumes (`db_data`, `redis_data`, `caddy_data`),
-so they survive rebuilds and updates.
+The database, Redis data, HTTPS certificates and plugins installed from the website live in Docker volumes
+(`db_data`, `redis_data`, `caddy_data`, `plugins`), so they survive rebuilds and updates.
 
 ## What you need
 
@@ -266,20 +266,22 @@ with `docker compose down`.
 
 ## Installing plugins
 
-Plugins add pages and features (recruitment, SRP, fleets, Discord, timers and so on). On a Docker install
-they are built into the image, so adding one means a rebuild:
+Plugins add pages and features (recruitment, SRP, fleets, Discord, timers and so on). They are installed
+from the website, the same as on Linux and Windows:
 
-1. In the browser, open **Administration → Plugins → Browse**. It lists the official plugins and shows,
-   for each one, the line to add to `requirements-plugins.txt`.
-2. Add that line to `requirements-plugins.txt` in the EvE Conduit folder (one plugin per line; the file
-   explains the format). PyPI package names, git URLs and local paths all work.
-3. Rebuild and restart:
-   ```bash
-   docker compose up -d --build
-   ```
-4. The new plugin appears switched off under **Administration → Plugins**. Switch it on there.
+1. In the browser, open **Administration → Plugins → Browse**. It lists the official plugins.
+2. Tick the ones you want and click **Install**. The three application containers restart and install them on
+   the way up; the site is offline for a minute or so. If a plugin fails to install, the previous plugins are
+   put back and the error is shown on the Plugins page.
+3. The new plugin appears switched off under **Administration → Plugins**. Switch it on there.
 
-To remove a plugin, switch it off in Administration, delete its line and rebuild.
+Plugins installed this way live in the `plugins` Docker volume, next to the database, so they survive
+`git pull` and rebuilds and update themselves when a new version is published. Plugins from other git
+repositories can be installed there too once you set `CONDUIT_PLUGIN_URLS=true` in `.env`.
+
+You can also bake plugins into the image instead: add the line **Browse** shows to `requirements-plugins.txt`
+and run `docker compose up -d --build`. Plugins installed that way can't be removed from the website; delete
+the line and rebuild.
 
 ## Backups
 
