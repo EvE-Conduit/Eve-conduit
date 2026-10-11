@@ -3,6 +3,24 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.41
+
+### Fixed
+- **The Linux install script is executable in the release.** `deploy/baremetal/install.sh` was shipped without
+  the executable bit, so `sudo ./deploy/baremetal/install.sh` failed with "Permission denied". (On an older
+  release, run it with `sudo bash ./deploy/baremetal/install.sh` instead.)
+
+### Changed
+- **Three installation guides, one per way to run EvE Conduit:** [docs/install-docker.md](docs/install-docker.md),
+  [docs/install-linux.md](docs/install-linux.md) and [docs/install-windows.md](docs/install-windows.md), each written for a
+  first-time operator from DNS to first login, with day-to-day commands, backups, updating and troubleshooting.
+  They replace the README's Docker section, `install-baremetal.md` and the Windows Docker and WSL pages; Docker
+  Desktop on Windows is a section of the Docker guide. [docs/dns.md](docs/dns.md) explains how to point a domain at
+  your server, including home connections and changing IP addresses.
+- The manual Linux steps now set up the updater and its folders like the install script does, and
+  `conduit.env.example` carries the two update settings. The external API doc lists the `logs:snooper` and
+  `import:seat` scopes.
+
 ## 0.5.40
 
 ### Changed
