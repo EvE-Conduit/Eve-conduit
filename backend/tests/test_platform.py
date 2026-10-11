@@ -251,6 +251,7 @@ def test_preferences_round_trip_and_bootstrap(user, api_client):
     api_client.force_login(user)
     prefs = api_client.call("get", "/api/me/preferences").json()
     assert prefs["theme"] == "dark"
+    assert prefs["text_scale"] == -2
     prefs.update(theme="light", timezone="Europe/Oslo", text_scale=1, muted_categories=["groups"])
     assert api_client.call("put", "/api/me/preferences", prefs).status_code == 200
     assert api_client.call("put", "/api/me/preferences", {**prefs, "timezone": "Mars/Base"}).status_code == 400

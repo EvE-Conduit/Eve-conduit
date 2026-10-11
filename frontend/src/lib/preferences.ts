@@ -14,7 +14,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   timezone: "UTC",
   clock_24h: true,
   reduce_motion: false,
-  text_scale: 0,
+  text_scale: -2,
   high_contrast: false,
   muted_categories: [],
   dashboard: {},
@@ -56,7 +56,7 @@ export function applyPreferences(prefs: Partial<Preferences> | null | undefined)
   setAttr("skin", skin ? current.theme : null);
   setAttr("contrast", current.high_contrast ? "high" : null);
   setAttr("density", current.density === "compact" ? "compact" : null);
-  setAttr("textScale", current.text_scale ? String(current.text_scale) : null);
+  setAttr("textScale", String(current.text_scale));
   setAttr("motion", current.reduce_motion ? "reduce" : null);
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", skin?.themeColor ?? (theme === "light" ? "#e9edf0" : "#05080c"));
   try {
