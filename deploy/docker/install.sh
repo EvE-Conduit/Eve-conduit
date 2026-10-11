@@ -138,7 +138,8 @@ fi
 
 # --- ports -------------------------------------------------------------------------------------------------------
 if command -v ss >/dev/null; then
-  busy=$(ss -Hltn 2>/dev/null | awk '{print $4}' | grep -oE ':(80|443)$' | tr -d : | sort -u | tr '\n' ' ')
+  # grep exits 1 when nothing listens there, which is the good case: don't let set -e take it as a failure.
+  busy=$(ss -Hltn 2>/dev/null | awk '{print $4}' | grep -oE ':(80|443)$' | tr -d : | sort -u | tr '\n' ' ' || true)
   if [[ -n "$busy" ]]; then
     echo
     echo "Warning: something on this machine already listens on port(s) $busy. Caddy needs 80 and 443; stop that"
