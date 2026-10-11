@@ -39,6 +39,10 @@ def _safe_next(request, default="/") -> str:
 def _start(request, mode: str, scopes: list[str]):
     if not sso_configured():
         return HttpResponseRedirect("/setup?error=sso_not_configured")
+    if settings.SESSION_COOKIE_SECURE and not request.is_secure():
+        # The site is configured for https:// but was opened over plain HTTP. The session cookie is marked Secure,
+        # so the browser would drop it after the callback and the login would seem to do nothing.
+        return HttpResponseRedirect("/login?error=insecure")
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()

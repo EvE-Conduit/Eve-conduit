@@ -284,6 +284,7 @@ The wizard itself can also run silently; see [windows/installer/README.md](../wi
 | Problem | What to check |
 |---|---|
 | Browser warns about the certificate, or HTTPS does not work | Caddy could not get a certificate. `conduit logs caddy` says why. Usually DNS does not point at your public IP yet, or port 80 is not forwarded to this PC (Let's Encrypt must reach it). Fix the cause; Caddy retries by itself. |
+| Signing in seems to do nothing, or **Claim admin** fails | You opened the site over `http://` while it is configured for `https://`. The browser then drops the login cookie. The site shows a red warning in that case. Open the `https://` address; if the browser refuses it, the certificate has not been issued yet (see the first row). |
 | The site works on this PC but not from outside | Router port forwarding for 80 and 443 to this PC's local address, and the Windows Firewall rule "EvE Conduit web" that the installer created (`Get-NetFirewallRule -DisplayName "EvE Conduit web"`). |
 | EVE login fails with `invalid_scope` | A scope is missing on the EVE application. Edit it at developers.eveonline.com and select every scope. |
 | EVE login fails with a redirect or callback error | The callback URL on the EVE application must be exactly `https://<your domain>/sso/callback` and match `CONDUIT_SITE_URL` in `conduit.env`. |

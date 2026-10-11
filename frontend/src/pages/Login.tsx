@@ -4,6 +4,7 @@ import { Navigate, useSearchParams } from "react-router";
 import { BrandMark } from "@/components/layout/Brand";
 import { Alert } from "@/components/ui/feedback";
 import { useBootstrap } from "@/lib/bootstrap";
+import { InsecureWarning } from "@/components/InsecureWarning";
 import { SSO_ERRORS } from "@/lib/messages";
 
 const FEATURES = [
@@ -73,6 +74,7 @@ export function Login() {
                 You're signed out. Fly safe o7
               </Alert>
             )}
+            <InsecureWarning className="mt-6" />
             {error && (
               <Alert tone="danger" className="mt-6 py-3">
                 {SSO_ERRORS[error] ?? "Something went wrong signing in."}

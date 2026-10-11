@@ -31,6 +31,7 @@ def test_bootstrap_anonymous(client):
     data = client.get("/api/core/bootstrap").json()
     assert data["user"] is None
     assert data["setup"]["sso_configured"] is True
+    assert data["setup"]["install_kind"] == "dev" and data["site"]["url"] == "http://localhost:5173"
     assert "csrftoken" in client.cookies
 
 
@@ -277,3 +278,12 @@ def test_rotate_token_key_covers_the_site_secret(no_env_sso, settings):
     assert raw_site_secret() != old_cipher
     assert SiteSettings.load().esi_secret_key == "s3cret"
     crypto._fernet.cache_clear()
+
+
+@pytest.mark.django_db
+def test_login_over_plain_http_on_an_https_site_is_refused(client, settings):
+    """Opened over http:// while configured for https://, the Secure session cookie would be dropped and the
+    login would seem to do nothing; say so instead."""
+    settings.SESSION_COOKIE_SECURE = True
+    assert client.get("/sso/login")["Location"] == "/login?error=insecure"
+    assert client.get("/sso/login", secure=True)["Location"].startswith("https://login.eveonline.com/")

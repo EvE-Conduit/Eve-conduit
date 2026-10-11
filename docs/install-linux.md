@@ -477,6 +477,7 @@ makes you the administrator and walks you through branding and plugins; see
 | Problem | What to check |
 |---|---|
 | Browser warns about the certificate, or HTTPS does not work | certbot failed. Check that `getent hosts auth.example.com` gives this server's public IP and that port 80 is reachable from the internet, then run `sudo certbot --nginx -d auth.example.com` (or `sudo conduit ip-cert` for an IP address). |
+| Signing in seems to do nothing, or **Claim admin** fails | You opened the site over `http://` while it is configured for `https://`. The browser then drops the login cookie. The site shows a red warning in that case. Open the `https://` address; if the browser refuses it, the certificate has not been issued yet (see the first row). |
 | `502 Bad Gateway` | The application is not running. `sudo conduit status`, then `sudo conduit logs web` for the error. On RHEL, SELinux must allow nginx to connect (`setsebool -P httpd_can_network_connect 1`). |
 | EVE login fails with `invalid_scope` | A scope is missing on the EVE application. Edit it at developers.eveonline.com and select every scope. |
 | EVE login fails with a redirect or callback error | The callback URL on the EVE application must be exactly `https://<your domain>/sso/callback` and match `CONDUIT_SITE_URL`. |

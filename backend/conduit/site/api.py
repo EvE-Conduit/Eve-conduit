@@ -40,6 +40,7 @@ class SiteOut(Schema):
     accent: str
     logo_url: str
     version: str
+    url: str
     maintenance: dict
     django_admin: bool
     #: Where people land after signing in ("" = the dashboard).
@@ -61,6 +62,7 @@ class SetupOut(Schema):
     # Where the EVE application comes from: "env" (the config file), "site" (entered on the website) or "".
     sso_source: str
     callback_url: str
+    install_kind: str
     admin_claimed: bool
     # This browser already proved it runs the server (it entered the setup code with the EVE application).
     verified: bool
@@ -107,6 +109,8 @@ def site_out(site: SiteSettings) -> dict:
         "accent": site.accent,
         "logo_url": site.logo_url,
         "version": __version__,
+        # The address the site is configured for; the front end warns when it was opened some other way.
+        "url": settings.SITE_URL,
         "maintenance": {"enabled": site.maintenance_mode, "message": site.maintenance_message},
         "django_admin": settings.CONDUIT_DJANGO_ADMIN,
         "start_page": site.start_page,
@@ -124,6 +128,8 @@ def setup_out(site: SiteSettings, request=None) -> dict:
         "sso_configured": sso_configured(),
         "sso_source": esi_credentials.source(),
         "callback_url": settings.ESI_CALLBACK_URL,
+        # docker, baremetal, windows or dev: which command prints the setup code.
+        "install_kind": settings.CONDUIT_INSTALL_KIND,
         "admin_claimed": User.objects.filter(is_superuser=True).exists(),
         "verified": bool(request is not None and request.session.get(SETUP_VERIFIED_KEY)),
     }

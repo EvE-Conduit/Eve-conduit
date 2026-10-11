@@ -120,6 +120,8 @@ export interface Bootstrap {
     accent: string;
     logo_url: string;
     version: string;
+    /** The address the site is configured for (CONDUIT_SITE_URL). */
+    url: string;
     maintenance: { enabled: boolean; message: string };
     /** Whether the Django back-office at /django-admin/ is switched on. */
     django_admin: boolean;
@@ -142,6 +144,8 @@ export interface Bootstrap {
     /** Where the EVE application comes from: "env" (the config file), "site" (entered on the website) or "". */
     sso_source: "env" | "site" | "";
     callback_url: string;
+    /** "docker", "baremetal", "windows" or "dev": which command prints the setup code. */
+    install_kind: string;
     admin_claimed: boolean;
     /** This browser entered the setup code with the EVE application, so "become admin" needs no code. */
     verified: boolean;

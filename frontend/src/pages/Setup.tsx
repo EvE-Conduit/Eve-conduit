@@ -5,12 +5,14 @@ import { Navigate } from "react-router";
 import { toast } from "sonner";
 
 import { BrandingForm, type BrandingValues } from "@/components/BrandingForm";
+import { InsecureWarning } from "@/components/InsecureWarning";
 import { BrandMark } from "@/components/layout/Brand";
 import { PluginList } from "@/components/PluginList";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/feedback";
 import { Field, Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { setupCodeCommand } from "@/lib/messages";
 import { applyBranding, useBootstrap, useRefreshBootstrap } from "@/lib/bootstrap";
 import type { Bootstrap } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -58,8 +60,10 @@ export function Setup() {
           ))}
         </ol>
 
+        <InsecureWarning className="mb-6" />
+
         <div className="panel animate-fade-up rounded-2xl" key={current}>
-          {current === "sso" && <SsoStep callbackUrl={setup.callback_url} source={setup.sso_source} onDone={refresh} />}
+          {current === "sso" && <SsoStep callbackUrl={setup.callback_url} source={setup.sso_source} installKind={setup.install_kind} onDone={refresh} />}
           {current === "login" && (
             <Step title="Sign in with your main character" description="This account becomes the site's first administrator.">
               <a href="/sso/login?next=/setup">
@@ -69,7 +73,7 @@ export function Setup() {
               </a>
             </Step>
           )}
-          {current === "claim" && <ClaimStep verified={setup.verified} onClaimed={refresh} />}
+          {current === "claim" && <ClaimStep verified={setup.verified} installKind={setup.install_kind} onClaimed={refresh} />}
           {current === "brand" && (
             <BrandStep
               branding={branding}
@@ -110,7 +114,8 @@ function Step({ title, description, children, footer }: { title: string; descrip
   );
 }
 
-function SsoStep({ callbackUrl, source, onDone }: { callbackUrl: string; source: Bootstrap["setup"]["sso_source"]; onDone: () => void }) {
+function SsoStep({ callbackUrl, source, installKind, onDone }: { callbackUrl: string; source: Bootstrap["setup"]["sso_source"]; installKind: string; onDone: () => void }) {
+  const codeCmd = setupCodeCommand(installKind);
   const [clientId, setClientId] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [token, setToken] = useState("");
@@ -180,7 +185,16 @@ function SsoStep({ callbackUrl, source, onDone }: { callbackUrl: string; source:
               <Field label="Secret Key" required>
                 <Input type="password" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="font-mono" autoComplete="new-password" />
               </Field>
-              <Field label="Setup code" required hint="Printed by the installer; or run the setup-code command from your install guide." className="sm:col-span-2">
+              <Field
+                label="Setup code"
+                required
+                hint={
+                  <>
+                    Printed by the installer. To see it again, run <code className="font-mono">{codeCmd.command}</code> {codeCmd.where}.
+                  </>
+                }
+                className="sm:col-span-2"
+              >
                 <Input value={token} onChange={(e) => setToken(e.target.value)} className="font-mono" autoComplete="off" spellCheck={false} />
               </Field>
             </form>
@@ -200,7 +214,8 @@ function Instruction({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
-function ClaimStep({ verified, onClaimed }: { verified: boolean; onClaimed: () => void }) {
+function ClaimStep({ verified, installKind, onClaimed }: { verified: boolean; installKind: string; onClaimed: () => void }) {
+  const codeCmd = setupCodeCommand(installKind);
   const [code, setCode] = useState("");
   const [needCode, setNeedCode] = useState(!verified);
   const claim = useMutation({
@@ -229,10 +244,8 @@ function ClaimStep({ verified, onClaimed }: { verified: boolean; onClaimed: () =
   return (
     <Step title="Prove you run this server" description="To stop anyone else claiming your fresh install, enter the one-time setup code the installer printed. It is also in the server log.">
       <div className="space-y-4">
-        <p className="text-sm text-muted">
-          Lost it? It is printed again by <code className="font-mono text-xs">conduit setup-code</code> on Linux and Windows installs, or{" "}
-          <code className="font-mono text-xs">docker compose logs web | grep "setup code"</code> on Docker.
-        </p>
+        <p className="text-sm text-muted">Lost it? This prints it again, {codeCmd.where}:</p>
+        <pre className="overflow-x-auto rounded-lg border border-border bg-bg/70 px-4 py-3 font-mono text-xs text-muted">{codeCmd.command}</pre>
         <form
           className="flex flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
