@@ -1,10 +1,11 @@
 # EvE Conduit Windows setup (EvE-Conduit-Setup-X.Y.Z.exe)
 
 A normal Windows installer wizard, built with [Inno Setup](https://jrsoftware.org/isinfo.php) 6.3+. It
-wraps the native Windows install described in [../README.md](../README.md): the wizard asks the
-questions, then runs `windows\install.ps1` non-interactively. Nothing about the install itself is
-different, so everything in that README (folder layout, ports, the `conduit` command, the tray panel)
-applies.
+wraps the native Windows install: the wizard asks the questions, then runs `windows\install.ps1`
+non-interactively. Nothing about the install itself is different, so the user guide
+([docs/install-windows.md](../../docs/install-windows.md): first login, the `conduit` command, backups,
+updating) and the technical reference ([../README.md](../README.md): folder layout, ports, what the
+installer does, the tray panel) both apply.
 
 | File | What it is |
 |---|---|

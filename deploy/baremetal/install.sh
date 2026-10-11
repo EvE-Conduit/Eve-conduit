@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # EvE Conduit bare-metal installer.
 #
-# Automates the steps in docs/install-baremetal.md. Run it from an unpacked release:
+# Automates the steps in docs/install-linux.md. Run it from an unpacked release:
 #
 #   tar -xzf eve-conduit-X.Y.Z.tar.gz && cd eve-conduit-X.Y.Z
 #   sudo ./deploy/baremetal/install.sh --domain auth.example.com --email you@example.com
@@ -67,7 +67,7 @@ elif [[ ! "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
 fi
 [[ -n "$EMAIL" ]] || die "--email is required (Let's Encrypt and CCP's ESI contact)"
 [[ "$DB" == postgres || "$DB" == mariadb ]] || die "--db must be postgres or mariadb"
-[[ -f "$RELEASE_SRC/VERSION" && -d "$RELEASE_SRC/web" ]] || die "run this from an unpacked release (see docs/install-baremetal.md)"
+[[ -f "$RELEASE_SRC/VERSION" && -d "$RELEASE_SRC/web" ]] || die "run this from an unpacked release (see docs/install-linux.md)"
 VERSION=$(cat "$RELEASE_SRC/VERSION")
 [[ -e "$CONDUIT_ETC/conduit.env" ]] && die "EvE Conduit is already installed; use 'sudo conduit upgrade <release.tar.gz>'"
 

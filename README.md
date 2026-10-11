@@ -13,43 +13,22 @@ A self-hosted platform for EVE Online corporations and alliances: EVE login, alt
 
 ## Installing
 
-There are two supported ways to run EvE Conduit:
+Three ways to run EvE Conduit, each with its own step-by-step guide written for someone doing this for the
+first time:
 
-- **Docker** (below): everything in containers, the same on any OS. Recommended if you're unsure.
-- **Bare metal**: installed directly on Ubuntu, Debian or Rocky/Alma/RHEL with PostgreSQL or MariaDB,
-  Supervisor and nginx, in the style of the Alliance Auth and SeAT manual installs. See
-  [docs/install-baremetal.md](docs/install-baremetal.md). An install script automates it.
+| Guide | Best for |
+|---|---|
+| [Docker](docs/install-docker.md) | Any Linux server, and Windows PCs with Docker Desktop. Everything in containers; the same on every OS. **Recommended if you're unsure.** |
+| [Linux without Docker](docs/install-linux.md) | Ubuntu, Debian or Rocky/Alma/RHEL with PostgreSQL or MariaDB, Supervisor and nginx, in the style of the Alliance Auth and SeAT manual installs. An install script does it all. |
+| [Windows](docs/install-windows.md) | Windows 10/11 or Windows Server as Windows services, with no Docker or WSL, from a setup wizard. Experimental. |
 
-Releases are built with `scripts/build-release.sh`, which produces `dist/eve-conduit-X.Y.Z.tar.gz` with the front end prebuilt.
+Whichever you choose, you need a domain name pointing at the machine (or a fixed public IP address), ports
+80 and 443 open, and an EVE application registered at <https://developers.eveonline.com/applications>.
+The first person to sign in and enter the one-time setup code becomes the administrator; a wizard then
+walks them through branding and plugins.
 
-## Running it (Docker)
-
-You need Docker with Compose and a domain pointing at the server, or a server with a fixed public IPv4 address.
-
-**No domain?** Use the IP address everywhere the steps say domain (`CONDUIT_DOMAIN=203.0.113.7`,
-`CONDUIT_SITE_URL=https://203.0.113.7`, callback `https://203.0.113.7/sso/callback`). Caddy then gets a Let's Encrypt
-IP address certificate, valid six days and renewed automatically. The address must not change (ask your provider for a static IP): the EVE login's callback URL and the certificate are tied to it. Private addresses (192.168.x.x, 10.x.x.x) and connections behind carrier-grade NAT can't get a certificate; use plain HTTP for a site that's only on your local network.
-
-1. Create an application at <https://developers.eveonline.com/applications> with the callback URL `https://<your-domain>/sso/callback`.
-2. Configure and start the stack:
-   ```sh
-   cp .env.example .env      # fill in every value under "Required"
-   docker compose up -d --build
-   ```
-3. Get the one-time setup code:
-   ```sh
-   docker compose logs web | grep "setup code"
-   ```
-4. Open the site, sign in with your main character and enter the code. The setup wizard then walks you through branding and plugins.
-
-Caddy obtains the HTTPS certificate for `CONDUIT_DOMAIN` automatically. On first start the worker imports EVE's static data (about a minute). After that it checks daily for new game builds.
-
-### Installing plugins
-
-**Administration → Plugins → Browse** lists the official plugins and gives each one's line for
-`requirements-plugins.txt`. Add it (or any PyPI name, git URL or local path), then run `docker compose up -d --build`.
-New plugins appear switched off under **Administration → Plugins**. Windows and bare-metal installs install
-plugins from that page directly; see [plugins/README.md](plugins/README.md).
+Plugins are installed from **Administration → Plugins → Browse** on Linux and Windows installs, and by
+adding a line to `requirements-plugins.txt` and rebuilding on Docker; see [plugins/README.md](plugins/README.md).
 
 ## Updating
 
@@ -64,6 +43,9 @@ what changed in [CHANGELOG.md](CHANGELOG.md). Each install checks once a day and
 - **Docker installs** show the commands to run (`git pull` and `docker compose up -d --build`).
 - Releases are signed: `SHA256SUMS` is signed with the project's Ed25519 key, whose public half is built into
   EvE Conduit (`backend/conduit/updates/keys.py`). A release that doesn't match is refused.
+
+Releases are built with `scripts/build-release.sh` (the Linux tarball, front end prebuilt) and
+`windows/build-release.sh` (the Windows zip); pushing a `vX.Y.Z` tag publishes them.
 
 ## Development
 

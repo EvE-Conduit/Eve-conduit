@@ -15,7 +15,8 @@ through the external API at `/api/v1/`. Its interactive docs are at `/api/v1/doc
    | Group membership | `groups:write` | Add/remove users from groups (state restrictions still apply; never groups that grant administrator permissions) |
    | State membership | `states:write` | Add/remove characters, corporations, alliances from a state (never states that grant administrator permissions) |
    | Notifications | `notify:write`, `notify:links` | Send in-app notifications to users, character owners or group members |
-   | Logs | `logs:audit`, `logs:requests`, `logs:service`, `logs:esi` | Audit, API request, service and ESI call logs |
+   | Logs | `logs:audit`, `logs:snooper`, `logs:requests`, `logs:service`, `logs:esi` | Audit, snooper, API request, service and ESI call logs |
+   | SeAT import | `import:seat` | Used only by the [SeAT import tool](../tools/seat-import/README.md); switch it on for the migration and off again after |
    | Plugins | `p.<plugin>:<scope>` | Whatever a plugin offers; only while the plugin is enabled |
 
 2. **Administration > API > Keys:** create a key for each service with only the scopes it needs. You can
