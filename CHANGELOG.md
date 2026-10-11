@@ -3,6 +3,12 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.46
+
+### Fixed
+- **"Claim admin" in the setup wizard did nothing when clicked.** The button wasn't a submit button, so the code
+  was only sent when you pressed Enter in the field. Same fix for the save button under Settings → EVE application.
+
 ## 0.5.45
 
 ### Fixed
