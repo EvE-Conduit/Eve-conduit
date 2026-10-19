@@ -3,7 +3,9 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.49
+
+Demo mode: show the site with example data, without touching the real data.
 
 ### Added
 - **Demo mode** (Administration → Settings): the site shows example data from a database of its own, an alliance
