@@ -14,6 +14,7 @@ from pydantic import Field, field_validator
 
 from conduit import __version__
 from conduit.audit.services import record
+from conduit.demo import state as demo_state
 from conduit.esi import credentials as esi_credentials
 from conduit.esi.tokens import sso_configured
 from conduit.plugins import registry
@@ -54,6 +55,9 @@ class SiteOut(Schema):
     updating: dict | None = None
     #: An install that's waiting for the updater to pick it up; only for people who can manage the site.
     update_pending: dict | None = None
+    #: Demo mode: ``enabled`` while it's on, ``active`` when this visitor is in the demo (administrators signed in
+    #: with EVE aren't), with the demo account's ``username`` and ``password`` for the login page.
+    demo: dict = {}
 
 
 class SetupOut(Schema):
@@ -117,6 +121,8 @@ def site_out(site: SiteSettings) -> dict:
         "nav_links": site.nav_links,
         "nav_links_title": site.nav_links_title,
         "updating": update_progress(),
+        "demo": {"enabled": site.demo_mode, "active": demo_state.active(),
+                 **({"username": demo_state.USERNAME, "password": demo_state.PASSWORD} if demo_state.active() else {})},
     }
 
 

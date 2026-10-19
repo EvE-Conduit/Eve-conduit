@@ -21,3 +21,4 @@ class DoctrinesPlugin(Plugin):
     # "Can fly doctrine fit" for group requirements and smart groups.
     group_rules = ("conduit_doctrines.rules",)
     search = ("conduit_doctrines.services:search",)
+    demo_data = "conduit_doctrines.demo:seed"

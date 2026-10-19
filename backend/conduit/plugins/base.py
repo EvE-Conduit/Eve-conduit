@@ -93,6 +93,9 @@ class Plugin:
     members_only: bool = True
     #: Whether a fresh install enables this plugin automatically.
     default_enabled: bool = False
+    #: Example data for demo mode: ``"package.module:function"``, called as ``function(demo)`` while the demo
+    #: database is built, after the core's example data (see conduit.demo.seed for what ``demo`` offers).
+    demo_data: str | None = None
 
     def validate(self) -> list[str]:
         problems = []

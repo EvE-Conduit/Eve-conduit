@@ -35,7 +35,17 @@ class DiscordSettings(models.Model):
 
     @property
     def configured(self) -> bool:
-        return bool(self.client_id and self.client_secret and self.bot_token and self.guild_id)
+        return bool(self.client_id and self.client_secret and self.bot_token and self.guild_id) or _demo()
+
+
+def _demo() -> bool:
+    """Demo mode (cores that have it) shows the plugin as set up, with example accounts and roles but no
+    application, token or server behind them: the demo is read-only, so nothing ever asks Discord."""
+    try:
+        from conduit.demo.state import active
+    except ImportError:
+        return False
+    return active()
 
 
 class RoleMapping(models.Model):

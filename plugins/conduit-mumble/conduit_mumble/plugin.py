@@ -28,3 +28,4 @@ class MumblePlugin(Plugin):
     # Guests are let in through temporary links, not accounts.
     members_only = True
     periodic_tasks = {"cleanup": {"task": "conduit_mumble.tasks.cleanup", "schedule": 3600.0}}
+    demo_data = "conduit_mumble.demo:seed"

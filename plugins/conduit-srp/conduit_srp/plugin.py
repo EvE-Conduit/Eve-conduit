@@ -19,3 +19,4 @@ class SrpPlugin(Plugin):
     # Where its permissions show in Administration's permission picker (EvE Conduit 0.5.19+).
     permission_tiers = {"review_requests": "director", "pay_requests": "director", "manage_srp": "director"}
     nav = (NavItem("Ship replacement", "", "life-buoy"),)
+    demo_data = "conduit_srp.demo:seed"

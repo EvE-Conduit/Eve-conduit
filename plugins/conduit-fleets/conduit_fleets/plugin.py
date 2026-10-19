@@ -20,5 +20,6 @@ class FleetsPlugin(Plugin):
     nav = (NavItem("Fleets", "", "rocket"),)
     # "Attended fleets" for group requirements and smart groups.
     group_rules = ("conduit_fleets.rules",)
+    demo_data = "conduit_fleets.demo:seed"
     # Fleets being tracked are read every minute (ESI caches fleet members for a few seconds, so that's well within).
     periodic_tasks = {"track": {"task": "conduit_fleets.tasks.track_fleets", "schedule": 60.0}}

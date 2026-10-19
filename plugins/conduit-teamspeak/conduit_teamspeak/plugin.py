@@ -23,3 +23,4 @@ class TeamSpeakPlugin(Plugin):
     # Group and state changes sync straight away; this catches anything missed (groups changed by hand on the server,
     # permissions changed on a state) and forgets link attempts nobody finished.
     periodic_tasks = {"sync-all": {"task": "conduit_teamspeak.tasks.sync_all", "schedule": 6 * 3600.0}}
+    demo_data = "conduit_teamspeak.demo:seed"

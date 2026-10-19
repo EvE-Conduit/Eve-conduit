@@ -12,6 +12,8 @@ from conduit.access.leader_api import router as group_leader_router
 from conduit.accounts.api import router as me_router
 from conduit.audit.api import router as admin_logs_router
 from conduit.corp.api import router as corp_router
+from conduit.demo.api import admin_router as admin_demo_router
+from conduit.demo.api import router as demo_router
 from conduit.esi.api import router as admin_esi_router
 from conduit.events.api import router as admin_events_router
 from conduit.external.admin_api import router as admin_external_router
@@ -33,6 +35,7 @@ log = logging.getLogger(__name__)
 api = NinjaAPI(title="EvE Conduit API", version=__version__, urls_namespace="api")
 
 api.add_router("/core", core_router)
+api.add_router("/core", demo_router)
 api.add_router("", search_router, auth=django_auth)
 api.add_router("/setup", setup_router)
 api.add_router("/me", me_router, auth=django_auth)
@@ -51,6 +54,7 @@ api.add_router("/admin", admin_external_router, auth=django_auth)
 api.add_router("/admin", admin_events_router, auth=django_auth)
 api.add_router("/admin", admin_health_router, auth=django_auth)
 api.add_router("/admin", admin_updates_router, auth=django_auth)
+api.add_router("/admin", admin_demo_router, auth=django_auth)
 
 for plugin_id, plugin in registry.installed().items():
     if plugin.api:

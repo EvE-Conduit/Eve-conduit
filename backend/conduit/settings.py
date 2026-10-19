@@ -2,6 +2,7 @@
 
 import ipaddress
 import os
+import tempfile
 from pathlib import Path
 
 import dj_database_url
@@ -91,6 +92,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "conduit.site.middleware.ImpersonationGuardMiddleware",
+    # After the guard, which checks the real session; from here on demo requests use the demo database.
+    "conduit.demo.middleware.DemoMiddleware",
     "conduit.site.middleware.MaintenanceMiddleware",
     "conduit.external.middleware.ApiRequestLogMiddleware",  # before the module check, so refused plugin API calls are logged too
     "conduit.plugins.middleware.DisabledModuleMiddleware",
@@ -137,11 +140,24 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql" and env_boo
         "timeout": 30,
     }
 
+# Demo mode (Administration -> Settings) keeps its example data in an SQLite file of its own, built when it's
+# switched on. By default in a private folder in the system's temporary directory; nothing in it is worth keeping.
+DATABASES["demo"] = {
+    "ENGINE": "django.db.backends.sqlite3",
+    "NAME": env("CONDUIT_DEMO_DATABASE")
+    or os.path.join(tempfile.gettempdir(), f"conduit-demo-{os.getuid() if hasattr(os, 'getuid') else 'site'}", "demo.sqlite3"),
+    # Example data that's rebuilt whenever it's lost: no need to wait for the disk.
+    "OPTIONS": {"init_command": "PRAGMA synchronous=OFF"},
+    "TEST": {"NAME": ":memory:"},
+}
+DATABASE_ROUTERS = ["conduit.demo.router.DemoRouter"]
+
 REDIS_URL = env("REDIS_URL")
 if REDIS_URL:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": REDIS_URL}}
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+CACHES["default"]["KEY_FUNCTION"] = "conduit.demo.state.cache_key"  # demo requests cache apart from the real site
 
 AUTH_USER_MODEL = "accounts.User"
 AUTHENTICATION_BACKENDS = ["conduit.access.backends.StatePermissionBackend"]

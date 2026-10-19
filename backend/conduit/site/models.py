@@ -22,6 +22,8 @@ class SiteSettings(models.Model):
     # While on, only people who can manage the site get in; everyone else sees the message.
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.CharField(max_length=300, blank=True)
+    # While on, visitors see example data from a database of its own (see conduit.demo); the real data is untouched.
+    demo_mode = models.BooleanField(default=False)
     # Where people land after signing in, e.g. a plugin's page ("/p/news"). Empty means the dashboard.
     start_page = models.CharField(max_length=200, blank=True, default="/home")
     # The landing page at /home (see landing.py). Empty means the built-in default.
