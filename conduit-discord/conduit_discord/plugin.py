@@ -18,6 +18,7 @@ class DiscordPlugin(Plugin):
     # Where its permissions show in Administration's permission picker (EvE Conduit 0.5.19+).
     permission_tiers = {"access_discord": "member", "manage_discord": "director"}
     nav = (NavItem("Discord", "", "message-square"),)
+    demo_data = "conduit_discord.demo:seed"
     # Who may link is decided by discord.access_discord (give it to states), so guests can be let in too.
     members_only = False
     # Group and state changes sync straight away; this catches anything missed (people who left the server,

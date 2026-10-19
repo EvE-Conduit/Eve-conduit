@@ -23,3 +23,4 @@ class RecruitmentPlugin(Plugin):
     members_only = False
     # Recruiters may read an applicant's character sheets while the application is open.
     sheet_access = ("conduit_recruitment.services:recruiter_can_view",)
+    demo_data = "conduit_recruitment.demo:seed"
