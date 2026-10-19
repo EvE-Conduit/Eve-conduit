@@ -7,7 +7,7 @@ A self-hosted platform for EVE Online corporations and alliances: EVE login, alt
 - **Compliance:** who has every character registered with a working login and the scopes the site needs, plus corporation members nobody has registered.
 - **Corporation sheet:** members and member tracking, structures (fuel and reinforcement alerts), wallets, assets, industry, contracts, market, mining, starbases and killmails, synced with a director's or role holder's login.
 - **For everyone:** notifications with a bell and inbox, personal settings (dark/light theme, text size, high contrast, time zone), and Ctrl+K search across characters, members, corporations, items and systems.
-- **For admins:** webhooks to Discord, Slack or any service, a health page, signing in as a member to help them, and maintenance mode. See [docs/platform.md](docs/platform.md) and [docs/security.md](docs/security.md).
+- **For admins:** webhooks to Discord, Slack or any service, a health page, signing in as a member to help them, maintenance mode, and a demo mode that shows example data in place of the real data. See [docs/platform.md](docs/platform.md) and [docs/security.md](docs/security.md).
 - **Character sheet (core):** Overview, Skills, Wallet, Assets, Blueprints, Industry, Research, Mining, PI, Market, Contracts, Mail, Notifications, Calendar, Contacts, Standings, Loyalty Points, Fittings, Killmails and Intel, kept in sync from ESI in the background. Members also get account-wide Wallet and Assets pages.
 - **Plugins:** installable Python packages with an optional front-end bundle. They add pages, dashboard widgets, character-sheet tabs, API routes, background jobs and ESI scopes.
 

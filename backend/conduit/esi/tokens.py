@@ -40,6 +40,10 @@ def _basic_auth() -> str:
 
 
 def _token_request(data: dict) -> dict:
+    from conduit.demo.state import active as demo_active
+
+    if demo_active():  # the demo's tokens are made up; don't ask EVE about them
+        raise SsoRefused(0, "not used in demo mode")
     resp = httpx.post(
         TOKEN_URL,
         data=data,

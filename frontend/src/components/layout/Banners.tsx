@@ -1,4 +1,4 @@
-import { Construction, Loader2, RefreshCw, UserCog, Wrench } from "lucide-react";
+import { Construction, FlaskConical, Loader2, RefreshCw, UserCog, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -95,6 +95,31 @@ export function MaintenanceBanner() {
       <Link to="/admin/settings" className="font-medium text-warning-fg underline underline-offset-4">
         Settings
       </Link>
+    </div>
+  );
+}
+
+/** Demo mode: visitors are told it's example data; administrators on the real site that everyone else isn't. */
+export function DemoBanner() {
+  const { site } = useBootstrap();
+  if (!site.demo?.enabled) return null;
+  return (
+    <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-accent/30 bg-accent-soft px-4 py-2 text-sm">
+      <FlaskConical className="size-4 text-accent-ink" />
+      {site.demo.active ? (
+        <>
+          <span className="font-medium text-text">This is a demo.</span>
+          <span className="text-muted">Everything here is example data, and changes can't be saved.</span>
+        </>
+      ) : (
+        <>
+          <span className="font-medium text-text">Demo mode is on.</span>
+          <span className="text-muted">Everyone else sees example data; you're on the real site.</span>
+          <Link to="/admin/settings" className="font-medium text-accent-ink underline underline-offset-4">
+            Settings
+          </Link>
+        </>
+      )}
     </div>
   );
 }

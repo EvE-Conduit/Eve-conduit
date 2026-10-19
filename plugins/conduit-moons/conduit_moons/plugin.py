@@ -17,3 +17,4 @@ class MoonsPlugin(Plugin):
     # Where its permissions show in Administration's permission picker (EvE Conduit 0.5.19+).
     permission_tiers = {"view_ledger": "director", "manage_ledger": "director"}
     nav = (NavItem("Moon mining", "", "pickaxe"),)
+    demo_data = "conduit_moons.demo:seed"

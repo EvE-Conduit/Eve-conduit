@@ -3,6 +3,15 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Added
+- **Demo mode** (Administration → Settings): the site shows example data from a database of its own, an alliance
+  of three corporations with about thirty members and something on every page, plugins included. Visitors sign in
+  with `demo` / `demo123`; administrators who sign in with EVE keep the real site and switch it off again. The demo
+  is read-only, starts no background jobs and never calls ESI, and the real data is untouched: switching it off
+  brings everything back. Plugins add example data with `Plugin.demo_data`. See docs/platform.md.
+
 ## 0.5.48
 
 Security release: the findings of a code review. Update as soon as you can, Linux installs first.

@@ -5,7 +5,7 @@ from celery.signals import after_setup_logger, beat_init, worker_ready
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "conduit.settings")
 
-app = Celery("conduit")
+app = Celery("conduit", task_cls="conduit.demo.tasks:Task")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 

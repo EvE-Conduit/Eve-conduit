@@ -23,6 +23,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 from conduit import __version__
+from conduit.demo.state import active as demo_active
 
 from .calllog import note_rate_limit, record_call
 from .exceptions import EsiBackoff, EsiError, EsiRateLimited
@@ -154,6 +155,8 @@ class EsiClient:
             raise EsiRateLimited(retry, bucket)
 
     def _request(self, method, path, *, character=None, params=None, body=None, use_cache=True) -> EsiResponse:
+        if demo_active():
+            raise EsiError(0, "ESI isn't used in demo mode")
         character_id = character.pk if character is not None else None
         key = _cache_key(method, path, params, character_id) if method == "GET" and use_cache else None
         cached = cache.get(key) if key else None
