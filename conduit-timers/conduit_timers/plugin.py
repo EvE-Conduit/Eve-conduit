@@ -24,4 +24,3 @@ class TimersPlugin(Plugin):
         # Timers from reinforced corporation structures and from characters' in-game notifications.
         "import": {"task": "conduit_timers.tasks.import_timers", "schedule": 300.0},
     }
-    demo_data = "conduit_timers.demo:seed"
