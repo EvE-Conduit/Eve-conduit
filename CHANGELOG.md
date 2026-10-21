@@ -3,6 +3,27 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.51
+
+zKillboard history on the killmail tabs, and four new plugins: Ops Calendar, Corp Tax, Blacklist and Freight.
+
+### Added
+- **zKillboard stats** on the Killmails tab of character and corporation sheets: all-time kills and losses, solo
+  kills, ISK destroyed and lost, danger and gang ratios, the last week's kills and the ships with most kills, with a
+  link to the zKillboard page. Our own killmails only go back as far as ESI does; zKillboard has the whole history.
+  Answers are cached for an hour, and only people who can see the sheet can ask.
+- **New plugins** (Administration → Plugins → Browse):
+  - **Ops Calendar:** CTAs, stratops and roams on one calendar in EVE time, with countdowns, RSVPs with a
+    character, reminders, a dashboard widget and Discord pings through webhooks. Ops can be for chosen states or
+    groups, and can name a doctrine from the Doctrines plugin.
+  - **Corp Tax:** bounty, ESS and mission tax per member from the corporation wallet journals, an extra tax billed
+    each month, payments matched from the wallet by their reason, reminders and a "tax paid up" group rule.
+  - **Blacklist:** characters, corporations and alliances you don't want, with a reason, severity, expiry and
+    notes. People with the permission are warned when a member links a flagged character or one applies through
+    Recruitment. Members never see the list.
+  - **Freight:** hauling routes with your rates, a calculator (public if you like) that gives the exact courier
+    contract to make, and every courier contract to the service checked against its route.
+
 ## 0.5.50
 
 Demo mode is removed.
