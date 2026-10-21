@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 import { UpdateOverlay } from "@/components/updates/UpdateOverlay";
 
-import { DemoBanner, ImpersonationBanner, MaintenanceBanner, MaintenanceScreen, UpdatingBanner } from "./Banners";
+import { ImpersonationBanner, MaintenanceBanner, MaintenanceScreen, UpdatingBanner } from "./Banners";
 import { Clocks } from "./Clocks";
 import { ExternalLinkGuard } from "@/lib/externalLinks";
 
@@ -87,7 +87,6 @@ export function AppShell() {
         Skip to content
       </a>
       <ImpersonationBanner />
-      <DemoBanner />
       <UpdatingBanner />
       <UpdateOverlay />
       <ThreatStrip />

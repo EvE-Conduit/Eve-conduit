@@ -20,4 +20,3 @@ class SkillPlansPlugin(Plugin):
     search = ("conduit_skillplans.services:search",)
     # "Completed skill plan" for group requirements and smart groups.
     group_rules = ("conduit_skillplans.rules",)
-    demo_data = "conduit_skillplans.demo:seed"

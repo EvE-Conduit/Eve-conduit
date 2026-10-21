@@ -21,4 +21,3 @@ class AnnouncementsPlugin(Plugin):
     # Announcements scheduled for later are announced (notifications, webhooks) once their time comes.
     periodic_tasks = {"publish-due": {"task": "conduit_announcements.tasks.publish_due", "schedule": 120.0}}
     default_enabled = True
-    demo_data = "conduit_announcements.demo:seed"

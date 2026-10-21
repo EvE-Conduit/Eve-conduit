@@ -77,9 +77,8 @@ async function start() {
   let bootstrap;
   try {
     bootstrap = await fetchBootstrap();
-  } catch (err) {
-    // A 503 with a message (the demo being set up, say) says what's going on; anything else is "offline".
-    root.render(<Offline message={err instanceof ApiError && err.maintenance ? err.message : undefined} />);
+  } catch {
+    root.render(<Offline />);
     return;
   }
   applyBranding(bootstrap.site);
@@ -149,7 +148,7 @@ async function start() {
 }
 
 /** The API didn't answer. Usually the site is restarting (often for an update): keep trying and come back by itself. */
-function Offline({ message }: { message?: string }) {
+function Offline() {
   const [updating] = useState<UpdateProgress | null>(() => {
     try {
       return JSON.parse(localStorage.getItem(UPDATING_KEY) ?? "null");
@@ -167,11 +166,9 @@ function Offline({ message }: { message?: string }) {
     <div className="backdrop-space grid min-h-full place-items-center px-4 text-center">
       <div className="max-w-md">
         <div className="mx-auto mb-5 size-3 animate-ping rounded-none bg-warning" />
-        <h1 className="text-xl font-semibold">{updating ? `${updateTitle(updating)}` : message ? "Just a moment" : "Can't reach the server"}</h1>
+        <h1 className="text-xl font-semibold">{updating ? `${updateTitle(updating)}` : "Can't reach the server"}</h1>
         <p className="mt-2 text-sm text-muted">
-          {message && !updating
-            ? `${message} This page reloads by itself when it's ready.`
-            : updating
+          {updating
             ? "The site is restarting with the new version. This page reloads by itself when it's back, usually within a minute or two."
             : "The site is starting up or offline. This page reloads by itself as soon as it answers again."}
         </p>

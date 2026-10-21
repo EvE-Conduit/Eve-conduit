@@ -1,12 +1,8 @@
-import { ArrowRight, Boxes, FlaskConical, Lock, Radar, ShieldCheck } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { ArrowRight, Boxes, Lock, Radar, ShieldCheck } from "lucide-react";
 import { Navigate, useSearchParams } from "react-router";
 
 import { BrandMark } from "@/components/layout/Brand";
-import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
-import { Field, Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
 import { useBootstrap } from "@/lib/bootstrap";
 import { InsecureWarning } from "@/components/InsecureWarning";
 import { isSitePath } from "@/lib/externalLinks";
@@ -28,7 +24,6 @@ export function Login() {
   const signedOut = params.has("signed_out");
 
   if (user) return <Navigate to={next} replace />;
-  const demo = site.demo?.active ? site.demo : null;
 
   return (
     <div className="relative flex min-h-full flex-col overflow-hidden bg-bg">
@@ -75,9 +70,7 @@ export function Login() {
           <div className="panel mx-auto w-full max-w-md border-border-strong bg-surface p-8 animate-fade-up [animation-delay:80ms] sm:p-10 lg:mx-0">
             <div className="eyebrow">Authentication</div>
             <h2 className="hud-title mt-3 text-[28px]">Welcome, capsuleer</h2>
-            <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              {demo ? "This site is running as a demo with example data. Sign in with the demo account to look around." : "Sign in with your EVE Online account to continue."}
-            </p>
+            <p className="mt-3 text-[15px] leading-relaxed text-muted">Sign in with your EVE Online account to continue.</p>
 
             {signedOut && !error && (
               <Alert tone="accent" className="mt-6 py-3">
@@ -91,16 +84,7 @@ export function Login() {
               </Alert>
             )}
 
-            {demo && <DemoLogin username={demo.username ?? "demo"} password={demo.password ?? ""} next={next} />}
-
-            {demo && setup.sso_configured ? (
-              <a
-                href={`/sso/login?next=${encodeURIComponent(next)}`}
-                className="mt-6 flex items-center justify-center gap-2 text-[13px] font-medium text-muted underline-offset-4 hover:text-text hover:underline"
-              >
-                Administrator? Log in with EVE Online <ArrowRight className="size-3.5" />
-              </a>
-            ) : setup.sso_configured ? (
+            {setup.sso_configured ? (
               <a
                 href={`/sso/login?next=${encodeURIComponent(next)}`}
                 className="group mt-8 flex h-13 items-center justify-center gap-3 border border-accent bg-accent px-5 text-[15px] font-bold uppercase tracking-[0.14em] text-accent-fg transition hover:brightness-110 focus-visible:outline-offset-4"
@@ -109,7 +93,7 @@ export function Login() {
                 Log in with EVE Online
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </a>
-            ) : demo ? null : (
+            ) : (
               <Alert tone="warning" className="mt-8" title="EVE login isn't configured yet">
                 <a href="/setup" className="font-medium text-text underline underline-offset-4">
                   Open the setup guide
@@ -118,12 +102,10 @@ export function Login() {
               </Alert>
             )}
 
-            {!demo && (
-              <div className="mt-8 flex items-start gap-2.5 border-t border-border pt-6 text-[13px] leading-relaxed text-muted">
-                <Lock className="mt-0.5 size-3.5 shrink-0 text-subtle" />
-                You'll be sent to login.eveonline.com. We never see your password; you approve exactly what's shared on EVE's own page.
-              </div>
-            )}
+            <div className="mt-8 flex items-start gap-2.5 border-t border-border pt-6 text-[13px] leading-relaxed text-muted">
+              <Lock className="mt-0.5 size-3.5 shrink-0 text-subtle" />
+              You'll be sent to login.eveonline.com. We never see your password; you approve exactly what's shared on EVE's own page.
+            </div>
           </div>
         </div>
       </main>
@@ -132,55 +114,6 @@ export function Login() {
         EVE Online and all related marks are property of CCP hf. · EvE Conduit v{site.version}
       </footer>
     </div>
-  );
-}
-
-/** The demo's own sign-in: one shared account, shown on the page, that only exists while demo mode is on. */
-function DemoLogin({ username: demoUsername, password: demoPassword, next }: { username: string; password: string; next: string }) {
-  const [username, setUsername] = useState(demoUsername);
-  const [password, setPassword] = useState(demoPassword);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post("/api/core/demo/login", { username, password });
-      // A full load, so the page starts again signed in (see AppShell's sign-out).
-      window.location.assign(next);
-    } catch (err) {
-      setBusy(false);
-      setError(err instanceof Error ? err.message : "Couldn't sign in");
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="mt-8 space-y-4">
-      <Alert tone="accent" className="py-3" title="Demo mode">
-        <span className="flex items-center gap-2">
-          <FlaskConical className="size-4 shrink-0" />
-          <span>
-            Username <code className="font-mono text-text">{demoUsername}</code>, password <code className="font-mono text-text">{demoPassword}</code>
-          </span>
-        </span>
-      </Alert>
-      <Field label="Username">
-        <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
-      </Field>
-      <Field label="Password">
-        <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
-      </Field>
-      {error && (
-        <Alert tone="danger" className="py-3">
-          {error}
-        </Alert>
-      )}
-      <Button type="submit" variant="primary" loading={busy} className="h-12 w-full text-[15px]">
-        Sign in to the demo <ArrowRight />
-      </Button>
-    </form>
   );
 }
 

@@ -19,6 +19,5 @@ class LeaderboardPlugin(Plugin):
     # Where its permissions show in Administration's permission picker (EvE Conduit 0.5.19+).
     permission_tiers = {"manage_leaderboard": "director"}
     nav = (NavItem("Leaderboard", "", "trophy"),)
-    demo_data = "conduit_leaderboard.demo:seed"
     # Hand out the medals for a finished month once a day (the day after it ends, so the last syncs are in).
     periodic_tasks = {"awards": {"task": "conduit_leaderboard.tasks.award_finished_months", "schedule": crontab(hour=6, minute=20)}}

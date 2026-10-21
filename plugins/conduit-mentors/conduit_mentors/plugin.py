@@ -23,6 +23,5 @@ class MentorsPlugin(Plugin):
     # "Mentoring status" and "Is an active mentor", e.g. for a New bro role on Discord.
     group_rules = ("conduit_mentors.rules",)
     search = ("conduit_mentors.search:find",)
-    demo_data = "conduit_mentors.demo:seed"
     # Mentors may read their active mentees' character sheets (a program setting, on by default).
     sheet_access = ("conduit_mentors.services:mentor_can_view",)

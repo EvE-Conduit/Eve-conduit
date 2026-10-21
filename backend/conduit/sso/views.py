@@ -15,7 +15,6 @@ from django.views.decorators.http import require_GET
 
 from conduit.accounts.services import CharacterOwnedElsewhere, link_character
 from conduit.audit.services import record
-from conduit.demo import state as demo
 from conduit.esi.credentials import client_id
 from conduit.esi.exceptions import TokenInvalid
 from conduit.esi.scopes import ALL_SCOPES
@@ -122,12 +121,7 @@ def callback(request):
         record("character.added", f"added character {character.name}", request=request, target=character,
                details={"scopes": len(info["scopes"])})
         return _back(flow, added=character.pk)
-    if demo.enabled() and not character.user.has_perm("site.manage_site"):
-        # During demo mode only administrators sign in to the real site (to switch it off); everyone else uses
-        # the demo account.
-        return _back(flow, error="demo_mode")
     django_login(request, character.user, backend=settings.AUTHENTICATION_BACKENDS[0])
-    request.session.pop(demo.SESSION_KEY, None)
     record("auth.login", f"signed in with {character.name}", request=request, target=character)
     if flow.get("next", "/") == "/":
         # Nowhere in particular was asked for: go to the site's start page (e.g. the announcements).
