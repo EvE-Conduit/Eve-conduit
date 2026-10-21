@@ -3,7 +3,9 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.5.50
+
+Demo mode is removed.
 
 ### Removed
 - **Demo mode** (added in 0.5.49) is gone, along with its example data, the `demo` / `demo123` sign-in and
