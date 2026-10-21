@@ -1,0 +1,28 @@
+[project]
+name = "conduit-ops"
+version = "1.0.0"
+description = "Ops calendar: CTAs, stratops, roams and mining ops on one calendar with live countdowns, RSVPs with the character you'll bring, reminders and Discord pings."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+ops = "conduit_ops.plugin:OpsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Ops Calendar"
+icon = "calendar"
+category = "Operations"
+min_conduit = "0.5.51"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_ops*"]
+
+[tool.setuptools.package-data]
+conduit_ops = ["static/**/*"]
