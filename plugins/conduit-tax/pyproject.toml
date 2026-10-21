@@ -1,0 +1,28 @@
+[project]
+name = "conduit-tax"
+version = "1.0.0"
+description = "Corp tax: the bounty, ESS and mission tax each member paid the corporation, an extra tax billed monthly, payments matched from the wallet, and reminders."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+tax = "conduit_tax.plugin:TaxPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Corp Tax"
+icon = "landmark"
+category = "Finance"
+min_conduit = "0.5.51"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_tax*"]
+
+[tool.setuptools.package-data]
+conduit_tax = ["static/**/*"]
