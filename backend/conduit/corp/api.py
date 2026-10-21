@@ -739,3 +739,10 @@ def killmail_summary(request, corporation_id: int):
     kills = [link.killmail.value for link in links if not link.is_loss]
     losses = [link.killmail.value for link in links if link.is_loss]
     return {"kills": len(kills), "losses": len(losses), "isk_destroyed": sum(kills), "isk_lost": sum(losses)}
+
+
+@router.get("/{corporation_id}/killmails/zkillboard")
+def killmail_zkillboard(request, corporation_id: int):
+    from conduit.sheet.killmails.api import zkill_out
+
+    return zkill_out("corporation", viewable_corporation(request, corporation_id, "killmails").pk)
