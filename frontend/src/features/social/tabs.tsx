@@ -20,6 +20,7 @@ import { cn, timeAgo } from "@/lib/utils";
 
 import { useSection } from "../sheet/hooks";
 import { Security, TypeIcon } from "../sheet/components";
+import { ZkillboardCard, type ZkillStats } from "../sheet/zkillboard";
 import type { CharacterHeader, EveType } from "../sheet/types";
 
 const base = (h: CharacterHeader) => `/api/characters/${h.id}`;
@@ -489,6 +490,7 @@ interface KillRow {
 export function KillmailsTab({ header }: { header: CharacterHeader }) {
   const [kind, setKind] = useState<"" | "kills" | "losses">("");
   const summary = useSection<{ kills: number; losses: number; isk_destroyed: number; isk_lost: number }>(header.id, "killmails/summary");
+  const zkb = useSection<ZkillStats>(header.id, "killmails/zkillboard");
   const s = summary.data;
   const efficiency = s && s.isk_destroyed + s.isk_lost > 0 ? (s.isk_destroyed / (s.isk_destroyed + s.isk_lost)) * 100 : null;
   const columns: Column<KillRow>[] = [
@@ -537,6 +539,7 @@ export function KillmailsTab({ header }: { header: CharacterHeader }) {
         <StatCard label="ISK destroyed" value={s ? isk(s.isk_destroyed).replace(" ISK", "") : "—"} mono />
         <StatCard label="Efficiency" value={efficiency != null ? `${efficiency.toFixed(0)}%` : "—"} mono hint="ISK destroyed vs lost" />
       </div>
+      <ZkillboardCard data={zkb.data} isLoading={zkb.isLoading} />
       <Card>
         <SegmentTabs value={kind} onChange={setKind} options={[{ value: "", label: "All" }, { value: "kills", label: "Kills" }, { value: "losses", label: "Losses" }]} />
         <PagedTable<KillRow> url={`${base(header)}/killmails`} params={`kind=${kind}`} columns={columns} rowKey={(k) => k.id} empty={{ icon: <Swords />, title: "No killmails in the last 90 days" }} />

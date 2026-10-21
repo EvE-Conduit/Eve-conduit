@@ -23,6 +23,7 @@ import { date, dateTime, duration, humanize, isk, num } from "@/lib/format";
 import { cn, timeAgo } from "@/lib/utils";
 
 import { PlaceLabel, Security, TypeIcon } from "../sheet/components";
+import { ZkillboardCard, type ZkillStats } from "../sheet/zkillboard";
 import type { EveType, Place } from "../sheet/types";
 import { corpBase, useCorpSection } from "./hooks";
 import type { CorpHeader, CorpMember, CorpOverview, CorpStructure, CorpWallets, SystemRef } from "./types";
@@ -795,6 +796,7 @@ export function KillmailsTab({ header }: TabProps) {
   const [kind, setKind] = useState<"" | "kills" | "losses">("");
   const { data: s } = useCorpSection<{ kills: number; losses: number; isk_destroyed: number; isk_lost: number }>(header.id, "killmails/summary");
   const efficiency = s && s.isk_destroyed + s.isk_lost > 0 ? s.isk_destroyed / (s.isk_destroyed + s.isk_lost) : null;
+  const zkb = useCorpSection<ZkillStats>(header.id, "killmails/zkillboard");
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -803,6 +805,7 @@ export function KillmailsTab({ header }: TabProps) {
         <StatCard label="ISK destroyed" value={shortIsk(s?.isk_destroyed)} mono />
         <StatCard label="Efficiency" value={efficiency != null ? `${Math.round(efficiency * 100)}%` : "—"} mono icon={<Percent />} hint={`${shortIsk(s?.isk_lost)} ISK lost`} />
       </div>
+      <ZkillboardCard data={zkb.data} isLoading={zkb.isLoading} />
       <Card>
         <SegmentTabs value={kind} onChange={setKind} options={[{ value: "", label: "All" }, { value: "kills", label: "Kills" }, { value: "losses", label: "Losses" }]} />
         <PagedTable<KillRow>

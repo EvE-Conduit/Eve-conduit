@@ -1,5 +1,6 @@
 from ninja.pagination import paginate
 
+from conduit.eve import zkill
 from conduit.eve.tasks import names_for
 from conduit.sde.models import SolarSystem
 from conduit.sheet.api import router, viewable_character
@@ -48,3 +49,17 @@ def killmail_summary(request, character_id: int):
     kills = [link.killmail.value for link in links if not link.is_loss]
     losses = [link.killmail.value for link in links if link.is_loss]
     return {"kills": len(kills), "losses": len(losses), "isk_destroyed": sum(kills), "isk_lost": sum(losses)}
+
+
+def zkill_out(kind: str, entity_id: int) -> dict:
+    """zKillboard's all-time stats, with names and icons for the top ships."""
+    out = dict(zkill.stats(kind, entity_id))
+    if out.get("top_ships"):
+        types = types_by_id({s["type_id"] for s in out["top_ships"]})
+        out["top_ships"] = [{"ship": type_out(s["type_id"], types), "kills": s["kills"]} for s in out["top_ships"]]
+    return out
+
+
+@router.get("/{character_id}/killmails/zkillboard")
+def killmail_zkillboard(request, character_id: int):
+    return zkill_out("character", viewable_character(request, character_id).pk)
