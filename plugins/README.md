@@ -20,6 +20,10 @@ results, group rules and ESI scopes.
 - [`conduit-mumble`](conduit-mumble): Mumble: members make a Mumble account whose name and groups follow their main character, groups and state; temporary access links let guests in for a while.
 - [`conduit-teamspeak`](conduit-teamspeak): TeamSpeak: members link their TeamSpeak identity with a one-time privilege key; their server groups follow their groups and state through ServerQuery.
 - [`conduit-wiki`](conduit-wiki): Wiki: pages in a tree with Markdown, a table of contents, history with restore, visibility by state or group, and public pages for recruits.
+- [`conduit-ops`](conduit-ops): Ops Calendar: CTAs, stratops and roams on one calendar in EVE time with countdowns, RSVPs with your character, reminders and Discord pings.
+- [`conduit-tax`](conduit-tax): Corp Tax: bounty, ESS and mission tax per member from the corp wallet, an extra tax billed monthly, payments matched from the wallet, reminders and a paid-up group rule.
+- [`conduit-blacklist`](conduit-blacklist): Blacklist: characters, corporations and alliances you don't want, with notes, and a warning when one links a character or applies.
+- [`conduit-freight`](conduit-freight): Freight: routes with your rates, a calculator that gives the exact courier contract to make, and every courier contract checked against its route.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
