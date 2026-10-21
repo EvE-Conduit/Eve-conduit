@@ -13,7 +13,5 @@ class ExamplePlugin(Plugin):
     api = "conduit_example.api:router"
     frontend = "conduit_example/plugin.js"
     nav = (NavItem("Server status", "", "activity"),)
-    # Example data for demo mode: "package.module:function", see demo.py.
-    demo_data = "conduit_example.demo:seed"
     # A template for plugin authors, so it stays off until an admin switches it on.
     default_enabled = False

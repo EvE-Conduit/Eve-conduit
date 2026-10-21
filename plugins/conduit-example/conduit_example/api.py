@@ -27,10 +27,6 @@ class StatusOut(Schema):
 
 @router.get("/status", response=StatusOut)
 def status(request):
-    if _demo():
-        from .demo import status as demo_status
-
-        return demo_status()
     # The core client handles caching, error limits and rate limits for us.
     try:
         return esi().get("/status").data
@@ -38,12 +34,3 @@ def status(request):
         # Log the details; don't send error text from ESI or the network to the browser.
         log.warning("ESI /status failed", exc_info=True)
         raise HttpError(503, "Tranquility's status isn't available right now") from None
-
-
-def _demo() -> bool:
-    """Demo mode never calls ESI (the import fails on cores without it)."""
-    try:
-        from conduit.demo.state import active
-    except ImportError:
-        return False
-    return active()

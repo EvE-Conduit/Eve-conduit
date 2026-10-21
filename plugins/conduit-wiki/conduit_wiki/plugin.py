@@ -22,4 +22,3 @@ class WikiPlugin(Plugin):
     nav = (NavItem("Wiki", "", "book-open"),)
     search = ("conduit_wiki.services:search",)
     default_enabled = True
-    demo_data = "conduit_wiki.demo:seed"

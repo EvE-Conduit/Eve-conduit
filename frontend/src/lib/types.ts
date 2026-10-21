@@ -137,9 +137,6 @@ export interface Bootstrap {
     updating?: UpdateProgress | null;
     /** An install waiting for the updater to pick it up (usually within seconds); admins only. */
     update_pending?: { kind: "release" | "plugins"; target: string; summary?: string; requested_at: string | null } | null;
-    /** Demo mode: `enabled` while it's on, `active` when this visitor sees the demo (administrators signed in with EVE
-     * keep the real site). The demo account's sign-in comes along for the login page. */
-    demo?: { enabled: boolean; active: boolean; username?: string; password?: string };
   };
   setup: {
     completed: boolean;

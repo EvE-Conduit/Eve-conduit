@@ -269,26 +269,3 @@ signed in as someone else, the next request ends the session (`401` for the API,
 **Administration → Settings → Maintenance** switches the site into maintenance with an optional message.
 People who can change site settings keep full access and see a banner; everyone else sees the message, and
 the API answers `503 {"detail": <message>, "maintenance": true}`. Login, bootstrap and setup keep working.
-
-## Demo mode
-
-**Administration → Settings → Demo mode** shows the site with example data instead of the real data, to try
-EvE Conduit out or show it to someone. The real data isn't touched, and is back the moment demo mode is off.
-
-- **Who sees what.** Every visitor sees the demo and signs in with the demo account: username `demo`, password
-  `demo123`, shown on the login page. Administrators (anyone who can change site settings) who sign in with EVE
-  keep the real site, with a banner, so they can switch demo mode off; the EVE login refuses everyone else while
-  it's on. Members' own sign-ins are kept and work again once it's off.
-- **What's in it.** An alliance of three corporations and a friendly one, about thirty members with alts, groups,
-  and data on every page: character sheets, the corporation sheet, the admin pages, and every installed plugin
-  that ships example data. The demo account is an administrator *of the demo*, so the admin pages can be shown.
-- **Read-only.** A demo visitor can't change anything (the API answers `403 {"demo": true}`), starts no
-  background jobs and never calls ESI. Branding, the landing page and which plugins are on come from the real site.
-  The external API (`/api/v1/`, API keys) and the background jobs keep working on the real data, so integrations
-  and syncing carry on as usual.
-- **Where it lives.** An SQLite file of its own, built when demo mode is switched on (a few seconds to a minute;
-  visitors get `503 {"maintenance": true}` meanwhile) and again after an update. It's in a private folder in the
-  system's temporary directory unless `CONDUIT_DEMO_DATABASE` names another path. Nothing in it is worth keeping.
-- **Plugins** add example data with `Plugin.demo_data = "package.module:function"`, called with the
-  `conduit.demo.seed.Demo` context (the demo's users, characters, corporations and helpers) while the demo
-  database is built.

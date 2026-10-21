@@ -25,7 +25,6 @@ class BuybackPlugin(Plugin):
         "manage_all_programs": "director",
     }
     nav = (NavItem("Buyback", "", "shopping-cart"),)
-    demo_data = "conduit_buyback.demo:seed"
     periodic_tasks = {
         "contracts": {"task": "conduit_buyback.tasks.sync_all_contracts", "schedule": 900.0},
         # Refreshes prices older than the settings' maximum age.

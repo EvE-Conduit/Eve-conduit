@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Construction, DoorOpen, FlaskConical, KeyRound, Link2, Palette, PencilLine, Plus, Save, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
+import { ArrowDown, ArrowUp, Construction, DoorOpen, KeyRound, Link2, Palette, PencilLine, Plus, Save, Search, Settings2, ShieldPlus, Trash2, UserMinus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -73,7 +73,7 @@ export function AdminSettings() {
         eyebrow="Administration"
         title="Settings"
         icon={<Settings2 />}
-        description="How your site looks, where members land after signing in, sidebar links, who the administrators are, and maintenance and demo mode."
+        description="How your site looks, where members land after signing in, sidebar links, who the administrators are, and maintenance mode."
         actions={
           <>
             <Button variant="ghost" disabled={!dirty} onClick={discard}>
@@ -166,8 +166,6 @@ export function AdminSettings() {
             </Field>
           </CardBody>
         </Card>
-
-        <DemoMode />
       </div>
 
       <ConfirmDialog
@@ -180,99 +178,6 @@ export function AdminSettings() {
         onConfirm={() => save.mutateAsync(values)}
       />
     </>
-  );
-}
-
-interface DemoStatus {
-  enabled: boolean;
-  preparing: boolean;
-  error: string;
-  username: string;
-  password: string;
-}
-
-/** Demo mode: everyone but the administrators sees example data from a database of its own. Saved straight away,
- * not with the form above: switching it on takes a minute while the example data is made. */
-function DemoMode() {
-  const { site } = useBootstrap();
-  const refresh = useRefreshBootstrap();
-  const qc = useQueryClient();
-  const [confirm, setConfirm] = useState(false);
-  const inDemo = !!site.demo?.active;
-  const status = useQuery({
-    queryKey: ["admin", "demo"],
-    queryFn: () => api.get<DemoStatus>("/api/admin/demo"),
-    enabled: !inDemo,
-    refetchInterval: (q) => (q.state.data?.preparing ? 3_000 : false),
-  });
-  const set = useMutation({
-    mutationFn: (enabled: boolean) => api.put<DemoStatus>("/api/admin/demo", { enabled }),
-    onSuccess: (s) => {
-      qc.setQueryData(["admin", "demo"], s);
-      refresh();
-      toast.success(s.enabled ? "Demo mode is on" : "Demo mode is off: everyone sees the real site again");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const data = status.data;
-  const enabled = inDemo || !!data?.enabled;
-
-  return (
-    <Card>
-      <CardHeader
-        icon={<FlaskConical />}
-        title="Demo mode"
-        description="Show the site with example data instead of your members' data, to try it out or show it off. Your real data isn't touched, and comes back when you switch it off."
-        actions={
-          <Switch
-            aria-label="Demo mode"
-            checked={enabled}
-            disabled={inDemo || !data || set.isPending}
-            onCheckedChange={(on) => (on ? setConfirm(true) : set.mutate(false))}
-          />
-        }
-      />
-      <CardBody className="space-y-4">
-        {inDemo ? (
-          <Alert tone="accent" title="You're looking at the demo">
-            Only an administrator who signs in with EVE Online can switch demo mode off.
-          </Alert>
-        ) : status.isLoading ? (
-          <Spinner />
-        ) : (
-          <>
-            {data?.error && <Alert tone="danger" title="The demo couldn't be set up">{data.error}</Alert>}
-            {data?.enabled && data.preparing && (
-              <Alert tone="info" title="Making the example data">
-                <span className="flex items-center gap-2">
-                  <Spinner /> Visitors are asked to come back in a minute until it's ready.
-                </span>
-              </Alert>
-            )}
-            {data?.enabled && !data.preparing && !data.error && (
-              <Alert tone="warning" title="Demo mode is on">
-                Visitors see example data and sign in as <code className="font-mono">{data.username}</code> with the password{" "}
-                <code className="font-mono">{data.password}</code>. Members can't use the real site until you switch it off; you and the
-                other administrators keep it.
-              </Alert>
-            )}
-            <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
-              <li>The demo has an alliance of three corporations with about thirty members, and something on every page, plugins included.</li>
-              <li>It's read-only: nothing can be changed, no background jobs start and ESI isn't called.</li>
-              <li>Members sign in with EVE again as soon as it's off; their sign-ins are kept meanwhile.</li>
-            </ul>
-          </>
-        )}
-      </CardBody>
-      <ConfirmDialog
-        open={confirm}
-        onOpenChange={setConfirm}
-        title="Turn on demo mode?"
-        description="Everyone except administrators signed in with EVE sees example data instead of the real site until you switch it off. Members can't use the site meanwhile."
-        confirmLabel="Turn on demo mode"
-        onConfirm={() => set.mutateAsync(true)}
-      />
-    </Card>
   );
 }
 
