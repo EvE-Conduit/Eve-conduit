@@ -1,0 +1,28 @@
+[project]
+name = "conduit-store"
+version = "1.0.0"
+description = "Corp Store: members earn points for referrals, fleets, mentoring and industry projects, and spend them in a store officers fill by hand."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+store = "conduit_store.plugin:StorePlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Corp Store"
+icon = "coins"
+category = "Community"
+min_conduit = "0.5.52"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_store*"]
+
+[tool.setuptools.package-data]
+conduit_store = ["static/**/*"]
