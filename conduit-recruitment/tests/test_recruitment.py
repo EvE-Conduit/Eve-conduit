@@ -4,6 +4,7 @@ import pytest
 from django.core.cache import cache
 from django.contrib.auth.models import Group, Permission
 
+from conduit.accounts.models import Character
 from conduit.events import bus
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
@@ -277,3 +278,29 @@ def test_closed_applications_take_no_more_messages_and_hide_live_data(setup, api
     # Recruiters keep the application, but not a live view of the person's wallet and characters.
     api_client.force_login(recruiter)
     assert api_client.call("get", f"/api/p/recruit/applications/{app.pk}").json()["characters"] == []
+
+
+def test_applicants_name_a_member_who_referred_them(setup, api_client):
+    form, recruiter, applicant, _ = setup
+    scout = make_user(90000090, "Scout Sam")
+    # Alts aren't searched: that would tell the applicant who owns them.
+    Character.objects.create(id=90000091, name="Sam's Alt", owner_hash="hash-90000091", user=scout)
+    make_user(90000092, "Sam Guest", member=False)  # guests can't be referrers
+    api_client.force_login(applicant)
+    hits = api_client.call("get", "/api/p/recruit/referrers?q=sam").json()
+    assert [h["name"] for h in hits] == ["Scout Sam"]
+    assert api_client.call("get", "/api/p/recruit/referrers?q=s").json() == []
+
+    bad = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers(), "referrer_id": applicant.pk})
+    assert bad.status_code == 400 and "referred you" in bad.json()["detail"]
+    ok = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers(), "referrer_id": scout.pk})
+    assert ok.json()["referrer"]["name"] == "Scout Sam"
+    app = Application.objects.get(pk=ok.json()["id"])
+
+    api_client.force_login(scout)
+    stats = api_client.call("get", "/api/p/recruit/referrals").json()
+    assert (stats["referred"], stats["recruited"], stats["in_progress"]) == (1, 0, 1)
+    services.decide(app, recruiter, True)
+    stats = api_client.call("get", "/api/p/recruit/referrals").json()
+    assert (stats["referred"], stats["recruited"], stats["in_progress"]) == (1, 1, 0)
+    assert stats["referrals"][0]["user"]["name"] == "Hopeful Pilot" and stats["referrals"][0]["status"] == "accepted"

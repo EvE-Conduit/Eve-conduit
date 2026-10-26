@@ -58,6 +58,8 @@ class Application(models.Model):
     #: {question id: answer}
     answers = models.JSONField(default=dict)
     reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    #: The member who brought them in, picked by the applicant when applying (optional).
+    referrer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     decided_at = models.DateTimeField(null=True, blank=True)

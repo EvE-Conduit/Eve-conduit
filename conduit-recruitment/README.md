@@ -19,6 +19,11 @@ Application forms, a review queue, and accepting people into groups.
   missing and links to the Discord page; Discord is asked live when they apply. **Needs the
   [Discord](../conduit-discord) plugin installed, switched on and set up**; until it is, nothing is checked and the
   Settings page says so. Applicants need `discord.access_discord` to link; Discord gives it to every state by default.
+- **Referrals:** when applying, applicants can name the member who referred them: they type part of the name and
+  pick from the members whose main character matches (alts aren't searched, so nobody learns who owns which alt).
+  Recruiters see the referrer on the application. Every member has a **Referrals** page with their own stats:
+  pilots who named them, how many were recruited (accepted), still in progress and not accepted, and each
+  application's status.
 - **Webhooks:** `recruit.application_submitted` and `recruit.application_decided` can be sent to Discord or Slack
   under Administration → Integrations.
 
