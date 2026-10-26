@@ -1,0 +1,28 @@
+[project]
+name = "conduit-stock"
+version = "1.0.0"
+description = "Doctrine Stock: how many of each ship and item should be for sale at each staging location, what's short, and members claiming shortages to seed them."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+stock = "conduit_stock.plugin:StockPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Doctrine Stock"
+icon = "boxes"
+category = "Industry"
+min_conduit = "0.5.52"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_stock*"]
+
+[tool.setuptools.package-data]
+conduit_stock = ["static/**/*"]
