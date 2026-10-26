@@ -363,7 +363,7 @@ def decide(app: Application, by, accept: bool, message: str = "", request=None) 
     notify(app.user_id, title, message.strip()[:300] or app.form.name, link="/p/recruit", level="success" if accept else "info",
            category="p.recruit", force=True)
     bus.emit("recruit.application_decided", user_id=app.user_id, user=app.user.display_name, form=app.form.name,
-             application_id=app.pk, accepted=accept, by=by.display_name, groups=added,
+             application_id=app.pk, accepted=accept, by=by.display_name, groups=added, referrer_id=app.referrer_id,
              summary=f"{by.display_name} {verb} {app.user.display_name} ({app.form.name})")
     record(f"recruit.{verb}", f"{verb} {app.user.display_name}'s application", request=request, actor=by, target=app.user,
            details={"application_id": app.pk, "groups": added})

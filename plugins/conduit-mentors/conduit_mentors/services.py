@@ -418,7 +418,7 @@ def graduate(m: Mentorship, by, text: str = "", request=None) -> Mentorship:
     _close(m, by, Mentorship.Status.GRADUATED, text or "Graduated", "graduated")
     notify(m.mentee_id, "Congratulations, you graduated!", text[:300] or f"From {by.display_name}", link=_link(m), level="success",
            category=CATEGORY, force=True)
-    bus.emit("mentors.graduated", user_id=m.mentee_id, user=m.mentee.display_name, mentor=m.mentor.display_name if m.mentor else None,
+    bus.emit("mentors.graduated", user_id=m.mentee_id, user=m.mentee.display_name, mentor=m.mentor.display_name if m.mentor else None, mentor_id=m.mentor_id,
              mentorship_id=m.pk, link=_link(m), level="success", title=f"{m.mentee.display_name} graduated",
              summary=f"Mentored by {m.mentor.display_name}" if m.mentor else "")
     record("mentors.graduated", f"graduated {m.mentee.display_name}", request=request, actor=by, target=m.mentee, details={"mentorship_id": m.pk})
