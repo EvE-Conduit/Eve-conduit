@@ -69,6 +69,7 @@ export interface ApplicationInfo {
   user: { id: number; name: string; portrait: string | null };
   reviewer: string | null;
   reviewer_id: number | null;
+  referrer: Referrer | null;
   created_at: string;
   updated_at: string;
   decided_at: string | null;
@@ -78,6 +79,21 @@ export interface ApplicationInfo {
   characters?: CharacterSummary[];
   accept_groups?: string[];
   history?: { id: number; status: Status; form: string; created_at: string }[];
+}
+
+/** A member an applicant can name as the one who referred them. */
+export interface Referrer {
+  id: number;
+  name: string;
+  portrait: string | null;
+}
+
+export interface ReferralStats {
+  referred: number;
+  recruited: number;
+  in_progress: number;
+  not_accepted: number;
+  referrals: { id: number; user: Referrer; form: string; status: Status; created_at: string; decided_at: string | null }[];
 }
 
 export const STATUS: Record<Status, { label: string; tone: "info" | "accent" | "success" | "danger" | "neutral" }> = {

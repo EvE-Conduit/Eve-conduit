@@ -181,7 +181,7 @@ export function ApplicationPage() {
       <PageHeader
         eyebrow={data.form.name}
         title={data.user.name}
-        description={`Applied ${date(data.created_at)}${data.reviewer ? ` · recruiter: ${data.reviewer}` : ""}`}
+        description={`Applied ${date(data.created_at)}${data.referrer ? ` · referred by ${data.referrer.name}` : ""}${data.reviewer ? ` · recruiter: ${data.reviewer}` : ""}`}
         icon={data.user.portrait ? <img src={data.user.portrait} alt="" className="size-full object-cover" /> : <Users />}
         actions={
           open ? (

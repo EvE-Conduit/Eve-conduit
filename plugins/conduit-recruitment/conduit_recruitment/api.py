@@ -24,7 +24,7 @@ def _run(fn, *args, **kwargs):
 
 
 def _visible_application(request, application_id: int) -> Application:
-    app = get_object_or_404(Application.objects.select_related("form", "user", "reviewer"), pk=application_id)
+    app = get_object_or_404(Application.objects.select_related("form", "user", "reviewer", "referrer"), pk=application_id)
     if app.user_id != request.user.pk and not request.user.has_perm(REVIEW_PERM):
         raise HttpError(404, "Not found")
     return app
@@ -36,7 +36,7 @@ def _visible_application(request, application_id: int) -> Application:
 @router.get("/me")
 def me(request):
     """The open forms and the signed-in user's own applications."""
-    mine = Application.objects.filter(user=request.user).select_related("form", "user", "reviewer")
+    mine = Application.objects.filter(user=request.user).select_related("form", "user", "reviewer", "referrer")
     current = next((a for a in mine if a.is_open), None)
     forms = list(Form.objects.filter(open=True))
     # Only asked when it matters, since it's a call to Discord: Require Discord is on and they're not applying yet.
@@ -50,15 +50,28 @@ def me(request):
     }
 
 
+@router.get("/referrers")
+def referrers(request, q: str = ""):
+    """Members to pick from in the "Who referred you?" box, by main character name."""
+    return services.find_referrers(q, request.user)
+
+
+@router.get("/referrals")
+def referrals(request):
+    """The signed-in member's own referral stats."""
+    return services.referral_stats(request.user)
+
+
 class ApplyIn(Schema):
     form_id: int
     answers: dict = {}
+    referrer_id: int | None = None
 
 
 @router.post("/applications")
 def apply(request, payload: ApplyIn):
     form = get_object_or_404(Form, pk=payload.form_id)
-    app = _run(services.apply, request.user, form, payload.answers)
+    app = _run(services.apply, request.user, form, payload.answers, payload.referrer_id)
     return services.application_out(app, request.user, detail=True)
 
 
@@ -92,7 +105,7 @@ def application(request, application_id: int):
 @router.get("/applications")
 @require_perm(REVIEW_PERM)
 def queue(request, status: str = "open", q: str = ""):
-    qs = Application.objects.select_related("form", "user", "reviewer")
+    qs = Application.objects.select_related("form", "user", "reviewer", "referrer")
     if status == "open":
         qs = qs.filter(status__in=Application.OPEN)
     elif status == "mine":

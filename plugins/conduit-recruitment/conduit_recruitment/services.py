@@ -191,6 +191,58 @@ def check_discord(user) -> None:
         raise RecruitError("Join our Discord server (on the Discord page) before you apply", 403)
 
 
+# --- referrers ----------------------------------------------------------------------------------------------------
+
+
+def find_referrers(q: str, user) -> list[dict]:
+    """Members whose main character's name contains ``q``, for the applicant's "Who referred you?" box.
+
+    Only main names are searched: matching alts would tell an applicant who owns which alt.
+    """
+    from conduit.access.services import site_members
+
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    qs = (site_members().filter(main_character__name__icontains=q).exclude(pk=user.pk)
+          .select_related("main_character").order_by("main_character__name")[:10])
+    return [referrer_out(u) for u in qs]
+
+
+def referrer_out(u) -> dict:
+    return {"id": u.pk, "name": u.display_name,
+            "portrait": portrait_url(u.main_character_id, 64) if u.main_character_id else None}
+
+
+def clean_referrer(user, referrer_id):
+    from conduit.access.services import is_site_member
+
+    if not referrer_id:
+        return None
+    referrer = get_user_model().objects.filter(pk=referrer_id).select_related("state", "main_character").first()
+    if referrer is None or referrer.pk == user.pk or not is_site_member(referrer):
+        raise RecruitError("Pick who referred you from the list, or leave it empty")
+    return referrer
+
+
+def referral_stats(user) -> dict:
+    """What a member's referrals came to: people referred, recruited (accepted), still in progress, not accepted."""
+    apps = list(Application.objects.filter(referrer=user).select_related("form", "user__main_character"))
+    people = {a.user_id for a in apps}
+    recruited = {a.user_id for a in apps if a.status == Application.Status.ACCEPTED}
+    return {
+        "referred": len(people),
+        "recruited": len(recruited),
+        "in_progress": sum(1 for a in apps if a.is_open),
+        "not_accepted": sum(1 for a in apps if a.status in (Application.Status.REJECTED, Application.Status.WITHDRAWN)),
+        "referrals": [
+            {"id": a.pk, "user": referrer_out(a.user), "form": a.form.name, "status": a.status,
+             "created_at": a.created_at.isoformat(), "decided_at": a.decided_at.isoformat() if a.decided_at else None}
+            for a in apps
+        ],
+    }
+
+
 # --- applying -------------------------------------------------------------------------------------------------
 
 
@@ -217,7 +269,7 @@ def clean_answers(form: Form, raw) -> dict:
 
 
 @transaction.atomic
-def apply(user, form: Form, answers) -> Application:
+def apply(user, form: Form, answers, referrer_id: int | None = None) -> Application:
     if not form.open:
         raise RecruitError("This form isn't taking applications right now")
     # Lock the applicant's row so two applies sent at once can't both pass the check below.
@@ -225,7 +277,8 @@ def apply(user, form: Form, answers) -> Application:
     if open_application(user):
         raise RecruitError("You already have an application in progress")
     check_discord(user)
-    app = Application.objects.create(user=user, form=form, answers=clean_answers(form, answers))
+    referrer = clean_referrer(user, referrer_id)
+    app = Application.objects.create(user=user, form=form, answers=clean_answers(form, answers), referrer=referrer)
     reviewers = [u for u in users_with_perm(REVIEW_PERM) if u.pk != user.pk]
     notify(reviewers, f"New application from {user.display_name}", form.name, link=f"/p/recruit/applications/{app.pk}",
            category="p.recruit", data={"application_id": app.pk})
@@ -381,6 +434,7 @@ def application_out(app: Application, viewer, *, detail: bool = False) -> dict:
                  "portrait": portrait_url(app.user.main_character_id, 128) if app.user.main_character_id else None},
         "reviewer": app.reviewer.display_name if app.reviewer else None,
         "reviewer_id": app.reviewer_id,
+        "referrer": referrer_out(app.referrer) if app.referrer else None,
         "created_at": app.created_at.isoformat(),
         "updated_at": app.updated_at.isoformat(),
         "decided_at": app.decided_at.isoformat() if app.decided_at else None,

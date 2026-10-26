@@ -7,8 +7,9 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import { Back, External, Form as FormIcon, Send, Users, X } from "./icons";
+import { ReferrerField } from "./referrals";
 import { Answer, Conversation, Progress, QuestionField, StatusBadge } from "./shared";
-import { type ApplicationInfo, BASE, type DiscordStatus, type FormInfo } from "./types";
+import { type ApplicationInfo, BASE, type DiscordStatus, type FormInfo, type Referrer } from "./types";
 
 interface Me {
   forms: FormInfo[];
@@ -26,15 +27,17 @@ export function ApplyPage() {
   const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: KEY, queryFn: () => api.get<Me>(`${BASE}/me`) });
   const [form, setForm] = useState<FormInfo | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | boolean | null>>({});
+  const [referrer, setReferrer] = useState<Referrer | null>(null);
   const [withdrawing, setWithdrawing] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: KEY });
 
   const submit = useMutation({
-    mutationFn: () => api.post<ApplicationInfo>(`${BASE}/applications`, { form_id: form!.id, answers }),
+    mutationFn: () => api.post<ApplicationInfo>(`${BASE}/applications`, { form_id: form!.id, answers, referrer_id: referrer?.id ?? null }),
     onSuccess: () => {
       toast.success("Application sent. The recruiters have been told.");
       setForm(null);
       setAnswers({});
+      setReferrer(null);
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -92,6 +95,12 @@ export function ApplyPage() {
                     <Answer value={q.answer} />
                   </div>
                 ))}
+                {current.referrer && (
+                  <div>
+                    <div className="text-xs text-muted">Referred by</div>
+                    <span>{current.referrer.name}</span>
+                  </div>
+                )}
               </CardBody>
             </Card>
             <Button variant="ghost" className="w-full text-danger-fg" onClick={() => setWithdrawing(true)}>
@@ -116,6 +125,7 @@ export function ApplyPage() {
             {form.questions.map((q) => (
               <QuestionField key={q.id} q={q} value={answers[q.id]} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
             ))}
+            <ReferrerField value={referrer} onChange={setReferrer} />
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
               <Button variant="ghost" onClick={() => setForm(null)}>
                 <Back /> Back

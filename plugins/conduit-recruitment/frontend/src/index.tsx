@@ -4,6 +4,7 @@ import { Link } from "react-router";
 
 import { ApplyPage } from "./apply";
 import { FormsPage } from "./forms";
+import { ReferralsPage } from "./referrals";
 import { ApplicationPage, QueuePage } from "./review";
 import { SettingsPage } from "./settings";
 import { BASE } from "./types";
@@ -41,6 +42,7 @@ export default definePlugin({
     { path: "apply", Component: ApplyPage },
     { path: "applications/:id", Component: ApplicationPage },
     { path: "forms", Component: FormsPage },
+    { path: "referrals", Component: ReferralsPage },
     { path: "settings", Component: SettingsPage },
   ],
   widgets: [{ id: "queue", title: "Recruitment", Component: RecruiterWidget, size: "sm", order: 30, permission: "recruit.review_applications" }],
