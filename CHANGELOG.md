@@ -3,6 +3,16 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.52
+
+Referrals in Recruitment.
+
+### Plugins
+- **Recruitment 1.2.0:** applicants can name the member who referred them: they type part of the name and pick from
+  the members whose main character matches (alts aren't searched, so nobody learns who owns which alt). Recruiters
+  see the referrer on the application. Every member has a **Referrals** page with their own stats: pilots who named
+  them, how many were recruited, still in progress and not accepted, and how each application went.
+
 ## 0.5.51
 
 zKillboard history on the killmail tabs, and four new plugins: Ops Calendar, Corp Tax, Blacklist and Freight.
