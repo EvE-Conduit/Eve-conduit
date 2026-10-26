@@ -1,0 +1,28 @@
+[project]
+name = "conduit-projects"
+version = "1.0.0"
+description = "Industry Projects: a corp build board where members claim parts of a project, deliver them and see their industry jobs against it."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+projects = "conduit_projects.plugin:ProjectsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Industry Projects"
+icon = "factory"
+category = "Industry"
+min_conduit = "0.5.52"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_projects*"]
+
+[tool.setuptools.package-data]
+conduit_projects = ["static/**/*"]

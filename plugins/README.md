@@ -24,6 +24,10 @@ results, group rules and ESI scopes.
 - [`conduit-tax`](conduit-tax): Corp Tax: bounty, ESS and mission tax per member from the corp wallet, an extra tax billed monthly, payments matched from the wallet, reminders and a paid-up group rule.
 - [`conduit-blacklist`](conduit-blacklist): Blacklist: characters, corporations and alliances you don't want, with notes, and a warning when one links a character or applies.
 - [`conduit-freight`](conduit-freight): Freight: routes with your rates, a calculator that gives the exact courier contract to make, and every courier contract checked against its route.
+- [`conduit-store`](conduit-store): Corp Store: members earn points for referrals, fleets, mentoring and industry projects, and spend them in a store officers fill by hand, with a points leaderboard.
+- [`conduit-stock`](conduit-stock): Doctrine Stock: how many of each ship and item should be for sale at each staging location, what's short from members' and corporations' orders and contracts, members claiming shortages to seed, and low-stock alerts.
+- [`conduit-inactivity`](conduit-inactivity): Inactivity: members who have gone quiet, from site sign-ins, game logins and fleets, a daily digest for HR, leave of absence with approval, and group rules.
+- [`conduit-projects`](conduit-projects): Industry Projects: a corp build board where members claim parts of a project, mark them delivered for a manager to confirm (paying Corp Store points), with their industry jobs shown as a hint.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
