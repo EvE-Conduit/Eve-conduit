@@ -28,6 +28,12 @@ results, group rules and ESI scopes.
 - [`conduit-stock`](conduit-stock): Doctrine Stock: how many of each ship and item should be for sale at each staging location, what's short from members' and corporations' orders and contracts, members claiming shortages to seed, and low-stock alerts.
 - [`conduit-inactivity`](conduit-inactivity): Inactivity: members who have gone quiet, from site sign-ins, game logins and fleets, a daily digest for HR, leave of absence with approval, and group rules.
 - [`conduit-projects`](conduit-projects): Industry Projects: a corp build board where members claim parts of a project, mark them delivered for a manager to confirm (paying Corp Store points), with their industry jobs shown as a hint.
+- [`conduit-structures`](conduit-structures): Structures & Fuel: every corporation's structures on one board with fuel countdowns and burn from their online services, a fuel plan for topping up to N days, warnings at chosen thresholds, refuel claims and a dashboard widget.
+- [`conduit-spycheck`](conduit-spycheck): Spy Check: a daily scan of members' wallets, contracts, mail, contacts and corporation history for contact with blacklisted or watched entities, with findings to acknowledge or dismiss and a digest for HR.
+- [`conduit-capitals`](conduit-capitals): Capital Registry: who can fly and who owns each capital class, where the hulls are parked, jump skills, clones and fatigue, availability for ops, and group rules.
+- [`conduit-finance`](conduit-finance): Corp Finance: corporation income and spending per month by category with internal transfers kept apart, balance history per wallet division, a printable monthly report and a CSV journal.
+- [`conduit-blueprints`](conduit-blueprints): Blueprint Library: the corporations' BPOs and BPCs with ME/TE and location, members' shared originals, copy and loan requests with overdue reminders, and research gaps.
+- [`conduit-pi`](conduit-pi): Planetary Industry: every colony of a member's characters with extractor countdowns, output and its value, expiry reminders, and a corporation view of products and idle colonies.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.

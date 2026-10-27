@@ -1,0 +1,29 @@
+[project]
+name = "conduit-pi"
+version = "1.0.0"
+description = "Planetary Industry: every colony across your characters with extractor countdowns, output and its value, expiry reminders, and a corporation view for PI programs."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+pi = "conduit_pi.plugin:PiPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Planetary Industry"
+icon = "globe"
+category = "Industry"
+min_conduit = "0.5.52"
+esi_scopes = ["esi-planets.manage_planets.v1"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_pi*"]
+
+[tool.setuptools.package-data]
+conduit_pi = ["static/**/*"]
