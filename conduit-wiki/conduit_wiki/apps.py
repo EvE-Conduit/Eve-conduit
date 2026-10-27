@@ -9,5 +9,9 @@ class WikiConfig(AppConfig):
     def ready(self):
         from conduit.events import bus
 
-        bus.register("wiki.page_created", "Wiki page created", "A new page was written", plugin="wiki")
-        bus.register("wiki.page_updated", "Wiki page edited", "A page got a new revision", plugin="wiki")
+        # Webhooks often post to channels everyone can read, so pages for some states or groups only go out as their
+        # own "_restricted" events. They're private: an "every event" webhook leaves them out, only one that picks
+        # them gets them (a leadership channel, say).
+        for suffix, who, private in (("", "", False), ("_restricted", " (for some states or groups only)", True)):
+            bus.register(f"wiki.page_created{suffix}", f"Wiki page created{who}", f"A new page was written{who}", plugin="wiki", private=private)
+            bus.register(f"wiki.page_updated{suffix}", f"Wiki page edited{who}", f"A page got a new revision{who}", plugin="wiki", private=private)

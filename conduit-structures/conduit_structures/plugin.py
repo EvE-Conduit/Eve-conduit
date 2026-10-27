@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class StructuresPlugin(Plugin):
     id = "structures"
     name = "Structures & Fuel"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Every structure your corporations own on one board, fuel blocks burned and needed, warnings at the thresholds you choose, and members claiming refuels."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-structures"

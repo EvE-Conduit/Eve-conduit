@@ -190,3 +190,42 @@ def test_managers_cannot_confirm_their_own_delivery(setup, api_client):
     resp = api_client.call("post", f"/api/p/projects/contributions/{c.pk}/confirm")
     assert resp.status_code == 403 and "Another manager" in resp.json()["detail"]
     assert Contribution.objects.get(pk=c.pk).status == Contribution.Status.DELIVERED
+
+
+def test_points_are_bounded_and_capped_per_delivery(setup, api_client):
+    project, item, boss, pilot, other = setup
+    api_client.force_login(boss)
+    for bad in ({"points_per_unit": services.MAX_POINTS + 1}, {"points_per_unit": -1}, {"isk_per_unit": float("nan")},
+                {"isk_per_unit": float("inf")}):
+        resp = api_client.call("put", f"/api/p/projects/items/{item.pk}", {"quantity": 20, "points_per_unit": 10, "isk_per_unit": 0,
+                                                                              **bad})
+        assert resp.status_code == 400, bad
+    big = services.add_item(project, TRITANIUM, services.MAX_QUANTITY, points_per_unit=services.MAX_POINTS)
+    c = services.claim(big, pilot, services.MAX_QUANTITY)
+    services.deliver(c, pilot)
+    services.confirm(c, boss)
+    assert services.contribution_points(c) == services.MAX_POINTS
+
+
+def test_confirm_needs_a_delivery_on_an_open_project(setup):
+    project, item, boss, pilot, other = setup
+    c = services.claim(item, pilot, 5)
+    with pytest.raises(services.ProjectError, match="marked delivered"):
+        services.confirm(c, boss)
+    services.deliver(c, pilot)
+    services.close(project, Project.Status.CANCELLED, boss)
+    with pytest.raises(services.ProjectError, match="closed"):
+        services.confirm(c, boss)
+    assert Contribution.objects.get(pk=c.pk).status == Contribution.Status.DELIVERED
+
+
+def test_points_per_unit_cannot_change_under_a_waiting_delivery(setup):
+    project, item, boss, pilot, other = setup
+    c = services.claim(item, pilot, 5)
+    services.update_item(item, 20, 50, 0)  # only claimed: fine
+    services.deliver(c, pilot)
+    with pytest.raises(services.ProjectError, match="waiting for a manager"):
+        services.update_item(item, 20, 5000, 0)
+    services.update_item(item, 25, 50, 0)  # the quantity can still change
+    services.confirm(c, boss)
+    assert services.contribution_points(Contribution.objects.get(pk=c.pk)) == 250

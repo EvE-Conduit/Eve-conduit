@@ -1,6 +1,6 @@
 [project]
 name = "conduit-mumble"
-version = "1.0.0"
+version = "1.0.1"
 description = "Mumble: members get a Mumble account with groups from their groups and state, and anyone with the permission can hand out temporary access links to guests."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

@@ -11,8 +11,8 @@ month, payments picked up from the corporation wallet, and reminders.
   bonuses) and how to pay. Once a month is over, close it: the rate is fixed, each member is told what they owe, and
   payments are marked as they come in. A month can be reopened while nobody has paid.
 - **Payments from the wallet:** a donation from one of a member's characters to a tax corporation whose reason
-  contains the payment word (`TAX` by default; each bill shows e.g. `TAX 2026-09`) settles their bills, oldest first,
-  once it covers one in full. What's left over counts towards the next bill. The wallets are checked once a day, or
+  contains the payment word as a word of its own (`TAX` by default, in any case but not inside `syntax` or `taxi`;
+  each bill shows e.g. `TAX 2026-09`) settles their bills, oldest first, once it covers one in full. What's left over counts towards the next bill. The wallets are checked once a day, or
   straight away with **Check payments**. Bills can also be marked paid by hand.
 - **Reminders:** members with unpaid bills get a notification every 7 days (configurable; 0 switches it off).
 - **Group rule** "Corp tax paid": no bill unpaid for longer than N days. Use it as a group requirement or in a smart
@@ -27,6 +27,8 @@ The data comes from the corporation sheet's Wallets section, which needs a direc
 corporation. Earnings are estimated with the corporation's current tax rate, so they're off for months when the rate
 was different; what the corporation took is always exact.
 
-Marking a bill that a wallet payment settled as unpaid doesn't give that payment back to the member.
+Marking a bill that a wallet payment settled as unpaid gives that payment back to the member, as credit for their
+next bill (bills settled before version 1.0.1 don't, as the plugin didn't note which payment paid them). Nobody
+can mark their own bill, managers included.
 
 Give the two permissions to a state (Administration → States) or a group (Administration → Groups).

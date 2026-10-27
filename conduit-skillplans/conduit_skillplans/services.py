@@ -189,26 +189,35 @@ def plan_detail(plan: SkillPlan, user) -> dict:
     }
 
 
-def members_progress(plan: SkillPlan) -> list[dict]:
-    """Every member's best character on a plan, closest to done first."""
+def members_progress(plan: SkillPlan, viewer=None) -> list[dict]:
+    """Every member's best character on a plan, closest to done first.
+
+    Which character it is (name and id) is only given when it's the member's main or ``viewer`` may read that
+    character's sheet anyway (the core sheet permissions): progress alone mustn't reveal who owns which alt.
+    """
     from conduit.access.services import site_members
+    from conduit.sheet.access import can_view
 
     users = list(site_members().filter(characters__isnull=False).distinct().select_related("main_character"))
-    chars = list(Character.objects.filter(user__in=users).values_list("pk", "name", "user_id"))
+    mains = {u.pk: u.main_character_id for u in users}
+    chars = {c.pk: c for c in Character.objects.filter(user__in=users).only("id", "name", "user_id", "corporation_id", "alliance_id")}
     steps = _steps(plan)
     info = training.skill_info(s for s, _ in steps)
-    states = training.character_state((c for c, _, _ in chars), {s for s, _ in steps})
+    states = training.character_state(chars, {s for s, _ in steps})
     best: dict[int, dict] = {}
-    for cid, name, uid in chars:
+    for cid, c in chars.items():
         p = training.progress(steps, states[cid], info)
-        row = {"character": name, "character_id": cid, "percent": p["percent"], "complete": p["complete"],
+        row = {"character": c.name, "character_id": cid, "percent": p["percent"], "complete": p["complete"],
                "seconds_left": p["seconds_left"], "synced": states[cid]["synced"]}
-        if uid not in best or (row["percent"], -row["seconds_left"]) > (best[uid]["percent"], -best[uid]["seconds_left"]):
-            best[uid] = row
+        if c.user_id not in best or (row["percent"], -row["seconds_left"]) > (best[c.user_id]["percent"], -best[c.user_id]["seconds_left"]):
+            best[c.user_id] = row
     out = []
     for u in users:
         row = best.get(u.pk)
         if row:
+            cid = row["character_id"]
+            if viewer is not None and cid != mains[u.pk] and not can_view(viewer, chars[cid]):
+                row = {**row, "character": None, "character_id": None}
             out.append({"user_id": u.pk, "name": u.display_name, "portrait": portrait_url(u.main_character_id, 64) if u.main_character_id else None,
                         **row})
     return sorted(out, key=lambda m: (not m["complete"], -m["percent"], m["seconds_left"], m["name"].lower()))

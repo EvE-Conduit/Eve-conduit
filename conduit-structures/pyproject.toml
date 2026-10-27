@@ -1,6 +1,6 @@
 [project]
 name = "conduit-structures"
-version = "1.0.0"
+version = "1.0.1"
 description = "Structures & Fuel: every structure your corporations own on one board, fuel blocks burned and needed, warnings at the thresholds you choose, and members claiming refuels."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

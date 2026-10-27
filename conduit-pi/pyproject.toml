@@ -1,6 +1,6 @@
 [project]
 name = "conduit-pi"
-version = "1.0.0"
+version = "1.0.1"
 description = "Planetary Industry: every colony across your characters with extractor countdowns, output and its value, expiry reminders, and a corporation view for PI programs."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

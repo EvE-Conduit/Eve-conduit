@@ -153,6 +153,12 @@ def test_library_groups_by_product(stocked, api_client):
 
     detail = api_client.call("get", f"{BASE}/library/{HURRICANE_BP}").json()
     assert [(e["copy"], e["runs"], e["me"]) for e in detail["entries"]] == [(False, -1, 10), (True, 10, 10), (True, 5, 8)]
+    # Being in the corporation shows its library, not where it keeps its blueprints...
+    assert detail["entries"][0]["location"] is None and detail["entries"][0]["division"] is None
+    # ...that takes its Assets on the corporation sheet.
+    pilot = grant(pilot, "view_own_corporation")
+    api_client.force_login(pilot)
+    detail = api_client.call("get", f"{BASE}/library/{HURRICANE_BP}").json()
     assert detail["entries"][0]["location"]["name"] == "Jita IV - Moon 4" and detail["entries"][0]["division"] == "Blueprints"
 
 
@@ -185,9 +191,13 @@ def test_who_sees_which_library(stocked, api_client, corp):
     outsider = grant(outsider, "view_all_corporations")
     api_client.force_login(outsider)
     assert len(api_client.call("get", f"{BASE}/library").json()["groups"]) == 3
-    # Request managers see every corporation's; members can't handle requests.
+    # Request managers see only the corporations they may see, like everyone else; members can't handle requests.
     other = EveCorporation.objects.get(pk=98000002)
     bp(other, 99, RIFTER_BP, me=1, te=2)
+    api_client.force_login(manager)
+    assert {e["owner"]["ticker"] for e in api_client.call("get", f"{BASE}/library/{RIFTER_BP}").json()["entries"]} == {"TCORP"}
+    assert {c["ticker"] for c in api_client.call("get", f"{BASE}/library").json()["corporations"]} == {"TCORP"}
+    manager = grant(manager, "view_all_corporations")
     api_client.force_login(manager)
     assert {e["owner"]["ticker"] for e in api_client.call("get", f"{BASE}/library/{RIFTER_BP}").json()["entries"]} == {"TCORP", "OTHER"}
     api_client.force_login(pilot)
@@ -368,8 +378,48 @@ def test_research_overview(stocked, api_client, corp):
     api_client.force_login(pilot)
     data = api_client.call("get", f"{BASE}/research").json()
     assert data["summary"] == {"originals": 2, "researched": 1, "me_short": 1, "te_short": 1}
+    # A member without corporation sheet access sees what needs research, not where it is.
+    assert [(r["name"], r["me"], r["te"], r["division"], r["location"]) for r in data["unresearched"]] == [("Rifter Blueprint", 5, 10, None, None)]
+    assert all(j["location"] is None for j in data["jobs"])
+    pilot = grant(pilot, "view_own_corporation")
+    api_client.force_login(pilot)
+    data = api_client.call("get", f"{BASE}/research").json()
     assert [(r["name"], r["me"], r["te"], r["division"]) for r in data["unresearched"]] == [("Rifter Blueprint", 5, 10, "Blueprints")]
+    assert data["jobs"][0]["location"]["name"] == "Jita IV - Moon 4"
     # Research and copying only, and a finished job not yet delivered counts as ready.
     assert [(j["job_id"], j["activity"], j["status"]) for j in data["jobs"]] == [(2, "Copying", "ready"), (1, "ME research", "active")]
     api_client.force_login(outsider)
     assert api_client.call("get", f"{BASE}/research").json()["unresearched"] == []
+
+
+def test_managers_dont_handle_their_own_requests(stocked, api_client, corp):
+    manager, pilot, _ = stocked
+    other_manager = grant(make_user(90000120, "Other Boss", corporation=corp), "manage_requests")
+    copy = services.create_request(manager, {"type_id": HURRICANE_BP})
+    loan = services.create_request(manager, {"type_id": HURRICANE_BP, "kind": "loan"})
+    api_client.force_login(manager)
+    for path in (f"{copy.pk}/accept", f"{copy.pk}/start", f"{copy.pk}/deliver", f"{loan.pk}/deliver"):
+        r = api_client.call("post", f"{BASE}/requests/{path}", {})
+        assert r.status_code == 403 and "your own request" in r.json()["detail"]
+    assert Request.objects.get(pk=copy.pk).status == "open"
+    # Someone else lends it; the borrower can't take it back in or move the date themselves.
+    services.deliver(loan, other_manager)
+    assert api_client.call("post", f"{BASE}/requests/{loan.pk}/returned").status_code == 403
+    assert api_client.call("post", f"{BASE}/requests/{loan.pk}/due", {"due_at": (timezone.now() + timedelta(days=9)).isoformat()}).status_code == 403
+    assert Request.objects.get(pk=loan.pk).status == "delivered"
+    api_client.force_login(other_manager)
+    assert api_client.call("post", f"{BASE}/requests/{loan.pk}/returned").json()["status"] == "returned"
+    assert api_client.call("post", f"{BASE}/requests/{copy.pk}/accept", {}).json()["status"] == "accepted"
+
+
+def test_copy_jobs_only_from_corporations_the_manager_sees(stocked, api_client, corp):
+    manager, pilot, _ = stocked
+    other = EveCorporation.objects.get(pk=98000002)
+    r = services.create_request(pilot, {"type_id": HURRICANE_BP})
+    now = timezone.now()
+    CorpIndustryJob.objects.create(corporation=other, job_id=5151, installer_id=1, activity_id=5, status="active",
+                                   blueprint_type_id=HURRICANE_BP, product_type_id=HURRICANE_BP, runs=1, facility_id=STATION,
+                                   location_id=STATION, start_date=now, end_date=now + timedelta(hours=5))
+    api_client.force_login(manager)
+    assert api_client.call("get", f"{BASE}/requests/{r.pk}/jobs").json() == []
+    assert api_client.call("post", f"{BASE}/requests/{r.pk}/start", {"job_id": 5151}).status_code == 400

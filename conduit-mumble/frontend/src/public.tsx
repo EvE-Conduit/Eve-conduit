@@ -35,6 +35,7 @@ export function PublicTempPage() {
     expired: "This link has expired. Ask whoever gave it to you for a new one.",
     revoked: "This link was withdrawn.",
     used_up: "This link has been used by as many people as it allows.",
+    creator_lost: "Whoever gave you this link can't hand out access any more. Ask someone else for a new one.",
   };
 
   return (

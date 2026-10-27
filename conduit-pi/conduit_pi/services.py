@@ -535,9 +535,11 @@ def send_digests(now: datetime | None = None) -> int:
 # --- the corporation view ----------------------------------------------------------------------------------------------
 
 
-def corp_overview(user, idle_days: int = 3, corporation_id: int | None = None, now: datetime | None = None) -> dict:
+def corp_overview(user, idle_days: int = 3, corporation_id: int | None = None, now: datetime | None = None, request=None) -> dict:
     """PI of every character the officer's character sheet access covers: totals by product, who makes what and idle
-    colonies (every extractor stopped for more than ``idle_days``)."""
+    colonies (every extractor stopped for more than ``idle_days``). With ``request``, looking at other members'
+    colonies goes in the snooper log like opening the Planets tab of their sheet."""
+    from conduit.audit.services import record_snoop
     from conduit.sheet.access import viewable_characters
 
     if not user.has_perm(VIEW_CORP_PERM):
@@ -552,6 +554,9 @@ def corp_overview(user, idle_days: int = 3, corporation_id: int | None = None, n
     colonies = list(Colony.objects.filter(character__in=chars).select_related(
         "character__corporation", "character__user__main_character__corporation"))
     ctx = Context(colonies)
+    if request is not None:
+        for character in {c.character_id: c.character for c in colonies}.values():
+            record_snoop(request, character, "planets")  # skips the viewer's own characters
 
     per_user: dict[int, dict] = {}
     idle = []

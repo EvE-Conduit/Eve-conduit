@@ -63,6 +63,31 @@ def test_fleet_points_once_per_member_whatever_their_characters(setup, django_ca
     assert services.balance(member) == 5 and PointEntry.objects.count() == 1
 
 
+def test_fleet_points_skip_self_added_fats_and_the_fcs_own_unless_tracked(setup, django_capture_on_commit_callbacks):
+    pytest.importorskip("conduit_fleets")
+    from conduit.accounts.models import Character
+    from conduit_fleets.models import Fat, Fleet
+
+    officer, member, _ = setup
+    Character.objects.create(id=90000101, name="Ola Alt", owner_hash="h-ola-alt", user=officer)
+    other = make_user(90000120, "Pilot Pia")
+    linker = make_user(90000130, "Linker Lu")
+    fleet = Fleet.objects.create(name="Self-serve", fc=officer, created_by=officer)
+    Fat.objects.create(fleet=fleet, character_id=90000110, character_name="Member Mo", via="manual", added_by=member)
+    Fat.objects.create(fleet=fleet, character_id=90000100, character_name="Officer Ola", via="manual", added_by=officer)
+    Fat.objects.create(fleet=fleet, character_id=90000101, character_name="Ola Alt", via="link", added_by=officer)
+    Fat.objects.create(fleet=fleet, character_id=90000120, character_name="Pilot Pia", via="manual", added_by=officer)
+    Fat.objects.create(fleet=fleet, character_id=90000130, character_name="Linker Lu", via="link", added_by=linker)
+    emit(django_capture_on_commit_callbacks, "fleets.ended", fleet_id=fleet.pk, fleet=fleet.name)
+    assert services.balance(member) == 0 and services.balance(officer) == 0
+    assert services.balance(other) == 5 and services.balance(linker) == 5
+
+    tracked = Fleet.objects.create(name="Tracked", fc=officer, created_by=officer)
+    Fat.objects.create(fleet=tracked, character_id=90000100, character_name="Officer Ola", via="esi")
+    emit(django_capture_on_commit_callbacks, "fleets.ended", fleet_id=tracked.pk, fleet=tracked.name)
+    assert services.balance(officer) == 5  # ESI saw the FC in the in-game fleet
+
+
 def test_nothing_is_paid_while_switched_off(setup, django_capture_on_commit_callbacks):
     _, member, _ = setup
     s = StoreSettings.load()
@@ -128,6 +153,10 @@ def test_cancelling_refunds_and_restocks_handing_over_notifies(setup, api_client
     resp = api_client.call("post", f"/api/p/store/orders/{second.pk}/fulfil", {"note": "In your hangar in Jita"})
     assert resp.status_code == 200 and resp.json()["status"] == "fulfilled"
     assert Notification.objects.filter(user=member, title="Your store order is ready: 1 × Ferox").exists()
+    services.award(officer.pk, 100, "Start", "manual")
+    own = services.buy(officer, item.pk, 1)
+    resp = api_client.call("post", f"/api/p/store/orders/{own.pk}/fulfil", {})
+    assert resp.status_code == 403 and Order.objects.get(pk=own.pk).status == "pending"  # not their own order
     third = services.buy(member, item.pk, 1)
     assert api_client.call("post", f"/api/p/store/orders/{third.pk}/cancel", {}).status_code == 400  # staff say why
     assert api_client.call("post", f"/api/p/store/orders/{third.pk}/cancel", {"note": "Out of Feroxes"}).status_code == 200

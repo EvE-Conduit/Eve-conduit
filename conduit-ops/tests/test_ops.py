@@ -205,6 +205,19 @@ def test_month_and_search(people, api_client):
     assert [h["url"] for h in groups["ops"]["hits"]] == [f"/p/ops#o{op['id']}"]
 
 
+def test_restricted_events_are_private():
+    from conduit.events import bus
+
+    for name in ("created", "updated", "cancelled", "reminder"):
+        assert bus.is_private(f"ops.{name}_restricted") and not bus.is_private(f"ops.{name}")
+
+
+def test_fc_search_matches_mains_only(people):
+    Character.objects.create(id=90000102, name="Hidden Scout", owner_hash="h2", user=people["fc"])
+    assert [p["name"] for p in services.fc_search("fleet")] == ["Fleet Commander"]
+    assert services.fc_search("hidden scout") == []  # would tell who owns the alt
+
+
 def test_doctrine_link(people, api_client):
     from django.apps import apps
 

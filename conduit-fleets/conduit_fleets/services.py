@@ -33,7 +33,7 @@ from conduit.eve.models import portrait_url
 from conduit.eve.tasks import ensure_eve_names, names_for
 from conduit.sde.models import ItemType, SolarSystem, type_icon_url
 
-from .models import Fat, Fleet, FleetType
+from .models import MAX_TRACKING, Fat, Fleet, FleetType
 
 log = logging.getLogger(__name__)
 
@@ -52,8 +52,6 @@ _BR = re.compile(r"<br\s*/?>", re.I)
 #: Line breaks at the end of the kept MOTD (the gap we added), possibly followed by closing tags the client moved.
 _TRAILING_BR = re.compile(r"(?:<br\s*/?>\s*)+((?:</[^>]+>\s*)*)$", re.I)
 _TAG = re.compile(r"<[^>]*>")
-#: Tracking stops by itself after this long, in case nobody ends the fleet.
-MAX_TRACKING = timedelta(hours=12)
 DEFAULT_TYPES = (("CTA", "#f43f5e"), ("Stratop", "#fb923c"), ("Roam", "#22d3ee"), ("Home defense", "#34d399"), ("Mining", "#a78bfa"))
 
 
@@ -522,7 +520,7 @@ def fleet_detail(fleet: Fleet, user) -> dict:
         "attended": any(f.character_id in mine for f in fats),
         "can_edit": editable,
         # The link and tracking details are for the people running the fleet.
-        "link": {"code": fleet.link_code, "active": fleet.link_active, "tracked_only": fleet.esi_fleet_id is not None, "expires_at": fleet.link_expires_at.isoformat() if fleet.link_expires_at else None} if editable else None,
+        "link": {"code": fleet.link_code, "active": fleet.link_active, "tracked_only": fleet.esi_fleet_id is not None, "expires_at": fleet.link_closes_at.isoformat()} if editable else None,
         "tracking_info": {
             "character": {"id": fleet.tracking_character_id, "name": fleet.tracking_character.name} if fleet.tracking_character_id else None,
             "last_at": fleet.last_tracked_at.isoformat() if fleet.last_tracked_at else None,

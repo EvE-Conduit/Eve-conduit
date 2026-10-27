@@ -107,7 +107,7 @@ def claim(request, mentorship_id: int):
     m = _visible(request, mentorship_id)
     if m.status != Mentorship.Status.WAITING:
         raise HttpError(400, "Someone already took this request")
-    _run(services.assign, m, request.user, request.user, request=request)
+    _run(services.assign, m, request.user, request.user, request=request, claim=True)
     return _detail(request, m)
 
 

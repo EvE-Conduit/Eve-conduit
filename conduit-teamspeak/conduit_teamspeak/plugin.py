@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class TeamSpeakPlugin(Plugin):
     id = "teamspeak"
     name = "TeamSpeak"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Members link their TeamSpeak identity with a one-time privilege key; their server groups follow their groups and state."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-teamspeak"

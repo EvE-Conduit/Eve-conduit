@@ -122,6 +122,19 @@ def test_fat_link(people, api_client):
     assert detail["attended"] and detail["link"] is None and not detail["can_edit"]
 
 
+def test_a_fat_link_without_a_closing_time_closes_after_twelve_hours(people, api_client):
+    fleet = start(api_client, people["fc"])
+    code = fleet["link"]["code"]
+    api_client.force_login(people["pilot"])
+    assert api_client.call("get", f"/api/p/fleets/fat/{code}").json()["open"]
+    Fleet.objects.update(started_at=timezone.now() - timedelta(hours=13))
+    assert not api_client.call("get", f"/api/p/fleets/fat/{code}").json()["open"]
+    assert api_client.call("post", f"/api/p/fleets/fat/{code}", {"characters": [90000002]}).status_code == 400
+    # A new FAT round opens it again for another twelve hours.
+    Fleet.objects.update(round_started_at=timezone.now() - timedelta(hours=1))
+    assert api_client.call("post", f"/api/p/fleets/fat/{code}", {"characters": [90000002]}).json() == {"added": 1}
+
+
 def test_only_fcs_run_fleets(people, api_client):
     api_client.force_login(people["pilot"])
     assert api_client.call("post", "/api/p/fleets", {"name": "Mine"}).status_code == 403

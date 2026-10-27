@@ -30,6 +30,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.db.models import Count, DecimalField, F, Max, Min, Q, Sum
 from django.db.models.functions import Abs
 from django.utils import timezone
@@ -59,6 +60,9 @@ SECTION = {"journal": "wallet", "market": "wallet", "contract": "contracts", "ma
 MAIL_CHUNK = 50  # recipients are a JSON list, matched by text: this many entity ids per query
 EVIDENCE_LIMIT = 200
 LINK = "/p/spycheck"
+#: Held while a scan runs, so Scan now and the daily scan don't run at the same time.
+SCAN_LOCK = "spycheck:scan"
+SCAN_LOCK_SECONDS = 3600
 
 
 class SpyCheckError(Exception):
@@ -71,9 +75,15 @@ def can_view(user) -> bool:
     return user.has_perm(VIEW_PERM) or user.has_perm(MANAGE_PERM)
 
 
+def others(viewer):
+    """The characters the viewer's sheet permissions reach, but not their own: nobody reviews themselves."""
+    return viewable_characters(viewer).exclude(user=viewer)
+
+
 def visible(viewer):
-    """Findings on the characters the viewer's sheet permissions reach, as Member Audit narrows its searches."""
-    return Finding.objects.filter(character_id__in=viewable_characters(viewer).values("pk"))
+    """Findings on the characters the viewer's sheet permissions reach, as Member Audit narrows its searches. Never
+    the viewer's own characters (nor ones they owned at the last scan): nobody reviews findings on themselves."""
+    return Finding.objects.filter(character_id__in=others(viewer).values("pk")).exclude(user=viewer)
 
 
 # --- what is watched -----------------------------------------------------------------------------------------------
@@ -243,7 +253,17 @@ def _newer_evidence(f: Finding, ev: Evidence, was_present: bool) -> bool:
 
 def scan(notify_people: bool = True) -> list[Finding]:
     """Look through everyone's data again and update the findings. Returns the ones that are new (or reopened), which
-    the chosen group is told about in one notification."""
+    the chosen group is told about in one notification. Only one scan runs at a time: another one while it runs
+    raises ``SpyCheckError`` (409)."""
+    if not cache.add(SCAN_LOCK, 1, SCAN_LOCK_SECONDS):
+        raise SpyCheckError("A scan is already running: try again when it's done", status=409)
+    try:
+        return _scan(notify_people)
+    finally:
+        cache.delete(SCAN_LOCK)
+
+
+def _scan(notify_people: bool) -> list[Finding]:
     s = SpySettings.load()
     now = timezone.now()
     chars = _member_characters()
@@ -260,9 +280,12 @@ def scan(notify_people: bool = True) -> list[Finding]:
                   "source": w.source, "count": ev.count, "amount": ev.amount.quantize(Decimal("0.01")),
                   "first_seen": ev.first, "last_seen": ev.last, "present": True}
         if f is None:
-            f = Finding.objects.create(character_id=cid, entity_id=eid, kind=kind, state=Finding.State.NEW, flagged_at=now, **fields)
-            flagged.append(f)
-            continue
+            # get_or_create: a row someone else made meanwhile is updated below rather than failing the scan.
+            f, created = Finding.objects.get_or_create(character_id=cid, entity_id=eid, kind=kind,
+                                                       defaults={"state": Finding.State.NEW, "flagged_at": now, **fields})
+            if created:
+                flagged.append(f)
+                continue
         reopen = f.state == Finding.State.DISMISSED and _newer_evidence(f, ev, f.present)
         changed = [k for k, v in fields.items() if getattr(f, k) != v]
         for k in changed:
@@ -308,10 +331,10 @@ def _digest(flagged: list[Finding], s: SpySettings) -> None:
         by_member[f.user.display_name].add(f.entity_name)
     title, shown = _digest_text(flagged)
     n = len(flagged)
-    # Each reviewer only hears about the characters they may see.
+    # Each reviewer only hears about the characters they may see, and never about their own.
     for person in recipients(s):
-        seen = set(viewable_characters(person).filter(pk__in={f.character_id for f in flagged}).values_list("pk", flat=True))
-        mine = [f for f in flagged if f.character_id in seen]
+        seen = set(others(person).filter(pk__in={f.character_id for f in flagged}).values_list("pk", flat=True))
+        mine = [f for f in flagged if f.character_id in seen and f.user_id != person.pk]
         if mine:
             notify([person], *_digest_text(mine), link=LINK, level="warning", category="p.spycheck")
     bus.emit("spycheck.findings", count=n, members=sorted(by_member)[:100], user_ids=sorted({f.user_id for f in flagged})[:100],
@@ -327,6 +350,8 @@ def decide(f: Finding, by, state: str, note: str = "", request=None) -> Finding:
     note = (note or "").strip()[:2000]
     if state == Finding.State.DISMISSED and not note:
         raise SpyCheckError("Say why it's dismissed")
+    if f.user_id == by.pk or Character.objects.filter(pk=f.character_id, user=by).exists():
+        raise SpyCheckError("You can't review findings on your own characters", status=403)
     f.state, f.note = state, note
     f.decided_by, f.decided_at = by, timezone.now()
     f.decided_last_seen, f.decided_amount = f.last_seen, f.amount
@@ -531,8 +556,11 @@ def members_out(viewer, q: str = "") -> list[dict]:
 
 
 def member_detail(user, request) -> dict:
-    """One member's findings across their characters the viewer may see. Seeing who they dealt with counts as looking at their intel."""
-    characters = list(viewable_characters(request.user).filter(user=user))
+    """One member's findings across their characters the viewer may see. Seeing who they dealt with counts as looking at their intel.
+    A member none of whose characters the viewer may see, or the viewer themselves, isn't there (404)."""
+    characters = list(others(request.user).filter(user=user))
+    if not characters:
+        raise SpyCheckError("Not found", status=404)
     order = {Finding.State.NEW: 0, Finding.State.ACKNOWLEDGED: 1, Finding.State.DISMISSED: 2}
     findings = sorted(findings_qs(request.user, "all", user=user.pk), key=lambda f: (order[f.state], f.character_name, f.entity_name, f.kind))
     with_findings = {f.character_id for f in findings}

@@ -1,6 +1,6 @@
 [project]
 name = "conduit-ops"
-version = "1.0.0"
+version = "1.0.1"
 description = "Ops calendar: CTAs, stratops, roams and mining ops on one calendar with live countdowns, RSVPs with the character you'll bring, reminders and Discord pings."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

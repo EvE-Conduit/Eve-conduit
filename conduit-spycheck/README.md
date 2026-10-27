@@ -29,11 +29,13 @@ you don't trust, so nobody has to search Member Audit by hand for each one.
 - **Members:** everyone with findings, and a page per member with every finding across all their characters.
 - **The daily scan** (06:40), or **Scan now**, updates everything and sends **one notification** naming who has new
   findings (and with whom) to the chosen group's members who may see Spy Check, or to everyone who may when no group
-  is chosen. It also emits `spycheck.findings`, which names members, so it only goes to webhooks that pick it by name.
+  is chosen. Only one scan runs at a time: Scan now while one is running says so, and the daily scan is skipped
+  when Scan now is already running. It also emits `spycheck.findings`, which names members, so it only goes to webhooks that pick it by name.
 - **Dashboard widget** with the number of new findings.
 
 **Permissions:** `spycheck.view_findings` sees the findings and their evidence and reviews them;
 `spycheck.manage_spycheck` also changes the watch list and settings and starts a scan. Members never see any of it.
 Like Member Audit, a reviewer only sees findings (and hears about new ones) for the characters their character sheet
-permissions reach: all, their alliance's or their corporation's.
+permissions reach: all, their alliance's or their corporation's. Nobody sees, hears about or reviews findings on
+their own characters, and a member's page is only there for someone who may see at least one of their characters.
 Give them to your HR or counter-intelligence group under Administration → Groups. Needs EvE Conduit 0.5.52 or newer.

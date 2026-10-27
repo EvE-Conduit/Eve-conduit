@@ -286,6 +286,9 @@ export function ContractSteps({ quote }: { quote: QuoteSummary }) {
         </Step>
         <Step n={5} title="Expiration">
           <span className="text-sm">{t.expiration_days} day{t.expiration_days === 1 ? "" : "s"}</span>
+          {t.quote_valid_days > 0 && (
+            <p className="mt-1 text-xs text-subtle">Make the contract within {t.quote_valid_days} day{t.quote_valid_days === 1 ? "" : "s"} of this quote; after that, quote again.</p>
+          )}
         </Step>
       </ol>
     </div>

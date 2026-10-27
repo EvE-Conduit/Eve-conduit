@@ -84,6 +84,28 @@ def test_claim_respects_capacity_but_managers_can_assign(people, api_client):
     assert c.call("post", f"{BASE}/m/{first.pk}/assign", {"mentor_id": mentor.pk}).status_code == 403
 
 
+def test_double_requests_and_simultaneous_claims(people, api_client):
+    """A double click asks once; of two mentors claiming the same request, the second is refused (each holds a copy
+    loaded while it was still waiting)."""
+    newbro = people["newbro"]
+    services.request_mentor(newbro)
+    with pytest.raises(services.MentorError, match="already have a mentor"):
+        services.request_mentor(newbro)
+    first = Mentorship.objects.get(mentee=newbro)
+    second = Mentorship.objects.get(pk=first.pk)
+    services.assign(first, people["mentor"], people["mentor"], claim=True)
+    with pytest.raises(services.MentorError, match="already took"):
+        services.assign(second, people["other"], people["other"], claim=True)
+    # Not through the plain call either, unless a manager does it on purpose.
+    with pytest.raises(services.MentorError, match="already took"):
+        services.assign(second, people["other"], people["other"])
+    assert services.assign(second, people["other"], people["manager"]).mentor_id == people["other"].pk
+    # And a request withdrawn on a stale copy after it was claimed stays claimed.
+    with pytest.raises(services.MentorError, match="still waiting"):
+        services.withdraw(second, newbro)
+    assert Mentorship.objects.get(pk=first.pk).status == Mentorship.Status.ACTIVE
+
+
 def test_who_sees_what(people, api_client):
     m = services.request_mentor(people["newbro"])
     # Other mentors see a waiting request (to claim it), strangers don't.

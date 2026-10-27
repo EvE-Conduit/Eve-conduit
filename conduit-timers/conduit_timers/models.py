@@ -17,8 +17,11 @@ class TimerSettings(models.Model):
     import_notifications = models.BooleanField(default=True)
     #: How many days timers that have come out stay on the board.
     keep_days = models.PositiveSmallIntegerField(default=14)
-    #: Notifications older than this were already looked at.
+    #: Notifications older than this were already looked at (shown in the settings; the cursor is the id below).
     notifications_seen_until = models.DateTimeField(null=True, blank=True)
+    #: The highest notification row id already looked at. Rows synced later have higher ids whatever time the game
+    #: gave them, so a notification that arrives late isn't skipped.
+    notifications_seen_id = models.BigIntegerField(null=True, blank=True)
     #: Discord role ids new timers ping by default (when the Discord plugin is linked to a server).
     default_ping_roles = models.JSONField(default=list, blank=True)
 
@@ -75,6 +78,9 @@ class Timer(models.Model):
     source = models.CharField(max_length=14, choices=Source.choices, default=Source.MANUAL)
     #: The in-game structure id, for timers read from structures and notifications.
     structure_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    #: Read from this corporation's structures on the corporation sheet: only people who may see its Structures
+    #: section see it (and hear about it) until a timer manager edits it, which puts it on the board for everyone.
+    corporation_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     #: Reminder marks (minutes before) already sent.
     reminded = models.JSONField(default=list, blank=True)
     going = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="+")

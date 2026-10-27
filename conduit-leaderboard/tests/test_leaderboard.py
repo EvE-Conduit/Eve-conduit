@@ -113,6 +113,20 @@ def test_fleets_category_needs_the_fleets_plugin(pilots, last_month):
     Fat.objects.create(fleet=fleet, character_id=90000002, character_name="One Alt", via="link")
     Fat.objects.create(fleet=fleet, character_id=90000003, character_name="Pilot Two", via="link")
     rows = services.ranked(services.CATEGORIES["fats"], services.month_period(last_month))
+    assert [(r["name"], r["score"]) for r in rows] == [("Pilot One", 1), ("Pilot Two", 1)]  # alts in one fleet count once
+
+    # A second fleet, and a second FAT round of the first, for Pilot One; FATs Pilot Two added for themselves don't count.
+    other = Fleet.objects.create(name="Roam", started_at=fleet.started_at + timedelta(days=1))
+    Fat.objects.create(fleet=other, character_id=90000002, character_name="One Alt", via="esi")
+    Fat.objects.create(fleet=fleet, round=2, character_id=90000001, character_name="Pilot One", via="link")
+    Fat.objects.create(fleet=other, character_id=90000003, character_name="Pilot Two", via="manual", added_by=two)
+    Fat.objects.create(fleet=other, round=2, character_id=90000003, character_name="Pilot Two", via="manual", added_by=one)
+    services.bump()  # boards are cached
+    rows = services.ranked(services.CATEGORIES["fats"], services.month_period(last_month))
+    assert [(r["name"], r["score"]) for r in rows] == [("Pilot One", 2), ("Pilot Two", 2)]
+    Fat.objects.filter(added_by=one).delete()
+    services.bump()
+    rows = services.ranked(services.CATEGORIES["fats"], services.month_period(last_month))
     assert [(r["name"], r["score"]) for r in rows] == [("Pilot One", 2), ("Pilot Two", 1)]
 
 
