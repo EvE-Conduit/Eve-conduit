@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import secrets
 from datetime import timedelta
 from decimal import Decimal
@@ -147,6 +148,7 @@ def contract_terms(program: Program) -> dict:
         "assignee": {"id": program.assignee_id, "name": assignee_name, "kind": "corporation" if program.is_corporation else "character"},
         "locations": [location_out(loc) for loc in program.locations.all()],
         "expiration_days": program.expiration_days,
+        "quote_valid_days": program.quote_valid_days,
     }
 
 
@@ -337,7 +339,8 @@ def program_contracts(program: Program):
     return Contract.objects.filter(q).select_related("program", "quote")
 
 
-def statistics(program: Program) -> dict:
+def statistics(program: Program, viewer=None) -> dict:
+    """The program's figures; its wallet only for a ``viewer`` who may see the owner corporation's wallets."""
     now = timezone.now()
     qs = program_contracts(program)
     finished = qs.filter(status__startswith="finished")
@@ -358,7 +361,7 @@ def statistics(program: Program) -> dict:
         "total_value": float(finished.aggregate(s=Sum("price"))["s"] or 0),
         "total_count": finished.count(),
         "months": [{"month": r["m"].strftime("%Y-%m"), "value": float(r["value"] or 0), "count": r["count"]} for r in by_month if r["m"]],
-        "wallet": wallet(program),
+        "wallet": wallet(program, viewer),
         "owner": owner_out(program),
     }
     # What it bought most of in the last 90 days, from the quotes behind accepted contracts.
@@ -385,10 +388,16 @@ def leaderboard(program: Program, days: int = 90) -> list[dict]:
     return [{"id": r["issuer_id"], "name": names.get(r["issuer_id"], "Unknown pilot"), "value": float(r["value"] or 0), "count": r["count"]} for r in rows]
 
 
-def wallet(program: Program) -> dict | None:
+def wallet(program: Program, viewer=None) -> dict | None:
+    """The balance of the program's corporation wallet division, for a viewer who may see that corporation's wallets on
+    the corporation sheet (managing a program isn't enough)."""
     if not (program.is_corporation and program.wallet_division and program.owner_corporation_id):
         return None
+    from conduit.corp.access import can_view_section
     from conduit.corp.models import WalletDivision
+
+    if viewer is None or not can_view_section(viewer, program.owner_corporation_id, "wallets"):
+        return None
 
     w = WalletDivision.objects.filter(corporation_id=program.owner_corporation_id, division=program.wallet_division).first()
     return {"division": program.wallet_division, "balance": float(w.balance) if w else None, "updated_at": w.updated_at if w else None}
@@ -415,6 +424,7 @@ def manage_out(p: Program) -> dict:
         "owner_id": p.owner_id,
         "is_corporation": p.is_corporation,
         "expiration_days": p.expiration_days,
+        "quote_valid_days": p.quote_valid_days,
         "location_ids": list(p.locations.values_list("pk", flat=True)),
         "manager_ids": list(p.managers.values_list("pk", flat=True)),
         "managers": [{"id": u.pk, "name": u.display_name} for u in p.managers.all()],
@@ -431,12 +441,25 @@ def manage_out(p: Program) -> dict:
 
 
 PROGRAM_FIELDS = {
-    "name", "description", "is_corporation", "expiration_days", "price_type", "tax", "hauling_fuel_cost", "price_density_threshold",
+    "name", "description", "is_corporation", "expiration_days", "quote_valid_days", "price_type", "tax", "hauling_fuel_cost", "price_density_threshold",
     "price_density_tax", "compressed_volume", "allow_all_items", "use_raw", "use_compressed", "use_refined", "refining_rate",
     "allow_unpacked", "blue_loot_npc", "red_loot_npc", "t1_refined", "t1_refining_rate", "public", "notify_managers",
     "wallet_division", "tracking_prefix", "active",
 }
 PERCENT_FIELDS = {"tax", "price_density_tax", "refining_rate", "t1_refining_rate"}
+#: Upper bounds for ISK amounts managers type in, well inside what their fields store.
+MAX_FUEL_COST = 1_000_000_000  # ISK per m³
+MAX_DENSITY_THRESHOLD = 1_000_000_000_000  # ISK per m³
+MAX_STATIC_PRICE = 10**15  # ISK per unit
+
+
+def _check_rule(tax, static_price) -> None:
+    if not (isinstance(tax, (int, float)) and math.isfinite(tax)) or (static_price is not None and not math.isfinite(static_price)):
+        raise BuybackError("Enter numbers, not NaN or infinity")
+    if not -100 <= tax <= 100:
+        raise BuybackError("The tax goes from -100 to 100 percent")
+    if static_price is not None and static_price > MAX_STATIC_PRICE:
+        raise BuybackError(f"Fixed prices go up to {MAX_STATIC_PRICE:,} ISK")
 
 
 def save_program(user, program: Program | None, data: dict) -> Program:
@@ -458,6 +481,8 @@ def save_program(user, program: Program | None, data: dict) -> Program:
             raise BuybackError("Percentages go from 0 to 100")
     if not 1 <= int(data.get("expiration_days") or 0) <= 90:
         raise BuybackError("Contracts expire after 1 to 90 days")
+    if not 0 <= int(data.get("quote_valid_days") or 0) <= 90:
+        raise BuybackError("Quotes are good for up to 90 days (0: no limit)")
     if data.get("wallet_division") not in (None, *range(1, 8)):
         raise BuybackError("Wallet divisions go from 1 to 7")
     prefix = (data.get("tracking_prefix") or "").strip()
@@ -524,10 +549,9 @@ def item_rules_out(program: Program) -> list[dict]:
 
 
 def save_item_rules(program: Program, type_ids: list[int], tax: float, disallowed: bool, static_price: float | None) -> int:
+    _check_rule(tax, static_price)
     if static_price is not None and static_price < 0:
         raise BuybackError("Prices can't be negative")
-    if not -100 <= tax <= 100:
-        raise BuybackError("The tax goes from -100 to 100 percent")
     ids = list(ItemType.objects.filter(pk__in=type_ids).values_list("pk", flat=True))
     for tid in ids:
         ItemRule.objects.update_or_create(
@@ -554,8 +578,7 @@ def set_rule(program: Program, type_id: int | None, market_group_id: int | None,
         model.objects.filter(program=program, **key).delete()
     else:
         tax, static_price = rule.get("tax") or 0, rule.get("static_price")
-        if not -100 <= tax <= 100:
-            raise BuybackError("The tax goes from -100 to 100 percent")
+        _check_rule(tax, static_price)
         if static_price is not None and (market_group_id or static_price < 0):
             raise BuybackError("Fixed prices are for single items and can't be negative")
         defaults = {"tax": Decimal(str(tax)), "disallowed": bool(rule.get("disallowed"))}

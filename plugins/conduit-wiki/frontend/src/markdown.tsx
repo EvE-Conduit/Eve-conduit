@@ -2,6 +2,8 @@
 // can't run scripts. Supports headings (with anchors for the table of contents), paragraphs, - and 1. lists (nested
 // by indenting), task lists, > quotes, ``` code blocks, | tables |, --- rules, **bold**, *italic*, ~~struck~~,
 // `code`, [links](https://...), ![images](https://...) and [[Page Title]] or [[Page Title|label]] links to other pages.
+// Images load lazily and without a referrer; on public pages only this site's own images load (an image from
+// elsewhere would tell its host who reads the page), the rest show as a link.
 import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -26,6 +28,15 @@ export function safeHref(href: string): string | null {
   if (href.startsWith("/") && !href.startsWith("//") && !href.includes("\\")) return href;
   if (href.startsWith("#")) return href;
   return null;
+}
+
+/** An https:// address on this site. */
+export function sameSite(src: string): boolean {
+  try {
+    return new URL(src).origin === window.location.origin;
+  } catch {
+    return false;
+  }
 }
 
 export interface Heading {
@@ -70,6 +81,8 @@ interface Ctx {
   /** Where [[wiki links]] go: "/p/wiki" or "/public/p/wiki". */
   linkBase: string;
   ids: Map<string, number>;
+  /** Public pages: only this site's images load. */
+  sameSiteImages: boolean;
 }
 
 function inline(text: string, key: string, ctx: Ctx): ReactNode[] {
@@ -84,7 +97,15 @@ function inline(text: string, key: string, ctx: Ctx): ReactNode[] {
     if (token.startsWith("![")) {
       const [, alt, src] = token.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/) ?? [];
       const safe = src && src.startsWith("https://") ? src : null;
-      out.push(safe ? <img key={k} src={safe} alt={alt ?? ""} loading="lazy" className="my-2 max-h-[480px] max-w-full border border-border" /> : alt);
+      if (safe && ctx.sameSiteImages && !sameSite(safe)) {
+        out.push(
+          <a key={k} href={safe} target="_blank" rel="noreferrer" className="text-accent-ink underline underline-offset-4 hover:no-underline">
+            {alt || "Image"}
+          </a>,
+        );
+      } else {
+        out.push(safe ? <img key={k} src={safe} alt={alt ?? ""} loading="lazy" referrerPolicy="no-referrer" className="my-2 max-h-[480px] max-w-full border border-border" /> : alt);
+      }
     } else if (token.startsWith("[[")) {
       const [, target, label] = token.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/) ?? [];
       const slug = target ? slugify(target.trim()) : "";
@@ -310,8 +331,8 @@ function Blocks({ text, ctx }: { text: string; ctx: Ctx }) {
   return <>{out}</>;
 }
 
-export function Markdown({ text, linkBase, className = "" }: { text: string; linkBase: string; className?: string }) {
-  const ctx: Ctx = { linkBase, ids: new Map() };
+export function Markdown({ text, linkBase, className = "", sameSiteImages = false }: { text: string; linkBase: string; className?: string; sameSiteImages?: boolean }) {
+  const ctx: Ctx = { linkBase, ids: new Map(), sameSiteImages };
   return (
     <div className={`space-y-4 text-[15px] leading-relaxed text-muted [&_p]:text-muted ${className}`}>
       <Blocks text={text} ctx={ctx} />

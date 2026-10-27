@@ -246,6 +246,8 @@ LOGGING = {
         "handlers": ["console", "database"] if env_bool("CONDUIT_SERVICE_LOG_DB", True) else ["console"],
         "level": env("CONDUIT_LOG_LEVEL", "INFO"),
     },
+    # httpx logs every request's full URL at INFO, and Discord and Slack webhook URLs carry their secret token.
+    "loggers": {name: {"level": "WARNING"} for name in ("httpx", "httpcore")},
 }
 
 # --- Logs and the external API ---------------------------------------------------

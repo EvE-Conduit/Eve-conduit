@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from conduit.esi.exceptions import EsiError
@@ -64,6 +64,11 @@ def check(c: Contract, quote: Quote | None, program: Program | None, duplicate: 
         allowed = {loc.structure_id for loc in program.locations.all() if loc.structure_id}
         if allowed and c.start_location_id not in allowed:
             out.append(problem("wrong_location", "Made at a location this program doesn't use."))
+    if program and program.quote_valid_days and c.date_issued and quote.created_at \
+            and c.date_issued - quote.created_at > timedelta(days=program.quote_valid_days):
+        days = program.quote_valid_days
+        out.append(problem("quote_expired", f"Made more than {days} day{'s' if days != 1 else ''} after its quote, which has "
+                                            "expired: prices may have moved since. Ask the seller to quote again."))
     if c.title.strip() != quote.tracking_number:
         out.append(problem("title", "The title has more than the tracking number in it.", severe=False))
     if quote.flagged:

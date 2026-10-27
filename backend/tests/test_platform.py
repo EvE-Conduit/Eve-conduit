@@ -181,6 +181,14 @@ def test_webhook_secret_is_shown_once(admin_user, api_client):
     assert AuditEvent.objects.filter(action="webhook.secret_rotated").exists()
 
 
+def test_webhook_urls_stay_out_of_the_logs():
+    """httpx logs each request's URL at INFO, and Discord and Slack webhook URLs hold their token."""
+    import logging
+
+    assert not logging.getLogger("httpx").isEnabledFor(logging.INFO)
+    assert not logging.getLogger("httpcore").isEnabledFor(logging.INFO)
+
+
 # --- notifications ----------------------------------------------------------------
 
 
@@ -376,8 +384,18 @@ def test_search_respects_visibility(user, corp, api_client):
     groups = {g["key"]: g for g in api_client.call("get", "/api/search?q=pilot").json()["groups"]}
     assert {h["title"] for h in groups["characters"]["hits"]} == {"Pilot One", "Pilot Two"}
     assert groups["members"]["hits"][0]["title"] == stranger.display_name
+    assert groups["members"]["hits"][0]["url"] == "/admin/members?q=Pilot%20Two"
     corps = api_client.call("get", "/api/search?q=TCORP").json()["groups"]
     assert corps[0]["key"] == "corporations"
+
+
+@pytest.mark.django_db
+def test_member_search_links_encode_the_name(user, api_client):
+    make_user(90000003, "Pilot A&B #1?x=y")
+    user.user_permissions.add(Permission.objects.get(codename="view_members"))
+    api_client.force_login(type(user).objects.get(pk=user.pk))
+    groups = {g["key"]: g for g in api_client.call("get", "/api/search?q=pilot a").json()["groups"]}
+    assert groups["members"]["hits"][0]["url"] == "/admin/members?q=Pilot%20A%26B%20%231%3Fx%3Dy"
 
 
 @pytest.mark.django_db

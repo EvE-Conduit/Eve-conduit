@@ -17,6 +17,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import Group
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from conduit.audit.services import record
@@ -420,14 +421,13 @@ def check() -> dict:
     structures = list(Structure.objects.select_related("corporation"))
     groups = _groups(s.type_id for s in structures)
     tracked = {t.structure_id: t for t in StructureFuel.objects.filter(structure_id__in=[s.structure_id for s in structures])}
+    by_id = {s.structure_id: s for s in structures}
+
+    # Claims on structures that are gone, or that ran out, go first: nothing below names them.
+    expired, _ = Claim.objects.filter(Q(expires_at__lte=now) | ~Q(structure_id__in=list(by_id))).delete()
     claims: dict[int, list[Claim]] = {}
     for c in Claim.objects.select_related("user"):
         claims.setdefault(c.structure_id, []).append(c)
-    by_id = {s.structure_id: s for s in structures}
-
-    # Claims on structures that are gone, or that ran out.
-    gone = [c.pk for cl in claims.values() for c in cl if c.structure_id not in by_id or c.expires_at <= now]
-    expired, _ = Claim.objects.filter(pk__in=gone).delete()
 
     warnings, refuels, done = [], [], []
     for s in structures:
@@ -439,7 +439,7 @@ def check() -> dict:
         if not first and went_up(t.last_fuel_expires, t.last_burn, s.fuel_expires, b.online):
             refuels.append((s, [c.user.display_name for c in claims.get(s.structure_id, [])]))
         for c in claims.get(s.structure_id, []):
-            if c.pk not in gone and went_up(c.fuel_expires, c.burn, s.fuel_expires, b.online):
+            if went_up(c.fuel_expires, c.burn, s.fuel_expires, b.online):
                 done.append(c.pk)
 
         ths = thresholds_for(t, settings)
@@ -459,7 +459,8 @@ def check() -> dict:
     cache: dict = {}
     with transaction.atomic():
         for s, threshold, hours, b in warnings:
-            _warn(s, threshold, hours, b, settings, core_hours, cache, claims.get(s.structure_id, []))
+            # Claims this run's refuel finished aren't someone refuelling it any more.
+            _warn(s, threshold, hours, b, settings, core_hours, cache, [c for c in claims.get(s.structure_id, []) if c.pk not in done])
         for s, by in refuels:
             name = s.name or f"Structure {s.structure_id}"
             left = hours_left(s, now) or 0

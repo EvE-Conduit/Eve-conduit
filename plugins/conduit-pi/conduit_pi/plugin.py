@@ -8,7 +8,7 @@ from conduit.plugins import NavItem, Plugin
 class PiPlugin(Plugin):
     id = "pi"
     name = "Planetary Industry"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Every colony across your characters with extractor countdowns, output and its value, expiry reminders, and a corporation view for PI programs."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-pi"

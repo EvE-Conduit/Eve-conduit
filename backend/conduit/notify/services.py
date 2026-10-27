@@ -14,8 +14,17 @@ log = logging.getLogger(__name__)
 
 
 def is_site_path(link: str) -> bool:
-    """A path on this site: "/groups", not "//evil.example" or "/\\evil.example" (both leave the site)."""
-    return link.startswith("/") and not link.startswith(("//", "/\\")) and "\\" not in link
+    """A path on this site: "/groups", not "//evil.example" or "/\\evil.example" (both leave the site).
+
+    Whitespace and control characters are refused too: browsers drop tabs and newlines from URLs, so
+    "/\\t/evil.example" would also become "//evil.example".
+    """
+    return (
+        link.startswith("/")
+        and not link.startswith(("//", "/\\"))
+        and "\\" not in link
+        and not any(c.isspace() or ord(c) < 0x20 or ord(c) == 0x7F for c in link)
+    )
 
 
 def is_external_url(link: str) -> bool:

@@ -1,6 +1,6 @@
 [project]
 name = "conduit-leaderboard"
-version = "1.0.0"
+version = "1.0.1"
 description = "Leaderboard: who tops the corporation in kills, ISK destroyed, fleets, mining, ratting, industry and skillpoints, with monthly medals."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

@@ -33,20 +33,23 @@ def sync(character, esi):
             fetched += 1
             victim = data["victim"]
             final = next((a for a in data.get("attackers", []) if a.get("final_blow")), {})
-            Killmail.objects.create(
+            # get_or_create: another character on the same kill may be storing it at the same moment.
+            Killmail.objects.get_or_create(
                 id=ref["killmail_id"],
-                hash=ref["killmail_hash"],
-                time=parse_dt(data["killmail_time"]),
-                solar_system_id=data["solar_system_id"],
-                victim_character_id=victim.get("character_id"),
-                victim_corporation_id=victim.get("corporation_id"),
-                victim_alliance_id=victim.get("alliance_id"),
-                victim_ship_type_id=victim["ship_type_id"],
-                damage_taken=victim.get("damage_taken", 0),
-                attacker_count=len(data.get("attackers", [])),
-                final_blow_character_id=final.get("character_id"),
-                value=_value(data),
-                data=data,
+                defaults={
+                    "hash": ref["killmail_hash"],
+                    "time": parse_dt(data["killmail_time"]),
+                    "solar_system_id": data["solar_system_id"],
+                    "victim_character_id": victim.get("character_id"),
+                    "victim_corporation_id": victim.get("corporation_id"),
+                    "victim_alliance_id": victim.get("alliance_id"),
+                    "victim_ship_type_id": victim["ship_type_id"],
+                    "damage_taken": victim.get("damage_taken", 0),
+                    "attacker_count": len(data.get("attackers", [])),
+                    "final_blow_character_id": final.get("character_id"),
+                    "value": _value(data),
+                    "data": data,
+                },
             )
             ensure_eve_names(
                 {victim.get("character_id"), victim.get("corporation_id"), victim.get("alliance_id"), final.get("character_id")}

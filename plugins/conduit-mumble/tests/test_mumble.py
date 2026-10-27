@@ -166,12 +166,23 @@ def test_certificate_is_remembered_after_a_password_login(setup, api_client, cli
     assert login(client, authenticator, "Pilot_One", "", cert)["result"] == "reject"
 
 
-def test_repeated_failures_lock_the_name_for_a_while(setup, api_client, client, authenticator):
+def test_repeated_failures_lock_passwords_but_not_the_certificate(setup, api_client, client, authenticator):
+    """Ten wrong passwords lock password logins for the name a while (no guessing); a remembered certificate still
+    gets in, so whoever guesses can't lock out a member who has one."""
     pilot, _ = setup
     password = create(api_client, pilot)["password"]
+    cert = "ab" * 20
+    assert login(client, authenticator, "Pilot_One", password, cert)["result"] == "ok"  # remembers the certificate
     for _ in range(services.FAILS_LIMIT):
-        assert login(client, authenticator, "Pilot_One", "wrong")["result"] == "reject"
-    assert login(client, authenticator, "Pilot_One", password)["reason"].startswith("too many")
+        assert login(client, authenticator, "Pilot_One", "wrong") == {"result": "reject"}
+    refused = login(client, authenticator, "Pilot_One", password)
+    assert refused["result"] == "reject" and refused["reason"] == services.LOCKED_REASON_CERT
+    assert login(client, authenticator, "Pilot_One", "", cert)["result"] == "ok"
+    assert login(client, authenticator, "Pilot_One", "wrong", cert)["result"] == "ok"  # the certificate is enough
+    assert login(client, authenticator, "Pilot_One", "", "cd" * 20)["reason"] == services.LOCKED_REASON_CERT
+    # Without a remembered certificate the refusal doesn't offer one.
+    MumbleUser.objects.filter(user=pilot).update(cert_hash="")
+    assert login(client, authenticator, "Pilot_One", password)["reason"] == services.LOCKED_REASON
     cache.clear()
     assert login(client, authenticator, "Pilot_One", password)["result"] == "ok"
 
@@ -253,6 +264,27 @@ def test_temp_link_lets_a_guest_in_until_it_expires(host, api_client, client, au
     assert login(client, authenticator, "Jane_Doe", guest["password"])["reason"] == "temporary access has ended"
     resp = client.post(f"/api/public/p/mumble/temp/{token}", {"name": "Late Comer"}, content_type="application/json")
     assert resp.status_code == 410 and "expired" in resp.json()["detail"]
+
+
+def test_temp_links_stop_when_their_maker_loses_the_permission(host, api_client, client, authenticator):
+    link = make_link(api_client, host).json()
+    token = link["url"].rsplit("/", 1)[1]
+    guest = client.post(f"/api/public/p/mumble/temp/{token}", {"name": "Jane Doe"}, content_type="application/json").json()
+    assert login(client, authenticator, "Jane_Doe", guest["password"])["result"] == "ok"
+
+    host.user_permissions.clear()
+    assert client.get(f"/api/public/p/mumble/temp/{token}").json()["status"] == "creator_lost"
+    assert login(client, authenticator, "Jane_Doe", guest["password"])["reason"] == "temporary access has ended"
+    resp = client.post(f"/api/public/p/mumble/temp/{token}", {"name": "Late Comer"}, content_type="application/json")
+    assert resp.status_code == 410 and "any more" in resp.json()["detail"]
+    # Given back: the link works again. Leaving the site (deactivated, or the account gone) stops it too.
+    host.user_permissions.add(Permission.objects.get(codename="create_temp_links"))
+    assert client.get(f"/api/public/p/mumble/temp/{token}").json()["status"] == "active"
+    host.is_active = False
+    host.save()
+    assert login(client, authenticator, "Jane_Doe", guest["password"])["reason"] == "temporary access has ended"
+    host.delete()
+    assert TempLink.objects.get().status() == "creator_lost"
 
 
 def test_temp_link_limits_and_revoking(host, api_client, client, authenticator):

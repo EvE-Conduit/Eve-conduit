@@ -30,7 +30,7 @@ class TaxSettings(models.Model):
     ref_types = models.JSONField(default=default_ref_types, blank=True)
     #: Shown to members with what they owe, e.g. "Give the ISK to Holding Corp with the reason on your bill".
     payment_instructions = models.TextField(blank=True)
-    #: Donations to a tax corporation whose reason contains this are counted as tax payments; empty switches it off.
+    #: Donations to a tax corporation whose reason has this word in it are counted as tax payments; empty switches it off.
     payment_reason = models.CharField(max_length=40, blank=True, default="TAX")
     #: Remind members with unpaid bills every this many days; 0 never.
     reminder_days = models.PositiveSmallIntegerField(default=7)
@@ -93,3 +93,11 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ["date", "pk"]
+
+
+class Settlement(models.Model):
+    """How much of a payment went to a bill, so marking the bill unpaid can give it back."""
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="settlements")
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="settlements")
+    amount = models.DecimalField(max_digits=20, decimal_places=2)

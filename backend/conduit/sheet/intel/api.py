@@ -61,11 +61,10 @@ def intel(request, character_id: int):
     def member_out(member: Character) -> dict:
         """Whose the registered counterparty is, but only as far as the viewer may look: someone allowed to see
         this character isn't thereby allowed to learn which account a character outside their reach belongs to."""
-        if member.user_id == character.user_id:
-            return {"registered": True, "user_id": member.user_id, "main": _main_name(member), "same_account": True}
-        if can_view(request.user, member):
-            return {"registered": True, "user_id": member.user_id, "main": _main_name(member), "same_account": False}
-        return {"registered": True}
+        if not can_view(request.user, member):
+            return {"registered": True}
+        same = member.user_id == character.user_id
+        return {"registered": True, "user_id": member.user_id, "main": _main_name(member), "same_account": same}
 
     interactions = []
     for entity_id, row in ranked:
@@ -89,7 +88,11 @@ def intel(request, character_id: int):
             }
         )
 
-    account = Character.objects.filter(user=character.user).exclude(pk=me).select_related("corporation", "alliance")
+    # Only the alts the viewer may see, for the same reason as member_out (owners see all of their own).
+    account = [
+        c for c in Character.objects.filter(user=character.user).exclude(pk=me).select_related("corporation", "alliance")
+        if can_view(request.user, c)
+    ]
     return {
         "interactions": interactions,
         "registered_counterparties": sum(1 for i in interactions if i["member"] and not i["member"].get("same_account")),

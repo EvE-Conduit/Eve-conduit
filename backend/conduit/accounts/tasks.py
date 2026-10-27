@@ -28,6 +28,7 @@ def verify_seat_tokens(run_id: str, character_ids: list[int]):
     from conduit.eve.tasks import update_affiliations
 
     from .models import Character
+    from .services import OwnerUnknown, fill_owner_hash
 
     state = {"total": len(character_ids), "done": 0, "live": 0, "dead": [], "errors": [], "finished": False}
     cache.set(verify_key(run_id), state, RESULT_TTL)
@@ -36,7 +37,13 @@ def verify_seat_tokens(run_id: str, character_ids: list[int]):
         try:
             character = Character.objects.get(pk=char_id)
             try:
-                get_access_token(character)
+                access_token = get_access_token(character)
+                if not character.owner_hash:
+                    # SeAT didn't know the owner hash; the working token does (EVE revokes tokens on a sale).
+                    try:
+                        fill_owner_hash(character, access_token)
+                    except OwnerUnknown as exc:  # the token works; the hash is filled in at its next login
+                        log.warning("Reading the owner of %s from its token failed: %s", char_id, exc)
                 return char_id, "live", ""
             except TokenInvalid:
                 return char_id, "dead", character.name

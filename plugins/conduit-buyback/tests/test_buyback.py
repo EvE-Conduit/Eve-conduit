@@ -551,3 +551,51 @@ def test_public_quotes_are_rate_limited(program, client, monkeypatch):
     url = f"/api/public/p/buyback/programs/{program.pk}/quote"
     codes = [client.post(url, {"text": "Tritanium 1"}, content_type="application/json").status_code for _ in range(3)]
     assert codes == [200, 200, 429]
+
+
+def test_the_wallet_balance_needs_the_wallets_permission(program, boss, corp, api_client):
+    from conduit.corp.models import WalletDivision
+
+    program.wallet_division = 2
+    program.save()
+    WalletDivision.objects.create(corporation=corp, division=2, balance=Decimal("123456789"))
+    api_client.force_login(boss)
+    assert api_client.call("get", f"/api/p/buyback/manage/programs/{program.pk}/stats").json()["wallet"] is None
+    assert api_client.call("get", "/api/p/buyback/manage").json()["programs"][0]["wallet"] is None
+    boss.user_permissions.add(*Permission.objects.filter(codename__in=["view_own_corporation", "view_corporation_wallets"]))
+    boss = type(boss).objects.get(pk=boss.pk)
+    api_client.force_login(boss)
+    assert api_client.call("get", f"/api/p/buyback/manage/programs/{program.pk}/stats").json()["wallet"]["balance"] == 123456789
+    assert api_client.call("get", "/api/p/buyback/manage").json()["programs"][0]["wallet"]["division"] == 2
+
+
+def test_contracts_from_an_expired_quote_are_flagged(program, seller):
+    number = services.quote(program, "Tritanium 1000", user=seller)["quote"]["tracking_number"]
+    q = Quote.objects.get(tracking_number=number)
+    c = Contract(contract_id=77, owner_id=CORP_ID, issuer_id=90000001, assignee_id=program.assignee_id, title=number, status="outstanding",
+                 price=q.value, start_location_id=STRUCTURE, date_issued=q.created_at + timedelta(days=6), items=[[TRITANIUM, 1000, True]])
+    assert "quote_expired" not in [p["code"] for p in contracts.check(c, q, program)]
+    c.date_issued = q.created_at + timedelta(days=8)
+    found = contracts.check(c, q, program)
+    assert found[0]["code"] == "quote_expired" and found[0]["severe"]
+    program.quote_valid_days = 0  # no limit
+    assert "quote_expired" not in [p["code"] for p in contracts.check(c, q, program)]
+    program.quote_valid_days = 91
+    with pytest.raises(services.BuybackError, match="90 days"):
+        services.save_program(program.owner.user, program, {**services.manage_out(program), "quote_valid_days": 91})
+
+
+def test_numbers_must_be_finite(program, boss, api_client):
+    api_client.force_login(boss)
+    form = {k: v for k, v in services.manage_out(program).items() if k in services.PROGRAM_FIELDS | {"owner_id", "location_ids"}}
+    for field, bad in (("hauling_fuel_cost", float("nan")), ("hauling_fuel_cost", float("inf")), ("hauling_fuel_cost", 1e12),
+                       ("tax", float("nan")), ("price_density_threshold", 1e20)):
+        resp = api_client.call("put", f"/api/p/buyback/manage/programs/{program.pk}", {**form, field: bad})
+        detail = resp.json()["detail"]
+        assert resp.status_code == 400 and ("NaN" in detail or "up to" in detail), (field, bad)
+    assert api_client.call("put", f"/api/p/buyback/manage/programs/{program.pk}", form).status_code == 200
+    for rule in ({"tax": float("nan")}, {"tax": 0, "static_price": float("inf")}, {"tax": 0, "static_price": 1e30}):
+        resp = api_client.call("post", f"/api/p/buyback/manage/programs/{program.pk}/rules", {"type_id": TRITANIUM, "rule": rule})
+        assert resp.status_code == 400, rule
+    program.refresh_from_db()
+    assert program.hauling_fuel_cost == 0

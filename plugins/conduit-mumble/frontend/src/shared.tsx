@@ -67,6 +67,7 @@ export function StatusBadge({ status }: { status: LinkStatus }) {
     expired: { tone: "neutral", label: "Expired" },
     used_up: { tone: "warning", label: "Used up" },
     revoked: { tone: "danger", label: "Withdrawn" },
+    creator_lost: { tone: "danger", label: "Maker lost access" },
   };
   const { tone, label } = map[status];
   return <Badge tone={tone}>{label}</Badge>;

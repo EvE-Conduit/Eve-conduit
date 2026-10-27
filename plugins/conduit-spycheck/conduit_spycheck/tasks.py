@@ -1,3 +1,5 @@
+import logging
+
 from celery import shared_task
 
 
@@ -8,4 +10,7 @@ def daily():
     from . import services
 
     if is_enabled("spycheck"):
-        services.scan()
+        try:
+            services.scan()
+        except services.SpyCheckError as exc:  # Scan now is already running: that one covers today
+            logging.getLogger(__name__).info("Skipped the daily Spy Check scan: %s", exc)

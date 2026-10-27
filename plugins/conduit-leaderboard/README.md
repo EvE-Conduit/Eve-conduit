@@ -3,8 +3,9 @@
 Who tops the corporation: members ranked by what their characters did, with a podium for every board and medals
 for the top three each month.
 
-- **Boards** (everyone): Kills, ISK destroyed, Fleets (FATs, when the Fleets plugin is on), Mining, Bounties,
-  Industry, Skillpoints and Losses. Pick a month (or all time) and, with several corporations, one corporation.
+- **Boards** (everyone): Kills, ISK destroyed, Fleets (fleets flown in, from FATs when the Fleets plugin is on;
+  alts in one fleet count once, FATs members added for themselves don't), Mining, Bounties, Industry, Skillpoints
+  and Losses. Pick a month (or all time) and, with several corporations, one corporation.
   Each board shows the top places and, further down, your own place and score; open a row to see which of a
   member's characters earned it. Alts count for their main.
 - **Medals** (everyone): the day after a month ends, the top three of every board get a medal and a notification.

@@ -8,12 +8,14 @@ A corp build board: "20 Hurricanes for the deployment", split into items members
 - **Items:** add them one by one (search by name) or paste a list: the materials list copied from the in-game
   Industry window, an inventory, or lines like `Tritanium x 1000`. The same item twice adds up. The static data
   has no blueprints, so work out the parts in game (with the ME you use) and paste them. Each item can carry
-  **points per unit** (paid by the [Corp Store](../conduit-store) plugin, when it's installed) and **ISK per unit**
-  (only shown; paying it is up to you). An item can't need fewer than what's already claimed or delivered.
+  **points per unit** (paid by the [Corp Store](../conduit-store) plugin, when it's installed; up to 1,000,000, and one
+  delivery pays at most 1,000,000 points) and **ISK per unit** (only shown; paying it is up to you). An item can't need
+  fewer than what's already claimed or delivered, and its points can't change while a delivery of it waits for a
+  manager.
 - **Claims:** a member claims part of an item (never more than is left), can change or release it, and marks it
   **delivered** with a note on where it is. Managers are told and confirm it on the **Deliveries** page or on the
   project, or send it back with a reason. Managers can't confirm their own deliveries, since confirming pays Corp Store
-  points. A project closes as done by itself once everything is confirmed.
+  points, and only deliveries the member marked delivered, on an open project, can be confirmed. A project closes as done by itself once everything is confirmed.
 - **Industry jobs as a hint:** next to an open claim, the member and managers see the member's industry jobs
   making that item since they claimed it, their own and corporation jobs they installed ("3 runs in production,
   ends in 2d"). It's only a hint: nothing is confirmed without a manager. Runs aren't always units (ammunition

@@ -16,6 +16,7 @@ from conduit import __version__
 from conduit.audit.services import record
 from conduit.esi import credentials as esi_credentials
 from conduit.esi.tokens import sso_configured
+from conduit.notify.services import is_site_path
 from conduit.plugins import registry
 from conduit.plugins.services import can_use, is_enabled, sync_installed
 from conduit.permissions import require_perm
@@ -423,7 +424,7 @@ class SiteIn(Schema):
         v = v.strip()
         if v in ("", "/"):
             return ""
-        if not v.startswith("/") or v.startswith("//") or "\\" in v or len(v) > 200:
+        if not is_site_path(v) or len(v) > 200:
             raise ValueError("the start page must be a page on this site, like /p/news")
         return v
 

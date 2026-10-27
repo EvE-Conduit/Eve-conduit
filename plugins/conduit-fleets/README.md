@@ -16,7 +16,8 @@ Records who flew in each fleet (FATs, also called PAPs) and lets groups require 
     `esi-fleets.write_fleet.v1`; it can be switched off when starting the fleet or on the fleet's page, which takes
     the lines out again.
   - **FAT link:** share the link in fleet chat; pilots open it and tick their characters that flew. It can close
-    after 15 minutes to 2 hours, or stay open until the fleet ends. Once a fleet has been tracked, the link only
+    after 15 minutes to 2 hours, or stay open until the fleet ends, for up to 12 hours after the fleet (or its latest
+    FAT round) started. Once a fleet has been tracked, the link only
     takes characters ESI saw in the in-game fleet this round (who already have their FAT), so nobody can register
     characters that weren't there; for fleets that aren't tracked it takes any of the pilot's own characters.
   - **FAT rounds:** start another round on the fleet's page (e.g. every hour of a long op), at least 15 minutes

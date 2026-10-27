@@ -67,11 +67,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--repo", required=True, help="owner/name on GitHub")
     parser.add_argument("--commit", required=True, help="full commit SHA the catalog pins every plugin to")
-    parser.add_argument("--serial", required=True, type=int, help="increases with every catalog (the commit time)")
+    parser.add_argument("--serial", required=True, type=int, help="increases with every catalog (when it was built)")
+    parser.add_argument("--root", type=Path, default=ROOT, help="the plugins folder to read (default: this one)")
     args = parser.parse_args()
     if len(args.commit) != 40:
         sys.exit("--commit must be a full 40-character SHA")
-    plugins = [e for folder in sorted(ROOT.iterdir()) if folder.is_dir() and (e := entry(folder, args.repo, args.commit))]
+    plugins = [e for folder in sorted(args.root.resolve().iterdir()) if folder.is_dir() and (e := entry(folder, args.repo, args.commit))]
     json.dump({
         "format": 1,
         "serial": args.serial,

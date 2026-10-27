@@ -15,10 +15,10 @@ coming (and in what), reminders before form-up and Discord pings.
 - **Who it's for:** every member, or only people in some states or groups (like announcements). Others don't see it,
   aren't told and can't answer.
 - **Scheduling** (permission `ops.schedule_ops`): title, kind, form-up time in EVE time, how long it runs, the FC
-  (picked from the site's members, or a name typed for someone who isn't on it), form-up location, comms, doctrine and
-  details. FCs change and cancel the ops they made or lead; `ops.manage_ops` changes anyone's. The audience is told
-  under the bell when an op is posted (switch it off per op); webhooks always hear about it. An op marked **Everyone
-  is expected** notifies and reminds its whole audience, even people who muted ops.
+  (picked from the site's members by main character name, or a name typed for someone who isn't on it), form-up
+  location, comms, doctrine and details. FCs change and cancel the ops they made or lead; `ops.manage_ops` changes
+  anyone's. The audience is told under the bell when an op is posted (switch it off per op); webhooks always hear
+  about it. An op marked **Everyone is expected** notifies and reminds its whole audience, even people who muted ops.
 - **Doctrines:** with the Doctrines plugin installed and on, the doctrine is picked from its doctrines and members
   can open it from the op. Without it, the doctrine is a name typed in.
 - **Moving and cancelling:** moving an op tells everyone who said going or maybe, and its reminders go out again.
@@ -37,7 +37,8 @@ coming (and in what), reminders before form-up and Discord pings.
 with the title, kind, `starts_at`, `duration_minutes`, FC, form-up, comms and doctrine. Ops for some states or groups
 only go out as `ops.created_restricted`, `ops.updated_restricted`, `ops.cancelled_restricted` and
 `ops.reminder_restricted` (with `audience`), since webhooks often post where anyone can read: send those to a
-leadership channel, or nowhere. The notification category is *Ops* (`p.ops`). Needs EvE Conduit 0.5.51.
+leadership channel, or nowhere. They're private events: a webhook set to "every event" leaves them out, only one
+that picks them gets them. The notification category is *Ops* (`p.ops`). Needs EvE Conduit 0.5.51.
 
 ## Development
 

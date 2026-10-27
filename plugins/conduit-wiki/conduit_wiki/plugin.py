@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class WikiPlugin(Plugin):
     id = "wiki"
     name = "Wiki"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Guides and reference pages in a tree, with Markdown, history, visibility by state or group, and public pages."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-wiki"

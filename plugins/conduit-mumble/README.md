@@ -11,7 +11,8 @@ main character, groups and state. Guests get in through temporary access links.
   label, how long it lasts (up to the limit from Setup) and optionally how many may use it. Whoever opens the link
   chooses a name and gets a login (`[TEMP] Jane Doe` in Mumble, group `temp`) that stops working when the link runs
   out. The page lists your links, who used them and when they last connected; withdraw a link, or cut off one guest.
-  Mumble managers see everyone's links and can give a link's guests other groups.
+  Mumble managers see everyone's links and can give a link's guests other groups. A link and its guests' logins
+  also stop working while its maker can't hand out links any more (lost the permission, or left the site).
 - **Server setup** (permission `mumble.manage_mumble`): the server address and port, the name and login formats,
   certificate login, the guest settings, the group mapping (group or state → Mumble group), every account (new
   password, delete) and every guest link.
@@ -28,7 +29,10 @@ changes on the site apply at the next connect. Names the site doesn't know fall 
   guests, without regard to case). The name shown in Mumble follows the main character at every login.
 - After a member's first login with the password, their Mumble client certificate is remembered and that computer gets
   in without the password (as Mumble normally works). Switch it off under Setup, or members can forget it themselves.
-- Ten failed logins for one name refuse that name for ten minutes.
+- Ten failed logins for one name refuse password logins for that name for ten minutes, so passwords can't be
+  guessed. A remembered certificate that matches still gets in during that time, so someone typing wrong passwords
+  can't lock out a member whose computer has signed in before (Mumble doesn't tell the site where a login comes
+  from). Members without a remembered certificate wait the ten minutes out.
 - Mumble groups are just names: create them on the server's root channel ACL (Edit → ACL → Groups) and give them rights
   on channels. Guests get the group from Setup (`temp` by default).
 - Guest logins are kept a week after they ended and links a month, so the person who made them can see who used

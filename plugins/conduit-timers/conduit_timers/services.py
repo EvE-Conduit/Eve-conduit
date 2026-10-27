@@ -9,7 +9,8 @@ Timers come from three places:
   lost its shields or armor, when a sovereignty structure was reinforced, when a customs office comes out, and when
   a structure finishes anchoring. Those become timers too (``import_notifications``).
 
-Every member sees the board and can say they're going. Reminders go to the people going (and to everyone for
+Every member sees the board and can say they're going, except that a timer read from a corporation's structures is
+only shown to those who may see that corporation's Structures section (``visible``) until a timer manager edits it. Reminders go to the people going (and to everyone for
 important timers) at the minute marks in the settings, and every reminder fires ``timers.reminder`` for webhooks.
 """
 
@@ -127,6 +128,8 @@ def out(t: Timer, user, now=None) -> dict:
         "ping_roles": list(t.ping_roles or []),
         "source": t.source,
         "structure_id": t.structure_id,
+        # Only the corporation's structure viewers see it until a timer manager edits it.
+        "corporation_only": bool(t.corporation_id),
         "status": status(t, now),
         "going": any(u.pk == user.pk for u in going),
         "going_count": len(going),
@@ -154,11 +157,41 @@ def _rows(qs):
     return qs.select_related("system__region", "created_by__main_character").prefetch_related("going__main_character")
 
 
+def _structures_corp(corporation_id: int):
+    from conduit.eve.models import EveCorporation
+
+    return EveCorporation.objects.filter(pk=corporation_id).first() or corporation_id
+
+
+def visible(user, qs=None):
+    """The timers ``user`` sees: everything, except ones read from a corporation's structures whose Structures
+    section of the corporation sheet they may not see (the same check the editor's structure search makes)."""
+    from conduit.corp.access import can_view_section
+
+    qs = Timer.objects.all() if qs is None else qs
+    corps = set(Timer.objects.filter(corporation_id__isnull=False).values_list("corporation_id", flat=True).distinct())
+    allowed = {c for c in corps if can_view_section(user, _structures_corp(c), "structures")}
+    return qs.filter(Q(corporation_id__isnull=True) | Q(corporation_id__in=allowed))
+
+
+def audience(t: Timer) -> list:
+    """Members who may hear about a timer: every member, or for one only its corporation's structure viewers see,
+    those of them."""
+    from conduit.access.services import site_members
+    from conduit.corp.access import can_view_section
+
+    people = list(site_members())
+    if t.corporation_id:
+        corp = _structures_corp(t.corporation_id)
+        people = [u for u in people if can_view_section(u, corp, "structures")]
+    return people
+
+
 def board(user) -> dict:
     now = timezone.now()
     s = TimerSettings.load()
-    upcoming = list(_rows(Timer.objects.filter(ends_at__gt=now - timedelta(hours=1))).order_by("ends_at"))
-    past = list(_rows(Timer.objects.filter(ends_at__lte=now - timedelta(hours=1), ends_at__gte=now - timedelta(days=s.keep_days))).order_by("-ends_at")[:200])
+    upcoming = list(_rows(visible(user).filter(ends_at__gt=now - timedelta(hours=1))).order_by("ends_at"))
+    past = list(_rows(visible(user).filter(ends_at__lte=now - timedelta(hours=1), ends_at__gte=now - timedelta(days=s.keep_days))).order_by("-ends_at")[:200])
     mine = {t.pk for t in upcoming if any(u.pk == user.pk for u in t.going.all())}
     return {
         "upcoming": [out(t, user, now) for t in upcoming],
@@ -294,10 +327,13 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
     if sys_row is None:
         raise TimerError("Pick a solar system")
     new = t is None
+    # A manager editing a timer read from a corporation's structures puts it on the board for everyone.
+    published = not new and bool(t.corporation_id)
     if new:
         t = Timer(created_by=by, source=Timer.Source.MANUAL)
     else:
         t.updated_by = by
+        t.corporation_id = None
     changed_time = not new and t.ends_at != ends_at
     t.name, t.system, t.kind, t.side, t.ends_at = name[:200], sys_row, kind, side, ends_at
     t.structure_type = " ".join(structure_type.split())[:60]
@@ -310,7 +346,7 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
     if changed_time:
         t.reminded = []  # a moved timer gets its reminders again
     t.save()
-    if new:
+    if new or published:
         announce(t, notify=notify)
     else:
         _emit("timers.updated", t, f"Now comes out {t.ends_at:%Y-%m-%d %H:%M} ET." if changed_time else "Details changed.")
@@ -318,12 +354,12 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
 
 
 def announce(t: Timer, notify: bool = True) -> None:
-    """Tell people about a new timer: members under the bell (when asked, or always for important ones), and webhooks."""
-    from conduit.access.services import site_members
+    """Tell people about a new timer: members under the bell (when asked, or always for important ones), and webhooks.
+    One only a corporation's structure viewers see goes to them alone, and not to webhooks."""
     from conduit.notify.services import notify as send
 
     if notify or t.important:
-        send(list(site_members()), f"{title(t)}", f"{describe(t)} Comes out {t.ends_at:%a %d %b %H:%M} ET.", link=LINK,
+        send(audience(t), f"{title(t)}", f"{describe(t)} Comes out {t.ends_at:%a %d %b %H:%M} ET.", link=LINK,
              level=NOTIFY_LEVEL.get(t.side, "info"), category="p.timers", force=t.important, data={"timer_id": t.pk})
     _emit("timers.created", t, f"Comes out {t.ends_at:%a %d %b %H:%M} ET.")
 
@@ -356,6 +392,8 @@ def _emit(event: str, t: Timer, summary: str) -> None:
     and the timer's roles) when the timer asks for it; a deleted timer never pings."""
     from conduit.events import bus
 
+    if t.corporation_id:  # webhooks reach people who may not see the corporation's structures
+        return
     ping = t.ping and event != "timers.deleted"
     bus.emit(event, timer_id=t.pk, structure=t.name, structure_type=t.structure_type, system=t.system.name, kind=t.kind, side=t.side,
              owner=t.owner, ends_at=t.ends_at.isoformat(), important=t.important, title=title(t),
@@ -407,7 +445,6 @@ def discord_roles() -> dict:
 def remind_due() -> int:
     """Send the reminders whose minute mark has passed. Each mark is sent once; if several are due at once (the
     scheduler was down), one reminder goes out for the nearest mark."""
-    from conduit.access.services import site_members
     from conduit.notify.services import notify as send
 
     marks = sorted({int(m) for m in TimerSettings.load().reminder_minutes if int(m) > 0}, reverse=True)
@@ -425,7 +462,7 @@ def remind_due() -> int:
             continue
         minutes = max(1, int((t.ends_at - now).total_seconds() // 60))
         body = f"{describe(t)} Comes out in {_minutes(minutes)}, at {t.ends_at:%H:%M} ET."
-        people = list(site_members()) if t.important else list(t.going.all())
+        people = audience(t) if t.important else list(t.going.all())
         if people:
             send(people, f"Timer soon: {title(t)}", body, link=LINK, level=NOTIFY_LEVEL.get(t.side, "info"), category="p.timers",
                  force=t.important, data={"timer_id": t.pk})
@@ -458,9 +495,10 @@ def _same(structure_id: int | None, kind: str, ends_at: datetime, system_id: int
 
 
 def _add(*, name: str, type_id: int | None, system_id: int, kind: str, ends_at: datetime, owner: str, source: str,
-         structure_id: int | None = None, side: str = Timer.Side.FRIENDLY) -> Timer | None:
+         structure_id: int | None = None, side: str = Timer.Side.FRIENDLY, corporation_id: int | None = None) -> Timer | None:
     """Add a timer read from elsewhere unless it's already on the board (then its time is corrected if it moved).
-    New ones are announced like timers added by hand: under the bell for members, and to webhooks."""
+    New ones are announced like timers added by hand: under the bell for members, and to webhooks. With
+    ``corporation_id`` (read from that corporation's structures) only its structure viewers see and hear about it."""
     if ends_at <= timezone.now() or not SolarSystem.objects.filter(pk=system_id).exists():
         return None
     existing = _same(structure_id, kind, ends_at, system_id)
@@ -469,18 +507,25 @@ def _add(*, name: str, type_id: int | None, system_id: int, kind: str, ends_at: 
             existing.ends_at = ends_at
             existing.reminded = []
             existing.save(update_fields=["ends_at", "reminded", "updated_at"])
+        if existing.corporation_id and corporation_id is None:
+            # A member's in-game notification says the same: it's no longer known only from the corporation sheet.
+            existing.corporation_id = None
+            existing.save(update_fields=["corporation_id", "updated_at"])
+            announce(existing, notify=True)
         return None
     type_name = ""
     if type_id:
         type_name = ItemType.objects.filter(pk=type_id).values_list("name", flat=True).first() or next((k for k, v in STRUCTURE_TYPES.items() if v == type_id), "")
     t = Timer.objects.create(name=(name or type_name or "Structure")[:200], structure_type=type_name[:60], type_id=type_id, system_id=system_id,
-                             kind=kind, side=side, owner=owner[:120], ends_at=ends_at, source=source, structure_id=structure_id)
+                             kind=kind, side=side, owner=owner[:120], ends_at=ends_at, source=source, structure_id=structure_id,
+                             corporation_id=corporation_id)
     announce(t, notify=True)
     return t
 
 
 def import_structures() -> int:
-    """Timers for the corporation sheet's structures that are reinforced, anchoring or unanchoring."""
+    """Timers for the corporation sheet's structures that are reinforced, anchoring or unanchoring. They're the
+    corporation sheet's data, so only those who may see that corporation's Structures section see them."""
     from conduit.corp.models import Structure
 
     now = timezone.now()
@@ -494,7 +539,7 @@ def import_structures() -> int:
         if not kind or not ends_at or ends_at <= now:
             continue
         if _add(name=s.name, type_id=s.type_id, system_id=s.system_id, kind=kind, ends_at=ends_at, owner=s.corporation.name,
-                source=Timer.Source.STRUCTURE, structure_id=s.structure_id):
+                source=Timer.Source.STRUCTURE, structure_id=s.structure_id, corporation_id=s.corporation_id):
             added += 1
     return added
 
@@ -546,15 +591,26 @@ def timer_from_notification(n) -> dict | None:
 
 
 def import_notifications() -> int:
-    """Timers from members' in-game notifications that arrived since the last look."""
+    """Timers from members' in-game notifications synced since the last look.
+
+    The cursor is the notification row id, not its in-game time: a character whose notifications sync late (a new
+    login, a token that was broken for a day) brings rows with older times than ones already looked at, and they
+    must still count."""
+    from django.db.models import Max
+
     from conduit.sheet.notifications.models import Notification
 
     s = TimerSettings.load()
     now = timezone.now()
-    since = max(s.notifications_seen_until or (now - NOTIFICATION_AGE), now - NOTIFICATION_AGE)
-    rows = (Notification.objects.filter(type__in=NOTIFICATION_KINDS, timestamp__gt=since)
-            .select_related("character__corporation").order_by("timestamp"))
-    added, latest = 0, since
+    window = now - NOTIFICATION_AGE
+    top = Notification.objects.aggregate(top=Max("pk"))["top"] or 0
+    rows = Notification.objects.filter(type__in=NOTIFICATION_KINDS, timestamp__gt=window, pk__lte=top)
+    if s.notifications_seen_id is not None:
+        rows = rows.filter(pk__gt=s.notifications_seen_id)
+    else:  # the first look since the cursor became the row id: carry on from the old time cutoff
+        rows = rows.filter(timestamp__gt=max(s.notifications_seen_until or window, window))
+    rows = rows.select_related("character__corporation").order_by("pk")
+    added, latest = 0, s.notifications_seen_until or window
     for n in rows:
         latest = max(latest, n.timestamp)
         try:
@@ -564,7 +620,7 @@ def import_notifications() -> int:
             continue
         if spec and _add(source=Timer.Source.NOTIFICATION, **spec):
             added += 1
-    TimerSettings.objects.filter(pk=s.pk).update(notifications_seen_until=latest)
+    TimerSettings.objects.filter(pk=s.pk).update(notifications_seen_until=latest, notifications_seen_id=max(top, s.notifications_seen_id or 0))
     return added
 
 
@@ -582,7 +638,7 @@ def import_all() -> dict:
 def search(request, q, limit):
     """Ctrl+K: upcoming timers by structure name, system or owner."""
     now = timezone.now()
-    rows = (Timer.objects.filter(ends_at__gt=now - timedelta(hours=1))
+    rows = (visible(request.user).filter(ends_at__gt=now - timedelta(hours=1))
             .filter(Q(name__icontains=q) | Q(system__name__icontains=q) | Q(owner__icontains=q))
             .select_related("system").order_by("ends_at")[:limit])
     return {

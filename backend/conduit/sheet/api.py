@@ -85,17 +85,20 @@ def character_header(request, character_id: int):
 
 
 def _alts(request, character: Character) -> list[dict]:
-    """The owner's other characters, main first. Each says whether the viewer may open its sheet."""
+    """The owner's other characters the viewer may see, main first. Seeing one character doesn't let the viewer
+    learn which other characters, outside their reach, share its account (owners see all of their own)."""
     main_id = character.user.main_character_id
     alts = Character.objects.filter(user_id=character.user_id).exclude(pk=character.pk).select_related("corporation", "alliance", "token")
     out = []
     for alt in sorted(alts, key=lambda a: (a.pk != main_id, a.name.lower())):
+        if not can_view(request.user, alt):
+            continue
         token = getattr(alt, "token", None)
         out.append({
             **character_brief(alt),
             "is_main": alt.pk == main_id,
             "token_valid": bool(token and token.valid),
-            "viewable": can_view(request.user, alt),
+            "viewable": True,  # kept for the web UI; only viewable alts are listed
         })
     return out
 

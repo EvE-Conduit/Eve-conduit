@@ -242,8 +242,20 @@ def seat_client_id(seat_dir: str) -> str:
 # --- talking to Conduit -----------------------------------------------------------------------------------
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Redirects are refused: urllib would send the API key (and the tokens) on to wherever they point."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ImportError_(f"{req.get_method()} {req.full_url} was redirected (HTTP {code}) to {newurl}. Not following it, "
+                           "so the API key goes nowhere else: pass the site's own address to --conduit (check http or "
+                           "https, www and the path).")
+
+
+open_url = urllib.request.build_opener(_NoRedirects).open
+
+
 class Conduit:
-    def __init__(self, base: str, key: str, opener=urllib.request.urlopen):
+    def __init__(self, base: str, key: str, opener=open_url):
         self.base = base.rstrip("/") + "/api/v1"
         self.key = key
         self.opener = opener
@@ -405,7 +417,7 @@ STATUS_TEXT = {
 }
 
 
-def connect(url: str, key: str, allow_http: bool = False, http=urllib.request.urlopen) -> tuple[Conduit, dict]:
+def connect(url: str, key: str, allow_http: bool = False, http=open_url) -> tuple[Conduit, dict]:
     """Check the address and key, and return the API client and what Conduit says about itself."""
     check_url(url, allow_http)
     if not key.strip():
@@ -464,7 +476,7 @@ def write_report(path: str, report: dict) -> str:
     return path
 
 
-def run(args, ask=input, say=print, secret=getpass.getpass, http=urllib.request.urlopen, db=subprocess.run) -> int:
+def run(args, ask=input, say=print, secret=getpass.getpass, http=open_url, db=subprocess.run) -> int:
     with_tokens = not args.no_tokens
     check_url(args.conduit, args.allow_http)
     key = os.environ.get("CONDUIT_API_KEY") or secret("Conduit API key (scope import:seat): ")

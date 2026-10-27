@@ -10,7 +10,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { Book, ChevronRight, Clock, Dots, Globe, Lock, Pencil, Plus, Trash } from "./icons";
 import { Markdown } from "./markdown";
 import { PageIcon, Toc, useOverview, WikiShell } from "./shell";
-import { BASE, HOME, type Node, type Page } from "./types";
+import { BASE, HOME, type Node, type Page, PUBLIC_HOME } from "./types";
 
 export function usePage(slug: string | undefined) {
   return useQuery({
@@ -196,7 +196,7 @@ export function Article({ page, canManage, linkBase = HOME, readOnly }: { page: 
       </header>
 
       {page.body.trim() ? (
-        <Markdown text={page.body} linkBase={linkBase} />
+        <Markdown text={page.body} linkBase={linkBase} sameSiteImages={linkBase === PUBLIC_HOME} />
       ) : (
         <p className="text-sm text-subtle">This page is empty{canEdit ? ": edit it to write something." : "."}</p>
       )}

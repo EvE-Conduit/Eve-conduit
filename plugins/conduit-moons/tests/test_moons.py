@@ -156,6 +156,19 @@ def test_invoices_of_hidden_corporations_cannot_be_marked(mined, last_month, adm
         services.set_paid(inv.pk, True, type(outsider).objects.get(pk=outsider.pk))
 
 
+def test_nobody_marks_their_own_bill(mined, last_month, admin_user):
+    from django.contrib.auth.models import Permission
+
+    services.close_month(last_month, admin_user)
+    inv = Invoice.objects.get(user=mined)
+    mined.user_permissions.add(*Permission.objects.filter(content_type__app_label="moons"))
+    mined.user_permissions.add(Permission.objects.get(codename="view_all_corporations"))
+    with pytest.raises(services.LedgerError, match="your own"):
+        services.set_paid(inv.pk, True, type(mined).objects.get(pk=mined.pk))
+    inv.refresh_from_db()
+    assert not inv.paid
+
+
 def test_far_off_months_are_refused(mined, api_client):
     api_client.force_login(mined)
     assert api_client.call("get", "/api/p/moons/me?month=9999-12").status_code == 400

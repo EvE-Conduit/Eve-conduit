@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class SkillPlansPlugin(Plugin):
     id = "skillplans"
     name = "Skill Plans"
-    version = "1.0.2"
+    version = "1.0.3"
     description = "Shared and personal skill plans with each character's progress and training time, copied straight into the game."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-skillplans"

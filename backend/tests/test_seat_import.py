@@ -134,3 +134,113 @@ def test_info_reports_client_id_and_wanted_scopes(client, key):
     assert info["client_id"] == "test-client"
     assert info["sso_configured"] is True
     assert isinstance(info["wanted_scopes"], list)
+
+
+@pytest.mark.django_db
+def test_an_alt_sold_to_someone_here_does_not_decide_the_account(client, key):
+    """SeAT still lists alt Z under X, but Z was sold to Y, who registered it here: X's main and other alts get an
+    account of their own, not Y's."""
+    buyer = make_user(91000003, "Sold Alt")
+    Character.objects.filter(pk=91000003).update(owner_hash="buyer-hash")  # Y signed in with Z after buying it
+    payload = {"users": [seat_user(alts=[91000002, 91000003])]}  # X's SeAT still has Z with X's (old) owner hash
+
+    preview = call(client, "post", "/api/v1/import/seat/preview", key, data=payload).json()["users"][0]
+    assert preview["account"] is None
+    assert {c["id"]: c["status"] for c in preview["characters"]} == {91000001: "new", 91000002: "new", 91000003: "owner_changed"}
+
+    result = call(client, "post", "/api/v1/import/seat/users", key, data=payload).json()["users"][0]
+    assert result["created"] is True and result["user_id"] != buyer.pk
+    assert {c["id"]: c["status"] for c in result["characters"]} == {91000001: "added", 91000002: "added", 91000003: "owner_changed"}
+    assert set(User.objects.get(pk=result["user_id"]).characters.values_list("pk", flat=True)) == {91000001, 91000002}
+    assert set(buyer.characters.values_list("pk", flat=True)) == {91000003}
+
+
+def _import_without_hashes(client, key) -> User:
+    user = seat_user(alts=[91000002])
+    for c in user["characters"]:
+        c["owner_hash"] = ""  # SeAT didn't know them
+    result = call(client, "post", "/api/v1/import/seat/users", key, data={"users": [user]}).json()["users"][0]
+    return User.objects.get(pk=result["user_id"])
+
+
+def _eve(monkeypatch, owner="real-hash", refresh=None):
+    """EVE SSO answering refreshes (``refresh`` overrides) with tokens whose JWT names ``owner``."""
+    monkeypatch.setattr("conduit.esi.tokens._token_request", refresh or (lambda data: {
+        "access_token": f"jwt:{data['refresh_token']}", "refresh_token": data["refresh_token"], "expires_in": 1199}))
+
+    def verify(access_token):
+        char_id = access_token.removeprefix("jwt:rt-")
+        return {"sub": f"CHARACTER:EVE:{char_id}", "name": "x", "owner": owner, "scp": []}
+
+    monkeypatch.setattr("conduit.esi.tokens.verify_access_token", verify)
+
+
+def _login(char_id=91000002, owner="real-hash"):
+    from conduit.accounts.services import link_character
+
+    info = {"id": char_id, "name": f"Alt {char_id}", "owner_hash": owner, "scopes": ["publicData"]}
+    return link_character(info, {"access_token": "a", "refresh_token": "r", "expires_in": 1199}, None)
+
+
+@pytest.mark.django_db
+def test_empty_owner_hash_is_read_from_a_working_token_on_first_login(client, key, monkeypatch):
+    """SeAT doesn't always know the owner hash; the character's own token (EVE revokes it on a sale) tells it."""
+    account = _import_without_hashes(client, key)
+    _eve(monkeypatch, owner="real-hash")
+    char = _login(owner="real-hash")
+    assert char.user_id == account.pk and account.characters.count() == 2
+    assert Character.objects.get(pk=91000002).owner_hash == "real-hash"
+
+
+@pytest.mark.django_db
+def test_empty_owner_hash_with_a_token_of_another_owner_is_a_sale(client, key, monkeypatch):
+    account = _import_without_hashes(client, key)
+    _eve(monkeypatch, owner="sellers-hash")
+    char = _login(owner="buyers-hash")
+    assert char.user_id != account.pk
+    assert set(account.characters.values_list("pk", flat=True)) == {91000001}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("token", ["none", "marked_invalid", "revoked"])
+def test_empty_owner_hash_without_a_usable_token_is_a_sale(client, key, monkeypatch, token):
+    """Nothing vouches for the old account, so the one signing in gets the character on an account of their own."""
+    account = _import_without_hashes(client, key)
+    if token == "none":
+        Token.objects.filter(character_id=91000002).delete()
+    elif token == "marked_invalid":
+        Token.objects.filter(character_id=91000002).update(valid=False)
+
+    def refused(data):
+        raise TokenInvalid("revoked", oauth_error="invalid_grant")
+
+    _eve(monkeypatch, refresh=refused)
+    char = _login(owner="buyers-hash")
+    assert char.user_id != account.pk and char.owner_hash == "buyers-hash"
+    assert set(account.characters.values_list("pk", flat=True)) == {91000001}
+
+
+@pytest.mark.django_db
+def test_empty_owner_hash_and_eve_unreachable_refuses_the_login_for_now(client, key, monkeypatch):
+    import httpx
+
+    from conduit.accounts.services import OwnerUnknown
+
+    account = _import_without_hashes(client, key)
+
+    def down(data):
+        raise httpx.ConnectError("no route")
+
+    _eve(monkeypatch, refresh=down)
+    with pytest.raises(OwnerUnknown):
+        _login()
+    assert Character.objects.get(pk=91000002).user_id == account.pk  # nothing guessed either way
+
+
+@pytest.mark.django_db
+def test_verifying_imported_tokens_fills_in_missing_owner_hashes(client, key, monkeypatch):
+    _import_without_hashes(client, key)
+    _eve(monkeypatch, owner="real-hash")
+    monkeypatch.setattr(account_tasks, "PARALLEL", 1)
+    account_tasks.verify_seat_tokens("run", [91000001, 91000002])
+    assert set(Character.objects.values_list("owner_hash", flat=True)) == {"real-hash"}

@@ -117,13 +117,21 @@ class TempLink(models.Model):
     def uses(self) -> int:
         return self.users.count()
 
+    def creator_may_hand_out(self) -> bool:
+        """Whoever made the link may still hand out temporary access. Once they can't (they lost
+        ``mumble.create_temp_links``, were deactivated or deleted), the link and the logins it gave stop working."""
+        u = self.created_by
+        return u is not None and u.is_active and u.has_perm("mumble.create_temp_links")
+
     def status(self, now=None) -> str:
-        """active, revoked, expired or used_up."""
+        """active, revoked, expired, creator_lost (see ``creator_may_hand_out``) or used_up."""
         now = now or timezone.now()
         if self.revoked_at:
             return "revoked"
         if self.expires_at <= now:
             return "expired"
+        if not self.creator_may_hand_out():
+            return "creator_lost"
         if self.max_uses and self.uses >= self.max_uses:
             return "used_up"
         return "active"
@@ -150,4 +158,4 @@ class TempUser(models.Model):
 
     def usable(self, now=None) -> bool:
         now = now or timezone.now()
-        return not self.revoked_at and self.expires_at > now and not self.link.revoked_at
+        return not self.revoked_at and self.expires_at > now and not self.link.revoked_at and self.link.creator_may_hand_out()

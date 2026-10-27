@@ -86,6 +86,8 @@ class Program(models.Model):
     #: People who run it: change it, see its contracts and statistics, and get told about new contracts.
     managers = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="buyback_programs")
     expiration_days = models.PositiveSmallIntegerField(default=14)
+    #: A contract made more than this many days after its quote is flagged: prices may have moved since. 0: never.
+    quote_valid_days = models.PositiveSmallIntegerField(default=7)
     price_type = models.CharField(max_length=5, choices=PriceType.choices, default=PriceType.BUY)
     #: Its own market (like the settings' ``hub_id``); empty: the site's. A player structure is read with the owner's login.
     hub_id = models.BigIntegerField(null=True, blank=True)

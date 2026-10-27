@@ -11,11 +11,10 @@ the section has synced from EVE (the sync deletes and recreates labels each run)
 
 import json
 
-from conduit.esi.exceptions import EsiError
 from conduit.eve.models import EveName
 from conduit.sheet.mail.models import Mail, MailLabel
 
-from ..esi import drop_none, esi_dt, missing, route
+from ..esi import drop_none, esi_dt, left_for_live_sync, missing, route
 from . import HISTORY, section
 
 PAGE = 50
@@ -112,7 +111,7 @@ def body(ctx, params, cid, mail_id):
     row = ctx.store.one("mail_bodies", mail_id=mail_id)
     if row is None:
         if ctx.synced:  # leave it for a live sync to fetch from EVE
-            raise EsiError(503, "body not in the SeAT dump")
+            raise left_for_live_sync("body not in the SeAT dump")
         raise missing()
     header = _mails(ctx).get(mail_id, {})
     return drop_none({

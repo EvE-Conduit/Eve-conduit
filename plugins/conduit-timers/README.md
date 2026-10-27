@@ -31,11 +31,15 @@ comes out. Timers for your own structures arrive by themselves.
   A timer that's moved gets its reminders again.
 - **From your structures:** every five minutes, the corporation sheet's structures that are reinforced (armor or
   hull), anchoring or unanchoring get a timer on the board, named and typed from the structure itself and owned by
-  the corporation. If a later sync moves the timer, the board follows.
+  the corporation. If a later sync moves the timer, the board follows. These come from the corporation sheet, so
+  only people who may see that corporation's **Structures** section see them, are told about them and get their
+  reminders, and webhooks don't hear about them, until a timer manager edits one (which puts it on the board for
+  everyone and announces it) or a member's in-game notification reports the same timer.
 - **From in-game notifications:** characters' notifications (`esi-characters.read_notifications.v1`, synced by the
   character sheet) are read for *structure lost shields* (armor timer), *structure lost armor* (hull timer), skyhooks,
   anchoring and unanchoring, *sovereignty structure reinforced* (TCU, IHub) and *customs office reinforced*. The
-  same notification seen by several members makes one timer. Both sources can be switched off in the settings, and
+  same notification seen by several members makes one timer, and a member whose notifications sync late (with
+  older in-game times than ones already read) still counts. Both sources can be switched off in the settings, and
   **Check now** runs them straight away.
 - **Settings** (permission `timers.manage_timers`): the reminder marks, the two automatic sources, the Discord roles new
   timers ping, and how long past

@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class OpsPlugin(Plugin):
     id = "ops"
     name = "Ops Calendar"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "CTAs, stratops, roams and mining ops on one calendar with countdowns, RSVPs, reminders and Discord pings."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-ops"

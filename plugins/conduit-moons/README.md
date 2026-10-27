@@ -7,7 +7,7 @@ Who mined what from your corporations' moon drills each month, what it's worth, 
   and a CSV export.
 - **Moon tax** (permission `moons.manage_ledger`): set a % of the ore's value and how to pay. Once a month is over,
   close it: the ore prices and tax rate are fixed, each member is told what they owe, and you mark payments as
-  they come in. A month can be reopened while nobody has paid.
+  they come in (nobody marks their own bill). A month can be reopened while nobody has paid.
 - **My moon mining**: every member sees their own mining and what they owe, plus a dashboard widget.
 
 **Which corporations:** the ledger follows the corporation sheet's permissions. Someone with `moons.view_ledger`

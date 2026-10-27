@@ -136,7 +136,7 @@ def accept(request, request_id: int, payload: NoteIn):
 @router.get("/requests/{request_id}/jobs")
 def jobs(request, request_id: int):
     _manager(request)
-    return services.copy_jobs(_request(request_id))
+    return services.copy_jobs(_request(request_id), request.user)
 
 
 class StartIn(Schema):

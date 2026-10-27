@@ -161,6 +161,8 @@ def test_search(people, api_client):
 def test_timers_from_reinforced_structures(people, corp):
     from conduit.corp.models import Structure
 
+    people["pilot"].user_permissions.add(Permission.objects.get(codename="view_own_corporation"))
+
     end = timezone.now() + timedelta(hours=30)
     Structure.objects.create(corporation=corp, structure_id=1030000000001, name="Our Astrahus", type_id=35832, system_id=JITA, state="armor_reinforce",
                              state_timer_start=timezone.now(), state_timer_end=end)
@@ -177,6 +179,59 @@ def test_timers_from_reinforced_structures(people, corp):
     assert services.import_structures() == 0
     assert Timer.objects.get(structure_id=1030000000001).ends_at == end + timedelta(minutes=3)
     assert Notification.objects.filter(user=people["pilot"], title__startswith="Our Astrahus in Jita").exists()
+
+
+def test_structure_timers_need_the_corporation_sheet(people, corp, api_client, monkeypatch):
+    from conduit.corp.models import Structure
+    from conduit.events import bus
+
+    emitted = []
+    monkeypatch.setattr(bus, "emit", lambda name, **kw: name.startswith("timers.") and emitted.append(name))
+    pilot, other, manager = people["pilot"], people["other"], people["manager"]
+    pilot.user_permissions.add(Permission.objects.get(codename="view_own_corporation"))
+    end = timezone.now() + timedelta(hours=30)
+    Structure.objects.create(corporation=corp, structure_id=1030000000001, name="Our Astrahus", type_id=35832, system_id=JITA, state="armor_reinforce",
+                             state_timer_start=timezone.now(), state_timer_end=end)
+    assert services.import_structures() == 1
+    t = Timer.objects.get()
+    assert t.corporation_id == corp.pk
+    # Only those who may see the corporation's structures see it and hear about it; webhooks don't.
+    assert set(Notification.objects.filter(category="p.timers").values_list("user_id", flat=True)) == {pilot.pk}
+    assert emitted == []
+    api_client.force_login(pilot)
+    assert [x["name"] for x in api_client.call("get", "/api/p/timers").json()["upcoming"]] == ["Our Astrahus"]
+    assert api_client.call("get", "/api/p/timers").json()["upcoming"][0]["corporation_only"] is True
+    api_client.force_login(other)
+    assert api_client.call("get", "/api/p/timers").json()["upcoming"] == []
+    assert api_client.call("post", f"/api/p/timers/{t.pk}/going", {"going": True}).status_code == 404
+    assert services.search(type("R", (), {"user": other})(), "Astrahus", 5)["hits"] == []
+    # A manager who may see it edits it: now it's on the board for everyone and announced.
+    manager.user_permissions.add(Permission.objects.get(codename="view_own_corporation"))
+    api_client.force_login(manager)
+    body = {"name": "Our Astrahus", "structure_type": "Astrahus", "system": JITA, "kind": "armor", "side": "friendly", "ends_at": end.isoformat(),
+            "notes": "Form up at the citadel"}
+    assert api_client.call("put", f"/api/p/timers/{t.pk}", body).status_code == 200
+    t.refresh_from_db()
+    assert t.corporation_id is None and emitted == ["timers.created"]
+    assert Notification.objects.filter(user=other, category="p.timers").exists()
+    api_client.force_login(other)
+    assert [x["name"] for x in api_client.call("get", "/api/p/timers").json()["upcoming"]] == ["Our Astrahus"]
+
+
+def test_a_members_notification_puts_a_structure_timer_on_the_board(people, corp):
+    from conduit.corp.models import Structure
+
+    end = timezone.now() + timedelta(hours=20)
+    Structure.objects.create(corporation=corp, structure_id=1030000000005, name="Jita Trade Hub", type_id=35833, system_id=JITA, state="armor_reinforce",
+                             state_timer_start=timezone.now(), state_timer_end=end)
+    services.import_structures()
+    assert Timer.objects.get().corporation_id == corp.pk
+    when = end - timedelta(hours=20)
+    _notification(people["pilot"].main_character, "StructureLostShields",
+                  f"solarsystemID: {JITA}\nstructureID: &id001 1030000000005\nstructureTypeID: 35833\ntimeLeft: {20 * 3600 * 10_000_000}\n", when, nid=1)
+    assert services.import_notifications() == 0  # the same timer
+    assert Timer.objects.get().corporation_id is None
+    assert Notification.objects.filter(user=people["other"], category="p.timers").exists()
 
 
 def _notification(character, kind, text, when=None, nid=None):
@@ -219,6 +274,31 @@ def test_timers_from_notifications(people, corp):
                   timezone.now() - timedelta(minutes=1), nid=6)
     assert services.import_notifications() == 1
     assert Timer.objects.filter(structure_id=1030000000005).count() == 2
+
+
+def test_a_notification_synced_late_still_counts(people, corp):
+    pilot, other = people["pilot"].main_character, people["other"].main_character
+    twenty_hours = 20 * 3600 * 10_000_000
+    text = f"solarsystemID: {JITA}\nstructureID: &id001 {{}}\nstructureTypeID: 35832\ntimeLeft: {twenty_hours}\n"
+    _notification(pilot, "StructureLostShields", text.format(1030000000007), timezone.now() - timedelta(minutes=5), nid=1)
+    assert services.import_notifications() == 1
+    # Another member's notifications sync an hour later, with an older in-game time than the one already read.
+    _notification(other, "StructureLostShields", text.format(1030000000008), timezone.now() - timedelta(hours=2), nid=2)
+    assert services.import_notifications() == 1
+    assert Timer.objects.filter(structure_id=1030000000008).exists()
+    assert services.import_notifications() == 0
+
+
+def test_the_first_look_after_upgrading_keeps_the_old_cutoff(people, corp):
+    pilot = people["pilot"].main_character
+    text = f"solarsystemID: {JITA}\nstructureID: &id001 {{}}\nstructureTypeID: 35832\ntimeLeft: {20 * 3600 * 10_000_000}\n"
+    seen = timezone.now() - timedelta(hours=1)
+    TimerSettings.objects.filter(pk=TimerSettings.load().pk).update(notifications_seen_until=seen)
+    _notification(pilot, "StructureLostShields", text.format(1030000000007), seen - timedelta(minutes=5), nid=1)  # looked at before
+    _notification(pilot, "StructureLostShields", text.format(1030000000008), seen + timedelta(minutes=5), nid=2)
+    assert services.import_notifications() == 1
+    assert list(Timer.objects.values_list("structure_id", flat=True)) == [1030000000008]
+    assert TimerSettings.load().notifications_seen_id is not None
 
 
 def test_notification_parsing():

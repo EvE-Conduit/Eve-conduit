@@ -1,6 +1,6 @@
 [project]
 name = "conduit-wiki"
-version = "1.0.0"
+version = "1.0.1"
 description = "Wiki: pages in a tree with Markdown, a table of contents, page history with restore, visibility by state or group, and public pages for recruits."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

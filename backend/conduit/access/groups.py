@@ -93,14 +93,25 @@ def eligible(user, profile: GroupProfile) -> bool:
 # --- membership --------------------------------------------------------------------------
 
 
-def _may_grant_admin(via: str, request=None, actor=None) -> bool:
-    """Groups carrying administrator permissions are only filled by people who manage access.
+def holds_all(user, permissions) -> bool:
+    """Whether ``user`` already holds every one of ``permissions`` (superusers hold them all)."""
+    return bool(user is not None and user.is_active and all(user.has_perm(p) for p in permissions))
+
+
+def _may_grant_admin(admin_perms: list[str], via: str, request=None, actor=None) -> bool:
+    """Groups carrying administrator permissions are only filled (or emptied) by people who manage access and already
+    hold every administrator permission the group grants, so managing access can't be turned into, say, managing
+    plugins by adding yourself (or a friend) to the group that grants it.
 
     Always checked against the person doing it, never trusted from ``via``: plugins call ``add_member`` too (e.g.
     Recruitment accepting an applicant into a form's groups) without the admin endpoints' permission check.
     """
     approver = actor or (request.user if via in ("admin", "leader") and request is not None else None)
-    return bool(approver is not None and approver.has_perm("site.manage_access"))
+    return bool(approver is not None and approver.has_perm("site.manage_access") and holds_all(approver, admin_perms))
+
+
+#: Removals nobody approves (the member leaving, the group's rules, their state): no approver to check.
+_UNAPPROVED_REMOVALS = ("self", "auto", "state")
 
 
 def add_member(user, group: Group, via: str, *, request=None, actor=None, note: str = "") -> bool:
@@ -108,11 +119,13 @@ def add_member(user, group: Group, via: str, *, request=None, actor=None, note: 
         return False
     from .services import admin_permissions_in
 
-    if admin_permissions_in(group.permissions.all()) and not _may_grant_admin(via, request, actor):
+    admin_perms = admin_permissions_in(group.permissions.all())
+    if admin_perms and not _may_grant_admin(admin_perms, via, request, actor):
         if via == "auto":
             log.warning("Smart group %s grants administrator permissions; not adding %s automatically", group.name, user)
             return False
-        raise GroupError(f"{group.name} grants administrator permissions, so only an administrator can add members", 403)
+        raise GroupError(f"{group.name} grants administrator permissions ({', '.join(admin_perms)}), so only an "
+                         "administrator holding all of them can add members", 403)
     user.groups.add(group)
     AutoGroupGrace.objects.filter(user=user, group=group).delete()
     who = actor.display_name if actor else ("System" if via in ("auto", "state") else user.display_name)
@@ -129,12 +142,15 @@ def add_member(user, group: Group, via: str, *, request=None, actor=None, note: 
 def remove_member(user, group: Group, via: str, *, request=None, actor=None, note: str = "") -> bool:
     if not is_member(user, group):
         return False
-    if via == "api":
+    if via not in _UNAPPROVED_REMOVALS:
         from .services import admin_permissions_in
 
-        # API keys may not strip administrators either (the endpoint checks too; this catches other callers).
-        if admin_permissions_in(group.permissions.all()) and not _may_grant_admin(via, request, actor):
-            raise GroupError(f"{group.name} grants administrator permissions, so only an administrator can remove members", 403)
+        # Nor strip administrators of permissions the person doing it doesn't hold (API keys never may; the endpoints
+        # check too, this catches other callers).
+        admin_perms = admin_permissions_in(group.permissions.all())
+        if admin_perms and not _may_grant_admin(admin_perms, via, request, actor):
+            raise GroupError(f"{group.name} grants administrator permissions ({', '.join(admin_perms)}), so only an "
+                             "administrator holding all of them can remove members", 403)
     user.groups.remove(group)
     AutoGroupGrace.objects.filter(user=user, group=group).delete()
     who = actor.display_name if actor else ("System" if via in ("auto", "state", "merge") else user.display_name)
@@ -184,12 +200,14 @@ def join(user, group: Group, message: str = "", request=None) -> tuple[str, Grou
     profile = profile_of(group)
     if is_member(user, group):
         raise GroupError("You're already a member")
+    if profile.hidden:
+        # Hidden groups aren't listed to non-members, and there is no invite: leaders and admins add people. Answer
+        # as if it didn't exist, so guessing ids neither joins one nor tells which ids are hidden groups.
+        raise GroupError("Group not found", 404)
     if profile.auto:
         raise GroupError("Membership of this group is automatic", 403)
     if profile.join_mode == GroupProfile.JoinMode.CLOSED:
         raise GroupError("You can't join or leave this group yourself", 403)
-    if profile.hidden and not profile.allows(user):
-        raise GroupError("Group not found", 404)
     missing = failed_requirements(user, profile)
     if missing:
         raise GroupError("You don't meet the requirements: " + "; ".join(missing), 403)

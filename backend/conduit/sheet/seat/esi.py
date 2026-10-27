@@ -42,6 +42,12 @@ def missing(what: str = "not in the SeAT dump") -> EsiError:
     return EsiError(404, what)
 
 
+def left_for_live_sync(what: str = "not in the SeAT dump") -> EsiError:
+    """For details (mail bodies, contract items) SeAT didn't have but EVE may still give. A 4xx other than 404, so the
+    sync skips just this one and goes on with the rest (it stops at the first 5xx, taking that for ESI trouble)."""
+    return EsiError(409, what)
+
+
 def unavailable() -> EsiBackoff:
     """For lookups (structures, stations) SeAT didn't have: the caller gives up for now and a live sync retries."""
     return EsiBackoff(0, "not in the SeAT dump")

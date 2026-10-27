@@ -22,7 +22,7 @@ export function ReferrerField({ value, onChange }: { value: Referrer | null; onC
   const { data, isLoading } = useQuery({
     queryKey: ["recruit", "referrers", dq],
     queryFn: () => api.get<Referrer[]>(`${BASE}/referrers?q=${encodeURIComponent(dq)}`),
-    enabled: dq.length >= 2,
+    enabled: dq.length >= 3,
   });
   const hits = data ?? [];
   const pick = (r: Referrer) => {
@@ -34,7 +34,7 @@ export function ReferrerField({ value, onChange }: { value: Referrer | null; onC
   return (
     <div className="space-y-1.5">
       <span className="block text-[13px] font-medium text-text">Who referred you?</span>
-      <p className="text-xs text-muted">Optional. Start typing the name of the member who brought you here.</p>
+      <p className="text-xs text-muted">Optional. Type at least three letters of the name of the member who brought you here.</p>
       {value ? (
         <div className="inline-flex items-center gap-2 border border-border bg-surface-2/60 py-1 pl-1 pr-1.5 text-sm">
           <Avatar src={value.portrait} name={value.name} size="sm" />
@@ -65,9 +65,9 @@ export function ReferrerField({ value, onChange }: { value: Referrer | null; onC
             placeholder="Character name"
             autoComplete="off"
             role="combobox"
-            aria-expanded={open && dq.length >= 2}
+            aria-expanded={open && dq.length >= 3}
           />
-          {open && dq.length >= 2 && (
+          {open && dq.length >= 3 && (
             <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto border border-border-strong bg-surface-raised p-1 shadow-e3" role="listbox">
               {isLoading ? (
                 <Spinner className="px-2 py-1.5" />

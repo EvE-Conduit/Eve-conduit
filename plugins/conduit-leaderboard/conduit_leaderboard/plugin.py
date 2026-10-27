@@ -8,7 +8,7 @@ from conduit.plugins import NavItem, Plugin
 class LeaderboardPlugin(Plugin):
     id = "leaderboard"
     name = "Leaderboard"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Who tops the corporation in kills, ISK destroyed, fleets, mining, ratting, industry and skillpoints, with monthly medals."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-leaderboard"

@@ -13,7 +13,7 @@ from django.http import HttpResponseBadRequest, HttpResponseRedirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET
 
-from conduit.accounts.services import CharacterOwnedElsewhere, link_character
+from conduit.accounts.services import CharacterOwnedElsewhere, OwnerUnknown, link_character
 from conduit.audit.services import record
 from conduit.esi.credentials import client_id
 from conduit.esi.exceptions import TokenInvalid
@@ -116,6 +116,9 @@ def callback(request):
         character = link_character(info, token_data, request.user if adding else None)
     except CharacterOwnedElsewhere:
         return _back(flow, error="character_owned_elsewhere")
+    except OwnerUnknown as exc:
+        log.warning("EVE SSO callback: %s", exc)
+        return _back(flow, error="sso_failed")
 
     if adding:
         record("character.added", f"added character {character.name}", request=request, target=character,

@@ -10,6 +10,8 @@ from typing import Literal
 from ninja import Schema
 from pydantic import Field, field_validator
 
+from conduit.notify.services import is_site_path
+
 ICONS = (
     "activity anchor award bar-chart bell book-open box boxes briefcase building calendar clock coins compass "
     "crosshair factory file-text flag flask-conical gauge gem globe graduation-cap hammer heart landmark "
@@ -59,7 +61,7 @@ def _link(v: str) -> str:
     v = v.strip()
     if not v:
         return v
-    if (v.startswith("/") and not v.startswith("//") and "\\" not in v) or v.startswith("https://"):
+    if is_site_path(v) or v.startswith("https://"):
         return v
     raise ValueError("links must be a page on this site (like /groups) or an https:// address")
 

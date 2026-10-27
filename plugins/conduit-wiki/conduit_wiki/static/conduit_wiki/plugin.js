@@ -1,6 +1,6 @@
 import { ApiError as e, Avatar as t, Badge as n, Button as r, Card as i, ConfirmDialog as a, DropdownContent as o, DropdownItem as s, DropdownMenu as c, DropdownSeparator as l, DropdownTrigger as u, EmptyState as d, Field as f, Input as p, PageHeader as m, SearchInput as h, Segmented as g, Select as _, Skeleton as v, SwitchRow as y, Textarea as b, api as x, buttonVariants as S, cn as C, dateTime as w, definePlugin as T, timeAgo as E, toast as D } from "@conduit/sdk";
-import { Link as O, useLocation as k, useNavigate as ee, useParams as A, useSearchParams as te } from "react-router";
-import { useMutation as ne, useQuery as j, useQueryClient as M } from "@tanstack/react-query";
+import { Link as O, useLocation as k, useNavigate as A, useParams as j, useSearchParams as ee } from "react-router";
+import { useMutation as te, useQuery as M, useQueryClient as ne } from "@tanstack/react-query";
 import { Fragment as N, useEffect as P, useMemo as F, useRef as re, useState as I } from "react";
 import { Fragment as L, jsx as R, jsxs as z } from "react/jsx-runtime";
 //#region src/icons.tsx
@@ -126,6 +126,13 @@ function ge(e) {
 	return e.startsWith("https://") || e.startsWith("/") && !e.startsWith("//") && !e.includes("\\") || e.startsWith("#") ? e : null;
 }
 function _e(e) {
+	try {
+		return new URL(e).origin === window.location.origin;
+	} catch {
+		return !1;
+	}
+}
+function ve(e) {
 	let t = [], n = /* @__PURE__ */ new Map(), r = !1;
 	for (let i of e.replace(/\r\n/g, "\n").split("\n")) {
 		if (/^\s*```/.test(i)) {
@@ -135,7 +142,7 @@ function _e(e) {
 		if (r) continue;
 		let e = i.match(/^(#{1,4})\s+(.+?)\s*#*\s*$/);
 		if (!e) continue;
-		let a = ve(e[2]), o = G(a) || "section", s = n.get(o) ?? 0;
+		let a = ye(e[2]), o = G(a) || "section", s = n.get(o) ?? 0;
 		n.set(o, s + 1), s && (o = `${o}-${s + 1}`), t.push({
 			level: e[1].length,
 			text: a,
@@ -144,7 +151,7 @@ function _e(e) {
 	}
 	return t;
 }
-function ve(e) {
+function ye(e) {
 	return e.replace(/!\[([^\]\n]{0,200})\]\([^)\s]{1,2000}\)/g, "$1").replace(/\[\[([^\]|\n]{1,200})(?:\|([^\]\n]{1,200}))?\]\]/g, (e, t, n) => n ?? t).replace(/\[([^\]\n]{1,200})\]\([^)\s]{1,2000}\)/g, "$1").replace(/[*_`~]+/g, "").trim();
 }
 function K(e, t, n) {
@@ -154,11 +161,18 @@ function K(e, t, n) {
 		c > i && r.push(e.slice(i, c));
 		let l = `${t}-${a++}`;
 		if (s.startsWith("![")) {
-			let [, e, t] = s.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/) ?? [], n = t && t.startsWith("https://") ? t : null;
-			r.push(n ? /* @__PURE__ */ R("img", {
-				src: n,
+			let [, e, t] = s.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/) ?? [], i = t && t.startsWith("https://") ? t : null;
+			i && n.sameSiteImages && !_e(i) ? r.push(/* @__PURE__ */ R("a", {
+				href: i,
+				target: "_blank",
+				rel: "noreferrer",
+				className: "text-accent-ink underline underline-offset-4 hover:no-underline",
+				children: e || "Image"
+			}, l)) : r.push(i ? /* @__PURE__ */ R("img", {
+				src: i,
 				alt: e ?? "",
 				loading: "lazy",
+				referrerPolicy: "no-referrer",
 				className: "my-2 max-h-[480px] max-w-full border border-border"
 			}, l) : e);
 		} else if (s.startsWith("[[")) {
@@ -196,11 +210,11 @@ function K(e, t, n) {
 	}
 	return i < e.length && r.push(e.slice(i)), r;
 }
-function ye(e, t, n) {
+function be(e, t, n) {
 	return e.split("\n").map((e, r) => /* @__PURE__ */ z(N, { children: [r > 0 && /* @__PURE__ */ R("br", {}), K(e, `${t}-l${r}`, n)] }, `${t}-l${r}`));
 }
-var q = /^(\s*)([-*]|\d+[.)])\s+(.*)$/, be = /^\[([ xX])\]\s+(.*)$/;
-function xe(e) {
+var q = /^(\s*)([-*]|\d+[.)])\s+(.*)$/, xe = /^\[([ xX])\]\s+(.*)$/;
+function Se(e) {
 	let t = {
 		text: "",
 		ordered: !1,
@@ -229,12 +243,12 @@ function xe(e) {
 	}
 	return t.children;
 }
-function Se(e, t, n) {
+function Ce(e, t, n) {
 	let r = e[0]?.ordered;
 	return /* @__PURE__ */ R(r ? "ol" : "ul", {
 		className: `${r ? "list-decimal" : "list-disc"} space-y-1 pl-5`,
 		children: e.map((e, r) => {
-			let i = e.text.match(be);
+			let i = e.text.match(xe);
 			return /* @__PURE__ */ z("li", {
 				className: i ? "list-none -ml-5 flex items-start gap-2" : void 0,
 				children: [i ? /* @__PURE__ */ z(L, { children: [/* @__PURE__ */ R("input", {
@@ -244,32 +258,32 @@ function Se(e, t, n) {
 					tabIndex: -1,
 					className: "mt-1 size-3.5 shrink-0 accent-[var(--site-accent)]",
 					"aria-label": i[1] === " " ? "Not done" : "Done"
-				}), /* @__PURE__ */ R("span", { children: ye(i[2], `${t}-${r}`, n) })] }) : ye(e.text, `${t}-${r}`, n), e.children.length > 0 && /* @__PURE__ */ R("div", {
+				}), /* @__PURE__ */ R("span", { children: be(i[2], `${t}-${r}`, n) })] }) : be(e.text, `${t}-${r}`, n), e.children.length > 0 && /* @__PURE__ */ R("div", {
 					className: "mt-1",
-					children: Se(e.children, `${t}-${r}-c`, n)
+					children: Ce(e.children, `${t}-${r}-c`, n)
 				})]
 			}, r);
 		})
 	}, t);
 }
-function Ce(e) {
+function we(e) {
 	return e.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((e) => e.trim());
 }
-function we(e, t, n) {
-	let [r, , ...i] = e, a = Ce(e[1]).map((e) => e.startsWith(":") && e.endsWith(":") ? "center" : e.endsWith(":") ? "right" : "left"), o = (e) => a[e] === "center" ? "text-center" : a[e] === "right" ? "text-right" : "text-left";
+function Te(e, t, n) {
+	let [r, , ...i] = e, a = we(e[1]).map((e) => e.startsWith(":") && e.endsWith(":") ? "center" : e.endsWith(":") ? "right" : "left"), o = (e) => a[e] === "center" ? "text-center" : a[e] === "right" ? "text-right" : "text-left";
 	return /* @__PURE__ */ R("div", {
 		className: "overflow-x-auto border border-border",
 		children: /* @__PURE__ */ z("table", {
 			className: "w-full text-sm",
 			children: [/* @__PURE__ */ R("thead", {
 				className: "bg-surface-2",
-				children: /* @__PURE__ */ R("tr", { children: Ce(r).map((e, r) => /* @__PURE__ */ R("th", {
+				children: /* @__PURE__ */ R("tr", { children: we(r).map((e, r) => /* @__PURE__ */ R("th", {
 					className: `px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted ${o(r)}`,
 					children: K(e, `${t}-h${r}`, n)
 				}, r)) })
 			}), /* @__PURE__ */ R("tbody", {
 				className: "divide-y divide-border",
-				children: i.map((e, r) => /* @__PURE__ */ R("tr", { children: Ce(e).map((e, i) => /* @__PURE__ */ R("td", {
+				children: i.map((e, r) => /* @__PURE__ */ R("tr", { children: we(e).map((e, i) => /* @__PURE__ */ R("td", {
 					className: `px-3 py-2 align-top ${o(i)}`,
 					children: K(e, `${t}-r${r}c${i}`, n)
 				}, i)) }, r))
@@ -277,13 +291,13 @@ function we(e, t, n) {
 		})
 	}, t);
 }
-var Te = {
+var Ee = {
 	1: "text-2xl font-semibold",
 	2: "text-xl font-semibold mt-8 first:mt-0",
 	3: "text-base font-semibold mt-6 first:mt-0",
 	4: "text-sm font-semibold uppercase tracking-[0.12em] mt-4 first:mt-0"
 };
-function Ee({ text: e, ctx: t }) {
+function De({ text: e, ctx: t }) {
 	let n = e.replace(/\r\n/g, "\n").split("\n"), r = [], i = 0, a = 0, o = () => `b${a++}`;
 	for (; i < n.length;) {
 		let e = n[i];
@@ -304,12 +318,12 @@ function Ee({ text: e, ctx: t }) {
 		}
 		let s = e.match(/^(#{1,4})\s+(.+?)\s*#*\s*$/);
 		if (s) {
-			let e = s[1].length, n = G(ve(s[2])) || "section", a = t.ids.get(n) ?? 0;
+			let e = s[1].length, n = G(ye(s[2])) || "section", a = t.ids.get(n) ?? 0;
 			t.ids.set(n, a + 1), a && (n = `${n}-${a + 1}`);
 			let c = `h${Math.min(e + 1, 6)}`;
 			r.push(/* @__PURE__ */ R(c, {
 				id: n,
-				className: `group scroll-mt-24 text-text ${Te[e]}`,
+				className: `group scroll-mt-24 text-text ${Ee[e]}`,
 				children: /* @__PURE__ */ R("a", {
 					href: `#${n}`,
 					className: "no-underline",
@@ -325,7 +339,7 @@ function Ee({ text: e, ctx: t }) {
 		if (e.trim().startsWith("|") && i + 1 < n.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(n[i + 1])) {
 			let a = [e, n[i + 1]];
 			for (i += 2; i < n.length && n[i].trim().startsWith("|");) a.push(n[i++]);
-			r.push(we(a, o(), t));
+			r.push(Te(a, o(), t));
 			continue;
 		}
 		if (e.startsWith(">")) {
@@ -333,7 +347,7 @@ function Ee({ text: e, ctx: t }) {
 			for (; i < n.length && n[i].startsWith(">");) e.push(n[i++].replace(/^>\s?/, ""));
 			r.push(/* @__PURE__ */ R("blockquote", {
 				className: "border-l-2 border-accent/50 pl-4 text-muted",
-				children: /* @__PURE__ */ R(Ee, {
+				children: /* @__PURE__ */ R(De, {
 					text: e.join("\n"),
 					ctx: t
 				})
@@ -343,61 +357,62 @@ function Ee({ text: e, ctx: t }) {
 		if (q.test(e)) {
 			let e = [];
 			for (; i < n.length && n[i].trim() && (q.test(n[i]) || /^\s{2,}/.test(n[i]));) e.push(n[i++]);
-			r.push(Se(xe(e), o(), t));
+			r.push(Ce(Se(e), o(), t));
 			continue;
 		}
 		let c = [];
 		for (; i < n.length && n[i].trim() && !/^(#{1,4}\s|\s*```|>|\s*\|)/.test(n[i]) && !q.test(n[i]);) c.push(n[i++]);
-		c.length === 0 && (c.push(e), i++), r.push(/* @__PURE__ */ R("p", { children: ye(c.join("\n"), o(), t) }, o()));
+		c.length === 0 && (c.push(e), i++), r.push(/* @__PURE__ */ R("p", { children: be(c.join("\n"), o(), t) }, o()));
 	}
 	return /* @__PURE__ */ R(L, { children: r });
 }
-function De({ text: e, linkBase: t, className: n = "" }) {
-	let r = {
+function Oe({ text: e, linkBase: t, className: n = "", sameSiteImages: r = !1 }) {
+	let i = {
 		linkBase: t,
-		ids: /* @__PURE__ */ new Map()
+		ids: /* @__PURE__ */ new Map(),
+		sameSiteImages: r
 	};
 	return /* @__PURE__ */ R("div", {
 		className: `space-y-4 text-[15px] leading-relaxed text-muted [&_p]:text-muted ${n}`,
-		children: /* @__PURE__ */ R(Ee, {
+		children: /* @__PURE__ */ R(De, {
 			text: e,
-			ctx: r
+			ctx: i
 		})
 	});
 }
 //#endregion
 //#region src/types.ts
-var J = "/api/p/wiki", Oe = "/api/public/p/wiki", Y = "/p/wiki", X = "/public/p/wiki";
+var J = "/api/p/wiki", ke = "/api/public/p/wiki", Y = "/p/wiki", X = "/public/p/wiki";
 //#endregion
 //#region src/shell.tsx
 function Z() {
-	return j({
+	return M({
 		queryKey: ["wiki", "overview"],
 		queryFn: () => x.get(J),
 		staleTime: 3e4
 	});
 }
-function ke(e, t = 0, n = []) {
+function Ae(e, t = 0, n = []) {
 	for (let r of e) n.push({
 		node: r,
 		depth: t
-	}), r.children?.length && ke(r.children, t + 1, n);
+	}), r.children?.length && Ae(r.children, t + 1, n);
 	return n;
 }
-function Ae(e, t, n = []) {
+function je(e, t, n = []) {
 	for (let r of e) {
 		let e = [...n, r.id];
 		if (r.slug === t) return e;
-		let i = r.children?.length ? Ae(r.children, t, e) : null;
+		let i = r.children?.length ? je(r.children, t, e) : null;
 		if (i) return i;
 	}
 	return null;
 }
-function je(e, t) {
-	return e.title.toLowerCase().includes(t) || (e.children ?? []).some((e) => je(e, t));
+function Me(e, t) {
+	return e.title.toLowerCase().includes(t) || (e.children ?? []).some((e) => Me(e, t));
 }
-function Me({ node: e, depth: t, current: n, open: r, toggle: i, filter: a, linkBase: o }) {
-	let s = (e.children ?? []).filter((e) => !a || je(e, a)), c = !!a || r.has(e.id), l = e.slug === n;
+function Ne({ node: e, depth: t, current: n, open: r, toggle: i, filter: a, linkBase: o }) {
+	let s = (e.children ?? []).filter((e) => !a || Me(e, a)), c = !!a || r.has(e.id), l = e.slug === n;
 	return /* @__PURE__ */ z("li", { children: [/* @__PURE__ */ z("div", {
 		className: C("group flex items-center gap-1", l && "bg-accent-soft"),
 		style: { paddingLeft: t * 12 },
@@ -424,7 +439,7 @@ function Me({ node: e, depth: t, current: n, open: r, toggle: i, filter: a, link
 				e.public && /* @__PURE__ */ R(ue, { className: "size-3 shrink-0 text-subtle" })
 			]
 		})]
-	}), s.length > 0 && c && /* @__PURE__ */ R("ul", { children: s.map((e) => /* @__PURE__ */ R(Me, {
+	}), s.length > 0 && c && /* @__PURE__ */ R("ul", { children: s.map((e) => /* @__PURE__ */ R(Ne, {
 		node: e,
 		depth: t + 1,
 		current: n,
@@ -434,17 +449,17 @@ function Me({ node: e, depth: t, current: n, open: r, toggle: i, filter: a, link
 		linkBase: o
 	}, e.id)) })] });
 }
-function Ne({ nodes: e, current: t, linkBase: n, canEdit: r }) {
+function Pe({ nodes: e, current: t, linkBase: n, canEdit: r }) {
 	let [i, a] = I(""), [o, s] = I(() => /* @__PURE__ */ new Set());
 	P(() => {
 		if (!t) return;
-		let n = Ae(e, t);
+		let n = je(e, t);
 		n && s((e) => /* @__PURE__ */ new Set([...e, ...n]));
 	}, [e, t]);
 	let c = (e) => s((t) => {
 		let n = new Set(t);
 		return n.has(e) ? n.delete(e) : n.add(e), n;
-	}), l = i.trim().toLowerCase(), u = l ? e.filter((e) => je(e, l)) : e;
+	}), l = i.trim().toLowerCase(), u = l ? e.filter((e) => Me(e, l)) : e;
 	return /* @__PURE__ */ z("nav", {
 		"aria-label": "Wiki pages",
 		className: "space-y-2",
@@ -458,7 +473,7 @@ function Ne({ nodes: e, current: t, linkBase: n, canEdit: r }) {
 			u.length === 0 ? /* @__PURE__ */ R("p", {
 				className: "px-2 py-1 text-xs text-subtle",
 				children: l ? "No page with that name." : "No pages yet."
-			}) : /* @__PURE__ */ R("ul", { children: u.map((e) => /* @__PURE__ */ R(Me, {
+			}) : /* @__PURE__ */ R("ul", { children: u.map((e) => /* @__PURE__ */ R(Ne, {
 				node: e,
 				depth: 0,
 				current: t,
@@ -508,7 +523,7 @@ function Q({ current: e, tree: t, loading: n, canEdit: r, linkBase: i = Y, aside
 							2,
 							3
 						].map((e) => /* @__PURE__ */ R(v, { className: "h-6" }, e))
-					}) : /* @__PURE__ */ R(Ne, {
+					}) : /* @__PURE__ */ R(Pe, {
 						nodes: t,
 						current: e,
 						linkBase: i,
@@ -527,8 +542,8 @@ function Q({ current: e, tree: t, loading: n, canEdit: r, linkBase: i = Y, aside
 		]
 	});
 }
-function Pe({ body: e }) {
-	let t = F(() => _e(e).filter((e) => e.level <= 3), [e]), [n, r] = I(null);
+function Fe({ body: e }) {
+	let t = F(() => ve(e).filter((e) => e.level <= 3), [e]), [n, r] = I(null);
 	return P(() => {
 		if (t.length === 0) return;
 		let e = t.map((e) => document.getElementById(e.id)).filter((e) => !!e), n = new IntersectionObserver((e) => {
@@ -536,12 +551,12 @@ function Pe({ body: e }) {
 			t[0] && r(t[0].target.id);
 		}, { rootMargin: "-80px 0px -70% 0px" });
 		return e.forEach((e) => n.observe(e)), () => n.disconnect();
-	}, [t]), t.length < 2 ? null : /* @__PURE__ */ R(Fe, {
+	}, [t]), t.length < 2 ? null : /* @__PURE__ */ R(Ie, {
 		items: t,
 		active: n
 	});
 }
-function Fe({ items: e, active: t }) {
+function Ie({ items: e, active: t }) {
 	let n = Math.min(...e.map((e) => e.level));
 	return /* @__PURE__ */ z("nav", {
 		"aria-label": "On this page",
@@ -562,13 +577,13 @@ function Fe({ items: e, active: t }) {
 		})]
 	});
 }
-function Ie({ node: e, className: t }) {
+function Le({ node: e, className: t }) {
 	return e.children?.length ? /* @__PURE__ */ R(V, { className: t }) : /* @__PURE__ */ R(de, { className: t });
 }
 //#endregion
 //#region src/pages.tsx
-function Le(t) {
-	return j({
+function Re(t) {
+	return M({
 		queryKey: [
 			"wiki",
 			"page",
@@ -579,25 +594,25 @@ function Le(t) {
 		retry: (t, n) => !(n instanceof e && n.status === 404) && t < 2
 	});
 }
-function Re() {
+function ze() {
 	let { data: e, isLoading: t } = Z();
 	return /* @__PURE__ */ R(Q, {
 		current: "home",
 		tree: e?.tree,
 		loading: t,
 		canEdit: e?.can_edit,
-		aside: e?.home ? /* @__PURE__ */ R(Pe, { body: e.home.body }) : null,
+		aside: e?.home ? /* @__PURE__ */ R(Fe, { body: e.home.body }) : null,
 		children: t || !e ? /* @__PURE__ */ R(v, { className: "h-64" }) : e.home ? /* @__PURE__ */ R($, {
 			page: e.home,
 			canManage: e.can_manage
-		}) : /* @__PURE__ */ R(ze, {
+		}) : /* @__PURE__ */ R(Be, {
 			recent: e.recent,
 			count: e.count,
 			canEdit: e.can_edit
 		})
 	});
 }
-function ze({ recent: e, count: t, canEdit: n }) {
+function Be({ recent: e, count: t, canEdit: n }) {
 	return /* @__PURE__ */ z(L, { children: [/* @__PURE__ */ R(m, {
 		eyebrow: "Wiki",
 		title: "Wiki",
@@ -624,7 +639,7 @@ function ze({ recent: e, count: t, canEdit: n }) {
 				className: "mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-subtle",
 				children: "Recently updated"
 			}),
-			/* @__PURE__ */ R(Be, { pages: e }),
+			/* @__PURE__ */ R(Ve, { pages: e }),
 			n && /* @__PURE__ */ z("p", {
 				className: "mt-4 text-xs text-subtle",
 				children: [
@@ -639,7 +654,7 @@ function ze({ recent: e, count: t, canEdit: n }) {
 		]
 	})] });
 }
-function Be({ pages: e, linkBase: t = Y }) {
+function Ve({ pages: e, linkBase: t = Y }) {
 	return e.length === 0 ? /* @__PURE__ */ R("p", {
 		className: "text-sm text-subtle",
 		children: "No pages yet."
@@ -649,7 +664,7 @@ function Be({ pages: e, linkBase: t = Y }) {
 			to: e.slug === "home" ? t : `${t}/${e.slug}`,
 			className: "flex items-center gap-3 py-2 text-sm hover:text-text",
 			children: [
-				/* @__PURE__ */ R(Ie, {
+				/* @__PURE__ */ R(Le, {
 					node: e,
 					className: "size-4 shrink-0 text-subtle"
 				}),
@@ -665,14 +680,14 @@ function Be({ pages: e, linkBase: t = Y }) {
 		}) }, e.id))
 	});
 }
-function Ve() {
-	let { slug: t } = A(), n = Z(), { data: r, isLoading: a, error: o } = Le(t), s = o instanceof e && o.status === 404;
+function He() {
+	let { slug: t } = j(), n = Z(), { data: r, isLoading: a, error: o } = Re(t), s = o instanceof e && o.status === 404;
 	return /* @__PURE__ */ R(Q, {
 		current: t ?? null,
 		tree: n.data?.tree,
 		loading: n.isLoading,
 		canEdit: n.data?.can_edit,
-		aside: r ? /* @__PURE__ */ R(Pe, { body: r.body }) : null,
+		aside: r ? /* @__PURE__ */ R(Fe, { body: r.body }) : null,
 		children: a ? /* @__PURE__ */ R(v, { className: "h-64" }) : s || !r ? /* @__PURE__ */ R(i, { children: /* @__PURE__ */ R(d, {
 			icon: /* @__PURE__ */ R(V, {}),
 			title: "No such page",
@@ -696,7 +711,7 @@ function Ve() {
 	});
 }
 function $({ page: e, canManage: i, linkBase: d = Y, readOnly: f }) {
-	let p = M(), m = ee(), [h, g] = I(!1), _ = ne({
+	let p = ne(), m = A(), [h, g] = I(!1), _ = te({
 		mutationFn: () => x.delete(`${J}/pages/${encodeURIComponent(e.slug)}`),
 		onSuccess: () => {
 			p.invalidateQueries({ queryKey: ["wiki"] }), D.success("Page deleted"), m(e.breadcrumbs.length ? `${Y}/${e.breadcrumbs[e.breadcrumbs.length - 1].slug}` : Y);
@@ -819,9 +834,10 @@ function $({ page: e, canManage: i, linkBase: d = Y, readOnly: f }) {
 					})] })]
 				})]
 			}),
-			e.body.trim() ? /* @__PURE__ */ R(De, {
+			e.body.trim() ? /* @__PURE__ */ R(Oe, {
 				text: e.body,
-				linkBase: d
+				linkBase: d,
+				sameSiteImages: d === X
 			}) : /* @__PURE__ */ z("p", {
 				className: "text-sm text-subtle",
 				children: ["This page is empty", y ? ": edit it to write something." : "."]
@@ -837,7 +853,7 @@ function $({ page: e, canManage: i, linkBase: d = Y, readOnly: f }) {
 						to: b(e.slug),
 						className: C("flex items-center gap-3 border border-border px-3 py-2.5 text-sm transition-colors hover:border-accent hover:bg-hover"),
 						children: [
-							/* @__PURE__ */ R(Ie, {
+							/* @__PURE__ */ R(Le, {
 								node: e,
 								className: "size-4 shrink-0 text-subtle"
 							}),
@@ -864,9 +880,9 @@ function $({ page: e, canManage: i, linkBase: d = Y, readOnly: f }) {
 }
 //#endregion
 //#region src/editor.tsx
-var He = "**bold**, *italic*, `code`, [link](https://…), [[Page Title]] links to another page, # headings, - lists (indent to nest), 1. lists, - [ ] tasks, > quotes, | tables |, ``` code blocks, ![image](https://…).";
-function Ue() {
-	let { slug: e } = A(), [t] = te(), n = Z(), { data: r, isLoading: i } = Le(e);
+var Ue = "**bold**, *italic*, `code`, [link](https://…), [[Page Title]] links to another page, # headings, - lists (indent to nest), 1. lists, - [ ] tasks, > quotes, | tables |, ``` code blocks, ![image](https://…).";
+function We() {
+	let { slug: e } = j(), [t] = ee(), n = Z(), { data: r, isLoading: i } = Re(e);
 	return e && (i || !r) || n.isLoading || !n.data ? /* @__PURE__ */ R(v, { className: "h-96" }) : !n.data.can_edit || r && !r.can_edit ? /* @__PURE__ */ z("div", {
 		className: "mx-auto max-w-xl py-12 text-center",
 		children: [/* @__PURE__ */ R("p", {
@@ -877,7 +893,7 @@ function Ue() {
 			className: "mt-3 inline-block text-sm text-accent-ink underline underline-offset-4",
 			children: "Back"
 		})]
-	}) : /* @__PURE__ */ R(We, {
+	}) : /* @__PURE__ */ R(Ge, {
 		page: r ?? null,
 		canManage: n.data.can_manage,
 		initial: {
@@ -887,8 +903,8 @@ function Ue() {
 		}
 	}, r?.id ?? "new");
 }
-function We({ page: e, canManage: t, initial: n }) {
-	let i = M(), a = ee(), o = Z(), { data: s } = j({
+function Ge({ page: e, canManage: t, initial: n }) {
+	let i = ne(), a = A(), o = Z(), { data: s } = M({
 		queryKey: ["wiki", "audience"],
 		queryFn: () => x.get(`${J}/audience`),
 		enabled: t
@@ -915,19 +931,19 @@ function We({ page: e, canManage: t, initial: n }) {
 		return window.addEventListener("beforeunload", e), () => window.removeEventListener("beforeunload", e);
 	}, []);
 	let T = F(() => {
-		let t = ke(o.data?.tree ?? []);
+		let t = Ae(o.data?.tree ?? []);
 		if (!e) return t;
 		let n = /* @__PURE__ */ new Set(), r = (e) => {
 			n.add(e), t.filter((t) => t.node.parent === e).forEach((e) => r(e.node.id));
 		};
 		return r(e.id), t.filter((e) => !n.has(e.node.id));
-	}, [o.data, e]), E = ne({
+	}, [o.data, e]), E = te({
 		mutationFn: () => {
 			let n = {
 				title: c.title,
 				body: c.body,
 				slug: c.slug.trim() || null,
-				parent: c.parent,
+				...!e || t ? { parent: c.parent } : {},
 				note: c.note,
 				...t ? {
 					states: c.states,
@@ -942,7 +958,7 @@ function We({ page: e, canManage: t, initial: n }) {
 			w.current = !1, i.invalidateQueries({ queryKey: ["wiki"] }), D.success(e ? "Page saved" : "Page created"), a(t.slug === "home" ? Y : `${Y}/${t.slug}`);
 		},
 		onError: (e) => D.error(e.message)
-	}), k = e ? e.slug === "home" ? Y : `${Y}/${e.slug}` : Y, A = c.states.length === 0 && c.groups.length === 0;
+	}), k = e ? e.slug === "home" ? Y : `${Y}/${e.slug}` : Y, j = c.states.length === 0 && c.groups.length === 0;
 	return /* @__PURE__ */ z("div", {
 		className: "mx-auto max-w-6xl",
 		children: [
@@ -1027,10 +1043,10 @@ function We({ page: e, canManage: t, initial: n }) {
 							className: "min-h-[480px] font-mono text-[13px]"
 						}), /* @__PURE__ */ R("p", {
 							className: "mt-1.5 text-xs text-subtle",
-							children: He
+							children: Ue
 						})] }) : /* @__PURE__ */ R("div", {
 							className: "min-h-[480px] border border-border bg-bg/40 p-5",
-							children: c.body.trim() ? /* @__PURE__ */ R(De, {
+							children: c.body.trim() ? /* @__PURE__ */ R(Oe, {
 								text: c.body,
 								linkBase: Y
 							}) : /* @__PURE__ */ R("p", {
@@ -1070,7 +1086,7 @@ function We({ page: e, canManage: t, initial: n }) {
 								className: "font-mono text-[13px]"
 							})
 						}),
-						/* @__PURE__ */ R(f, {
+						(!e || t) && /* @__PURE__ */ R(f, {
 							label: "Under",
 							hint: "The page this one is nested in.",
 							children: /* @__PURE__ */ z(_, {
@@ -1097,7 +1113,7 @@ function We({ page: e, canManage: t, initial: n }) {
 								}),
 								/* @__PURE__ */ R("div", {
 									className: "flex flex-wrap gap-1.5",
-									children: (s?.states ?? []).map((e) => /* @__PURE__ */ R(Ge, {
+									children: (s?.states ?? []).map((e) => /* @__PURE__ */ R(Ke, {
 										on: c.states.includes(e.id),
 										onClick: () => C("states", e.id),
 										color: e.color,
@@ -1106,7 +1122,7 @@ function We({ page: e, canManage: t, initial: n }) {
 								}),
 								(s?.groups.length ?? 0) > 0 && /* @__PURE__ */ R("div", {
 									className: "mt-2 flex flex-wrap gap-1.5",
-									children: s.groups.map((e) => /* @__PURE__ */ R(Ge, {
+									children: s.groups.map((e) => /* @__PURE__ */ R(Ke, {
 										on: c.groups.includes(e.id),
 										onClick: () => C("groups", e.id),
 										children: e.name
@@ -1130,7 +1146,7 @@ function We({ page: e, canManage: t, initial: n }) {
 							/* @__PURE__ */ z("p", {
 								className: "text-xs text-subtle",
 								children: [
-									A ? "Every member" : "Only the chosen states and groups",
+									j ? "Every member" : "Only the chosen states and groups",
 									c.public ? " and anyone with the public link" : "",
 									" will see it."
 								]
@@ -1142,7 +1158,7 @@ function We({ page: e, canManage: t, initial: n }) {
 		]
 	});
 }
-function Ge({ on: e, onClick: t, color: n, children: r }) {
+function Ke({ on: e, onClick: t, color: n, children: r }) {
 	return /* @__PURE__ */ z("button", {
 		type: "button",
 		"aria-pressed": e,
@@ -1156,7 +1172,7 @@ function Ge({ on: e, onClick: t, color: n, children: r }) {
 }
 //#endregion
 //#region src/history.tsx
-function Ke(e, t) {
+function qe(e, t) {
 	let n = e.split("\n"), r = t.split("\n");
 	if (n.length * r.length > 4e6) return null;
 	let i = n.length, a = r.length, o = new Uint32Array((i + 1) * (a + 1));
@@ -1182,8 +1198,8 @@ function Ke(e, t) {
 	});
 	return s;
 }
-function qe({ older: e, newer: t }) {
-	let n = F(() => Ke(e, t), [e, t]);
+function Je({ older: e, newer: t }) {
+	let n = F(() => qe(e, t), [e, t]);
 	if (!n) return /* @__PURE__ */ R("p", {
 		className: "text-sm text-subtle",
 		children: "These revisions are too long to compare here."
@@ -1232,8 +1248,8 @@ function qe({ older: e, newer: t }) {
 		}, t))
 	});
 }
-function Je() {
-	let { slug: e } = A(), n = M(), o = ee(), { data: s, isLoading: c } = j({
+function Ye() {
+	let { slug: e } = j(), n = ne(), o = A(), { data: s, isLoading: c } = M({
 		queryKey: [
 			"wiki",
 			"history",
@@ -1245,7 +1261,7 @@ function Je() {
 	P(() => {
 		s && l === null && s.revisions[0] && u(s.revisions[0].number);
 	}, [s, l]);
-	let y = s?.revisions[0]?.number ?? null, b = j({
+	let y = s?.revisions[0]?.number ?? null, b = M({
 		queryKey: [
 			"wiki",
 			"revision",
@@ -1254,7 +1270,7 @@ function Je() {
 		],
 		queryFn: () => x.get(`${J}/pages/${encodeURIComponent(e)}/history/${l}`),
 		enabled: !!e && l !== null
-	}), S = s && l !== null ? s.revisions.find((e) => e.number < l)?.number ?? null : null, T = j({
+	}), S = s && l !== null ? s.revisions.find((e) => e.number < l)?.number ?? null : null, T = M({
 		queryKey: [
 			"wiki",
 			"revision",
@@ -1263,18 +1279,18 @@ function Je() {
 		],
 		queryFn: () => x.get(`${J}/pages/${encodeURIComponent(e)}/history/${S}`),
 		enabled: !!e && S !== null
-	}), k = ne({
+	}), k = te({
 		mutationFn: (t) => x.post(`${J}/pages/${encodeURIComponent(e)}/restore/${t}`),
 		onSuccess: () => {
 			n.invalidateQueries({ queryKey: ["wiki"] }), D.success(`Revision ${l} restored`), o(e === "home" ? Y : `${Y}/${e}`);
 		},
 		onError: (e) => D.error(e.message)
-	}), te = e === "home" ? Y : `${Y}/${e}`, N = s?.revisions.find((e) => e.number === l) ?? null;
+	}), ee = e === "home" ? Y : `${Y}/${e}`, N = s?.revisions.find((e) => e.number === l) ?? null;
 	return /* @__PURE__ */ z("div", {
 		className: "mx-auto max-w-6xl",
 		children: [
 			/* @__PURE__ */ z(O, {
-				to: te,
+				to: ee,
 				className: "mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text",
 				children: [
 					/* @__PURE__ */ R(ce, {}),
@@ -1375,13 +1391,13 @@ function Je() {
 						]
 					}), /* @__PURE__ */ R(i, {
 						className: "p-card",
-						children: b.isLoading || !b.data || S !== null && T.isLoading ? /* @__PURE__ */ R(v, { className: "h-48" }) : f === "text" ? (b.data.body ?? "").trim() ? /* @__PURE__ */ R(De, {
+						children: b.isLoading || !b.data || S !== null && T.isLoading ? /* @__PURE__ */ R(v, { className: "h-48" }) : f === "text" ? (b.data.body ?? "").trim() ? /* @__PURE__ */ R(Oe, {
 							text: b.data.body ?? "",
 							linkBase: Y
 						}) : /* @__PURE__ */ R("p", {
 							className: "text-sm text-subtle",
 							children: "The page was empty."
-						}) : /* @__PURE__ */ R(qe, {
+						}) : /* @__PURE__ */ R(Je, {
 							older: S === null ? "" : T.data?.body ?? "",
 							newer: b.data.body ?? ""
 						})
@@ -1401,32 +1417,32 @@ function Je() {
 }
 //#endregion
 //#region src/public.tsx
-function Ye() {
-	return j({
+function Xe() {
+	return M({
 		queryKey: [
 			"wiki",
 			"public",
 			"tree"
 		],
-		queryFn: () => x.get(`${Oe}/pages`),
+		queryFn: () => x.get(`${ke}/pages`),
 		staleTime: 6e4
 	});
 }
-function Xe(t) {
-	return j({
+function Ze(t) {
+	return M({
 		queryKey: [
 			"wiki",
 			"public",
 			"page",
 			t
 		],
-		queryFn: () => x.get(`${Oe}/pages/${encodeURIComponent(t)}`),
+		queryFn: () => x.get(`${ke}/pages/${encodeURIComponent(t)}`),
 		enabled: !!t,
 		retry: (t, n) => !(n instanceof e && n.status === 404) && t < 2
 	});
 }
-function Ze() {
-	let { data: e, isLoading: t } = Ye(), n = Xe(e?.tree.some((e) => e.slug === "home") ? "home" : void 0);
+function Qe() {
+	let { data: e, isLoading: t } = Xe(), n = Ze(e?.tree.some((e) => e.slug === "home") ? "home" : void 0);
 	return /* @__PURE__ */ R(Q, {
 		current: "home",
 		tree: e?.tree,
@@ -1447,8 +1463,8 @@ function Ze() {
 		}) })] })
 	});
 }
-function Qe() {
-	let { slug: t } = A(), n = Ye(), { data: r, isLoading: a, error: o } = Xe(t), s = o instanceof e && o.status === 404;
+function $e() {
+	let { slug: t } = j(), n = Xe(), { data: r, isLoading: a, error: o } = Ze(t), s = o instanceof e && o.status === 404;
 	return /* @__PURE__ */ R(Q, {
 		current: t ?? null,
 		tree: n.data?.tree,
@@ -1467,53 +1483,53 @@ function Qe() {
 }
 //#endregion
 //#region src/index.tsx
-function $e() {
+function et() {
 	let { data: e, isLoading: t } = Z();
-	return t ? /* @__PURE__ */ R(v, { className: "h-24" }) : e ? /* @__PURE__ */ z("div", { children: [/* @__PURE__ */ R(Be, { pages: e.recent.slice(0, 5) }), /* @__PURE__ */ R(O, {
+	return t ? /* @__PURE__ */ R(v, { className: "h-24" }) : e ? /* @__PURE__ */ z("div", { children: [/* @__PURE__ */ R(Ve, { pages: e.recent.slice(0, 5) }), /* @__PURE__ */ R(O, {
 		to: Y,
 		className: "mt-2 inline-block text-xs text-muted hover:text-text",
 		children: "Open the wiki →"
 	})] }) : null;
 }
-var et = T({
+var tt = T({
 	routes: [
 		{
 			path: "",
-			Component: Re
+			Component: ze
 		},
 		{
 			path: "new",
-			Component: Ue
+			Component: We
 		},
 		{
 			path: ":slug",
-			Component: Ve
+			Component: He
 		},
 		{
 			path: ":slug/edit",
-			Component: Ue
+			Component: We
 		},
 		{
 			path: ":slug/history",
-			Component: Je
+			Component: Ye
 		}
 	],
 	publicRoutes: [{
 		path: "",
-		Component: Ze
+		Component: Qe
 	}, {
 		path: ":slug",
-		Component: Qe
+		Component: $e
 	}],
 	widgets: [{
 		id: "recent",
 		title: "Wiki",
-		Component: $e,
+		Component: et,
 		size: "sm",
 		order: 40
 	}]
 });
 //#endregion
-export { et as default };
+export { tt as default };
 
-export const classes = ["!data","!filter","!readOnly","!tree","---","--site-accent","-c","-ml-5","-ml-px","@conduit/sdk","@tanstack/react-query","[&_p]:text-muted","a","accent","accent-[var(--site-accent)]","action","actions","active","add","address","adds","after","align","align-top","aligns","alt","an","anchors","and","another","anyone","are","aria-current","aria-expanded","aria-hidden","aria-label","aria-pressed","around","as","aside","at","atEnd","atStart","audience","author","autoFocus","b","back","background","banned","be","becomes","before","beforeunload","belong","bg-accent-soft","bg-bg/40","bg-danger-soft","bg-hover","bg-success-soft","bg-surface-2","big","blank","block","body","boolean","border","border-accent","border-accent/50","border-accent/60","border-b","border-border","border-l","border-l-2","border-t","border-transparent","bounded","breadcrumbs","breaks","browser","builds","but","button","by","can","canEdit","canManage","can_edit","can_manage","center","changed","changes","checkbox","checked","children","chosen","className","code","color","common","compare","compared","confirmLabel","const","content","context","continuation","count","crafted","created","created_at","ctx","current","currentColor","cx","cy","danger","data","data-lang","dateTime","decoration-accent/40","decoration-danger/40","deeper","default","del","deleted","depth","description","diff","dirty","disabled","divide-border","divide-y","doctrine","done","down","e","each","edit","el","elements","els","else","empty","empty:hidden","enabled","end","error","every","everyone","everything","export","extends","eyebrow","fence","few","fill","filter","find","finds","first:mt-0","fleet","fleet-rules","flex","flex-1","flex-wrap","folded","font-medium","font-mono","font-semibold","for","frame","from","function","gap-1","gap-1.5","gap-2","gap-3","gap-6","get","ghost","go","gone","grid","group","groups","h-24","h-48","h-6","h-64","h-96","h2","h3","h4","h5","has","header","heading","headings","height","here","hidden","highlighting","hint","history","home","hover:bg-hover","hover:border-accent","hover:border-border-strong","hover:no-underline","hover:text-text","how","href","i","icon","icon-sm","icons","id","ids","if","import","in","inCode","indent","indented","indents","index","info","initial","injects","inline","inline-block","inline-flex","instanceof","instead","interface","into","io","is","isLoading","isOpen","isn","it","item","items","items-center","items-start","its","j","joins","justify-between","justify-center","justify-start","k","keepAfter","keepBefore","key","kids","kind","l","label","last","latest","lazy","leading-relaxed","leading-tight","leaving","left","len","length","let","level","lg:block","lg:flex","lg:grid-cols-[240px_minmax(0,1fr)]","lg:grid-cols-[300px_minmax(0,1fr)]","lg:grid-cols-[minmax(0,1fr)_300px]","lg:hidden","lg:mt-0","lg:self-start","lg:sticky","lg:top-20","line","line-through","lines","link","linkBase","linked","links","list","list-decimal","list-disc","list-none","lists","little","loading","location","locked","long","looked","lost","m","m12","m15","m19","m21","m5","m6","m9","make","manage","mark","marked","match","matching","max-h-[480px]","max-w-3xl","max-w-6xl","max-w-full","max-w-xl","maxLength","may","mb-1.5","mb-2","mb-3","mb-4","mb-6","md","means","meant","member","members","min","min-h-[480px]","min-w-0","missing","ml-auto","mobileOpen","move","mr-2","mt-0.5","mt-1","mt-1.5","mt-10","mt-2","mt-3","mt-4","mt-6","mt-8","mutationFn","mx-auto","my-2","n","name","navigate","nested","never","new","newer","next","no","no-underline","nobody","node","nodes","none","noreferrer","not","note","null","number","numbers","of","ol","old","older","on","onChange","onCheckedChange","onClick","onConfirm","onError","onKeyDown","onOpenChange","onSelect","onSuccess","once","one","only","op","open","opens","ops","options","or","order","ordered","other","out","outside","overflow-hidden","overflow-x-auto","overview","own","p-3","p-5","p-card","paddingLeft","page","pages","para","parent","parents","part","patch","path","pathname","pb-5","people","per","picked","pl-2","pl-4","pl-5","placeholder","portrait","post","pr-2","prevNumber","preview","previous","primary","pt-5","public","publicRoutes","put","putting","px-1","px-2","px-3","py-0.5","py-1","py-12","py-2","py-2.5","q","qc","queryFn","queryKey","quote","react","react-router","read","readOnly","reader","readers","recent","reference","rel","removes","rendered","renderer","reps","rest","restore","restored","retry","return","revision","revisions","right","root","rootMargin","rotate-45","round","routes","row","rows","rule","rules","run","rx","ry","s","safe","same","save","saved","scroll","scroll-mt-24","secondary","section","see","seen","sees","sel","select-none","selected","selectionEnd","selectionStart","self-start","set","setActive","setDeleting","setFilter","setForm","setMobileOpen","setOpen","setRestoring","setSelected","setSlugTouched","setTab","setView","shared","shown","shrink-0","signed","signing","since","single","site","sites","sits","size","size-1.5","size-3","size-3.5","size-4","size-6","skip","slow","slug","slugify","sm","sm:grid-cols-2","sm:text-3xl","so","something","space-y-1","space-y-2","space-y-3","space-y-4","space-y-5","src","stack","staleTime","start","starts","states","status","stays","sticky","stretches","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","such","t","tabIndex","table","tables","target","task","text","text-2xl","text-[0.9em]","text-[13px]","text-[15px]","text-accent-ink","text-base","text-center","text-danger-fg","text-left","text-lg","text-muted","text-right","text-sm","text-subtle","text-success-fg","text-text","text-xl","text-xs","that","the","them","then","there","they","this","title","to","toast","toggle","token","tone","too","top","top-20","tracking-[0.12em]","tracking-[0.1em]","trail","transition-colors","tree","true","truncate","type","ul","unchanged","under","underline","underline-offset-4","until","up","updated","updated_at","updated_by","uppercase","useLocation","useOverview","usePage","useParams","useQuery","useQueryClient","useSearchParams","useState","used","v","value","variant","view","viewBox","visible","w-3","w-8","w-full","warn","was","welcome","were","what","whatever","when","where","while","who","widgets","width","wiki","will","with","without","words","write","written","wrote","x","xX","xl:block","xl:grid-cols-[240px_minmax(0,1fr)_200px]","xs","yet","your"];
+export const classes = ["!data","!filter","!readOnly","!tree","---","--site-accent","-c","-ml-5","-ml-px","@conduit/sdk","@tanstack/react-query","[&_p]:text-muted","a","accent","accent-[var(--site-accent)]","action","actions","active","add","address","adds","after","align","align-top","aligns","alt","an","anchors","and","another","anyone","are","aria-current","aria-expanded","aria-hidden","aria-label","aria-pressed","around","as","aside","at","atEnd","atStart","audience","author","autoFocus","b","back","background","banned","be","becomes","before","beforeunload","belong","bg-accent-soft","bg-bg/40","bg-danger-soft","bg-hover","bg-success-soft","bg-surface-2","big","blank","block","body","boolean","border","border-accent","border-accent/50","border-accent/60","border-b","border-border","border-l","border-l-2","border-t","border-transparent","bounded","breadcrumbs","breaks","browser","builds","but","button","by","can","canEdit","canManage","can_edit","can_manage","catch","center","changed","changes","checkbox","checked","children","chosen","className","code","color","common","compare","compared","confirmLabel","const","content","context","continuation","count","crafted","created","created_at","ctx","current","currentColor","cx","cy","danger","data","data-lang","dateTime","decoration-accent/40","decoration-danger/40","deeper","default","del","deleted","depth","description","diff","dirty","disabled","divide-border","divide-y","doctrine","done","down","e","each","edit","el","elements","els","else","elsewhere","empty","empty:hidden","enabled","end","error","every","everyone","everything","export","extends","eyebrow","false","fence","few","fill","filter","find","finds","first:mt-0","fleet","fleet-rules","flex","flex-1","flex-wrap","folded","font-medium","font-mono","font-semibold","for","frame","from","function","gap-1","gap-1.5","gap-2","gap-3","gap-6","get","ghost","go","gone","grid","group","groups","h-24","h-48","h-6","h-64","h-96","h2","h3","h4","h5","has","header","heading","headings","height","here","hidden","highlighting","hint","history","home","host","hover:bg-hover","hover:border-accent","hover:border-border-strong","hover:no-underline","hover:text-text","how","href","i","icon","icon-sm","icons","id","ids","if","ignores","image","images","import","in","inCode","indent","indented","indents","index","info","initial","injects","inline","inline-block","inline-flex","instanceof","instead","interface","into","io","is","isLoading","isOpen","isn","it","item","items","items-center","items-start","its","j","joins","justify-between","justify-center","justify-start","k","keepAfter","keepBefore","key","kids","kind","l","label","last","latest","lazily","lazy","leading-relaxed","leading-tight","leaving","left","len","length","let","level","lg:block","lg:flex","lg:grid-cols-[240px_minmax(0,1fr)]","lg:grid-cols-[300px_minmax(0,1fr)]","lg:grid-cols-[minmax(0,1fr)_300px]","lg:hidden","lg:mt-0","lg:self-start","lg:sticky","lg:top-20","line","line-through","lines","link","linkBase","linked","links","list","list-decimal","list-disc","list-none","lists","little","load","loading","location","locked","long","looked","lost","m","m12","m15","m19","m21","m5","m6","m9","make","manage","managers","mark","marked","match","matching","max-h-[480px]","max-w-3xl","max-w-6xl","max-w-full","max-w-xl","maxLength","may","mb-1.5","mb-2","mb-3","mb-4","mb-6","md","means","meant","member","members","min","min-h-[480px]","min-w-0","missing","ml-auto","mobileOpen","move","mr-2","mt-0.5","mt-1","mt-1.5","mt-10","mt-2","mt-3","mt-4","mt-6","mt-8","mutationFn","mx-auto","my-2","n","name","navigate","nested","never","new","newer","next","no","no-referrer","no-underline","nobody","node","nodes","none","noreferrer","not","note","null","number","numbers","of","ol","old","older","on","onChange","onCheckedChange","onClick","onConfirm","onError","onKeyDown","onOpenChange","onSelect","onSuccess","once","one","only","op","open","opens","ops","options","or","order","ordered","origin","other","out","outside","overflow-hidden","overflow-x-auto","overview","own","p-3","p-5","p-card","paddingLeft","page","pages","para","parent","parents","part","patch","path","pathname","pb-5","people","per","picked","pl-2","pl-4","pl-5","placeholder","portrait","post","pr-2","prevNumber","preview","previous","primary","pt-5","public","publicRoutes","put","putting","px-1","px-2","px-3","py-0.5","py-1","py-12","py-2","py-2.5","q","qc","queryFn","queryKey","quote","react","react-router","read","readOnly","reader","readers","reads","recent","reference","referrerPolicy","rel","removes","rendered","renderer","reps","rest","restore","restored","retry","return","revision","revisions","right","root","rootMargin","rotate-45","round","routes","row","rows","rule","rules","run","rx","ry","s","safe","same","sameSiteImages","save","saved","scroll","scroll-mt-24","secondary","section","see","seen","sees","sel","select-none","selected","selectionEnd","selectionStart","self-start","server","set","setActive","setDeleting","setFilter","setForm","setMobileOpen","setOpen","setRestoring","setSelected","setSlugTouched","setTab","setView","shared","show","shown","shrink-0","signed","signing","since","single","site","sites","sits","size","size-1.5","size-3","size-3.5","size-4","size-6","skip","slow","slug","slugify","sm","sm:grid-cols-2","sm:text-3xl","so","something","space-y-1","space-y-2","space-y-3","space-y-4","space-y-5","src","stack","staleTime","start","starts","states","status","stays","sticky","stretches","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","such","t","tabIndex","table","tables","target","task","tell","text","text-2xl","text-[0.9em]","text-[13px]","text-[15px]","text-accent-ink","text-base","text-center","text-danger-fg","text-left","text-lg","text-muted","text-right","text-sm","text-subtle","text-success-fg","text-text","text-xl","text-xs","that","the","them","then","there","they","this","title","to","toast","toggle","token","tone","too","top","top-20","tracking-[0.12em]","tracking-[0.1em]","trail","transition-colors","tree","true","truncate","try","type","ul","unchanged","under","underline","underline-offset-4","until","up","updated","updated_at","updated_by","uppercase","useLocation","useOverview","usePage","useParams","useQuery","useQueryClient","useSearchParams","useState","used","v","value","variant","view","viewBox","visible","w-3","w-8","w-full","warn","was","welcome","were","what","whatever","when","where","while","who","widgets","width","wiki","will","with","without","words","would","write","written","wrote","x","xX","xl:block","xl:grid-cols-[240px_minmax(0,1fr)_200px]","xs","yet","your"];

@@ -665,6 +665,9 @@ def settings_out(viewer) -> dict:
     overrides = {o.ref_type: o.category for o in CategoryOverride.objects.all()}
     seen = set(CorpJournalEntry.objects.order_by().values_list("ref_type", flat=True).distinct())
     rules = list(CounterpartyRule.objects.all())
+    # A rule for one corporation's wallets shows only to those who may see that corporation's wallets.
+    shown = _wallet_access(viewer, {r.corporation_id for r in rules if r.corporation_id})
+    rules = [r for r in rules if r.corporation_id is None or r.corporation_id in shown]
     names = names_for({r.party_id for r in rules})
     synced = set(WalletDivision.objects.values_list("corporation_id", flat=True).distinct())
     return {

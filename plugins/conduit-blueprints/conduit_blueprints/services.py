@@ -2,8 +2,9 @@
 
 - **Library:** every corporation blueprint (read by ``sync``) of the corporations a viewer may see, plus the originals
   of characters whose owner shares them, grouped by blueprint with the item it makes. Viewing needs
-  ``blueprint_library.view_library``; a viewer sees the corporations their characters are in and those whose sheet the
-  core lets them read. Request managers see every corporation's.
+  ``blueprint_library.view_library``; a viewer (request managers too) sees the corporations their characters are in
+  and those whose sheet the core lets them read. Where a corporation blueprint is (station or structure, hangar
+  division) is only shown to those who may see that corporation's Assets section of the corporation sheet.
 - **Requests:** members ask for copies (runs, copies, research wanted) or to borrow an original. Managers
   (``blueprint_library.manage_requests``) accept, mark it in progress (optionally with the corporation copying job
   doing it), deliver or decline it; the member is told each time. A delivered loan is due back after the days asked
@@ -63,15 +64,22 @@ def can_view(user) -> bool:
 
 def corporation_ids(user) -> set[int]:
     """Corporations whose blueprints this user sees: those their characters are in, and those the core lets them read
-    the sheet of. Request managers see every one."""
+    the sheet of. Request managers are no different: managing requests isn't access to every corporation."""
     from conduit.accounts.models import Character
     from conduit.corp.access import can_view as can_view_corporation
 
     have = set(CorpBlueprint.objects.values_list("corporation_id", flat=True).distinct())
-    if can_manage(user):
-        return have
     own = set(Character.objects.filter(user=user).values_list("corporation_id", flat=True))
     return {c for c in have if c in own or can_view_corporation(user, c)}
+
+
+def located_ids(user, corps, section: str = "assets") -> set[int]:
+    """Of ``corps``, those where the user may also see where things are: the corporation sheet section the
+    locations come from (Assets for hangars, Industry for jobs). Being in the corporation shows its library, not its
+    hangars."""
+    from conduit.corp.access import can_view_section
+
+    return {c for c in corps if can_view_section(user, c, section)}
 
 
 def shared_character_ids() -> dict[int, int]:
@@ -183,16 +191,18 @@ def _entries(user, type_ids=None, corporation_id: int | None = None) -> list[dic
     rows = list(qs.values("pk", "corporation_id", "type_id", "root_location_id", "division", "quantity", "runs",
                           "material_efficiency", "time_efficiency"))
     corp_names = {c.pk: c for c in EveCorporation.objects.filter(pk__in={r["corporation_id"] for r in rows})}
-    divisions = _divisions(corp_names)
+    located = located_ids(user, corp_names)
+    divisions = _divisions(located)
     out = []
     for r in rows:
         c = corp_names.get(r["corporation_id"])
+        shown = r["corporation_id"] in located
         out.append({
             "id": f"c{r['pk']}", "source": "corporation", "type_id": r["type_id"],
             "owner": {"id": r["corporation_id"], "name": c.name if c else str(r["corporation_id"]), "ticker": c.ticker if c else ""},
             "copy": r["quantity"] == -2, "quantity": max(r["quantity"], 1), "runs": r["runs"],
-            "me": r["material_efficiency"], "te": r["time_efficiency"], "location_id": r["root_location_id"],
-            "division": _division_name(divisions, r["corporation_id"], r["division"]),
+            "me": r["material_efficiency"], "te": r["time_efficiency"], "location_id": r["root_location_id"] if shown else None,
+            "division": _division_name(divisions, r["corporation_id"], r["division"]) if shown else None,
         })
     if corporation_id is None:
         shared = shared_character_ids()
@@ -328,8 +338,10 @@ def research(user) -> dict:
                                                status__in=("active", "paused", "ready")).order_by("end_date")[:500])
     types = _types({r["type_id"] for r in todo} | {j.blueprint_type_id for j in jobs})
     corp_names = dict(EveCorporation.objects.filter(pk__in=corps).values_list("pk", "ticker"))
-    divisions = _divisions(corps)
-    where = places({r["root_location_id"] for r in todo} | {j.location_id for j in jobs})
+    hangars, sites = located_ids(user, corps), located_ids(user, corps, "industry")
+    todo_shown = [r for r in todo if r["corporation_id"] in hangars]
+    divisions = _divisions(hangars)
+    where = places({r["root_location_id"] for r in todo_shown} | {j.location_id for j in jobs if j.corporation_id in sites})
     installers = dict(EveName.objects.filter(pk__in={j.installer_id for j in jobs}).values_list("pk", "name"))
 
     def name(type_id):
@@ -342,8 +354,8 @@ def research(user) -> dict:
                 "id": r["pk"], "type_id": r["type_id"], "name": name(r["type_id"]), "icon": _bp_icon(r["type_id"]),
                 "corporation": corp_names.get(r["corporation_id"], ""), "quantity": max(r["quantity"], 1),
                 "me": r["material_efficiency"], "te": r["time_efficiency"],
-                "location": where.get(r["root_location_id"]),
-                "division": _division_name(divisions, r["corporation_id"], r["division"]),
+                "location": where.get(r["root_location_id"]) if r["corporation_id"] in hangars else None,
+                "division": _division_name(divisions, r["corporation_id"], r["division"]) if r["corporation_id"] in hangars else None,
             }
             for r in todo
         ),
@@ -363,7 +375,8 @@ def research(user) -> dict:
                 "type_id": j.blueprint_type_id, "name": name(j.blueprint_type_id), "icon": _bp_icon(j.blueprint_type_id),
                 "runs": j.runs, "status": _job_status(j.status, j.end_date), "start_date": j.start_date.isoformat(),
                 "end_date": j.end_date.isoformat(), "installer": installers.get(j.installer_id, ""),
-                "corporation": corp_names.get(j.corporation_id, ""), "location": where.get(j.location_id),
+                "corporation": corp_names.get(j.corporation_id, ""),
+                "location": where.get(j.location_id) if j.corporation_id in sites else None,
             }
             for j in jobs
         ],
@@ -523,6 +536,12 @@ def _tell(r: Request, title: str, body: str = "", level: str = "info") -> None:
     notify(r.user_id, title, body, link=_link(r), level=level, category=CATEGORY)
 
 
+def _not_own(r: Request, by) -> None:
+    """Managers don't work their own requests: someone else hands out the corporation's blueprints to them."""
+    if r.user_id == by.pk:
+        raise LibraryError("That's your own request: another library manager has to handle it", 403)
+
+
 def _respond(r: Request, by, note: str | None) -> None:
     r.handled_by = by
     if note is not None and note.strip():
@@ -532,6 +551,7 @@ def _respond(r: Request, by, note: str | None) -> None:
 @transaction.atomic
 def accept(r: Request, by, note: str = "", request=None) -> Request:
     r = Request.objects.select_for_update().get(pk=r.pk)
+    _not_own(r, by)
     _require(r, Request.Status.OPEN)
     r.status = Request.Status.ACCEPTED
     _respond(r, by, note)
@@ -542,12 +562,14 @@ def accept(r: Request, by, note: str = "", request=None) -> Request:
     return r
 
 
-def copy_jobs(r: Request) -> list[dict]:
-    """Corporation copying jobs of this blueprint started around or after the request, to link one."""
+def copy_jobs(r: Request, user=None) -> list[dict]:
+    """Corporation copying jobs of this blueprint started around or after the request, to link one: in the
+    corporations whose library ``user`` sees."""
     from conduit.corp.models import CorpIndustryJob
     from conduit.eve.models import EveCorporation, EveName
 
-    jobs = list(CorpIndustryJob.objects.filter(activity_id=COPYING, blueprint_type_id=r.type_id,
+    qs = CorpIndustryJob.objects.all() if user is None else CorpIndustryJob.objects.filter(corporation_id__in=corporation_ids(user))
+    jobs = list(qs.filter(activity_id=COPYING, blueprint_type_id=r.type_id,
                                                start_date__gte=r.created_at - timedelta(days=1)).order_by("-start_date")[:20])
     installers = dict(EveName.objects.filter(pk__in={j.installer_id for j in jobs}).values_list("pk", "name"))
     corps = dict(EveCorporation.objects.filter(pk__in={j.corporation_id for j in jobs}).values_list("pk", "ticker"))
@@ -563,11 +585,13 @@ def start(r: Request, by, job_id: int | None = None, note: str = "", request=Non
     from conduit.corp.models import CorpIndustryJob
 
     r = Request.objects.select_for_update().get(pk=r.pk)
+    _not_own(r, by)
     if r.kind != Request.Kind.COPY:
         raise LibraryError("Only copies are made; hand a loan over with Deliver")
     _require(r, *Request.ACTIVE)
     if job_id:
-        job = CorpIndustryJob.objects.filter(job_id=job_id, activity_id=COPYING, blueprint_type_id=r.type_id).first()
+        job = CorpIndustryJob.objects.filter(job_id=job_id, activity_id=COPYING, blueprint_type_id=r.type_id,
+                                             corporation_id__in=corporation_ids(by)).first()
         if job is None:
             raise LibraryError("No corporation copying job of this blueprint with that id")
         r.job_id, r.job_corporation_id = job.job_id, job.corporation_id
@@ -589,6 +613,7 @@ def start(r: Request, by, job_id: int | None = None, note: str = "", request=Non
 @transaction.atomic
 def deliver(r: Request, by, note: str = "", due_at=None, request=None) -> Request:
     r = Request.objects.select_for_update().get(pk=r.pk)
+    _not_own(r, by)
     _require(r, *Request.ACTIVE)
     now = timezone.now()
     r.status = Request.Status.DELIVERED
@@ -640,6 +665,7 @@ def cancel(r: Request, user) -> Request:
 @transaction.atomic
 def mark_returned(r: Request, by, request=None) -> Request:
     r = Request.objects.select_for_update().get(pk=r.pk)
+    _not_own(r, by)
     if not r.on_loan:
         raise LibraryError("Only a blueprint out on loan can come back")
     r.status = Request.Status.RETURNED
@@ -653,6 +679,7 @@ def mark_returned(r: Request, by, request=None) -> Request:
 
 
 def extend(r: Request, by, due_at, request=None) -> Request:
+    _not_own(r, by)
     if not r.on_loan:
         raise LibraryError("Only a blueprint out on loan has a due date")
     due = _parse_date(due_at)

@@ -168,14 +168,24 @@ def fleets_available() -> bool:
 
 
 def fats(period: Period, chars: CharMap) -> Results:
+    """Distinct fleets per member: two characters (or two FAT rounds) in one fleet count once. FATs a member added by
+    hand for their own characters don't count, as in the Fleets plugin's own attendance."""
     from conduit_fleets.models import Fat
 
     qs = _time_range(Fat.objects.filter(character_id__in=chars), "fleet__started_at", period)
+    fleets: dict[int, set[int]] = defaultdict(set)  # user -> fleets
+    per_char: dict[int, set[int]] = defaultdict(set)
+    for cid, fleet_id, via, added_by in qs.values_list("character_id", "fleet_id", "via", "added_by_id"):
+        uid = chars[cid]
+        if via == Fat.Via.MANUAL and added_by == uid:
+            continue
+        fleets[uid].add(fleet_id)
+        per_char[cid].add(fleet_id)
     out = _entries(chars)
-    for cid in qs.values_list("character_id", flat=True):
-        e = out[chars[cid]]
-        e.score += 1
-        e.characters[cid] = e.characters.get(cid, 0) + 1
+    for uid, ids in fleets.items():
+        out[uid].score = len(ids)
+    for cid, ids in per_char.items():
+        out[chars[cid]].characters[cid] = len(ids)
     return out
 
 
@@ -248,7 +258,7 @@ class Category:
 CATEGORIES: dict[str, Category] = {c.key: c for c in (
     Category("kills", "Kills", "Killmails the member's characters were on.", "count", "ISK destroyed", "isk", kills),
     Category("isk_destroyed", "ISK destroyed", "Value of the ships the member helped kill.", "isk", "kills", "count", isk_destroyed),
-    Category("fats", "Fleets", "Fleet participation (FATs) from the Fleets plugin.", "count", "", "", fats, available=fleets_available),
+    Category("fats", "Fleets", "Fleets flown in, from the Fleets plugin's FATs (several characters in one fleet count once).", "count", "", "", fats, available=fleets_available),
     Category("mining", "Mining", "Value of the ore and ice mined.", "isk", "units", "count", mining),
     Category("bounties", "Bounties", "NPC bounties and ESS payouts earned.", "isk", "payouts", "count", bounties),
     Category("industry", "Industry", "Industry jobs started.", "count", "runs", "count", industry),

@@ -6,17 +6,19 @@ character who earned the income; characters are grouped under the member who own
 registered are listed on their own.
 
 Members owe ``rate`` % of what the corporation took from them. Once a month is over it's closed, which bills every
-member. Donations to a tax corporation whose reason contains the payment word settle bills, oldest first.
+member. Donations to a tax corporation whose reason has the payment word (as a word of its own) settle bills, oldest first.
 """
 
 from __future__ import annotations
 
 import calendar
+import re
 from collections import defaultdict
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
+from django.db.models import F
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
@@ -25,7 +27,7 @@ from conduit.corp.models import CorpJournalEntry, CorporationInfo
 from conduit.eve.models import EveCorporation, portrait_url
 from conduit.eve.tasks import names_for
 
-from .models import TAX_REF_TYPES, Invoice, LedgerMonth, Payment, TaxSettings
+from .models import TAX_REF_TYPES, Invoice, LedgerMonth, Payment, Settlement, TaxSettings
 
 #: Below this, ids are NPC corporations, factions and agents (CONCORD is 1000125), never a player's character.
 NPC_MAX_ID = 3_000_000
@@ -285,15 +287,23 @@ def reopen_month(month: date) -> None:
     closed.delete()
 
 
+@transaction.atomic
 def set_paid(invoice_id: int, paid: bool, by) -> Invoice:
-    inv = Invoice.objects.select_related("month").filter(pk=invoice_id).first()
+    inv = Invoice.objects.select_for_update().select_related("month").filter(pk=invoice_id).first()
     if inv is None:
         raise LedgerError("No such invoice")
+    if inv.user_id == by.pk:
+        raise LedgerError("Someone else has to mark your own corp tax")
     month = inv.month.month
     mine = set(inv.user.characters.values_list("pk", flat=True))
     taxed_in = {e.corporation_id for e in in_month(entries(), month) if earner(e) in mine}
     if taxed_in - visible_corporations(by):
         raise LedgerError("This member was taxed in corporations you can't see on the corporation sheet")
+    if not paid:
+        # Whatever wallet payments settled it is the member's again, for this bill once it's due again or the next.
+        for s in inv.settlements.select_for_update():
+            Payment.objects.filter(pk=s.payment_id).update(remaining=F("remaining") + s.amount)
+        inv.settlements.all().delete()
     inv.paid = paid
     inv.paid_at = timezone.now() if paid else None
     inv.marked_by = by
@@ -301,8 +311,15 @@ def set_paid(invoice_id: int, paid: bool, by) -> Invoice:
     return inv
 
 
+def is_payment_reason(reason: str, word: str) -> bool:
+    """The payment word appears in the reason as a word of its own, in any case: "TAX 2026-09", "corp tax", "tax:"
+    and "TAX2026-09" count, "syntax" and "taxi" don't. Not just the start of the reason, since members write the
+    reason in their own words ("Sept tax, Pilot Alt")."""
+    return bool(word) and re.search(rf"(?<![^\W\d_]){re.escape(word)}(?![^\W\d_])", reason or "", re.IGNORECASE) is not None
+
+
 def match_payments() -> int:
-    """Take new donations to a tax corporation whose reason contains the payment word as tax payments, and settle what
+    """Take new donations to a tax corporation whose reason has the payment word as tax payments, and settle what
     they cover. Returns how many payments were found."""
     settings = TaxSettings.load()
     if not settings.payment_reason:
@@ -313,7 +330,7 @@ def match_payments() -> int:
     else:
         qs = qs.filter(corporation_id__in=set(entries().values_list("corporation_id", flat=True).distinct()))
     qs = qs.exclude(pk__in=Payment.objects.values_list("journal_entry_id", flat=True))
-    found = list(qs.order_by("date"))
+    found = [e for e in qs.order_by("date") if is_payment_reason(e.reason, settings.payment_reason)]
     owners = dict(Character.objects.filter(pk__in={e.first_party_id for e in found}, user__isnull=False).values_list("pk", "user_id"))
     users = set()
     for e in found:
@@ -345,8 +362,11 @@ def settle(user_id: int) -> list[Invoice]:
         due = inv.amount
         for p in payments:
             take = min(p.remaining, due)
+            if take <= 0:
+                continue
             p.remaining -= take
             due -= take
+            Settlement.objects.create(invoice=inv, payment=p, amount=take)
             if due == 0:
                 break
         inv.paid, inv.paid_at, inv.marked_by = True, timezone.now(), None

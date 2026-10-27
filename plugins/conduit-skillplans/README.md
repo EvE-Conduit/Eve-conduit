@@ -13,7 +13,8 @@ What to train and in what order, with each character's progress and training tim
 - **Shared plans** (permission `skillplans.manage_plans`): plans everyone sees, with an optional category (Doctrines,
   Industry, New players...).
 - **Members' progress** (permission `skillplans.view_progress`): for a shared plan, every member's character closest
-  to finishing it, with time left, and a CSV.
+  to finishing it, with time left, and a CSV. The character is only named when it's the member's main or one your
+  character sheet permissions let you see, so the list doesn't reveal who owns which alt.
 - **Group rule:** *Completed skill plan* (on the main, any or every character) for group requirements and smart groups,
   e.g. a "Ferox ready" group that fills itself.
 - A dashboard widget shows the shared plan you're closest to finishing, and Ctrl+K finds plans by name.

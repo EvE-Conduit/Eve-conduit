@@ -73,7 +73,8 @@ class FakeServer(ts3.Client):
             del self.keys[p["token"]]
             return []
         if name == "customsearch":
-            rows = [{"cldbid": str(i), "ident": p["ident"], "value": c["custom"][p["ident"]]} for i, c in self.clients.items() if c["custom"].get(p["ident"]) == p["pattern"]]
+            rows = [{"cldbid": str(i), "ident": p["ident"], "value": c["custom"][p["ident"]]} for i, c in self.clients.items()
+                    if p["ident"] in c["custom"] and (p["pattern"] == "%" or c["custom"][p["ident"]] == p["pattern"])]
             if not rows:
                 raise ts3.QueryError(1281, "database empty result set")
             return rows
@@ -264,6 +265,66 @@ def test_a_lost_key_is_replaced_and_giving_up_deletes_it(setup, server, api_clie
     assert first != second and first not in server.keys and second in server.keys
     assert api_client.call("delete", "/api/p/teamspeak/link").json()["account"] is None
     assert second not in server.keys and not TeamSpeakUser.objects.filter(user=pilot).exists()
+
+
+def test_a_used_key_given_up_takes_the_registered_group_back(setup, server, api_client):
+    pilot, _ = setup
+    api_client.force_login(pilot)
+    server.add_client(100, "abc=", "Pilot One")
+    server.add_client(101, "def=", "Friend")
+    # The first key is used by a friend's client, then the member asks for a new one: the friend loses Registered.
+    first = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    server.use_key(first, 101)
+    second = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    assert server.clients[101]["groups"] == set() and server.clients[101]["custom"] == {}
+    # The second is used, then the member gives up before the site saw it.
+    server.use_key(second, 100)
+    assert server.clients[100]["groups"] == {REGISTERED}
+    api_client.call("delete", "/api/p/teamspeak/link")
+    assert server.clients[100]["groups"] == set() and server.clients[100]["custom"] == {}
+
+
+def test_a_used_key_of_someone_who_lost_access_is_undone(setup, server, api_client):
+    pilot, _ = setup
+    api_client.force_login(pilot)
+    key = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    server.add_client(100, "abc=", "Pilot One")
+    server.use_key(key, 100)
+    pilot.user_permissions.clear()
+    assert api_client.call("post", "/api/p/teamspeak/link/check").status_code == 403
+    assert server.clients[100]["groups"] == set() and server.clients[100]["custom"] == {}
+    assert not TeamSpeakUser.objects.filter(user=pilot).exists()
+
+
+def test_sync_all_undoes_expired_and_orphaned_keys(setup, server, api_client, corp):
+    pilot, _ = setup
+    link(api_client, server, pilot)  # linked: keeps everything
+    other = make_user(90000002, "Pilot Two", corporation=corp)
+    other.user_permissions.add(Permission.objects.get(codename="access_teamspeak"))
+    api_client.force_login(other)
+    key = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    server.add_client(101, "def=", "Pilot Two")
+    server.use_key(key, 101)
+    TeamSpeakUser.objects.filter(user=other).update(created_at=timezone.now() - timedelta(days=2))
+    # Stamped by an earlier link the site forgot (say a forced unlink while the server was down).
+    server.add_client(102, "ghi=", "Old", groups=(REGISTERED, 6))
+    server.clients[102]["custom"]["conduit_link"] = "5-forgotten"
+    # Registered by hand, never stamped: left alone.
+    server.add_client(103, "jkl=", "Guest", groups=(REGISTERED,))
+    # A pending link that's still fresh: its key may be used and checked any moment.
+    third = make_user(90000003, "Pilot Three", corporation=corp)
+    third.user_permissions.add(Permission.objects.get(codename="access_teamspeak"))
+    api_client.force_login(third)
+    fresh = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    server.add_client(104, "mno=", "Pilot Three")
+    server.use_key(fresh, 104)
+
+    assert services.sync_all()["expired"] == 1
+    assert REGISTERED in server.clients[100]["groups"]
+    assert server.clients[101]["groups"] == set() and server.clients[101]["custom"] == {}
+    assert server.clients[102]["groups"] == {6} and server.clients[102]["custom"] == {}
+    assert server.clients[103]["groups"] == {REGISTERED}
+    assert server.clients[104]["groups"] == {REGISTERED} and "conduit_link" in server.clients[104]["custom"]
 
 
 def test_an_identity_links_to_one_member_only(setup, server, api_client, corp):

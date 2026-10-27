@@ -1,8 +1,10 @@
 """Keeps characters' corporation and alliance up to date."""
 
 import logging
+from collections import defaultdict
 
 from celery import shared_task
+from django.db import transaction
 from django.utils import timezone
 
 from conduit.esi.client import esi
@@ -36,20 +38,36 @@ def update_affiliations(self, character_ids: list[int] | None = None):
     except EsiBackoff as exc:
         raise self.retry(countdown=exc.retry_after + 1) from exc
 
-    changed_users = set()
     now = timezone.now()
-    for row in rows:
-        char = Character.objects.select_related("user").get(pk=row["character_id"])
-        corp, alliance = row["corporation_id"], row.get("alliance_id")
-        if char.corporation_id != corp or char.alliance_id != alliance:
-            changed_users.add(char.user)
-        char.corporation_id, char.alliance_id, char.affiliation_updated_at = corp, alliance, now
-        char.save(update_fields=["corporation", "alliance", "affiliation_updated_at"])
-        # Affiliation data is also the cheapest way to notice a corp changing alliance.
+    # Affiliation data is also the cheapest way to notice a corp changing alliance.
+    for corp, alliance in {r["corporation_id"]: r.get("alliance_id") for r in rows}.items():
         EveCorporation.objects.filter(pk=corp).exclude(alliance_id=alliance).update(alliance_id=alliance)
 
-    for user in changed_users:
-        recompute_user_state(user)
+    chars = {}
+    for i in range(0, len(rows), AFFILIATION_BATCH):
+        batch = [r["character_id"] for r in rows[i : i + AFFILIATION_BATCH]]
+        chars.update((c.pk, c) for c in Character.objects.select_related("user").filter(pk__in=batch))
+    by_user = defaultdict(list)
+    for row in rows:
+        char = chars.get(row["character_id"])
+        if char is not None:  # None: unlinked while we were asking ESI
+            by_user[char.user_id].append((char, row))
+
+    for user_rows in by_user.values():
+        user = user_rows[0][0].user
+        try:
+            # Saved and recomputed together: a crash can't leave a change that the next run would no longer see.
+            with transaction.atomic():
+                changed = False
+                for char, row in user_rows:
+                    corp, alliance = row["corporation_id"], row.get("alliance_id")
+                    changed |= char.corporation_id != corp or char.alliance_id != alliance
+                    char.corporation_id, char.alliance_id, char.affiliation_updated_at = corp, alliance, now
+                    char.save(update_fields=["corporation", "alliance", "affiliation_updated_at"])
+                if changed:
+                    recompute_user_state(user)
+        except Exception:
+            log.exception("Updating the affiliations of %s failed", user)
     return len(rows)
 
 

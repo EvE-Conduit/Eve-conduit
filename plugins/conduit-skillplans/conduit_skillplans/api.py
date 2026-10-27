@@ -172,7 +172,7 @@ def _progress_plan(request, plan_id: int) -> SkillPlan:
 @router.get("/plans/{plan_id}/members")
 def members(request, plan_id: int):
     plan = _progress_plan(request, plan_id)
-    return {"plan": services.plan_brief(plan), "members": services.members_progress(plan)}
+    return {"plan": services.plan_brief(plan), "members": services.members_progress(plan, request.user)}
 
 
 def _csv_row(cells) -> list[str]:
@@ -187,6 +187,6 @@ def members_csv(request, plan_id: int):
     resp["Content-Disposition"] = f'attachment; filename="skill-plan-{plan.pk}.csv"'
     out = csv.writer(resp)
     out.writerow(["Member", "Best character", "Percent", "Complete", "Hours left"])
-    for m in services.members_progress(plan):
-        out.writerow(_csv_row([m["name"], m["character"], m["percent"], "yes" if m["complete"] else "no", round(m["seconds_left"] / 3600, 1)]))
+    for m in services.members_progress(plan, request.user):
+        out.writerow(_csv_row([m["name"], m["character"] or "", m["percent"], "yes" if m["complete"] else "no", round(m["seconds_left"] / 3600, 1)]))
     return resp

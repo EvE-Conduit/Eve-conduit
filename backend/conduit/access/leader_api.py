@@ -183,7 +183,11 @@ def remove(request, group_id: int, user_id: int):
     if profile.auto:
         raise HttpError(400, "Membership of a smart group is managed by its rules")
     user = get_object_or_404(User, pk=user_id)
-    if groups.remove_member(user, profile.group, "leader", request=request):
+    try:
+        removed = groups.remove_member(user, profile.group, "leader", request=request)
+    except groups.GroupError as exc:
+        raise HttpError(exc.status, str(exc)) from None
+    if removed:
         from conduit.notify import notify
 
         notify(user, f"You've been removed from {profile.group.name}", f"{request.user.display_name} removed you.",

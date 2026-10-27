@@ -1,6 +1,6 @@
 [project]
 name = "conduit-teamspeak"
-version = "1.0.0"
+version = "1.0.1"
 description = "TeamSpeak: members link their TeamSpeak identity with a one-time privilege key; their server groups follow their groups and state through ServerQuery."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

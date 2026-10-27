@@ -1,6 +1,6 @@
 [project]
 name = "conduit-finance"
-version = "1.0.0"
+version = "1.0.1"
 description = "Corp Finance: income and spending per month by category, wallet balance history, internal transfers kept apart, and a monthly report."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

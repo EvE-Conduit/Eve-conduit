@@ -23,6 +23,8 @@ class Mail(models.Model):
     recipients = models.JSONField(default=list)  # [{"recipient_id", "recipient_type"}]
     body = models.TextField(blank=True)
     body_fetched = models.BooleanField(default=False)
+    #: Failed body fetches in a row; past a few the body is no longer asked for.
+    fetch_failures = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         unique_together = [("character", "mail_id")]

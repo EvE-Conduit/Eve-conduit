@@ -23,7 +23,7 @@ export function MembersPage() {
   const done = data.members.filter((m) => m.complete).length;
   const rows = data.members
     .filter((m) => show === "all" || (show === "done") === m.complete)
-    .filter((m) => !q.trim() || `${m.name} ${m.character}`.toLowerCase().includes(q.trim().toLowerCase()));
+    .filter((m) => !q.trim() || `${m.name} ${m.character ?? ""}`.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
     <>
@@ -66,7 +66,7 @@ export function MembersPage() {
                       <span className="font-medium">{m.name}</span>
                     </div>
                   </Td>
-                  <Td className="text-sm text-muted">{m.character}{!m.synced && <span className="text-xs text-subtle"> (not synced)</span>}</Td>
+                  <Td className="text-sm text-muted">{m.character ?? <span className="text-subtle">An alt</span>}{!m.synced && <span className="text-xs text-subtle"> (not synced)</span>}</Td>
                   <Td>
                     {m.complete ? (
                       <Badge tone="success" size="xs"><Check className="size-3" /> Finished</Badge>

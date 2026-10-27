@@ -8,7 +8,7 @@ from conduit.plugins import NavItem, Plugin
 class SpyCheckPlugin(Plugin):
     id = "spycheck"
     name = "Spy Check"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "A daily scan of members' synced data for dealings with blacklisted and watched characters, corporations and alliances, with findings HR reviews."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-spycheck"

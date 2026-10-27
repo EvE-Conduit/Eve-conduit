@@ -206,6 +206,8 @@ def _locked(order: Order) -> Order:
 
 @transaction.atomic
 def fulfil(order: Order, by, note: str = "", request=None) -> Order:
+    if order.user_id == by.pk:
+        raise StoreError("You can't hand over your own order; another officer does", 403)
     order = _locked(order)
     order.status = Order.Status.FULFILLED
     order.note = (note or "").strip()[:2000]

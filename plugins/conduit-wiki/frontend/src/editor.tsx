@@ -88,7 +88,8 @@ function Editor({ page, canManage, initial }: { page: Page | null; canManage: bo
         title: form.title,
         body: form.body,
         slug: form.slug.trim() || null,
-        parent: form.parent,
+        // Only managers move a page once it exists; the server ignores it for everyone else.
+        ...(!page || canManage ? { parent: form.parent } : {}),
         note: form.note,
         ...(canManage ? { states: form.states, groups: form.groups, public: form.public, locked: form.locked } : {}),
       };
@@ -178,14 +179,16 @@ function Editor({ page, canManage, initial }: { page: Page | null; canManage: bo
           <Field label="Address" hint={<>Shown as /p/wiki/<b>{form.slug || slugify(form.title) || "…"}</b>. {page && form.slug !== page.slug ? "Changing it breaks links to the old address." : "Letters, numbers and dashes."}</>}>
             <Input value={form.slug} maxLength={120} onChange={(e) => { setSlugTouched(true); set({ slug: e.target.value }); }} placeholder={slugify(form.title) || "fleet-rules"} className="font-mono text-[13px]" />
           </Field>
-          <Field label="Under" hint="The page this one is nested in.">
-            <Select value={form.parent ?? ""} onChange={(e) => set({ parent: e.target.value ? Number(e.target.value) : null })}>
-              <option value="">Top level</option>
-              {parents.map(({ node, depth }) => (
-                <option key={node.id} value={node.id}>{`${"   ".repeat(depth)}${node.title}`}</option>
-              ))}
-            </Select>
-          </Field>
+          {(!page || canManage) && (
+            <Field label="Under" hint="The page this one is nested in.">
+              <Select value={form.parent ?? ""} onChange={(e) => set({ parent: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">Top level</option>
+                {parents.map(({ node, depth }) => (
+                  <option key={node.id} value={node.id}>{`${"   ".repeat(depth)}${node.title}`}</option>
+                ))}
+              </Select>
+            </Field>
+          )}
 
           {canManage && (
             <>

@@ -1,6 +1,6 @@
 [project]
 name = "conduit-tax"
-version = "1.0.0"
+version = "1.0.1"
 description = "Corp tax: the bounty, ESS and mission tax each member paid the corporation, an extra tax billed monthly, payments matched from the wallet, and reminders."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

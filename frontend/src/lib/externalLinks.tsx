@@ -3,9 +3,13 @@ import { useSyncExternalStore } from "react";
 
 import { ConfirmDialog } from "@/components/ui/dialog";
 
-/** A path on this site ("/groups"), not "//host" or "/\host", which browsers treat as another site. */
+/**
+ * A path on this site ("/groups"), not "//host" or "/\host", which browsers treat as another site. Whitespace
+ * and control characters are refused too: browsers drop tabs and newlines, so "/\t/host" also means "//host".
+ */
 export function isSitePath(link: string) {
-  return link.startsWith("/") && !link.startsWith("//") && !link.includes("\\");
+  // eslint-disable-next-line no-control-regex
+  return link.startsWith("/") && !link.startsWith("//") && !link.includes("\\") && !/[\s\x00-\x1f\x7f]/.test(link);
 }
 
 let pending: URL | null = null;

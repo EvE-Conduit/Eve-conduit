@@ -31,7 +31,8 @@ for running a PI program.
   member's colonies, extractors, products and ISK a day, and **idle colonies** (every extractor stopped for more than
   N days, 3 by default). Filter by corporation. It covers exactly the characters the officer's character sheet access
   reaches (`sheet.view_corporation_characters`, `sheet.view_alliance_characters` or `sheet.view_all_characters`), so
-  give officers one of those too.
+  give officers one of those too. Opening it goes in the **snooper log** for every other member's character it
+  shows, like opening the Planets tab of their sheet.
 - **Dashboard widget:** the member's extractors running out next and how many have stopped.
 - **Webhooks:** `pi.extractors_expiring` and `pi.extractors_expired` can be sent to Discord or Slack under
   Administration → Integrations. They name the member and their planets, so they only go to webhooks that pick them

@@ -194,15 +194,23 @@ def check_discord(user) -> None:
 # --- referrers ----------------------------------------------------------------------------------------------------
 
 
+#: Letters to type before the referrer box searches.
+REFERRER_MIN_QUERY = 3
+
+
 def find_referrers(q: str, user) -> list[dict]:
     """Members whose main character's name contains ``q``, for the applicant's "Who referred you?" box.
 
-    Only main names are searched: matching alts would tell an applicant who owns which alt.
+    Only main names are searched: matching alts would tell an applicant who owns which alt. The page is open to
+    guests, so this only answers someone who could fill in that box right now (a form is open and they have no
+    application in progress) and for at least three letters: a list of members isn't handed to every visitor.
     """
     from conduit.access.services import site_members
 
     q = (q or "").strip()
-    if len(q) < 2:
+    if len(q) < REFERRER_MIN_QUERY:
+        return []
+    if not Form.objects.filter(open=True).exists() or open_application(user):
         return []
     qs = (site_members().filter(main_character__name__icontains=q).exclude(pk=user.pk)
           .select_related("main_character").order_by("main_character__name")[:10])
@@ -288,9 +296,18 @@ def apply(user, form: Form, answers, referrer_id: int | None = None) -> Applicat
     return app
 
 
+def _lock(app: Application) -> None:
+    """Lock the application's row and re-read it, so two decisions (or a decision and a withdrawal) sent at once
+    can't both pass the "still open" check. Call inside a transaction."""
+    Application.objects.select_for_update().filter(pk=app.pk).first()
+    app.refresh_from_db()
+
+
+@transaction.atomic
 def withdraw(user, app: Application) -> Application:
     if app.user_id != user.pk:
         raise RecruitError("Not your application", 403)
+    _lock(app)
     if not app.is_open:
         raise RecruitError("This application is already closed")
     app.status = Application.Status.WITHDRAWN
@@ -305,7 +322,9 @@ def withdraw(user, app: Application) -> Application:
 # --- reviewing ---------------------------------------------------------------------------------------------------
 
 
+@transaction.atomic
 def claim(app: Application, by) -> Application:
+    _lock(app)
     if not app.is_open:
         raise RecruitError("This application is closed")
     app.reviewer = by
@@ -340,6 +359,7 @@ def comment(app: Application, by, text: str, internal: bool) -> Comment:
 def decide(app: Application, by, accept: bool, message: str = "", request=None) -> Application:
     from conduit.access import groups as access_groups
 
+    _lock(app)
     if not app.is_open:
         raise RecruitError("This application is already closed")
     if accept:

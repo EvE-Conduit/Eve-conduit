@@ -25,6 +25,10 @@ the site. No passwords, no nickname matching: the site talks to the server throu
    touched; groups given by hand stay. Without access they lose all of them, and are kicked if the admins chose that.
    Syncs run on group, state and main-character changes, every six hours for everyone (which also forgets link
    attempts older than a day and deletes their keys), on "Fix my groups", and from the members list.
+   A key hands out the linked members' group as soon as it's used, so when a pending link is replaced, given up,
+   expires or is refused (the member lost access), whoever used its key loses that group and the stamp again; the
+   six-hourly sync also does this for any stamped identity that isn't linked. Identities without the site's stamp
+   (the group given by hand) are left alone.
 4. An identity links to one member only. When an administrator merges a member's second account into their main,
    the link moves along unless the main has one already.
 

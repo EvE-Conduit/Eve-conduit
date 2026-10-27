@@ -59,6 +59,7 @@ class PageIn(Schema):
     title: str
     body: str = Field("", max_length=services.MAX_BODY)
     slug: str | None = None
+    # Left out: an edit keeps the page where it is. Only managers move a page on edit (editors pick it when creating).
     parent: int | None = None
     note: str = ""
     # Managers only; ignored for everyone else.
@@ -70,9 +71,12 @@ class PageIn(Schema):
 
 def _save(request, p: Page | None, payload: PageIn) -> Page:
     data = payload.model_dump()
-    if not services.can_manage(request.user):
+    manager = services.can_manage(request.user)
+    if not manager:
         for key in ("states", "groups", "public", "locked"):
             data[key] = None
+    if "parent" not in payload.model_fields_set or (p is not None and not manager):
+        data.pop("parent")  # unchanged (services.UNSET)
     try:
         return services.save(p, request.user, **data)
     except services.WikiError as exc:

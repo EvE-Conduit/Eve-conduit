@@ -133,6 +133,24 @@ def test_leadership_view(people, api_client):
     assert csv.splitlines()[1].startswith("Pilot One,Pilot One,100.0,yes")
 
 
+def test_leadership_view_hides_alts_the_viewer_may_not_see(people, api_client):
+    train(90000003, s3300=2)  # the alt is the best character
+    plan = SkillPlan.objects.create(name="Guns", shared=True, skills=[[3300, 1], [3300, 2]])
+    api_client.force_login(people["manager"])
+    pilot = next(r for r in api_client.call("get", f"/api/p/skillplans/plans/{plan.pk}/members").json()["members"] if r["name"] == "Pilot One")
+    assert pilot["complete"] and pilot["character"] is None and pilot["character_id"] is None
+    csv = api_client.call("get", f"/api/p/skillplans/plans/{plan.pk}/members.csv").content.decode()
+    assert "Pilot Alt" not in csv and csv.splitlines()[1].startswith("Pilot One,,100.0,yes")
+    # The manager's own best character is their main and always shown.
+    me = next(r for r in api_client.call("get", f"/api/p/skillplans/plans/{plan.pk}/members").json()["members"] if r["name"] == "Manager Mo")
+    assert me["character"] == "Manager Mo"
+    # With sheet access to the corporation, the alt is named.
+    people["manager"].user_permissions.add(Permission.objects.get(content_type__app_label="sheet", codename="view_corporation_characters"))
+    api_client.force_login(people["manager"])
+    pilot = next(r for r in api_client.call("get", f"/api/p/skillplans/plans/{plan.pk}/members").json()["members"] if r["name"] == "Pilot One")
+    assert (pilot["character"], pilot["character_id"]) == ("Pilot Alt", 90000003)
+
+
 def test_group_rule(people):
     plan = SkillPlan.objects.create(name="Guns", shared=True, skills=[[3300, 1], [3300, 2]])
     pilot = people["pilot"]

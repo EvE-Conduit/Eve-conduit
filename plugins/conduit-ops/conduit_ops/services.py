@@ -226,14 +226,15 @@ def month(user, first: date) -> list[dict]:
 
 
 def fc_search(q: str, limit: int = 10) -> list[dict]:
-    """Members whose main character (or any character) matches ``q``, for picking the FC."""
+    """Members whose main character matches ``q``, for picking the FC. Only mains: matching alts would tell whoever
+    schedules ops who owns which alt."""
     from conduit.access.services import site_members
 
     q = " ".join(q.split())
     if len(q) < 2:
         return []
-    users = (site_members().filter(Q(main_character__name__icontains=q) | Q(characters__name__icontains=q))
-             .select_related("main_character").distinct().order_by("main_character__name")[:limit])
+    users = (site_members().filter(main_character__name__icontains=q)
+             .select_related("main_character").order_by("main_character__name")[:limit])
     return [_person(u) for u in users]
 
 

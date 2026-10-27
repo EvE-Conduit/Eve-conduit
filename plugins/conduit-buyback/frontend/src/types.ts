@@ -19,6 +19,7 @@ export interface Terms {
   assignee: { id: number | null; name: string; kind: "corporation" | "character" };
   locations: Place[];
   expiration_days: number;
+  quote_valid_days: number;
 }
 
 /** An item's or a market group's terms. */
@@ -321,6 +322,7 @@ export interface ProgramForm {
   location_ids: number[];
   manager_ids: number[];
   expiration_days: number;
+  quote_valid_days: number;
   price_type: "buy" | "sell" | "split";
   tax: number;
   hauling_fuel_cost: number;

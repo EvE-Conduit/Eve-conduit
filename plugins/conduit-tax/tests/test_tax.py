@@ -13,7 +13,7 @@ from conduit.eve.models import EveName
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
 from conduit_tax import services
-from conduit_tax.models import Invoice, LedgerMonth, Payment, TaxSettings
+from conduit_tax.models import Invoice, LedgerMonth, Payment, Settlement, TaxSettings
 from tests.conftest import make_user
 
 CONCORD = 1000125
@@ -214,3 +214,64 @@ def test_plugin_off_means_no_api(taxed, api_client):
 def test_far_off_months_are_refused(taxed, api_client):
     api_client.force_login(taxed)
     assert api_client.call("get", "/api/p/tax/me?month=9999-12").status_code == 400
+
+
+def test_unmarking_a_wallet_settled_bill_gives_the_payment_back(taxed, corp, last_month, admin_user):
+    officer = ledger_admin(admin_user)
+    journal(corp, timezone.now(), "player_donation", 1_000_000, 90000001, corp.pk, reason="TAX")
+    services.match_payments()
+    inv = close(last_month, officer)
+    assert inv.paid and Payment.objects.get().remaining == 300_000
+    services.set_paid(inv.pk, False, officer)
+    assert Payment.objects.get().remaining == 1_000_000 and not Settlement.objects.exists()
+    services.set_paid(inv.pk, False, officer)  # unmarking again gives nothing more back
+    assert Payment.objects.get().remaining == 1_000_000
+    # Reopening and closing the month again settles the bill from the same donation, once.
+    services.reopen_month(last_month)
+    inv = close(last_month, officer)
+    assert inv.paid and Payment.objects.get().remaining == 300_000
+    assert services.settle(taxed.pk) == [] and Payment.objects.get().remaining == 300_000
+
+
+def test_settling_takes_each_payment_once(taxed, corp, last_month, admin_user):
+    inv = close(last_month, ledger_admin(admin_user))
+    now = timezone.now()
+    journal(corp, now, "player_donation", 400_000, 90000001, corp.pk, reason="TAX")
+    journal(corp, now, "player_donation", 400_000, 90000002, corp.pk, reason="TAX")
+    services.match_payments()
+    inv.refresh_from_db()
+    assert inv.paid
+    assert sorted(s.amount for s in Settlement.objects.filter(invoice=inv)) == [300_000, 400_000]
+    assert sum(p.remaining for p in Payment.objects.all()) == 100_000
+    services.settle(taxed.pk)
+    assert sum(p.remaining for p in Payment.objects.all()) == 100_000
+
+
+def test_nobody_marks_their_own_bill(taxed, last_month, admin_user):
+    from django.contrib.auth.models import Permission
+
+    inv = close(last_month, admin_user)
+    taxed.user_permissions.add(*Permission.objects.filter(content_type__app_label="tax"))
+    with pytest.raises(services.LedgerError, match="your own"):
+        services.set_paid(inv.pk, True, taxed)
+    inv.refresh_from_db()
+    assert not inv.paid
+
+
+def test_the_payment_word_must_be_a_word_of_its_own(taxed, corp, last_month, admin_user):
+    assert services.is_payment_reason(f"tax {last_month:%Y-%m}", "TAX")
+    assert services.is_payment_reason("Sept corp Tax, Pilot Alt", "TAX")
+    assert services.is_payment_reason(f"TAX{last_month:%Y-%m}", "TAX")
+    assert not services.is_payment_reason("syntax error", "TAX")
+    assert not services.is_payment_reason("taxi fare", "TAX")
+    now = timezone.now()
+    journal(corp, now, "player_donation", 700_000, 90000001, corp.pk, reason="for the taxi")
+    assert services.match_payments() == 0 and not Payment.objects.exists()
+
+
+def test_the_minimum_must_be_a_real_number(taxed, api_client, admin_user):
+    api_client.force_login(ledger_admin(admin_user))
+    for bad in (float("nan"), float("inf"), 1e30, -1):
+        resp = api_client.call("put", "/api/p/tax/settings", {"rate": 25, "minimum": bad, "ref_types": ["bounty_prizes"]})
+        assert resp.status_code == 400, bad
+    assert TaxSettings.load().minimum == 0

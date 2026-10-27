@@ -1,6 +1,7 @@
 """Mounted at /api/p/tax/. Only reachable while the plugin is enabled."""
 
 import csv
+import math
 from decimal import Decimal
 
 from django.http import HttpResponse
@@ -15,6 +16,8 @@ from . import services
 from .models import TAX_REF_TYPES, Invoice, TaxSettings
 
 router = Router(tags=["tax"], auth=django_auth)
+#: The largest minimum bill: a trillion ISK, far above any real bill, and well inside what the field stores.
+MAX_MINIMUM = 1_000_000_000_000
 
 
 def _month(text: str | None):
@@ -123,8 +126,10 @@ class SettingsIn(Schema):
 def put_settings(request, payload: SettingsIn):
     if not 0 <= payload.rate <= 1000:
         raise HttpError(400, "The rate must be between 0 and 1000 %")
-    if payload.minimum < 0:
+    if not math.isfinite(payload.minimum) or payload.minimum < 0:
         raise HttpError(400, "The minimum can't be negative")
+    if payload.minimum > MAX_MINIMUM:
+        raise HttpError(400, f"The minimum must be at most {MAX_MINIMUM:,} ISK")
     if not 0 <= payload.reminder_days <= 365:
         raise HttpError(400, "Reminders must be between 0 and 365 days apart")
     unknown = set(payload.ref_types) - set(TAX_REF_TYPES)
