@@ -1,6 +1,6 @@
 // Running programs: overview, statistics and contracts, the program form, item rules, locations and settings.
 import {
-  api, Badge, BarChart, Button, buttonVariants, Card, CardBody, CardHeader, ConfirmDialog, DataTable, Dialog, EmptyState, Field, Input,
+  api, Badge, BarChart, Button, buttonVariants, Card, CardBody, CardHeader, ConfirmDialog, DataTable, Dialog, DiscordPings, EmptyState, Field, Input,
   isk, num, PageHeader, SearchInput, SectionTitle, Segmented, Select, Skeleton, StatCard, Switch, SwitchRow, TabPanel, Tabs, Textarea, timeAgo, toast,
   useHasPerm,
 } from "@conduit/sdk";
@@ -969,6 +969,8 @@ export function SettingsPage() {
               </div>
             </CardBody>
           </Card>
+          {/* Saved on its own, not with the Save button above. */}
+          <DiscordPings plugin="buyback" className="panel p-card" />
         </div>
       </div>
     </div>

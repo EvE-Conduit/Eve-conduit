@@ -1,6 +1,6 @@
 [project]
 name = "conduit-inactivity"
-version = "1.0.0"
+version = "1.0.1"
 description = "Inactivity: members who have gone quiet, from site sign-ins, game logins and fleets, and leave of absence so nobody is chased by mistake."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ inactivity = "conduit_inactivity.plugin:InactivityPlugin"
 name = "Inactivity"
 icon = "moon"
 category = "HR"
-min_conduit = "0.5.52"
+min_conduit = "0.5.55"
 
 [build-system]
 requires = ["setuptools>=75"]

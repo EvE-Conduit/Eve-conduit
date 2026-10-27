@@ -32,4 +32,6 @@ Give the permissions to a state (Administration → States) or a group (Administ
 with `esi-contracts.read_character_contracts.v1` and `esi-contracts.read_corporation_contracts.v1`.
 
 Events for webhooks: `freight.contract_created`, `freight.contract_finished` (a contract was delivered, failed,
-rejected, deleted or expired). Post them to a Discord channel with a webhook (Administration → Integrations).
+rejected, deleted or expired). Post them to a Discord channel with a webhook (Administration → Integrations). New
+contracts can ping on Discord: switch it on under **Discord pings** on the Services page. With the Discord plugin
+linked you also pick the roles to ping. Needs EvE Conduit 0.5.55 or newer.

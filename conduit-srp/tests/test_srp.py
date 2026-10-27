@@ -8,6 +8,7 @@ from django.contrib.auth.models import Permission
 from django.utils import timezone
 
 from conduit.accounts.models import Character
+from conduit.events import bus
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
 from conduit.sde.models import ItemCategory, ItemGroup, ItemType
@@ -317,3 +318,24 @@ def test_only_the_members_own_losses_are_fetched_or_claimed(pilot, monkeypatch):
     with pytest.raises(services.SrpError) as exc:
         services.submit(pilot, link=link, fleet="CTA")
     assert exc.value.status == 429
+
+
+def test_srp_request_created_is_a_discord_alert():
+    et = bus.EVENT_TYPES["srp.request_created"]
+    assert et.alert and et.manage == "srp.manage_srp" and et.plugin == "srp"
+
+
+@pytest.mark.django_db
+def test_managers_switch_on_discord_pings(api_client):
+    from conduit.events.models import EventPing
+
+    manager = make_user(90000900, "Ping Manager")
+    manager.user_permissions.add(Permission.objects.get(content_type__app_label="srp", codename="manage_srp"))
+    other = make_user(90000901, "Not A Manager")
+    other.user_permissions.add(Permission.objects.get(content_type__app_label="srp", codename="review_requests"))
+    api_client.force_login(other)  # a reviewer may not
+    assert api_client.call("put", "/api/pings/srp.request_created", {"ping": True}).status_code == 403
+    api_client.force_login(manager)
+    resp = api_client.call("put", "/api/pings/srp.request_created", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="srp.request_created").roles == ["123"]

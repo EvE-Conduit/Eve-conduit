@@ -1,6 +1,6 @@
 // HR's side: who has gone quiet, everyone's leave of absence, and the settings.
 import {
-  api, Avatar, Badge, Button, Card, CardBody, CardHeader, Dialog, EmptyState, Field, Input, PageHeader, SearchInput, Segmented,
+  api, Avatar, Badge, Button, Card, CardBody, CardHeader, Dialog, DiscordPings, EmptyState, Field, Input, PageHeader, SearchInput, Segmented,
   Skeleton, SwitchRow, TabPanel, Table, Tabs, Td, Textarea, Th, THead, timeAgo, toast, Tr,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -293,6 +293,7 @@ function SettingsTab() {
       <div className="lg:col-span-2">
         <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Save settings</Button>
       </div>
+      <DiscordPings plugin="inactivity" className="lg:col-span-2" />
     </div>
   );
 }

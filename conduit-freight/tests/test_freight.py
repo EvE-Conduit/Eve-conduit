@@ -306,3 +306,22 @@ def test_two_corporation_services_dont_take_each_others_contracts(service, custo
         assert (c2.service, codes(2)) == (other, [])
     # The one nobody's routes cover stays with whoever found it first, flagged once.
     assert Contract.objects.get(contract_id=3).service == service and codes(3) == ["wrong_route"]
+
+
+def test_new_contracts_are_a_discord_alert():
+    from conduit.events import bus
+
+    et = bus.EVENT_TYPES["freight.contract_created"]
+    assert et.alert and et.manage == "freight.manage_freight" and et.plugin == "freight"
+    assert not bus.EVENT_TYPES["freight.contract_finished"].alert
+
+
+def test_managers_switch_on_discord_pings(boss, customer, api_client):
+    from conduit.events.models import EventPing
+
+    api_client.force_login(grant(customer, "view_contracts"))  # haulers may not
+    assert api_client.call("put", "/api/pings/freight.contract_created", {"ping": True}).status_code == 403
+    api_client.force_login(boss)
+    resp = api_client.call("put", "/api/pings/freight.contract_created", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="freight.contract_created").roles == ["123"]

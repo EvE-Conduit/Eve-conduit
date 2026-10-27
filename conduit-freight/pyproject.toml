@@ -1,6 +1,6 @@
 [project]
 name = "conduit-freight"
-version = "1.0.1"
+version = "1.0.2"
 description = "Freight: routes with your rates, a calculator that gives the exact courier contract to make, and every courier contract checked against its route."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ freight = "conduit_freight.plugin:FreightPlugin"
 name = "Freight"
 icon = "truck"
 category = "Industry"
-min_conduit = "0.5.51"
+min_conduit = "0.5.55"
 esi_scopes = ["esi-contracts.read_character_contracts.v1", "esi-contracts.read_corporation_contracts.v1"]
 
 [build-system]

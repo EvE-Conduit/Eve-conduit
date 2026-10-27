@@ -1,13 +1,13 @@
 // The announcements page: pinned news first, then the newest. Writers get the editor and see scheduled and ended ones.
 import {
-  api, Avatar, Badge, Button, Card, cn, ConfirmDialog, dateTime, DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator,
-  DropdownTrigger, EmptyState, PageHeader, Segmented, Skeleton, timeAgo, toast,
+  api, Avatar, Badge, Button, Card, cn, ConfirmDialog, dateTime, Dialog, DiscordPings, DropdownContent, DropdownItem, DropdownMenu,
+  DropdownSeparator, DropdownTrigger, EmptyState, PageHeader, Segmented, Skeleton, timeAgo, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { Editor } from "./editor";
-import { Clock, Dots, Megaphone, Pencil, Pin, Plus, Trash } from "./icons";
+import { Bell, Clock, Dots, Megaphone, Pencil, Pin, Plus, Trash } from "./icons";
 import { Markdown } from "./markdown";
 import { type Announcement, BASE, type Feed, type Tone } from "./types";
 
@@ -21,12 +21,26 @@ export function useFeed(all = false) {
   return useQuery({ queryKey: ["announcements", "feed", all], queryFn: () => api.get<Feed>(`${BASE}${all ? "?all=true" : ""}`) });
 }
 
+/** Whether DiscordPings has anything to show (a Discord webhook exists and the user may set the alerts); it shares
+ * the component's query, so the button only shows when the dialog wouldn't be empty. */
+function useDiscordPings(enabled: boolean) {
+  const { data } = useQuery({
+    queryKey: ["pings", "announcements"],
+    queryFn: () => api.get<{ configured: boolean; events: unknown[] }>("/api/pings?plugin=announcements"),
+    staleTime: 60_000,
+    enabled,
+  });
+  return !!data?.configured && data.events.length > 0;
+}
+
 export function FeedPage() {
   const qc = useQueryClient();
   const [view, setView] = useState<"live" | "all">("live");
   const { data, isLoading } = useFeed(view === "all");
   const [editing, setEditing] = useState<Announcement | "new" | null>(null);
   const [deleting, setDeleting] = useState<Announcement | null>(null);
+  const [pings, setPings] = useState(false);
+  const hasPings = useDiscordPings(!!data?.can_post);
   const refresh = () => qc.invalidateQueries({ queryKey: ["announcements"] });
 
   // Opening the page counts as reading what's on it; the "new" marks stay until the next visit.
@@ -75,6 +89,7 @@ export function FeedPage() {
                 size="sm"
                 options={[{ value: "live", label: "What members see" }, { value: "all", label: "Everything" }]}
               />
+              {hasPings && <Button onClick={() => setPings(true)}><Bell /> Discord pings</Button>}
               <Button variant="primary" onClick={() => setEditing("new")}><Plus /> New announcement</Button>
             </div>
           ) : undefined
@@ -105,6 +120,9 @@ export function FeedPage() {
       )}
 
       {editing && <Editor announcement={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      <Dialog open={pings} onOpenChange={setPings} title="Announcement alerts" description="Changes are saved straight away.">
+        <DiscordPings plugin="announcements" />
+      </Dialog>
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}

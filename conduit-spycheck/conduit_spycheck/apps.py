@@ -13,4 +13,5 @@ class SpyCheckConfig(AppConfig):
         register_category("p.spycheck", "Spy Check findings")
         # Private: it names members and who they dealt with, so it only goes to webhooks that picked it by name.
         bus.register("spycheck.findings", "Spy Check findings", "The scan found members dealing with blacklisted or watched entities",
-                     plugin="spycheck", private=True)
+                     plugin="spycheck", private=True,
+                     alert=True, manage="spycheck.manage_spycheck")

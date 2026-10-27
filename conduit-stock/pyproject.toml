@@ -1,6 +1,6 @@
 [project]
 name = "conduit-stock"
-version = "1.0.0"
+version = "1.0.1"
 description = "Doctrine Stock: how many of each ship and item should be for sale at each staging location, what's short, and members claiming shortages to seed them."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ stock = "conduit_stock.plugin:StockPlugin"
 name = "Doctrine Stock"
 icon = "boxes"
 category = "Industry"
-min_conduit = "0.5.52"
+min_conduit = "0.5.55"
 
 [build-system]
 requires = ["setuptools>=75"]

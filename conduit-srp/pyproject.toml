@@ -1,6 +1,6 @@
 [project]
 name = "conduit-srp"
-version = "1.0.3"
+version = "1.0.4"
 description = "Ship replacement: members claim their losses from synced killmails, reviewers approve a payout and mark it paid."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ srp = "conduit_srp.plugin:SrpPlugin"
 name = "Ship Replacement (SRP)"
 icon = "life-buoy"
 category = "Military"
-min_conduit = "0.5.6"
+min_conduit = "0.5.55"
 esi_scopes = ["esi-killmails.read_killmails.v1"]
 
 [build-system]

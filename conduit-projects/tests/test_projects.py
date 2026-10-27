@@ -229,3 +229,23 @@ def test_points_per_unit_cannot_change_under_a_waiting_delivery(setup):
     services.update_item(item, 25, 50, 0)  # the quantity can still change
     services.confirm(c, boss)
     assert services.contribution_points(Contribution.objects.get(pk=c.pk)) == 250
+
+
+def test_alerts_can_ping_discord():
+    assert bus.EVENT_TYPES["projects.created"].alert and bus.EVENT_TYPES["projects.created"].manage == "projects.manage_projects"
+    assert not bus.EVENT_TYPES["projects.contribution_delivered"].alert
+    assert not bus.EVENT_TYPES["projects.completed"].alert
+
+
+@pytest.mark.django_db
+def test_managers_set_discord_pings(user, api_client):
+    from conduit.events.models import EventPing
+
+    api_client.force_login(user)
+    assert api_client.call("put", "/api/pings/projects.created", {"ping": True}).status_code == 403
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="projects", codename="manage_projects"))
+    user = type(user).objects.get(pk=user.pk)  # drop the permission cache
+    api_client.force_login(user)
+    resp = api_client.call("put", "/api/pings/projects.created", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="projects.created").roles == ["123"]

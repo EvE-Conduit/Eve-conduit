@@ -359,3 +359,25 @@ def test_group_rules_and_search(people, api_client):
     assert group["hits"][0]["url"] == f"/p/mentors/m/{m.pk}"
     hits = login(api_client, people["stranger"]).call("get", "/api/search?q=new").json()["groups"]
     assert not any(g["key"] == "mentors" for g in hits)
+
+
+def test_alerts_can_ping_discord():
+    assert bus.EVENT_TYPES["mentors.requested"].alert and bus.EVENT_TYPES["mentors.requested"].manage == "mentors.manage_program"
+    assert not bus.EVENT_TYPES["mentors.assigned"].alert
+    assert not bus.EVENT_TYPES["mentors.graduated"].alert
+
+
+@pytest.mark.django_db
+def test_managers_set_discord_pings(user, api_client):
+    from conduit.events.models import EventPing
+
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="mentors", codename="mentor"))
+    user = type(user).objects.get(pk=user.pk)
+    api_client.force_login(user)
+    assert api_client.call("put", "/api/pings/mentors.requested", {"ping": True}).status_code == 403
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="mentors", codename="manage_program"))
+    user = type(user).objects.get(pk=user.pk)  # drop the permission cache
+    api_client.force_login(user)
+    resp = api_client.call("put", "/api/pings/mentors.requested", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="mentors.requested").roles == ["123"]

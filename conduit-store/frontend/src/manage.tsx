@@ -1,6 +1,6 @@
 // Managers (store.manage_store): the items, how points are earned, and giving or taking points by hand.
 import {
-  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, EmptyState, Field, Input, PageHeader, Skeleton,
+  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, DiscordPings, EmptyState, Field, Input, PageHeader, Skeleton,
   Switch, Textarea, timeAgo, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,6 +27,7 @@ export function ManagePage() {
           <div className="space-y-6">
             <Earning settings={data.settings} />
             <Award awards={data.awards} />
+            <DiscordPings plugin="store" />
           </div>
         </div>
       )}

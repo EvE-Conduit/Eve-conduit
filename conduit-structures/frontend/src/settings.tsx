@@ -1,5 +1,5 @@
 // Fuel warnings: the thresholds, who is told, the plan's days and how long claims last (structures.manage_structures).
-import { api, Button, Callout, Card, CardBody, CardHeader, Field, Input, PageHeader, Skeleton, SwitchRow, toast } from "@conduit/sdk";
+import { api, Button, Callout, Card, CardBody, CardHeader, DiscordPings, Field, Input, PageHeader, Skeleton, SwitchRow, toast } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -96,6 +96,7 @@ export function SettingsPage() {
         <div className="lg:col-span-2">
           <Button variant="primary" loading={save.isPending} disabled={!parsed} onClick={() => save.mutate(form)}>Save settings</Button>
         </div>
+        <DiscordPings plugin="structures" className="lg:col-span-2" />
       </div>
     </>
   );

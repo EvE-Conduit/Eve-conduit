@@ -25,7 +25,9 @@ A corp build board: "20 Hurricanes for the deployment", split into items members
   quantity.
 - **Events and webhooks:** `projects.created`, `projects.contribution_delivered` (when a manager confirms a delivery;
   `user_id, user, project_id, project, contribution_id, item, type_id, quantity, points, summary, link`) and
-  `projects.completed`. The Corp Store listens to `projects.contribution_delivered` to pay `points`.
+  `projects.completed`. The Corp Store listens to `projects.contribution_delivered` to pay `points`. A new project
+  can ping Discord: switch it on under Discord pings on the Deliveries page. It needs a Discord webhook under
+  Administration → Integrations; with the Discord plugin linked you also pick roles.
 
-Needs EvE Conduit 0.5.52 or newer. Industry jobs come from the core's character and corporation sheets (the
+Needs EvE Conduit 0.5.55 or newer. Industry jobs come from the core's character and corporation sheets (the
 industry job scopes). Give `projects.manage_projects` to whoever runs projects under Administration → Groups.

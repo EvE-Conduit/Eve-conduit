@@ -599,3 +599,22 @@ def test_numbers_must_be_finite(program, boss, api_client):
         assert resp.status_code == 400, rule
     program.refresh_from_db()
     assert program.hauling_fuel_cost == 0
+
+
+def test_new_contracts_are_a_discord_alert():
+    from conduit.events import bus
+
+    et = bus.EVENT_TYPES["buyback.contract_created"]
+    assert et.alert and et.manage == "buyback.manage_all_programs" and et.plugin == "buyback"
+    assert not bus.EVENT_TYPES["buyback.contract_finished"].alert
+
+
+def test_buyback_admins_switch_on_discord_pings(boss, api_client):
+    from conduit.events.models import EventPing
+
+    api_client.force_login(boss)  # running their own programs isn't enough
+    assert api_client.call("put", "/api/pings/buyback.contract_created", {"ping": True}).status_code == 403
+    api_client.force_login(grant(boss, "manage_all_programs"))
+    resp = api_client.call("put", "/api/pings/buyback.contract_created", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="buyback.contract_created").roles == ["123"]
