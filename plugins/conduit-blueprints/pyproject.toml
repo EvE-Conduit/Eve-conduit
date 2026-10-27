@@ -1,0 +1,29 @@
+[project]
+name = "conduit-blueprints"
+version = "1.0.0"
+description = "Blueprint Library: every corporation blueprint and members' shared originals, copy and loan requests, and what still needs research."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+blueprints = "conduit_blueprints.plugin:BlueprintsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Blueprint Library"
+icon = "scroll"
+category = "Industry"
+min_conduit = "0.5.52"
+esi_scopes = ["esi-corporations.read_blueprints.v1"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_blueprints*"]
+
+[tool.setuptools.package-data]
+conduit_blueprints = ["static/**/*"]

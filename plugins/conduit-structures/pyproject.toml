@@ -1,0 +1,28 @@
+[project]
+name = "conduit-structures"
+version = "1.0.0"
+description = "Structures & Fuel: every structure your corporations own on one board, fuel blocks burned and needed, warnings at the thresholds you choose, and members claiming refuels."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+structures = "conduit_structures.plugin:StructuresPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Structures & Fuel"
+icon = "building"
+category = "Operations"
+min_conduit = "0.5.52"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_structures*"]
+
+[tool.setuptools.package-data]
+conduit_structures = ["static/**/*"]
