@@ -3,6 +3,41 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.53
+
+Ten new plugins: Corp Store, Doctrine Stock, Inactivity, Industry Projects, Structures & Fuel, Spy Check, Capital
+Registry, Corp Finance, Blueprint Library and Planetary Industry.
+
+### Plugins
+- **New plugins** (Administration → Plugins → Browse):
+  - **Corp Store:** members earn points for referrals, fleets, mentoring and industry projects, and spend them in a
+    store officers fill by hand, with a points leaderboard.
+  - **Doctrine Stock:** how many of each ship and item should be for sale at each staging location, what's short
+    from members' and corporations' orders and contracts, members claiming shortages to seed, and low-stock alerts.
+  - **Inactivity:** members who have gone quiet, from site sign-ins, game logins and fleets, a daily digest for HR,
+    leave of absence with approval, and group rules.
+  - **Industry Projects:** a corp build board where members claim parts of a project and mark them delivered for a
+    manager to confirm (paying Corp Store points), with their industry jobs shown as a hint.
+  - **Structures & Fuel:** every corporation's structures on one board with fuel countdowns and the burn of their
+    online services, a fuel plan for topping everything up to a number of days, warnings at chosen thresholds (7, 3
+    and 1 days by default) to chosen groups, "I'm refuelling this" claims and a dashboard widget.
+  - **Spy Check:** a daily scan of members' wallets, market transactions, contracts, mail, contacts and corporation
+    history for dealings with blacklisted (Blacklist plugin) or watched characters, corporations and alliances.
+    Findings can be acknowledged or dismissed, and reviewers get a digest. Reviewers only see the characters their
+    character sheet permissions reach, and opening evidence is logged like Member Audit.
+  - **Capital Registry:** who can fly and who owns each capital class, where the hulls are parked, jump skills,
+    jump clones and fatigue, members marking hulls available for ops, and "can fly" / "owns" group rules.
+  - **Corp Finance:** corporation income and spending per month by category, with internal transfers kept apart,
+    officers' own categories and counterparty tags, balance history per wallet division, a printable monthly report,
+    a CSV journal and a dashboard widget.
+  - **Blueprint Library:** the corporations' BPOs and BPCs with ME/TE, runs and location, members' shared originals,
+    copy and loan requests with overdue reminders, and originals not fully researched. Reads corporation blueprints
+    with a Director's login.
+  - **Planetary Industry:** every colony of a member's characters with extractor countdowns, factories, storage and
+    output with its value, reminders before extractors stop, and a corporation view of products and idle colonies.
+- **Recruitment 1.2.1** and **Mentoring 1.2.1:** the `recruit.application_decided` and `mentors.graduated` events
+  name the referrer and the mentor, so other plugins (the Corp Store) know whom to credit.
+
 ## 0.5.52
 
 Referrals in Recruitment.
