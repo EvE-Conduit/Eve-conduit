@@ -48,7 +48,7 @@ export interface TempUser {
   active: boolean;
 }
 
-export type LinkStatus = "active" | "revoked" | "expired" | "used_up";
+export type LinkStatus = "active" | "revoked" | "expired" | "used_up" | "creator_lost";
 
 export interface TempLink {
   id: number;

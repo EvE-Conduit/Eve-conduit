@@ -68,7 +68,8 @@ export interface MemberRow {
   user_id: number;
   name: string;
   portrait: string | null;
-  character: string;
+  /** Null when it's an alt the viewer may not see on the character sheet. */
+  character: string | null;
   percent: number;
   complete: boolean;
   seconds_left: number;

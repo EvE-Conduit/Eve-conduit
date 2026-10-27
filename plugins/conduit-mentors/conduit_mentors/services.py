@@ -260,6 +260,8 @@ def _event(m: Mentorship, by, text: str, event: str, private: bool = False):
 
 @transaction.atomic
 def request_mentor(user, *, focus=None, note: str = "", play_time: str = "", mentor_id: int | None = None) -> Mentorship:
+    # Lock the new member's row so two requests sent at once (a double click) can't both pass the check below.
+    User.objects.select_for_update().filter(pk=user.pk).first()
     if open_mentorship(user):
         raise MentorError("You already have a mentor or are waiting for one")
     wanted = None
@@ -281,9 +283,12 @@ def request_mentor(user, *, focus=None, note: str = "", play_time: str = "", men
     return m
 
 
+@transaction.atomic
 def withdraw(m: Mentorship, user) -> Mentorship:
     if m.mentee_id != user.pk:
         raise MentorError("Not your request", 403)
+    # Re-read under a lock: a mentor may have just claimed it.
+    m = Mentorship.objects.select_for_update().get(pk=m.pk)
     if m.status != Mentorship.Status.WAITING:
         raise MentorError("Only a request still waiting for a mentor can be withdrawn")
     m.status, m.ended_at, m.ended_by, m.end_reason = Mentorship.Status.ENDED, timezone.now(), user, "Withdrawn"
@@ -293,8 +298,12 @@ def withdraw(m: Mentorship, user) -> Mentorship:
 
 
 @transaction.atomic
-def assign(m: Mentorship, mentor, by, request=None) -> Mentorship:
-    """Make ``mentor`` the mentor. Mentors claiming for themselves must have a free place; managers may go over."""
+def assign(m: Mentorship, mentor, by, request=None, *, claim: bool = False) -> Mentorship:
+    """Make ``mentor`` the mentor. Mentors claiming for themselves must have a free place; managers may go over.
+
+    ``claim``: a mentor taking a waiting request (the Claim button). It, and anyone who isn't a manager, is refused
+    once the request has a mentor, so two mentors claiming at the same moment can't have the second quietly take it
+    over. Only a manager's Assign hands a mentee to another mentor on purpose."""
     m = Mentorship.objects.select_for_update().get(pk=m.pk)
     if not m.is_open:
         raise MentorError("This mentorship has ended")
@@ -304,6 +313,8 @@ def assign(m: Mentorship, mentor, by, request=None) -> Mentorship:
         raise MentorError(f"{mentor.display_name} isn't a mentor")
     if m.mentor_id == mentor.pk:
         raise MentorError(f"{mentor.display_name} is already the mentor")
+    if (claim or not can_manage(by)) and (m.status != Mentorship.Status.WAITING or m.mentor_id):
+        raise MentorError("Someone already took this request")
     if not can_manage(by):
         profile_for(mentor)
         # Lock the mentor's profile so claims sent at the same moment can't all pass the capacity check.

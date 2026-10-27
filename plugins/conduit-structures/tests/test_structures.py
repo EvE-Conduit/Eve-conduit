@@ -264,6 +264,21 @@ def test_claims_run_out_and_can_be_dropped(setup, corp, api_client):
     assert services.check()["expired_claims"] == 1
 
 
+def test_warnings_dont_name_claims_that_ran_out(setup, corp, api_client, events):
+    viewer, _ = setup
+    other = corp_perm(make_user(90000004, "Hauler Hal", corporation=corp))
+    structure(corp, 1, 100)
+    for who in (viewer, other):
+        api_client.force_login(who)
+        api_client.call("post", f"{BASE}/structures/1/claim", {})
+    Claim.objects.filter(user=viewer).update(expires_at=timezone.now() - timedelta(minutes=1))
+    out = services.check()
+    assert out["warnings"] == 1 and out["expired_claims"] == 1
+    low = [e[1] for e in events if e[0] == "structures.fuel_low"][-1]
+    assert low["claimed_by"] == ["Hauler Hal"]
+    assert "Fuel Fred" not in Notification.objects.get(user=other, title__contains="fuel").body
+
+
 # --- who may see what -----------------------------------------------------------------------------------------------
 
 

@@ -247,8 +247,29 @@ def _admin_permission_problem(payload: "GroupIn", join_mode: str) -> str | None:
             "Remove those permissions, or make it a closed group without leaders or rules.")
 
 
+def _admin_permissions_lacking(actor, group: Group, wanted: list[str] = ()) -> list[str]:
+    """Administrator permissions ``group`` grants now or would grant (``wanted``) that ``actor`` doesn't hold.
+
+    Changing or deleting such a group, or its members, would hand out or take away power the actor doesn't have
+    themselves (managing access, say, turned into managing plugins), so that is left to someone who holds it.
+    """
+    from .services import admin_permissions_in
+
+    perms = set(ADMIN_PERMISSIONS & set(wanted))
+    if group.pk:
+        perms |= set(admin_permissions_in(group.permissions.all()))
+    return sorted(p for p in perms if not groups.holds_all(actor, [p]))
+
+
+def _refuse_admin_group_change(actor, group: Group, wanted: list[str] = ()):
+    lacking = _admin_permissions_lacking(actor, group, wanted)
+    if lacking:
+        raise HttpError(403, f"{group.name or 'This group'} grants administrator permissions you don't hold "
+                             f"({', '.join(lacking)}); an administrator who holds them has to do this")
+
+
 @transaction.atomic
-def _save_group(group: Group, payload: GroupIn) -> Group:
+def _save_group(group: Group, payload: GroupIn, actor) -> Group:
     join_mode = payload.join_mode or ("open" if payload.joinable else "closed")
     leave_mode = payload.leave_mode or ("open" if payload.joinable else "closed")
     if join_mode not in GroupProfile.JoinMode.values:
@@ -262,6 +283,7 @@ def _save_group(group: Group, payload: GroupIn) -> Group:
         raise HttpError(400, str(exc)) from None
     if payload.auto and not ruleset:
         raise HttpError(400, "A smart group needs at least one rule")
+    _refuse_admin_group_change(actor, group, payload.permissions)
     problem = _admin_permission_problem(payload, join_mode)
     if problem:
         raise HttpError(400, problem)
@@ -299,7 +321,7 @@ def list_groups(request):
 @router.post("/groups", response=GroupOut)
 @require_perm("site.manage_access")
 def create_group(request, payload: GroupIn):
-    group = _save_group(Group(), payload)
+    group = _save_group(Group(), payload, request.user)
     record("group.created", f"created group {group.name}", request=request, target=group, details=payload.dict())
     return _group_out(group)
 
@@ -307,7 +329,7 @@ def create_group(request, payload: GroupIn):
 @router.put("/groups/{group_id}", response=GroupOut)
 @require_perm("site.manage_access")
 def update_group(request, group_id: int, payload: GroupIn):
-    group = _save_group(get_object_or_404(Group, pk=group_id), payload)
+    group = _save_group(get_object_or_404(Group, pk=group_id), payload, request.user)
     record("group.updated", f"changed group {group.name}", request=request, target=group, details=payload.dict())
     return _group_out(group)
 
@@ -316,6 +338,7 @@ def update_group(request, group_id: int, payload: GroupIn):
 @require_perm("site.manage_access")
 def delete_group(request, group_id: int):
     group = get_object_or_404(Group, pk=group_id)
+    _refuse_admin_group_change(request.user, group)
     record("group.deleted", f"deleted group {group.name}", request=request, target=group)
     group.delete()
     return {"ok": True}
@@ -331,7 +354,10 @@ def add_member(request, group_id: int, user_id: int):
         raise HttpError(400, "Membership of a smart group is managed by its rules")
     if profile and not profile.allows(user):
         raise HttpError(400, "That user's state is not allowed in this group")
-    groups.add_member(user, group, "admin", request=request)
+    try:
+        groups.add_member(user, group, "admin", request=request)
+    except groups.GroupError as exc:
+        raise HttpError(exc.status, str(exc)) from None
     return {"ok": True}
 
 
@@ -340,7 +366,10 @@ def add_member(request, group_id: int, user_id: int):
 def remove_member(request, group_id: int, user_id: int):
     user = get_object_or_404(User, pk=user_id)
     group = get_object_or_404(Group, pk=group_id)
-    groups.remove_member(user, group, "admin", request=request)
+    try:
+        groups.remove_member(user, group, "admin", request=request)
+    except groups.GroupError as exc:
+        raise HttpError(exc.status, str(exc)) from None
     return {"ok": True}
 
 

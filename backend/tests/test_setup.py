@@ -48,6 +48,7 @@ def test_start_page_must_be_on_the_site(admin_user, api_client):
     base = {"name": "Brave Auth", "accent": "#f59e0b"}
     assert api_client.call("put", "/api/admin/site", {**base, "start_page": "https://evil.example"}).status_code in (400, 422)
     assert api_client.call("put", "/api/admin/site", {**base, "start_page": "//evil.example"}).status_code in (400, 422)
+    assert api_client.call("put", "/api/admin/site", {**base, "start_page": "/\t/evil.example"}).status_code in (400, 422)
     resp = api_client.call("put", "/api/admin/site", {**base, "start_page": "/p/news"})
     assert resp.status_code == 200 and resp.json()["start_page"] == "/p/news"
 
@@ -150,6 +151,7 @@ def test_sidebar_links(admin_user, api_client, client):
         {"label": "Evil", "url": "javascript:alert(1)"},
         {"label": "Plain", "url": "http://example.com"},
         {"label": "Other site", "url": "//evil.example"},
+        {"label": "Tabbed", "url": "/\t/evil.example"},
         {"label": "", "url": "https://example.com"},
         {"label": "Blank", "url": "   "},
     ],

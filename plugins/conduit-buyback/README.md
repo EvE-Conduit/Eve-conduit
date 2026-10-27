@@ -26,12 +26,13 @@ the description, and every contract is checked against its quote before you acce
   programs that go to the corporation). Contracts carrying a tracking number or the program's prefix are matched to
   their quote and checked: missing or extra items, items asked for in return, a higher (or lower) price, the wrong
   location, made out to the wrong character or corporation, extra text in the title, a tracking number used twice,
-  watched items, and prefixes without a quote behind them (imitations). Managers are notified of new contracts,
+  watched items, a quote that had expired (each program sets how long quotes are good for, 7 days by default; 0 for
+  no limit), and prefixes without a quote behind them (imitations). Managers are notified of new contracts,
   with a warning when something's wrong.
 - **Running programs** (permission `buyback.manage_programs`): create programs owned by one of your characters (its
   login reads the contracts), pick locations, managers, states and groups, and see each program's open contracts
   with their checks, what was bought per month, top sellers, the most bought items and the corporation wallet
-  division's balance. **Check now** reads the contracts straight away.
+  division's balance (for those who may see that corporation's wallets on the corporation sheet). **Check now** reads the contracts straight away.
 - **Locations**: a name, a solar system and optionally the station or structure id, which makes contracts made
   anywhere else stand out. Known stations and structures can be picked by name.
 - **Public programs**: a program marked public gives quotes to anyone at `/public/p/buyback/<id>`, without an

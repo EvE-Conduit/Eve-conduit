@@ -7,6 +7,8 @@ from conduit.sheet.locations import resolve
 from ..models import CorporationMember
 from .common import has, parse_dt
 
+FIELDS = ["start_date", "logon_date", "logoff_date", "location_id", "ship_type_id", "base_id", "roles", "titles", "tracked"]
+
 
 def _optional(fn):
     try:
@@ -31,9 +33,10 @@ def sync(corporation, character, esi):
     with transaction.atomic():
         CorporationMember.objects.filter(corporation=corporation).exclude(character_id__in=ids).delete()
         existing = {m.character_id: m for m in CorporationMember.objects.filter(corporation=corporation)}
-        new = []
+        new, changed = [], []
         for char_id in ids:
             m = existing.get(char_id) or CorporationMember(corporation=corporation, character_id=char_id)
+            before = [getattr(m, f) for f in FIELDS]
             t = tracking.get(char_id)
             m.tracked = t is not None
             if t:
@@ -45,10 +48,12 @@ def sync(corporation, character, esi):
                 m.base_id = t.get("base_id")
             m.roles = sorted(roles.get(char_id, []))
             m.titles = titles.get(char_id, [])
-            if m.pk:
-                m.save()
-            else:
+            if not m.pk:
                 new.append(m)
+            elif [getattr(m, f) for f in FIELDS] != before:
+                changed.append(m)
         CorporationMember.objects.bulk_create(new, batch_size=1000)
+        # Only the members whose data moved: most of a big corp is the same from one sync to the next.
+        CorporationMember.objects.bulk_update(changed, FIELDS, batch_size=500)
     ensure_eve_names(ids)
     resolve({t.get("location_id") for t in tracking.values()} - {None}, character=character, client=esi)

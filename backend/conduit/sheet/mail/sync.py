@@ -1,6 +1,7 @@
 from django.db import transaction
+from django.db.models import F
 
-from conduit.esi.exceptions import EsiError
+from conduit.esi.exceptions import EsiBackoff, EsiError
 from conduit.eve.models import EveName
 from conduit.eve.tasks import ensure_eve_names
 from conduit.sheet.text import plain_text
@@ -11,6 +12,8 @@ from .models import Mail, MailLabel
 
 HEADER_PAGES = 10  # 50 mails per page
 BODY_FETCH_LIMIT = 50
+#: Failed fetches after which a mail's body is no longer asked for.
+MAX_FETCH_FAILURES = 5
 
 
 def sync(character, esi):
@@ -67,11 +70,21 @@ def sync(character, esi):
             update_fields=["is_read", "labels"],
         )
 
-    for mail in Mail.objects.filter(character=character, body_fetched=False)[:BODY_FETCH_LIMIT]:
+    # Fewest failures first, so a body ESI keeps refusing can't hold up the others; give up after a few.
+    pending = (
+        Mail.objects.filter(character=character, body_fetched=False, fetch_failures__lt=MAX_FETCH_FAILURES)
+        .order_by("fetch_failures", "-timestamp", "mail_id")[:BODY_FETCH_LIMIT]
+    )
+    for mail in pending:
         try:
             data = esi.get(f"/characters/{cid}/mail/{mail.mail_id}", character=character).data
+        except EsiBackoff:
+            break  # the rest wait for the next sync; the headers are already saved
         except EsiError as exc:
             if exc.status != 404:
+                Mail.objects.filter(pk=mail.pk).update(fetch_failures=F("fetch_failures") + 1)
+                if exc.status == 0 or exc.status >= 500:
+                    break  # ESI is in trouble: don't burn its shared error limit on the rest
                 continue
             data = {}
         mail.body = plain_text(data.get("body"))

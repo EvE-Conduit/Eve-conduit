@@ -1,5 +1,6 @@
 """Mounted at /api/p/buyback/. Only reachable while the plugin is enabled."""
 
+import math
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
@@ -94,7 +95,7 @@ def manage(request):
     qs = Program.objects.all() if request.user.has_perm("buyback.view_all_statistics") else services.managed(request.user)
     out = []
     for p in qs.select_related("owner__corporation", "owner__token"):
-        stats = services.statistics(p)
+        stats = services.statistics(p, request.user)
         out.append({"id": p.pk, "name": p.name, "active": p.active, "public": p.public, "can_manage": services.can_manage(request.user, p),
                     **{k: stats[k] for k in ("open", "open_value", "problems", "month_value", "month_count", "total_value", "wallet", "owner")}})
     return {"programs": out, "can_create": services.can_create(request.user), "manages_all": services.manages_all(request.user)}
@@ -130,6 +131,7 @@ class ProgramIn(Schema):
     location_ids: list[int]
     manager_ids: list[int] = []
     expiration_days: int = 14
+    quote_valid_days: int = 7
     price_type: str = "buy"
     tax: float = 10
     hauling_fuel_cost: float = 0
@@ -161,10 +163,17 @@ class ProgramIn(Schema):
 def _program_data(payload: ProgramIn) -> dict:
     if payload.price_type not in Program.PriceType.values:
         raise HttpError(400, "Unknown price type")
+    numbers = ("tax", "hauling_fuel_cost", "price_density_threshold", "price_density_tax", "refining_rate", "t1_refining_rate")
+    if not all(math.isfinite(getattr(payload, f)) for f in numbers):
+        raise HttpError(400, "Enter numbers, not NaN or infinity")
     if min(payload.hauling_fuel_cost, payload.price_density_threshold) < 0:
         raise HttpError(400, "Costs can't be negative")
+    if payload.hauling_fuel_cost > services.MAX_FUEL_COST:
+        raise HttpError(400, f"The hauling cost goes up to {services.MAX_FUEL_COST:,} ISK per m³")
+    if payload.price_density_threshold > services.MAX_DENSITY_THRESHOLD:
+        raise HttpError(400, f"The density threshold goes up to {services.MAX_DENSITY_THRESHOLD:,} ISK per m³")
     data = payload.model_dump()
-    for f in ("tax", "hauling_fuel_cost", "price_density_threshold", "price_density_tax", "refining_rate", "t1_refining_rate"):
+    for f in numbers:
         data[f] = Decimal(str(round(data[f], 2)))
     return data
 
@@ -228,7 +237,7 @@ def _stats_program(request, program_id: int) -> Program:
 @router.get("/manage/programs/{program_id}/stats")
 def stats(request, program_id: int):
     p = _stats_program(request, program_id)
-    return {"program": {"id": p.pk, "name": p.name, "can_manage": services.can_manage(request.user, p)}, **services.statistics(p),
+    return {"program": {"id": p.pk, "name": p.name, "can_manage": services.can_manage(request.user, p)}, **services.statistics(p, request.user),
             "leaderboard": services.leaderboard(p)}
 
 

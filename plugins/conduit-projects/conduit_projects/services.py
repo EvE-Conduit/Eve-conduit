@@ -28,6 +28,9 @@ from .models import Contribution, Item, Project
 MANAGE_PERM = "projects.manage_projects"
 MAX_ITEMS = 200
 MAX_QUANTITY = 2_000_000_000
+#: The most Corp Store points one item pays per unit, and one confirmed delivery pays in all. The same as the Corp
+#: Store's own limit for one award (``conduit_store.services.MAX_POINTS``); the store isn't imported, it's optional.
+MAX_POINTS = 1_000_000
 MAX_PASTE_LINES = 500
 #: Manufacturing and reactions: the activities that make an item.
 MAKING = (1, 9, 11)
@@ -208,9 +211,24 @@ def _isk(value) -> Decimal:
         d = Decimal(str(value or 0))
     except InvalidOperation:
         raise ProjectError("The ISK per unit must be a number") from None
-    if d < 0 or d >= Decimal("1e17"):
+    if not d.is_finite() or d < 0 or d >= Decimal("1e17"):
         raise ProjectError("The ISK per unit is out of range")
     return d.quantize(Decimal("0.01"))
+
+
+def _points(value) -> int:
+    try:
+        n = int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        raise ProjectError("The points per unit must be a whole number") from None
+    if not 0 <= n <= MAX_POINTS:
+        raise ProjectError(f"The points per unit must be between 0 and {MAX_POINTS:,}")
+    return n
+
+
+def contribution_points(c: Contribution) -> int:
+    """The Corp Store points a delivery pays: units × points per unit, at most ``MAX_POINTS``."""
+    return min(c.quantity * c.item.points_per_unit, MAX_POINTS)
 
 
 def _require_open(project: Project) -> None:
@@ -231,7 +249,7 @@ def add_item(project: Project, type_id: int, quantity, points_per_unit=0, isk_pe
     _require_open(project)
     t = _item_type(type_id)
     quantity = _quantity(quantity)
-    points = _quantity(points_per_unit, "points per unit", 0)
+    points = _points(points_per_unit)
     isk = _isk(isk_per_unit)
     existing = project.items.filter(type_id=t.pk).first()
     if existing:
@@ -251,8 +269,13 @@ def update_item(item: Item, quantity, points_per_unit, isk_per_unit) -> Item:
     if quantity < taken["confirmed"] + taken["claimed"]:
         raise ProjectError(f"{taken['confirmed'] + taken['claimed']:,} of these are claimed or delivered already; "
                            "it can't need fewer than that")
+    points = _points(points_per_unit)
+    if points != item.points_per_unit and taken["delivered"]:
+        # Members delivered on the points shown when they did; confirm or send those back before changing them.
+        raise ProjectError(f"{taken['delivered']:,} of these are delivered and waiting for a manager; confirm or send them "
+                           "back before changing the points")
     item.quantity = quantity
-    item.points_per_unit = _quantity(points_per_unit, "points per unit", 0)
+    item.points_per_unit = points
     item.isk_per_unit = _isk(isk_per_unit)
     item.save(update_fields=["quantity", "points_per_unit", "isk_per_unit"])
     return item
@@ -421,17 +444,21 @@ def confirm(c: Contribution, by, request=None) -> Contribution:
     c = Contribution.objects.select_for_update().select_related("item__project", "user").get(pk=c.pk)
     if c.status == Contribution.Status.CONFIRMED:
         raise ProjectError("This delivery is confirmed already")
+    if c.status != Contribution.Status.DELIVERED:
+        raise ProjectError("Only a delivery the member marked delivered can be confirmed")
     if c.user_id == by.pk:
         # Confirming pays Corp Store points; nobody pays themselves.
         raise ProjectError("Another manager has to confirm your own delivery", 403)
     project = c.item.project
+    if project.status != Project.Status.OPEN:
+        raise ProjectError("This project is closed; reopen it to confirm deliveries")
     c.status = Contribution.Status.CONFIRMED
     c.confirmed_at = timezone.now()
     c.delivered_at = c.delivered_at or c.confirmed_at
     c.reviewed_by = by
     c.review_note = ""
     c.save(update_fields=["status", "confirmed_at", "delivered_at", "reviewed_by", "review_note"])
-    points = c.quantity * c.item.points_per_unit
+    points = contribution_points(c)
     what = f"{c.quantity:,} × {c.item.name}"
     notify(c.user_id, f"Delivery confirmed: {what}", f"{project.name}" + (f" · {points:,} points" if points else ""),
            link=_link(project), level="success", category="p.projects")
@@ -611,7 +638,7 @@ def project_out(p: Project, user) -> dict:
         t = totals.setdefault(c.user_id, {"user": _person(c.user), "confirmed_units": 0, "open_units": 0, "points": 0})
         if c.status == Contribution.Status.CONFIRMED:
             t["confirmed_units"] += c.quantity
-            t["points"] += c.quantity * c.item.points_per_unit
+            t["points"] += contribution_points(c)
         else:
             t["open_units"] += c.quantity
     out["contributors"] = sorted(totals.values(), key=lambda t: (-t["points"], -t["confirmed_units"], t["user"]["name"]))
@@ -630,7 +657,7 @@ def my_contributions(user) -> dict:
         row["item"] = c.item.name
         row["type_id"] = c.item.type_id
         row["project"] = {"id": c.item.project_id, "name": c.item.project.name, "status": c.item.project.status}
-        row["points"] = c.quantity * c.item.points_per_unit
+        row["points"] = contribution_points(c)
         out.append(row)
     confirmed = [r for r in out if r["status"] == Contribution.Status.CONFIRMED]
     return {
@@ -656,6 +683,6 @@ def queue(status: str = "delivered") -> list[dict]:
         row["item"] = c.item.name
         row["type_id"] = c.item.type_id
         row["project"] = {"id": c.item.project_id, "name": c.item.project.name, "location": c.item.project.location}
-        row["points"] = c.quantity * c.item.points_per_unit
+        row["points"] = contribution_points(c)
         out.append(row)
     return out

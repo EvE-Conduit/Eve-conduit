@@ -10,6 +10,10 @@ registered group, and the ones it gave a member before (so a group whose mapping
 Groups given by hand on the server stay as they are. A member gets the managed groups of every group they're in and
 of their state, as long as they have ``teamspeak.access_teamspeak``; without it they lose the managed groups, or are
 kicked off the server too when the admins chose that.
+
+The key hands out the registered group on the server the moment it's used, before the site sees it. So a pending
+link that's replaced, given up, expired or refused takes the group away again from whoever used its key, and the full
+sync does the same for any stamped identity no link accounts for. Identities the site never stamped keep it.
 """
 
 from __future__ import annotations
@@ -194,6 +198,44 @@ def server_check(s: TeamSpeakSettings | None = None) -> dict:
 # --- syncing -------------------------------------------------------------------------------------------------------
 
 
+def _strip_stamped(client: ts3.Client, s: TeamSpeakSettings, hits: list[dict], linked: set[int]) -> int:
+    """Identities that used one of the site's keys but aren't linked to a member: take the registered group the key
+    gave them away again, and the stamp. Linked identities keep their groups (their own sync looks after them)."""
+    done = 0
+    for h in hits:
+        cldbid = int(h["cldbid"])
+        if cldbid in linked:
+            continue
+        if s.registered_sgid:
+            client.servergroupdelclient(s.registered_sgid, cldbid)
+        client.customdelete(cldbid, CUSTOM_IDENT)
+        done += 1
+    return done
+
+
+def _linked_cldbids() -> set[int]:
+    return set(TeamSpeakUser.objects.filter(cldbid__isnull=False).values_list("cldbid", flat=True))
+
+
+def revoke_pending(client: ts3.Client, acct: TeamSpeakUser, s: TeamSpeakSettings) -> None:
+    """A pending link replaced, given up or expired: delete its key, and if somebody used it already, take the
+    registered group the key gave them away (the key hands it out on the server, before the site ever sees it)."""
+    if acct.privilege_key:
+        client.privilegekeydelete(acct.privilege_key)
+    if acct.verify_code:
+        hits = [h for h in client.customsearch(CUSTOM_IDENT, acct.verify_code) if h.get("value") == acct.verify_code]
+        _strip_stamped(client, s, hits, _linked_cldbids())
+
+
+def sweep_stamped(client: ts3.Client, s: TeamSpeakSettings) -> int:
+    """Identities still stamped by one of the site's keys that belong to no link and no pending link (say a link
+    forgotten with ``force`` while the server was down): take the registered group and the stamp away. Identities
+    the site never stamped are left alone, so the registered group given by hand stays."""
+    pending = set(TeamSpeakUser.objects.filter(cldbid__isnull=True).exclude(verify_code="").values_list("verify_code", flat=True))
+    hits = [h for h in client.customsearch(CUSTOM_IDENT, "%") if h.get("value") not in pending]
+    return _strip_stamped(client, s, hits, _linked_cldbids())
+
+
 def _set_status(acct: TeamSpeakUser, error: str = "", **fields) -> None:
     acct.sync_error = error[:300]
     acct.synced_at = timezone.now()
@@ -291,10 +333,10 @@ def sync_all() -> dict:
                 else:
                     synced += 1
             for acct in TeamSpeakUser.objects.filter(cldbid__isnull=True, created_at__lt=timezone.now() - PENDING_MAX_AGE):
-                if acct.privilege_key:
-                    client.privilegekeydelete(acct.privilege_key)
+                revoke_pending(client, acct, s)
                 acct.delete()
                 expired += 1
+            sweep_stamped(client, s)
     except ts3.QueryError as exc:
         # The session itself failed (sync_user keeps per-member errors to itself): the rest didn't get their turn.
         log.warning("TeamSpeak full sync stopped: %s", exc)
@@ -322,8 +364,8 @@ def start_link(user, s: TeamSpeakSettings | None = None) -> TeamSpeakUser:
     try:
         with connect(s) as client:
             registered = ensure_registered_group(client, s)
-            if acct is not None and acct.privilege_key:
-                client.privilegekeydelete(acct.privilege_key)
+            if acct is not None:
+                revoke_pending(client, acct, s)
             key = client.privilegekeyadd(registered, f"EvE Conduit: {nickname_for(user, s)}", CUSTOM_IDENT, code)
     except ts3.QueryError as exc:
         raise TeamSpeakError(f"Couldn't make your key on the server: {explain(exc)}", 502) from None
@@ -341,6 +383,15 @@ def check_link(user, s: TeamSpeakSettings | None = None) -> bool:
     if acct is None or not acct.pending:
         raise TeamSpeakError("You haven't started linking", 404)
     if not has_access(user):
+        # Lost access while the link was pending: the key may have been used already (and given the registered
+        # group), so undo that and give the link up.
+        try:
+            with connect(s) as client:
+                revoke_pending(client, acct, s)
+        except (ts3.QueryError, TeamSpeakError) as exc:
+            log.warning("Couldn't revoke the pending TeamSpeak link of %s: %s", user, exc)  # the daily expiry retries
+        else:
+            acct.delete()
         raise TeamSpeakError("You don't have access to TeamSpeak", 403)
     try:
         with connect(s) as client:
@@ -405,8 +456,7 @@ def unlink(user, *, reason: str = "", notify_user: bool = True, force: bool = Fa
         try:
             with connect(s) as client:
                 if acct.pending:
-                    if acct.privilege_key:
-                        client.privilegekeydelete(acct.privilege_key)
+                    revoke_pending(client, acct, s)
                 else:
                     managed = set(GroupMapping.objects.values_list("sgid", flat=True)) | set(acct.groups) | ({s.registered_sgid} if s.registered_sgid else set())
                     for sgid in sorted(client.servergroups_of(acct.cldbid) & managed):

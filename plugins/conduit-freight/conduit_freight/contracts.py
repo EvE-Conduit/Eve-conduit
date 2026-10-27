@@ -133,9 +133,17 @@ def sync_owner(character_id: int, client=None) -> dict:
     if not rows:
         return {"seen": 0, "new": 0}
 
+    own = {s.pk for s in services}
     touched = []
     for row in rows:
         c = known.get(row["contract_id"])
+        theirs = c is not None and c.service_id is not None and c.service_id not in own
+        mine = by_assignee.get(row["assignee_id"]) or services
+        if theirs and (c.route_id or not any(match_route(s, row.get("start_location_id"), row.get("end_location_id"), systems)
+                                             for s in mine)):
+            # Another owner's service in the same corporation: its owner's sync looks after it, unless it runs none of
+            # that service's routes but one of ours. Otherwise the two syncs would take it from each other in turn.
+            continue
         created = c is None
         old_status = None if created else c.status
         c = c or Contract(contract_id=row["contract_id"])
@@ -156,7 +164,7 @@ def sync_owner(character_id: int, client=None) -> dict:
         c.date_expired = _dt(row.get("date_expired"))
         c.date_accepted = _dt(row.get("date_accepted"))
         c.date_completed = _dt(row.get("date_completed"))
-        candidates = by_assignee.get(c.assignee_id) or ([c.service] if c.service_id else services)
+        candidates = mine if theirs else by_assignee.get(c.assignee_id) or ([c.service] if c.service_id else services)
         route = None
         for s in candidates:
             route = match_route(s, c.start_location_id, c.end_location_id, systems)

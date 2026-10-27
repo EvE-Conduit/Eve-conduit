@@ -18,7 +18,7 @@ from conduit.access.models import GroupProfile
 from conduit.access.services import recompute_user_state
 
 from .models import Character, Token, User
-from .services import _new_username
+from .services import create_user
 
 #: Saved as the expiry of imported tokens, so the first use refreshes them.
 EXPIRED = datetime(2000, 1, 1, tzinfo=dt_timezone.utc)
@@ -48,12 +48,22 @@ def wanted_scopes() -> set[str]:
     return set(required_scopes())
 
 
+def _sold(here: Character, seat: SeatCharacter) -> bool:
+    """Whether the two systems know the character under different owners (sold since one of them last saw it)."""
+    return bool(here.owner_hash and seat.owner_hash and here.owner_hash != seat.owner_hash)
+
+
 def _target_user(seat_user: SeatUser, existing: dict[int, Character]) -> User | None:
-    """The account this SeAT user lands in: whoever owns their main here, else whoever owns any of their characters."""
-    main = existing.get(seat_user.main_character_id)
+    """The account this SeAT user lands in: whoever owns their main here, else whoever owns any of their characters.
+
+    Only characters with the same owner on both sides count: an alt sold to someone who registered it here must not
+    pull the seller's main and alts into the buyer's account.
+    """
+    same_owner = {c.id: existing[c.id] for c in seat_user.characters if c.id in existing and not _sold(existing[c.id], c)}
+    main = same_owner.get(seat_user.main_character_id)
     if main is not None:
         return main.user
-    return next((c.user for c in existing.values()), None)
+    return next((c.user for c in same_owner.values()), None)
 
 
 def preview(users: list[SeatUser]) -> list[dict]:
@@ -70,10 +80,10 @@ def preview(users: list[SeatUser]) -> list[dict]:
             here = existing.get(c.id)
             if here is None:
                 status = "new"
+            elif _sold(here, c):
+                status = "owner_changed"
             elif target is not None and here.user_id != target.pk:
                 status = "other_account"
-            elif here.owner_hash and c.owner_hash and here.owner_hash != c.owner_hash:
-                status = "owner_changed"
             elif not hasattr(here, "token") or not here.token.valid:
                 status = "token_replaced"
             else:
@@ -94,7 +104,7 @@ def import_user(u: SeatUser) -> dict:
     user = _target_user(u, existing)
     created = user is None
     if created:
-        user = User.objects.create(username=_new_username(u.main_character_id))
+        user = create_user(u.main_character_id)
 
     result = {"seat_id": u.seat_id, "user_id": user.pk, "created": created, "characters": []}
     for c in u.characters:
@@ -102,12 +112,12 @@ def import_user(u: SeatUser) -> dict:
         if here is None:
             here = Character.objects.create(id=c.id, name=c.name, owner_hash=c.owner_hash, user=user)
             status = "added"
-        elif here.user_id != user.pk:
-            result["characters"].append({"id": c.id, "status": "other_account"})
-            continue
-        elif here.owner_hash and c.owner_hash and here.owner_hash != c.owner_hash:
+        elif _sold(here, c):
             # Sold since one of the two systems last saw it; keep what this site has.
             result["characters"].append({"id": c.id, "status": "owner_changed"})
+            continue
+        elif here.user_id != user.pk:
+            result["characters"].append({"id": c.id, "status": "other_account"})
             continue
         else:
             status = "exists"

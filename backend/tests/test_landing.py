@@ -45,6 +45,8 @@ def test_admin_edits_and_resets_landing(admin_user, user, api_client):
 @pytest.mark.parametrize("patch", [
     {"buttons": [{"label": "Bad", "link": "javascript:alert(1)", "style": "primary"}]},
     {"buttons": [{"label": "Bad", "link": "//evil.example", "style": "primary"}]},
+    {"buttons": [{"label": "Bad", "link": "/\t/evil.example", "style": "primary"}]},
+    {"cards": [{"icon": "box", "title": "x", "text": "", "link": "/\n/evil.example"}]},
     {"cards": [{"icon": "box", "title": "x", "text": "", "link": "http://plain.example"}]},
     {"hero": {"title": "x", "image_url": "http://plain.example/a.png"}},
     {"cards": [{"icon": "box", "title": "x"}] * 13},

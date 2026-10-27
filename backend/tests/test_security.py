@@ -249,6 +249,46 @@ def test_admin_permission_groups_cannot_be_handed_out(admin_user, user, api_clie
 
 
 @pytest.fixture
+def plugins_group(db):
+    """A closed group (no leaders, no rules) granting manage_plugins and manage_access."""
+    group = Group.objects.create(name="Plugin admins")
+    group.permissions.add(*Permission.objects.filter(codename__in=["manage_plugins", "manage_access"]))
+    GroupProfile.objects.create(group=group, join_mode="closed")
+    return group
+
+
+@pytest.mark.django_db
+def test_managing_access_cannot_hand_out_admin_permissions_it_lacks(plugins_group, user, admin_user, api_client):
+    officer = grant(make_user(90000030, "Officer"), "manage_access")
+    holder = grant(make_user(90000031, "Plugin Admin"), "manage_access", "manage_plugins")
+    holder.groups.add(plugins_group)
+    api_client.force_login(officer)
+    for target in (officer, user):  # neither themselves nor anyone else
+        resp = api_client.call("post", f"/api/admin/groups/{plugins_group.pk}/members/{target.pk}")
+        assert resp.status_code == 403 and "site.manage_plugins" in resp.json()["detail"]
+        assert not target.groups.filter(pk=plugins_group.pk).exists()
+    # Nor take it away, edit the group, or delete it.
+    assert api_client.call("delete", f"/api/admin/groups/{plugins_group.pk}/members/{holder.pk}").status_code == 403
+    assert api_client.call("put", f"/api/admin/groups/{plugins_group.pk}", {"name": "Plugin admins"}).status_code == 403
+    assert api_client.call("delete", f"/api/admin/groups/{plugins_group.pk}").status_code == 403
+    assert holder.groups.filter(pk=plugins_group.pk).exists() and Group.objects.filter(pk=plugins_group.pk).exists()
+    # Nor make a new group granting it, or give one of their groups it.
+    resp = api_client.call("post", "/api/admin/groups", {"name": "Mine", "permissions": ["site.manage_plugins"]})
+    assert resp.status_code == 403 and "site.manage_plugins" in resp.json()["detail"]
+    mine = api_client.call("post", "/api/admin/groups", {"name": "Mine", "permissions": ["site.manage_access"]})
+    assert mine.status_code == 200  # an administrator permission they hold themselves is fine
+    resp = api_client.call("put", f"/api/admin/groups/{mine.json()['id']}",
+                           {"name": "Mine", "permissions": ["site.manage_access", "site.manage_plugins"]})
+    assert resp.status_code == 403
+    # Someone holding every permission the group grants may, and superusers always.
+    api_client.force_login(holder)
+    assert api_client.call("post", f"/api/admin/groups/{plugins_group.pk}/members/{user.pk}").status_code == 200
+    api_client.force_login(admin_user)
+    assert api_client.call("post", f"/api/admin/groups/{plugins_group.pk}/members/{officer.pk}").status_code == 200
+    assert api_client.call("delete", f"/api/admin/groups/{plugins_group.pk}/members/{holder.pk}").status_code == 200
+
+
+@pytest.fixture
 def legacy_admin_group(db):
     """A group saved before the rule existed: open, led, and granting manage_access."""
     group = Group.objects.create(name="Old officers")
@@ -291,6 +331,9 @@ def test_api_keys_cannot_fill_admin_groups_or_states(client, user, legacy_admin_
 @pytest.mark.parametrize("link,kept", [
     ("/groups", True), ("https://zkillboard.com/", True), ("javascript:alert(1)", False), ("//evil.example", False),
     ("/\\evil.example", False), ("http://plain.example", False), ("data:text/html,x", False),
+    # Browsers drop tabs and newlines from URLs, so each of these would open //evil.example.
+    ("/\t/evil.example", False), ("/\r/evil.example", False), ("/\n/evil.example", False), ("/\x00/evil.example", False),
+    ("/ /evil.example", False), ("/groups\x7f", False),
 ])
 def test_notify_drops_unsafe_links(user, link, kept):
     n = notify(user, "x", link=link)[0]
@@ -312,6 +355,7 @@ def test_external_links_need_their_own_scope(client, user):
 
     assert post(plain, body).status_code == 403
     assert post(plain, {**body, "link": "//phish.example"}).status_code == 400
+    assert post(plain, {**body, "link": "/\t/phish.example"}).status_code == 400
     assert post(plain, {**body, "link": "/p/fleets"}).status_code == 200
     assert post(linked, body).status_code == 200
     assert Notification.objects.count() == 2

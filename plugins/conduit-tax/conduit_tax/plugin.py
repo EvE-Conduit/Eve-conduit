@@ -8,7 +8,7 @@ from conduit.plugins import NavItem, Plugin
 class TaxPlugin(Plugin):
     id = "tax"
     name = "Corp Tax"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "The bounty, ESS and mission tax each member paid the corporation, an extra tax billed monthly, and payments matched from the wallet."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-tax"

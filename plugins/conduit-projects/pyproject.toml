@@ -1,6 +1,6 @@
 [project]
 name = "conduit-projects"
-version = "1.0.0"
+version = "1.0.1"
 description = "Industry Projects: a corp build board where members claim parts of a project, deliver them and see their industry jobs against it."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

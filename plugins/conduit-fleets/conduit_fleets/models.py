@@ -1,8 +1,14 @@
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+
+#: Tracking stops by itself after this long, in case nobody ends the fleet; a FAT link with no closing time of its own
+#: closes this long after the fleet (or its latest FAT round) started.
+MAX_TRACKING = timedelta(hours=12)
 
 
 class FleetType(models.Model):
@@ -66,8 +72,14 @@ class Fleet(models.Model):
         return self.name
 
     @property
+    def link_closes_at(self):
+        """When the FAT link stops taking registrations: its own closing time, or ``MAX_TRACKING`` after the fleet
+        (or its latest FAT round) started, so a link nobody closes doesn't stay open for good."""
+        return self.link_expires_at or (self.round_started_at or self.started_at) + MAX_TRACKING
+
+    @property
     def link_active(self) -> bool:
-        return self.link_open and self.ended_at is None and (self.link_expires_at is None or self.link_expires_at > timezone.now())
+        return self.link_open and self.ended_at is None and self.link_closes_at > timezone.now()
 
 
 class Fat(models.Model):

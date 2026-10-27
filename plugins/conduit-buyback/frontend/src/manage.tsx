@@ -276,7 +276,7 @@ export function StatsPage() {
 // --- program form -------------------------------------------------------------------------------------------------
 
 const BLANK: ProgramForm = {
-  name: "", description: "", owner_id: null, is_corporation: true, location_ids: [], manager_ids: [], expiration_days: 14, price_type: "buy",
+  name: "", description: "", owner_id: null, is_corporation: true, location_ids: [], manager_ids: [], expiration_days: 14, quote_valid_days: 7, price_type: "buy",
   tax: 10, hauling_fuel_cost: 0, price_density_threshold: 0, price_density_tax: 0, compressed_volume: false, allow_all_items: true,
   use_raw: true, use_compressed: true, use_refined: true, refining_rate: 80, allow_unpacked: false, blue_loot_npc: false, red_loot_npc: false,
   t1_refined: false, t1_refining_rate: 55, state_ids: [], group_ids: [], public: false, notify_managers: true, wallet_division: null,
@@ -400,6 +400,7 @@ export function EditPage() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <NumberField label="Contracts expire after" value={value.expiration_days} onChange={(n) => set({ expiration_days: n })} suffix="days" />
+                  <NumberField label="Quotes are good for" hint="Contracts made later are flagged. 0: no limit." value={value.quote_valid_days} onChange={(n) => set({ quote_valid_days: n })} suffix="days" />
                   <Field label="Wallet division" hint="Its balance shows on the program's page.">
                     <Select value={value.wallet_division ?? ""} onChange={(e) => set({ wallet_division: Number(e.target.value) || null })}>
                       <option value="">None</option>

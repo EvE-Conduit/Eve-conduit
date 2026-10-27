@@ -4,10 +4,9 @@ When the section has synced from EVE, only contracts Conduit doesn't have come o
 SeAT's older one. Items are taken from SeAT for any contract still waiting for them.
 """
 
-from conduit.esi.exceptions import EsiError
 from conduit.sheet.contracts.models import Contract
 
-from ..esi import drop_none, esi_dt, route
+from ..esi import drop_none, esi_dt, left_for_live_sync, route
 from . import HISTORY, section
 
 section(
@@ -56,7 +55,7 @@ def items(ctx, params, cid, contract_id):
     rows = ctx.store.rows("contract_items", order="record_id", contract_id=contract_id)
     if not rows and (ctx.synced or contract_id not in _contract_ids(ctx)):
         # Neither SeAT nor EVE has given the items yet: leave the contract waiting for a live sync.
-        raise EsiError(503, "contract items not in the SeAT dump")
+        raise left_for_live_sync("contract items not in the SeAT dump")
     return [
         drop_none({
             "record_id": int(i["record_id"]), "type_id": int(i["type_id"]), "quantity": int(i["quantity"]),

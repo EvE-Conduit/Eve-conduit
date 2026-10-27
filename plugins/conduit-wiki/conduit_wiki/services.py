@@ -256,8 +256,12 @@ def reorder(user, parent_id: int | None, ids: list[int]) -> None:
 def _emit(event: str, p: Page, by, note: str) -> None:
     from conduit.events import bus
 
-    bus.emit(event, page_id=p.pk, slug=p.slug, title=p.title, note=note.strip()[:200], author=by.display_name if by else None,
-             link=f"/p/wiki/{p.slug}")
+    # Pages for some states or groups only go out as "_restricted" events (private: see apps.py).
+    states, groups = list(p.states.values_list("name", flat=True)), list(p.groups.values_list("name", flat=True))
+    limited = bool(states or groups)
+    bus.emit(f"{event}_restricted" if limited else event, page_id=p.pk, slug=p.slug, title=p.title, note=note.strip()[:200],
+             author=by.display_name if by else None, link=f"/p/wiki/{p.slug}",
+             audience={"states": states, "groups": groups} if limited else "everyone")
 
 
 # --- text and search -------------------------------------------------------------------------------------------------

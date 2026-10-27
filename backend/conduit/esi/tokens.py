@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core.cache import cache as django_cache
 from django.utils import timezone
 
-from .exceptions import SsoRefused, TokenInvalid
+from .exceptions import EsiBackoff, SsoRefused, TokenInvalid
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,11 @@ AUTHORIZE_URL = f"{SSO_HOST}/v2/oauth/authorize"
 TOKEN_URL = f"{SSO_HOST}/v2/oauth/token"
 JWKS_URL = f"{SSO_HOST}/oauth/jwks"
 VALID_ISSUERS = {"login.eveonline.com", SSO_HOST}
+SSO_TIMEOUT = 20
+#: Must outlive a refresh request (SSO_TIMEOUT), or a second worker could refresh with the same token.
+REFRESH_LOCK_TTL = 3 * SSO_TIMEOUT
+#: How long a worker waits for another one's refresh before giving up and retrying later.
+REFRESH_WAIT = 10
 
 
 def sso_configured() -> bool:
@@ -44,7 +49,7 @@ def _token_request(data: dict) -> dict:
         TOKEN_URL,
         data=data,
         headers={"Authorization": _basic_auth(), "Host": "login.eveonline.com"},
-        timeout=20,
+        timeout=SSO_TIMEOUT,
     )
     if resp.status_code in (400, 401):
         raise TokenInvalid(resp.text[:200], oauth_error=_oauth_error(resp))
@@ -134,14 +139,25 @@ def get_access_token(character) -> str:
         return token.access_token
 
     lock = f"esi:refresh-lock:{character.pk}"
-    if not django_cache.add(lock, 1, 30):
-        # Another worker is refreshing; wait for it instead of burning the refresh token.
-        for _ in range(20):
-            time.sleep(0.5)
-            token.refresh_from_db()
-            if token.expires_at - timezone.now() > timedelta(seconds=60):
-                return token.access_token
+    deadline = time.monotonic() + REFRESH_WAIT
+    while not django_cache.add(lock, 1, REFRESH_LOCK_TTL):
+        # Another worker is refreshing; wait for it instead of burning the refresh token. Only the lock holder
+        # may use (and rotate) the refresh token, so a waiter that runs out of patience retries later instead.
+        if time.monotonic() >= deadline:
+            raise EsiBackoff(5, f"another worker is still refreshing {character}'s token")
+        time.sleep(0.5)
+        token.refresh_from_db()
+        if not token.valid:
+            raise TokenInvalid(f"{character} needs to log in again")  # the holder already told the owner
+        if token.expires_at - timezone.now() > timedelta(seconds=60):
+            return token.access_token
     try:
+        # The previous holder may have finished between our first look and taking the lock.
+        token.refresh_from_db()
+        if not token.valid:
+            raise TokenInvalid(f"{character} needs to log in again")
+        if token.expires_at - timezone.now() > timedelta(seconds=60):
+            return token.access_token
         try:
             data = _token_request({"grant_type": "refresh_token", "refresh_token": token.refresh_token})
         except TokenInvalid as exc:

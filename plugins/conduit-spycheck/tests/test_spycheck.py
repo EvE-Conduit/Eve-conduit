@@ -463,10 +463,79 @@ def test_findings_are_narrowed_to_characters_the_reviewer_may_see(setup, api_cli
     assert [m["name"] for m in api_client.call("get", f"{BASE}/members").json()["items"]] == ["Shady Sam"]
     assert api_client.call("get", f"{BASE}/findings/{theirs_finding.pk}").status_code == 404
     assert api_client.call("post", f"{BASE}/findings/{theirs_finding.pk}/state", {"state": "acknowledged"}).status_code == 404
-    assert api_client.call("get", f"{BASE}/members/{other.pk}").json()["findings"] == []
+    # A member none of whose characters they may see isn't there, and opening it isn't audited.
+    assert api_client.call("get", f"{BASE}/members/{other.pk}").status_code == 404
+    assert not AuditEvent.objects.filter(action="spycheck.member_viewed", target_id=str(other.pk)).exists()
     # The digest tells each reviewer only about what they may see.
     assert Notification.objects.filter(user=corp_hr).get().body.startswith("Shady Sam")
     assert Notification.objects.filter(user=hr).count() == 1 and "Other Olga" in Notification.objects.get(user=hr).body
     assert not Notification.objects.filter(user=no_sheet).exists()
     api_client.force_login(no_sheet)
     assert api_client.call("get", f"{BASE}/findings").json()["count"] == 0
+
+
+def test_reviewers_never_review_themselves(setup, api_client):
+    hr, viewer, member, _ = setup
+    watch(SPY)
+    journal(viewer.main_character, 1, 3)
+    journal(member.main_character, 2, 3)
+    services.scan()
+    own = Finding.objects.get(character_id=viewer.main_character.pk)
+    # The digest leaves out their own finding; HR hears about both.
+    assert "Viewer Vic" not in Notification.objects.get(user=viewer).body
+    assert "Viewer Vic" in Notification.objects.get(user=hr).body
+    api_client.force_login(viewer)
+    assert [i["character"]["name"] for i in api_client.call("get", f"{BASE}/findings").json()["items"]] == ["Shady Sam"]
+    assert api_client.call("get", f"{BASE}/summary").json()["new"] == 1
+    assert [m["name"] for m in api_client.call("get", f"{BASE}/members").json()["items"]] == ["Shady Sam"]
+    assert api_client.call("get", f"{BASE}/findings/{own.pk}").status_code == 404
+    assert api_client.call("post", f"{BASE}/findings/{own.pk}/state", {"state": "dismissed", "note": "Not me"}).status_code == 404
+    assert api_client.call("get", f"{BASE}/members/{viewer.pk}").status_code == 404
+    assert not AuditEvent.objects.filter(action="spycheck.member_viewed").exists()
+    with pytest.raises(services.SpyCheckError):
+        services.decide(own, viewer, "dismissed", "Not me")
+    own.refresh_from_db()
+    assert own.state == Finding.State.NEW
+    # Someone else may.
+    services.decide(own, hr, "acknowledged")
+
+
+def test_only_one_scan_at_a_time(setup, api_client):
+    from django.core.cache import cache
+
+    from conduit_spycheck.tasks import daily
+
+    hr, _, member, _ = setup
+    watch(SPY)
+    journal(member.main_character, 1, 3)
+    cache.add(services.SCAN_LOCK, 1, 60)  # a scan is running
+    try:
+        api_client.force_login(hr)
+        r = api_client.call("post", f"{BASE}/scan")
+        assert r.status_code == 409 and "already running" in r.json()["detail"]
+        daily()  # skipped quietly
+        assert not Finding.objects.exists()
+    finally:
+        cache.delete(services.SCAN_LOCK)
+    assert api_client.call("post", f"{BASE}/scan").json()["flagged"] == 1
+    assert cache.add(services.SCAN_LOCK, 1, 60)  # released after the scan
+    cache.delete(services.SCAN_LOCK)
+
+
+def test_a_finding_made_meanwhile_doesnt_fail_the_scan(setup, monkeypatch):
+    _, _, member, _ = setup
+    watch(SPY)
+    journal(member.main_character, 1, 3)
+    real = services.collect
+
+    def racing(*args):
+        found = real(*args)
+        # Another scan saved the same finding after this one read the existing ones.
+        Finding.objects.create(user=member, character_id=member.main_character.pk, character_name="Shady Sam", entity_id=SPY,
+                               kind="journal", entity_kind="character", entity_name="Known Spy", source="watch")
+        return found
+
+    monkeypatch.setattr(services, "collect", racing)
+    services.scan()
+    f = Finding.objects.get()
+    assert f.count == 1

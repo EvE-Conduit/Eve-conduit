@@ -45,17 +45,28 @@ jobs:
         if: steps.check.outputs.skip != '1'
         with:
           python-version: "3.13"
-      - name: Build, sign and publish
+      # The catalog is built by this repository's own copy of build_catalog.py, never the plugins repository's:
+      # code from there only gets read as data here, and the signing key is only in the step that signs.
+      # The serial is when the catalog was built (it only has to go up), not the commit's date, which the
+      # committer chooses.
+      - name: Build
+        if: steps.check.outputs.skip != '1'
+        env:
+          SHA: ${{ steps.check.outputs.sha }}
+        run: |
+          python plugins/scripts/build_catalog.py --root plugins-repo --repo EvE-Conduit/plugins --commit "$SHA" \
+            --serial "$(date +%s)" > catalog.json
+          cat catalog.json
+      - name: Sign
         if: steps.check.outputs.skip != '1'
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-          SHA: ${{ steps.check.outputs.sha }}
         run: |
           pip install --quiet cryptography
-          python plugins-repo/scripts/build_catalog.py --repo EvE-Conduit/plugins --commit "$SHA" \
-            --serial "$(git -C plugins-repo log -1 --format=%ct)" > catalog.json
-          cat catalog.json
           python scripts/sign-release.py catalog.json
+      - name: Publish
+        if: steps.check.outputs.skip != '1'
+        run: |
           gh release view plugin-catalog >/dev/null 2>&1 || \
             gh release create plugin-catalog --title "Plugin catalog" --latest=false \
               --notes "The signed list of plugins EvE Conduit offers under Administration -> Plugins, built from github.com/EvE-Conduit/plugins. Not a release of EvE Conduit."

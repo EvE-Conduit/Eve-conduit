@@ -102,14 +102,38 @@ def test_tree_breadcrumbs_and_reparenting_on_delete(people, api_client):
     assert tree[0]["slug"] == "guides" and tree[0]["children"][0]["slug"] == "pvp" and tree[0]["children"][0]["children"][0]["slug"] == "fitting"
     got = api_client.call("get", f"{BASE}/pages/fitting").json()
     assert [b["slug"] for b in got["breadcrumbs"]] == ["guides", "pvp"]
-    # A page can't be moved under its own child.
-    resp = api_client.call("put", f"{BASE}/pages/guides", {"title": "Guides", "body": "", "parent": grandchild["id"]})
-    assert resp.status_code == 400
+    # Editors don't move pages on edit (the parent is ignored), and an edit that leaves it out keeps it where it is.
+    assert api_client.call("put", f"{BASE}/pages/pvp", {"title": "PvP", "body": "x", "parent": None}).status_code == 200
+    assert api_client.call("put", f"{BASE}/pages/fitting", {"title": "Fitting", "body": "y"}).status_code == 200
+    assert Page.objects.get(slug="pvp").parent.slug == "guides" and Page.objects.get(slug="fitting").parent.slug == "pvp"
     # Deleting the middle page moves its children up; editors can't delete, managers can.
     assert api_client.call("delete", f"{BASE}/pages/pvp").status_code == 403
     api_client.force_login(people["manager"])
+    # Managers move pages, but not under the page's own child.
+    resp = api_client.call("put", f"{BASE}/pages/guides", {"title": "Guides", "body": "", "parent": grandchild["id"]})
+    assert resp.status_code == 400
+    assert api_client.call("put", f"{BASE}/pages/fitting", {"title": "Fitting", "body": "y"}).status_code == 200
+    assert Page.objects.get(slug="fitting").parent.slug == "pvp"
+    assert api_client.call("put", f"{BASE}/pages/fitting", {"title": "Fitting", "body": "y", "parent": root["id"]}).status_code == 200
+    assert Page.objects.get(slug="fitting").parent.slug == "guides"
+    assert api_client.call("put", f"{BASE}/pages/fitting", {"title": "Fitting", "body": "y", "parent": child["id"]}).status_code == 200
     assert api_client.call("delete", f"{BASE}/pages/pvp").status_code == 200
     assert Page.objects.get(slug="fitting").parent.slug == "guides"
+
+
+def test_pages_for_some_people_only_go_out_as_private_events(people, api_client, monkeypatch):
+    from conduit.events import bus
+
+    emitted = []
+    monkeypatch.setattr(bus, "emit", lambda name, **kw: emitted.append((name, kw)))
+    leaders = Group.objects.create(name="Leadership")
+    write(api_client, people["manager"], title="Open")
+    write(api_client, people["manager"], title="Secret", groups=[leaders.pk])
+    api_client.call("put", f"{BASE}/pages/secret", {"title": "Secret", "body": "changed", "groups": [leaders.pk]})
+    assert [n for n, _ in emitted] == ["wiki.page_created", "wiki.page_created_restricted", "wiki.page_updated_restricted"]
+    assert emitted[0][1]["audience"] == "everyone" and emitted[1][1]["audience"] == {"states": [], "groups": ["Leadership"]}
+    for name in ("page_created", "page_updated"):
+        assert bus.is_private(f"wiki.{name}_restricted") and not bus.is_private(f"wiki.{name}")
 
 
 def test_history_and_restore(people, api_client):

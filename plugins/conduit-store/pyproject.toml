@@ -1,6 +1,6 @@
 [project]
 name = "conduit-store"
-version = "1.0.0"
+version = "1.0.1"
 description = "Corp Store: members earn points for referrals, fleets, mentoring and industry projects, and spend them in a store officers fill by hand."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

@@ -103,8 +103,8 @@ def import_now(request):
     return services.import_all()
 
 
-def _get(pk: int) -> Timer:
-    t = Timer.objects.select_related("system").filter(pk=pk).first()
+def _get(request, pk: int) -> Timer:
+    t = services.visible(request.user, Timer.objects.select_related("system")).filter(pk=pk).first()
     if t is None:
         raise HttpError(404, "No such timer")
     return t
@@ -152,7 +152,7 @@ def create(request, payload: TimerIn):
 @router.put("/{timer_id}")
 @require_perm("timers.manage_timers")
 def update(request, timer_id: int, payload: TimerIn):
-    t = _save(request, _get(timer_id), payload)
+    t = _save(request, _get(request, timer_id), payload)
     record("timers.update", f"changed the timer \"{t.name}\" in {t.system.name}", request=request, target=t)
     return _one(request, t.pk)
 
@@ -160,7 +160,7 @@ def update(request, timer_id: int, payload: TimerIn):
 @router.delete("/{timer_id}")
 @require_perm("timers.manage_timers")
 def delete(request, timer_id: int):
-    t = _get(timer_id)
+    t = _get(request, timer_id)
     record("timers.delete", f"removed the timer \"{t.name}\" in {t.system.name}", request=request, target=t)
     services.delete(t)
     return {"ok": True}
@@ -172,7 +172,7 @@ class GoingIn(Schema):
 
 @router.post("/{timer_id}/going")
 def going(request, timer_id: int, payload: GoingIn):
-    t = _get(timer_id)
+    t = _get(request, timer_id)
     count = services.set_going(t, request.user, payload.going)
     return {"going": payload.going, "going_count": count}
 

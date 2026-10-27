@@ -148,5 +148,7 @@ def _finish(status: CorpSyncStatus, result: str, message: str, failed: bool = Fa
 
 def sync_now(corporation_id: int, sections: list[str] | None = None):
     for key in sections or registry.SECTIONS:
-        CorpSyncStatus.objects.update_or_create(corporation_id=corporation_id, section=key, defaults={"next_due": timezone.now()})
+        # Push next_due forward as schedule_syncs does, so it doesn't queue the section a second time.
+        next_due = timezone.now() + timedelta(seconds=registry.SECTIONS[key].interval)
+        CorpSyncStatus.objects.update_or_create(corporation_id=corporation_id, section=key, defaults={"next_due": next_due})
         sync_section.apply_async((corporation_id, key), queue="default")  # ahead of the routine syncs

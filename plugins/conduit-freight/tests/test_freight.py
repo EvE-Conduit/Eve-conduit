@@ -263,3 +263,46 @@ def test_public_calculator(service, client):
     q = client.post(f"/api/public/p/freight/services/{service.pk}/quote", {"route_id": r.pk, "volume": 10_000, "collateral": 1_000_000_000},
                     content_type="application/json")
     assert q.json()["reward"] == 16_900_000
+
+
+def test_public_quotes_refuse_numbers_that_arent(service, client):
+    service.public = True
+    service.save()
+    r = jita_amarr(service)
+    url = f"/api/public/p/freight/services/{service.pk}/quote"
+    for volume, collateral in ((float("nan"), 0), (float("inf"), 0), (10, float("nan")), (10, float("inf")), (10, -float("inf")),
+                               (services.MAX_VOLUME + 1, 0), (10, services.MAX_COLLATERAL * 10)):
+        resp = client.post(url, {"route_id": r.pk, "volume": volume, "collateral": collateral}, content_type="application/json")
+        assert resp.status_code == 400, (volume, collateral)
+    # Sent as JSON's own words too (Python's json reads NaN and Infinity).
+    resp = client.post(url, '{"route_id": %d, "volume": NaN, "collateral": Infinity}' % r.pk, content_type="application/json")
+    assert resp.status_code in (400, 422)
+
+
+def test_route_numbers_must_be_finite_and_in_range(service):
+    data = {"start_name": "Jita", "start_system_id": JITA, "end_name": "Amarr", "end_system_id": AMARR, "jumps": 9}
+    for field, bad in (("base_price", float("nan")), ("price_per_m3", float("inf")), ("max_volume", float("nan")),
+                       ("max_collateral", 1e30), ("collateral_percent", float("nan"))):
+        with pytest.raises(services.FreightError):
+            services.save_route(service, None, {**data, field: bad})
+
+
+def test_two_corporation_services_dont_take_each_others_contracts(service, customer, boss, corp, offline):
+    other_boss = make_user(90000060, "Other Boss", corporation=corp,
+                           scopes="esi-contracts.read_character_contracts.v1 esi-contracts.read_corporation_contracts.v1")
+    other = Service.objects.create(name="Lowsec freight", owner=other_boss.main_character, is_corporation=True, days_to_complete=3)
+    Route.objects.create(service=other, start_name="Perimeter", start_system_id=PERIMETER, end_name="Jita", end_system_id=JITA)
+    good = 1_000_000 + 5_000_000 + 900_000
+    esi = FakeEsi({f"/corporations/{CORP_ID}/contracts": [
+        row(1, JITA_44, AMARR_HUB, good),  # the first service's route
+        row(2, KEEPSTAR, JITA_44, 0),  # the other's
+        row(3, AMARR_HUB, PERIMETER, 1),  # nobody's
+    ]})
+    for _ in range(2):
+        contracts.sync_owner(boss.main_character.pk, client=esi)
+        contracts.sync_owner(other_boss.main_character.pk, client=esi)
+        c1, c2 = Contract.objects.get(contract_id=1), Contract.objects.get(contract_id=2)
+        assert (c1.service, codes(1)) == (service, [])
+        assert (c2.service, codes(2)) == (other, [])
+    # The one nobody's routes cover stays with whoever found it first, flagged once.
+    assert Contract.objects.get(contract_id=3).service == service and codes(3) == ["wrong_route"]

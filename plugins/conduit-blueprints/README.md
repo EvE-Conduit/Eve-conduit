@@ -8,7 +8,10 @@ and what still needs research.
   Open one to see every copy and original, its owner and where it is (station or structure and hangar division).
   Search by blueprint or by what it makes, and filter by category (Ship, Module, Charge...), originals or copies,
   lowest ME, corporation, or corporation vs. members' blueprints. A member sees the corporations their characters
-  are in and any whose sheet the core lets them read (`corp.view_*_corporations`); request managers see every one.
+  are in and any whose sheet the core lets them read (`corp.view_*_corporations`); so do request managers, who
+  don't see other corporations' libraries just for managing requests. Where a corporation blueprint is (station or
+  structure and hangar division) is only shown to those who may see that corporation's **Assets** on the
+  corporation sheet; where its research and copying jobs run, to those who may see its **Industry**.
 - **Members' own originals:** under **Share mine** a member switches on, per character, that its originals show in
   the library, labelled **Personal** with the character's name. Copies always stay private. A share stops counting
   if the character moves to another account.
@@ -16,7 +19,8 @@ and what still needs research.
   borrow the original for some days. A request can say it's for an open [Industry Projects](../conduit-projects)
   project when that plugin is on. Managers (permission `blueprint_library.manage_requests`) are told and work the
   **Request queue**: accept, mark it in progress (linking the corporation copying job making the copies, picked
-  from the core's corporation industry jobs), deliver, or decline with a reason. The member is notified at every
+  from the core's corporation industry jobs), deliver, or decline with a reason. Nobody handles their own request (or
+  marks their own loan returned, or moves its due date): another manager has to. The member is notified at every
   step and can cancel while it isn't delivered.
 - **Loans:** a handed-over original is due back after the days asked for (the manager can pick another date, and
   move it later). Once it's overdue the borrower is reminded every day and managers are told once. Managers mark it

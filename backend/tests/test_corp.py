@@ -259,6 +259,22 @@ def test_member_ids(people, fake):
     assert member_ids(CORP) == {DIRECTOR_ID, ACCOUNTANT_ID, LINE_ID, 2112000000}
 
 
+@pytest.mark.django_db
+def test_member_sync_updates_only_changed_members(people, fake):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    run("members")
+    with CaptureQueriesContext(connection) as ctx:
+        run("members")
+    member_updates = [q["sql"] for q in ctx.captured_queries if q["sql"].startswith("UPDATE") and "corporationmember" in q["sql"]]
+    assert member_updates == []  # nothing changed, nothing written
+    fake.routes[rf"/corporations/{CORP}/roles"] = [{"character_id": LINE_ID, "roles": ["Station_Manager"]}]
+    run("members")
+    roles = dict(CorporationMember.objects.values_list("character_id", "roles"))
+    assert roles[LINE_ID] == ["Station_Manager"] and roles[DIRECTOR_ID] == [] and roles[ACCOUNTANT_ID] == []
+
+
 # --- notifications ----------------------------------------------------------------------
 
 

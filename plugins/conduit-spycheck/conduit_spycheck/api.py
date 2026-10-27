@@ -82,7 +82,7 @@ def members(request, q: str = ""):
 def member(request, user_id: int):
     """One member's findings across their characters."""
     _view(request)
-    return services.member_detail(get_object_or_404(get_user_model(), pk=user_id), request)
+    return _run(services.member_detail, get_object_or_404(get_user_model(), pk=user_id), request)
 
 
 @router.get("/watch")
@@ -142,6 +142,6 @@ def put_settings(request, payload: SettingsIn):
 @router.post("/scan")
 @require_perm(MANAGE_PERM)
 def scan(request):
-    """Scan everyone now. What's new is sent in the usual digest, as the daily scan would."""
-    flagged = services.scan()
+    """Scan everyone now. What's new is sent in the usual digest, as the daily scan would. 409 while a scan runs."""
+    flagged = _run(services.scan)
     return {**services.summary(request.user), "flagged": len(flagged)}

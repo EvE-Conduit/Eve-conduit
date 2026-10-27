@@ -1,7 +1,7 @@
 import "./index.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useState, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider, type RouteObject } from "react-router";
 import { Toaster } from "sonner";
@@ -11,6 +11,8 @@ import { PublicShell } from "@/components/layout/PublicShell";
 import { UPDATING_KEY } from "@/components/layout/Banners";
 import { updateTitle } from "@/components/updates/UpdateSteps";
 import { PluginBoundary } from "@/components/PluginBoundary";
+import { RequirePerm } from "@/components/RequirePerm";
+import { adminPagePerm } from "@/components/layout/nav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api";
 import { applyBranding, BOOTSTRAP_KEY, BootstrapProvider, fetchBootstrap } from "@/lib/bootstrap";
@@ -71,6 +73,11 @@ function pluginRoutes(plugins: LoadedPlugin[], key: "routes" | "publicRoutes" = 
   );
 }
 
+/** An Administration page, shown only to people with the permission its sidebar entry needs. */
+function adminRoute(path: string, element: ReactElement): RouteObject {
+  return { path, element: <RequirePerm perm={adminPagePerm(`/${path}`) ?? "site.manage_site"}>{element}</RequirePerm> };
+}
+
 async function start() {
   applyStoredTheme();
   const root = createRoot(document.getElementById("root")!);
@@ -107,19 +114,19 @@ async function start() {
         { path: "groups/manage", element: <GroupManage /> },
         { path: "notifications", element: <Notifications /> },
         { path: "settings", element: <UserSettings /> },
-        { path: "admin/members", element: <AdminMembers /> },
-        { path: "admin/member-audit", element: <AdminMemberAudit /> },
-        { path: "admin/access", element: <AdminAccess /> },
-        { path: "admin/groups", element: <AdminGroups /> },
-        { path: "admin/compliance", element: <AdminCompliance /> },
-        { path: "admin/plugins", element: <AdminPlugins /> },
-        { path: "admin/api", element: <AdminApi /> },
-        { path: "admin/logs", element: <AdminLogs /> },
-        { path: "admin/health", element: <AdminHealth /> },
-        { path: "admin/integrations", element: <AdminIntegrations /> },
-        { path: "admin/settings", element: <AdminSettings /> },
-        { path: "admin/settings/landing", element: <LandingEditor /> },
-        { path: "admin/updates", element: <AdminUpdates /> },
+        adminRoute("admin/members", <AdminMembers />),
+        adminRoute("admin/member-audit", <AdminMemberAudit />),
+        adminRoute("admin/access", <AdminAccess />),
+        adminRoute("admin/groups", <AdminGroups />),
+        adminRoute("admin/compliance", <AdminCompliance />),
+        adminRoute("admin/plugins", <AdminPlugins />),
+        adminRoute("admin/api", <AdminApi />),
+        adminRoute("admin/logs", <AdminLogs />),
+        adminRoute("admin/health", <AdminHealth />),
+        adminRoute("admin/integrations", <AdminIntegrations />),
+        adminRoute("admin/settings", <AdminSettings />),
+        adminRoute("admin/settings/landing", <LandingEditor />),
+        adminRoute("admin/updates", <AdminUpdates />),
         ...pluginRoutes(plugins),
         { path: "*", element: <NotFound /> },
       ],

@@ -180,6 +180,35 @@ def test_refuses_plain_http_elsewhere():
     tool.check_url("http://localhost:8000", allow_http=False)
 
 
+def test_redirects_are_refused_so_the_key_stays_put():
+    """urllib would follow a redirect with the Authorization header still on; the tool stops instead."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    seen = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append((self.path, self.headers.get("Authorization")))
+            self.send_response(302)
+            self.send_header("Location", "/elsewhere/api/v1/info")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        conduit = tool.Conduit(f"http://127.0.0.1:{server.server_port}", "secret-key")
+        with pytest.raises(tool.ImportError_, match=r"redirected \(HTTP 302\) to http://127\.0\.0\.1:\d+/elsewhere/api/v1/info"):
+            conduit.call("GET", "/info")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert seen == [("/api/v1/info", "Bearer secret-key")]  # asked once, never at the redirect target
+
+
 def test_picker_search_select_all_and_toggle():
     users, _ = tool.parse_seat(seat_rows())
     answers = iter(["/pilot", "a", "2", "l", "d"])

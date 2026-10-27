@@ -92,6 +92,17 @@ def test_hidden_groups_stay_hidden(user, api_client):
     assert api_client.call("post", f"/api/me/groups/{g.pk}/join").status_code == 404
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("join_mode", ["open", "request", "closed"])
+def test_hidden_groups_cannot_be_joined_by_guessing_their_id(user, api_client, join_mode):
+    """Even one the user's state may hold: there is no invite, leaders and admins add people to hidden groups."""
+    g = make_group("Secret", join_mode=join_mode, hidden=True)
+    api_client.force_login(user)
+    resp = api_client.call("post", f"/api/me/groups/{g.pk}/join")
+    assert resp.status_code == 404 and resp.json()["detail"] == "Group not found"
+    assert not user.groups.filter(pk=g.pk).exists() and not GroupRequest.objects.exists()
+
+
 # --- requests and leaders ----------------------------------------------------------------
 
 

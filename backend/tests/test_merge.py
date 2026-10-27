@@ -77,6 +77,7 @@ def test_moves_cant_be_used_to_take_over_accounts(accounts, api_client, admin_us
     give(main, "manage_plugins")
     resp = api_client.call("post", url, {"target": main.pk, "characters": [90000002]})
     assert resp.status_code == 403 and "manage_plugins" in resp.json()["detail"]
+    main.user_permissions.clear()
     # Someone else's characters, or none: no.
     assert api_client.call("post", f"/api/admin/members/{main.pk}/move-characters",
                            {"target": second.pk, "characters": [90000002]}).status_code == 400
@@ -121,3 +122,36 @@ def test_records_stay_unless_asked(accounts, api_client):
                           {"target": main.pk, "characters": [90000002, 90000003]}).json()
     assert out["records"] is None and Notification.objects.get().user_id == second.pk
     # Only a merge moves records: a partial move ignores the option.
+
+
+def test_moves_cant_strip_administrators(accounts, api_client, admin_user):
+    """Moving every character away switches the account off, so it mustn't take power the officer lacks."""
+    main, second, officer = accounts
+    give(second, "manage_plugins")
+    api_client.force_login(officer)
+    resp = api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
+                           {"target": main.pk, "characters": [90000002, 90000003]})
+    assert resp.status_code == 403 and "manage_plugins" in resp.json()["detail"]
+    second.refresh_from_db()
+    assert second.is_active and second.characters.count() == 2
+    api_client.force_login(admin_user)
+    assert api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
+                           {"target": main.pk, "characters": [90000002, 90000003]}).status_code == 200
+
+
+def test_merging_leaves_who_decided_what_alone(accounts, api_client):
+    """Who decided a request is history: it keeps naming the account that did it, while the person's own rows move."""
+    from conduit.access.models import GroupRequest
+
+    main, second, officer = accounts
+    caps = Group.objects.create(name="Caps")
+    decided = GroupRequest.objects.create(user=main, group=caps, kind="join", status="approved", decided_by=second)
+    own = GroupRequest.objects.create(user=second, group=caps, kind="leave", status="rejected", decided_by=officer)
+    api_client.force_login(officer)
+    out = api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
+                          {"target": main.pk, "characters": [90000002, 90000003], "move_records": True}).json()
+    assert out["emptied"]
+    decided.refresh_from_db()
+    own.refresh_from_db()
+    assert decided.decided_by_id == second.pk
+    assert own.user_id == main.pk and own.decided_by_id == officer.pk

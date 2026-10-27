@@ -15,6 +15,9 @@ from .models import Contract, Route, Service
 log = logging.getLogger(__name__)
 
 OPEN = ("outstanding", "in_progress")
+#: The most a quote takes: far beyond any courier contract the game allows, and well inside what the numbers hold.
+MAX_VOLUME = 10_000_000  # m³
+MAX_COLLATERAL = 10**15  # ISK
 FINISHED = ("finished", "finished_issuer", "finished_contractor")
 
 
@@ -83,10 +86,16 @@ def quote(service: Service, route_id: int, volume: float, collateral: float) -> 
     route = service.routes.filter(pk=route_id, active=True).first()
     if route is None:
         raise FreightError("No such route", 404)
+    if not (math.isfinite(volume) and math.isfinite(collateral)):
+        raise FreightError("Enter the volume and collateral as numbers")
     if volume <= 0:
         raise FreightError("Enter the volume, in m³")
+    if volume > MAX_VOLUME:
+        raise FreightError(f"The volume goes up to {MAX_VOLUME:,} m³")
     if collateral < 0:
         raise FreightError("Collateral can't be negative")
+    if collateral > MAX_COLLATERAL:
+        raise FreightError(f"The collateral goes up to {MAX_COLLATERAL:,} ISK")
     col = Decimal(str(round(collateral, 2)))
     reward = price(route, volume, col)
     return {
@@ -339,6 +348,9 @@ def save_service(user, service: Service | None, data: dict) -> Service:
 
 
 MONEY_FIELDS = ("base_price", "price_per_m3", "price_per_jump", "min_reward", "max_collateral")
+#: The largest value each of a route's numbers takes, inside what its field stores.
+ROUTE_MAXIMA = {"base_price": 10**13, "price_per_m3": 10**9, "price_per_jump": 10**11, "min_reward": 10**13,
+                "max_collateral": 10**17, "collateral_percent": 100, "max_volume": MAX_VOLUME}
 
 
 def save_route(service: Service, route: Route | None, data: dict, client=None) -> Route:
@@ -348,6 +360,12 @@ def save_route(service: Service, route: Route | None, data: dict, client=None) -
             raise FreightError(f"Pick the {'pick-up' if end == 'start' else 'delivery'} system")
         if not (data.get(f"{end}_name") or "").strip():
             raise FreightError(f"Name the {'pick-up' if end == 'start' else 'delivery'} place")
+    for f, most in ROUTE_MAXIMA.items():
+        value = data.get(f) or 0
+        if not math.isfinite(value):
+            raise FreightError("Enter prices and limits as numbers")
+        if value > most:
+            raise FreightError(f"That's more than this route can take: {f.replace('_', ' ')} goes up to {most:,}")
     for f in MONEY_FIELDS:
         if (data.get(f) or 0) < 0:
             raise FreightError("Prices and limits can't be negative")

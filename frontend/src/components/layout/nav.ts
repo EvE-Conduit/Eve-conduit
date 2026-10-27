@@ -1,6 +1,7 @@
 import { Building2, Crown, Download, HeartPulse, Home, Layers, ScanSearch, ShieldAlert, Webhook } from "lucide-react";
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
+import { isSitePath } from "@/lib/externalLinks";
 import { iconFor } from "@/lib/icons";
 import type { CurrentUser, PluginEntry, SiteNavLink } from "@/lib/types";
 
@@ -24,6 +25,27 @@ export interface NavSection {
   collapsible?: boolean;
   /** Shown in its own rail on the right of the page on wide screens (the left sidebar below that). */
   side?: "right";
+}
+
+/** The Administration pages and the permission each needs (main.tsx gates the routes with the same list). */
+export const ADMIN_PAGES: { label: string; to: string; icon: LucideIcon; perm: string }[] = [
+  { label: "Members", to: "/admin/members", icon: Users, perm: "site.view_members" },
+  { label: "Member Audit", to: "/admin/member-audit", icon: ScanSearch, perm: "sheet.use_member_audit" },
+  { label: "States", to: "/admin/access", icon: ShieldCheck, perm: "site.manage_access" },
+  { label: "Groups", to: "/admin/groups", icon: Layers, perm: "site.manage_access" },
+  { label: "Compliance", to: "/admin/compliance", icon: ShieldAlert, perm: "access.view_compliance" },
+  { label: "Plugins", to: "/admin/plugins", icon: Puzzle, perm: "site.manage_plugins" },
+  { label: "API", to: "/admin/api", icon: KeyRound, perm: "site.manage_api" },
+  { label: "Integrations", to: "/admin/integrations", icon: Webhook, perm: "site.manage_api" },
+  { label: "Logs", to: "/admin/logs", icon: ScrollText, perm: "site.view_logs" },
+  { label: "Health", to: "/admin/health", icon: HeartPulse, perm: "site.view_health" },
+  { label: "Updates", to: "/admin/updates", icon: Download, perm: "site.manage_site" },
+  { label: "Settings", to: "/admin/settings", icon: Settings2, perm: "site.manage_site" },
+];
+
+/** The permission an Administration page needs ("/admin/settings/landing" goes with Settings). */
+export function adminPagePerm(path: string) {
+  return ADMIN_PAGES.find((p) => path === p.to || path.startsWith(`${p.to}/`))?.perm;
 }
 
 function can(user: CurrentUser, perm: string) {
@@ -64,22 +86,15 @@ export function buildNav(
   if (pluginItems.length) sections.push({ title: "Plugins", items: pluginItems });
 
   // Links admins added under Administration > Settings, e.g. the alliance wiki or killboard.
-  const extra = links.items.map((l): NavLinkItem => ({ label: l.label, to: l.url, icon: iconFor(l.icon), external: l.url.startsWith("https://") }));
+  // The server only saves site paths and https:// addresses; anything else is dropped here too.
+  const extra = links.items
+    .filter((l) => isSitePath(l.url) || l.url.startsWith("https://"))
+    .map((l): NavLinkItem => ({ label: l.label, to: l.url, icon: iconFor(l.icon), external: l.url.startsWith("https://") }));
   if (extra.length) sections.push({ title: links.title || "Links", items: extra, collapsible: true });
 
-  const admin: NavLinkItem[] = [];
-  if (can(user, "site.view_members")) admin.push({ label: "Members", to: "/admin/members", icon: Users });
-  if (can(user, "sheet.use_member_audit")) admin.push({ label: "Member Audit", to: "/admin/member-audit", icon: ScanSearch });
-  if (can(user, "site.manage_access")) admin.push({ label: "States", to: "/admin/access", icon: ShieldCheck });
-  if (can(user, "site.manage_access")) admin.push({ label: "Groups", to: "/admin/groups", icon: Layers });
-  if (can(user, "access.view_compliance")) admin.push({ label: "Compliance", to: "/admin/compliance", icon: ShieldAlert });
-  if (can(user, "site.manage_plugins")) admin.push({ label: "Plugins", to: "/admin/plugins", icon: Puzzle });
-  if (can(user, "site.manage_api")) admin.push({ label: "API", to: "/admin/api", icon: KeyRound });
-  if (can(user, "site.manage_api")) admin.push({ label: "Integrations", to: "/admin/integrations", icon: Webhook });
-  if (can(user, "site.view_logs")) admin.push({ label: "Logs", to: "/admin/logs", icon: ScrollText });
-  if (can(user, "site.view_health")) admin.push({ label: "Health", to: "/admin/health", icon: HeartPulse });
-  if (can(user, "site.manage_site")) admin.push({ label: "Updates", to: "/admin/updates", icon: Download, badge: updateAvailable ? 1 : undefined });
-  if (can(user, "site.manage_site")) admin.push({ label: "Settings", to: "/admin/settings", icon: Settings2 });
+  const admin = ADMIN_PAGES.filter((p) => can(user, p.perm)).map(
+    ({ label, to, icon }): NavLinkItem => ({ label, to, icon, badge: to === "/admin/updates" && updateAvailable ? 1 : undefined }),
+  );
   if (admin.length) sections.push({ title: "Administration", items: admin, collapsible: true, side: "right" });
 
   return sections;

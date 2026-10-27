@@ -263,6 +263,8 @@ def set_paid(invoice_id: int, paid: bool, by) -> Invoice:
     inv = Invoice.objects.select_related("month").filter(pk=invoice_id).first()
     if inv is None:
         raise LedgerError("No such invoice")
+    if inv.user_id == by.pk:
+        raise LedgerError("Someone else has to mark your own moon tax")
     month = inv.month.month
     mined_in = set(observations().filter(last_updated__gte=month, last_updated__lt=month_end(month),
                                          character_id__in=inv.user.characters.values_list("pk", flat=True))

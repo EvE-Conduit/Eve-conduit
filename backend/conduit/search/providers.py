@@ -1,5 +1,7 @@
 """What core search finds: characters, members, groups, corporations, alliances, items and systems."""
 
+from urllib.parse import quote
+
 from django.contrib.auth.models import Group
 from django.db.models import Case, IntegerField, Q, Value, When
 
@@ -64,7 +66,7 @@ def members(request, q, limit):
                 "subtitle": u.state.name if u.state else "No state",
                 "image": portrait_url(u.main_character_id, 64) if u.main_character_id else None,
                 "icon": None if u.main_character_id else "user",
-                "url": f"/admin/members?q={u.display_name}",
+                "url": f"/admin/members?q={quote(u.display_name, safe='')}",
             }
             for u in rows
         ],
@@ -154,7 +156,7 @@ def universe(request, q, limit):
                     "title": s.name,
                     "subtitle": f"{s.region.name} · {s.display_security:.1f}",
                     "icon": "orbit",
-                    "url": f"https://evemaps.dotlan.net/system/{s.name.replace(' ', '_')}",
+                    "url": f"https://evemaps.dotlan.net/system/{quote(s.name.replace(' ', '_'), safe='')}",
                 }
                 for s in systems
             ],

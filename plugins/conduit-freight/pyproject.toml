@@ -1,6 +1,6 @@
 [project]
 name = "conduit-freight"
-version = "1.0.0"
+version = "1.0.1"
 description = "Freight: routes with your rates, a calculator that gives the exact courier contract to make, and every courier contract checked against its route."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

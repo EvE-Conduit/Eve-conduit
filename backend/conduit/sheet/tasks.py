@@ -120,7 +120,9 @@ def _finish(status: SyncStatus, result: str, message: str, failed: bool = False,
 def sync_now(character, sections: list[str] | None = None):
     """Queue an immediate sync, e.g. right after a character is linked."""
     for key in sections or registry.synced():
-        SyncStatus.objects.update_or_create(character=character, section=key, defaults={"next_due": timezone.now()})
+        # Push next_due forward as schedule_syncs does, so it doesn't queue the section a second time.
+        next_due = timezone.now() + timedelta(seconds=registry.SECTIONS[key].interval)
+        SyncStatus.objects.update_or_create(character=character, section=key, defaults={"next_due": next_due})
         # The default queue, so someone waiting for it doesn't queue behind the routine syncs.
         sync_section.apply_async((character.pk, key), queue="default")
 

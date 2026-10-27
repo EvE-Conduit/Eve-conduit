@@ -20,7 +20,9 @@ export function Avatar({
   /** Small presence dot in the corner. */
   status?: "online" | "offline" | "warning";
 }) {
-  const [failed, setFailed] = useState(false);
+  // Remembers which picture failed, so a new src (another character in the same row) gets its own try.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = !!src && failedSrc === src;
   // HUD look: large faces are hexagons, small ones square.
   const shape = rounded === "full" ? "rounded-full" : size === "xl" || size === "lg" ? "hex" : "rounded-control";
   const face = (
@@ -33,7 +35,7 @@ export function Avatar({
       )}
     >
       {src && !failed ? (
-        <img src={src} alt={name} loading="lazy" className="size-full object-cover" onError={() => setFailed(true)} />
+        <img src={src} alt={name} loading="lazy" className="size-full object-cover" onError={() => setFailedSrc(src)} />
       ) : (
         initials(name)
       )}

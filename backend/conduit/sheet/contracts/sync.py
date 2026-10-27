@@ -1,8 +1,9 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import F
 
-from conduit.esi.exceptions import EsiError
+from conduit.esi.exceptions import EsiBackoff, EsiError
 from conduit.eve.tasks import ensure_eve_names
 from conduit.sheet.locations import resolve
 from conduit.sheet.util import parse_dt
@@ -13,6 +14,8 @@ from .models import Contract, ContractItem
 FIELDS = ["status", "acceptor_id", "date_accepted", "date_completed", "date_expired", "price", "reward", "buyout"]
 #: New contracts whose items we fetch per sync; the rest follow on later syncs.
 ITEM_FETCH_LIMIT = 40
+#: Failed fetches after which a contract's items are no longer asked for.
+MAX_FETCH_FAILURES = 5
 
 
 def _dec(v):
@@ -58,12 +61,22 @@ def sync(character, esi):
         )
 
     # Contents never change, so fetch them once. Courier contracts have none worth listing.
-    pending = Contract.objects.filter(character=character, items_fetched=False).exclude(type="courier")[:ITEM_FETCH_LIMIT]
+    # Fewest failures first, so contents ESI keeps refusing can't hold up the others; give up after a few.
+    pending = (
+        Contract.objects.filter(character=character, items_fetched=False, fetch_failures__lt=MAX_FETCH_FAILURES)
+        .exclude(type="courier")
+        .order_by("fetch_failures", "-date_issued", "contract_id")[:ITEM_FETCH_LIMIT]
+    )
     for contract in pending:
         try:
             items = esi.get(f"/characters/{cid}/contracts/{contract.contract_id}/items", character=character).data
+        except EsiBackoff:
+            break  # the rest wait for the next sync
         except EsiError as exc:
             if exc.status != 404:  # 404: too old for ESI to list; stop asking
+                Contract.objects.filter(pk=contract.pk).update(fetch_failures=F("fetch_failures") + 1)
+                if exc.status == 0 or exc.status >= 500:
+                    break  # ESI is in trouble: don't burn its shared error limit on the rest
                 continue
             items = []
         with transaction.atomic():

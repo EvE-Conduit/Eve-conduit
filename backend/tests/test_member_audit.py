@@ -103,7 +103,11 @@ def test_character_sheet_lists_the_owners_alts(people, client):
     Character.objects.create(id=90000022, name="Alt In Corp", owner_hash="h22", user=one, corporation=one.main_character.corporation)
     client.force_login(auditor)
     alts = client.get("/api/characters/90000022").json()["alts"]
-    assert [(a["name"], a["is_main"], a["viewable"]) for a in alts] == [("Line One", True, True), ("Alt Out Of Corp", False, False)]
+    # The alt outside the auditor's corporation isn't theirs to know about.
+    assert [(a["name"], a["is_main"], a["viewable"]) for a in alts] == [("Line One", True, True)]
+    client.force_login(one)  # the owner sees all of their own
+    alts = client.get("/api/characters/90000022").json()["alts"]
+    assert [(a["name"], a["is_main"], a["viewable"]) for a in alts] == [("Line One", True, True), ("Alt Out Of Corp", False, True)]
     assert alts[1]["corporation"]["ticker"] == "OTHER"
 
 

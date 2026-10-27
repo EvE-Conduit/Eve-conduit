@@ -356,6 +356,14 @@ def test_permissions(books, officer, api_client):
     r = api_client.call("post", f"{BASE}/rules", {"party_id": SRP_GUY, "category": "SRP payouts", "direction": "out", "corporation_id": corp.pk})
     assert r.status_code == 200 and r.json()["party_name"] == "SRP Guy"
     assert api_client.call("post", f"{BASE}/rules", {"party_id": SRP_GUY, "category": "X", "corporation_id": sister.pk}).status_code == 403
+    # The settings list rules for every corporation and for the ones they may see, not the sister corporation's.
+    CounterpartyRule.objects.create(party_id=BUYBACK, category="Buyback", corporation_id=sister.pk)
+    CounterpartyRule.objects.create(party_id=BUYBACK, category="Buyback", direction="in")
+    shown = [(r["category"], r["corporation_id"]) for r in api_client.get(f"{BASE}/settings").json()["rules"]]
+    assert sorted(shown, key=str) == sorted([("SRP payouts", corp.pk), ("Buyback", None)], key=str)
+    api_client.force_login(officer)
+    assert len(api_client.get(f"{BASE}/settings").json()["rules"]) == 3
+    CounterpartyRule.objects.filter(party_id=BUYBACK).delete()
 
     api_client.force_login(officer)
     assert api_client.call("put", f"{BASE}/categories/player_donation", {"category": "Donations"}).status_code == 200

@@ -263,6 +263,10 @@ def test_corp_view_is_limited_by_sheet_access(corp_setup, api_client):
     data = api_client.call("get", "/api/p/pi/corp").json()
     assert data["totals"]["colonies"] == 3 and data["totals"]["members"] == 2  # not the other corporation's
     assert [c["name"] for c in data["corporations"]] == ["Test Corp"]
+    # Looking at others' colonies is snooping, like opening the Planets tab of their sheet; their own isn't.
+    from conduit.audit.models import SnoopEvent
+
+    assert set(SnoopEvent.objects.values_list("viewer_id", "character_id", "section")) == {(officer.pk, 90000001, "planets"), (officer.pk, 90000004, "planets")}
 
 
 def test_corp_aggregation_and_idle_colonies(corp_setup, setup):

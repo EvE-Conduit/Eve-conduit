@@ -242,6 +242,11 @@ def _seen(s: MumbleSettings, version: str = "") -> None:
     s.save(update_fields=fields)
 
 
+#: What a refused login is told while its name is locked.
+LOCKED_REASON = "too many failed logins; wait a few minutes"
+LOCKED_REASON_CERT = LOCKED_REASON + " (signing in with your remembered certificate still works)"
+
+
 def _too_many_failures(name: str) -> bool:
     return (cache.get(f"mumble:fails:{name.lower()}") or 0) >= FAILS_LIMIT
 
@@ -264,8 +269,6 @@ def authenticate(name: str, password: str = "", certhash: str = "", strong: bool
     name = (name or "").strip()
     if not name:
         return {"result": "reject"}
-    if _too_many_failures(name):
-        return {"result": "reject", "reason": "too many failed logins; wait a few minutes"}
     certhash = (certhash or "").strip().lower()
     acct = (MumbleUser.objects.filter(username__iexact=name)
             .select_related("user__main_character__corporation", "user__main_character__alliance", "user__state").first())
@@ -273,11 +276,18 @@ def authenticate(name: str, password: str = "", certhash: str = "", strong: bool
         user = acct.user
         if not has_access(user):
             return {"result": "reject", "reason": "no access"}
-        by_password = bool(password) and check_password(password, acct.password_hash)
-        by_cert = (not by_password and s.allow_cert_auth and bool(certhash) and bool(acct.cert_hash)
+        # A remembered certificate that matches always gets in, even while the name is locked: Mumble doesn't tell
+        # the site where a login comes from, so someone guessing passwords could otherwise lock the member out.
+        by_cert = (s.allow_cert_auth and bool(certhash) and bool(acct.cert_hash)
                    and secrets.compare_digest(acct.cert_hash, certhash))
-        if not (by_password or by_cert):
-            return _failed(name)
+        by_password = False
+        if not by_cert:
+            # Passwords stay refused for the lockout window, so they can't be guessed.
+            if _too_many_failures(name):
+                return {"result": "reject", "reason": LOCKED_REASON_CERT if s.allow_cert_auth and acct.cert_hash else LOCKED_REASON}
+            by_password = bool(password) and check_password(password, acct.password_hash)
+            if not by_password:
+                return _failed(name)
         acct.display_name = display_name_for(user, s)
         acct.groups = desired_groups(user)
         acct.last_login_at = timezone.now()
@@ -291,6 +301,8 @@ def authenticate(name: str, password: str = "", certhash: str = "", strong: bool
     if temp is not None:
         if not temp.usable():
             return {"result": "reject", "reason": "temporary access has ended"}
+        if _too_many_failures(name):
+            return {"result": "reject", "reason": LOCKED_REASON}
         if not (password and check_password(password, temp.password_hash)):
             return _failed(name)
         temp.last_login_at = timezone.now()
@@ -381,7 +393,8 @@ def redeem_temp_link(link: TempLink, name: str, ip: str | None, s: MumbleSetting
         raise MumbleError("Temporary access isn't available", 404)
     status = link.status()
     if status != "active":
-        raise MumbleError({"revoked": "This link was withdrawn", "expired": "This link has expired", "used_up": "This link has been used up"}[status], 410)
+        raise MumbleError({"revoked": "This link was withdrawn", "expired": "This link has expired", "used_up": "This link has been used up",
+                           "creator_lost": "Whoever made this link can't hand out temporary access any more"}[status], 410)
     name = " ".join((name or "").split())[:60]
     if len(name) < 2:
         raise MumbleError("Enter the name you want to use (at least 2 characters)")

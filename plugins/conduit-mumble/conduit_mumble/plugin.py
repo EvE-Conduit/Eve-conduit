@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class MumblePlugin(Plugin):
     id = "mumble"
     name = "Mumble"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Members get a Mumble account whose groups follow their groups and state; temporary access links let guests in for a while."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-mumble"

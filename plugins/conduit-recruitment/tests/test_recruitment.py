@@ -110,6 +110,29 @@ def test_accepting_adds_the_groups(setup, api_client):
     assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/decide", {"accept": False}).status_code == 400
 
 
+def test_a_second_decision_on_a_stale_copy_fails(setup):
+    """Two recruiters (or the applicant withdrawing) acting at once each hold a copy loaded while it was open; only
+    the first gets through."""
+    form, recruiter, applicant, members = setup
+    app = services.apply(applicant, form, answers())
+    first, second, mine = (Application.objects.get(pk=app.pk) for _ in range(3))
+    services.decide(first, recruiter, True)
+    with pytest.raises(services.RecruitError, match="already closed"):
+        services.decide(second, recruiter, False)
+    with pytest.raises(services.RecruitError, match="already closed"):
+        services.withdraw(applicant, mine)
+    with pytest.raises(services.RecruitError, match="closed"):
+        services.claim(Application.objects.get(pk=app.pk), recruiter)
+    assert Application.objects.get(pk=app.pk).status == Application.Status.ACCEPTED
+
+    other = services.apply(make_user(90000081, "Second Hopeful", member=False), form, answers())
+    stale = Application.objects.get(pk=other.pk)
+    services.withdraw(other.user, Application.objects.get(pk=other.pk))
+    with pytest.raises(services.RecruitError, match="already closed"):
+        services.decide(stale, recruiter, True)
+    assert not other.user.groups.filter(pk=members.pk).exists()
+
+
 def test_withdraw_and_reapply(setup, api_client):
     form, _, applicant, _ = setup
     api_client.force_login(applicant)
@@ -289,13 +312,18 @@ def test_applicants_name_a_member_who_referred_them(setup, api_client):
     api_client.force_login(applicant)
     hits = api_client.call("get", "/api/p/recruit/referrers?q=sam").json()
     assert [h["name"] for h in hits] == ["Scout Sam"]
-    assert api_client.call("get", "/api/p/recruit/referrers?q=s").json() == []
+    assert api_client.call("get", "/api/p/recruit/referrers?q=sa").json() == []
+    # Only for someone who could name a referrer now: not with every form closed, not while an application is open.
+    Form.objects.update(open=False)
+    assert api_client.call("get", "/api/p/recruit/referrers?q=sam").json() == []
+    Form.objects.update(open=True)
 
     bad = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers(), "referrer_id": applicant.pk})
     assert bad.status_code == 400 and "referred you" in bad.json()["detail"]
     ok = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers(), "referrer_id": scout.pk})
     assert ok.json()["referrer"]["name"] == "Scout Sam"
     app = Application.objects.get(pk=ok.json()["id"])
+    assert api_client.call("get", "/api/p/recruit/referrers?q=sam").json() == []
 
     api_client.force_login(scout)
     stats = api_client.call("get", "/api/p/recruit/referrals").json()

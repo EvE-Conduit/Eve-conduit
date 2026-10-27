@@ -145,3 +145,62 @@ def test_sso_login_lands_on_the_start_page(client, monkeypatch):
     client.get("/sso/login?next=/wallet")
     resp = client.get(f"/sso/callback?code=abc&state={client.session['conduit_sso']['state']}")
     assert resp["Location"] == "/wallet"
+
+
+@pytest.mark.django_db
+def test_selling_a_character_updates_the_sellers_account(user, django_capture_on_commit_callbacks):
+    """The seller loses it as if they had removed it: another main, their state rechecked, character.removed sent."""
+    from conduit.access.models import State
+    from conduit.audit.models import AuditEvent
+    from conduit.events import bus
+
+    sold_id = user.main_character.pk
+    corp_state = State.objects.create(name="Corp", priority=10)
+    corp_state.member_characters.add(user.main_character)
+    User.objects.filter(pk=user.pk).update(state=corp_state)
+    Character.objects.create(id=91000009, name="Remaining Alt", owner_hash="alt-hash", user=user)
+    seen = []
+    bus.on("character.removed")(seen.append)
+    try:
+        with django_capture_on_commit_callbacks(execute=True):
+            char = link_character(info(sold_id, name="Pilot One", owner="new-owner"), TOKEN, None)
+    finally:
+        bus.off("character.removed", seen.append)
+    assert char.user_id != user.pk
+    user.refresh_from_db()
+    assert user.main_character_id == 91000009
+    assert user.state is None  # the Corp state followed the sold main, not the remaining alt
+    assert [(e.payload["user_id"], e.payload["character_id"]) for e in seen] == [(user.pk, sold_id)]
+    assert AuditEvent.objects.get(action="character.removed").details["user_id"] == user.pk
+
+
+@pytest.mark.django_db
+def test_simultaneous_first_logins_share_one_account(monkeypatch):
+    """The second of two logins at once finds the character the first one saved, instead of failing."""
+    from django.db.models.query import QuerySet
+
+    first = link_character(info(), TOKEN, None)
+    real_first = QuerySet.first
+    missed = []
+
+    def first_misses_once(qs):
+        # The losing login read before the winning one had saved the character.
+        if qs.model is Character and not missed:
+            missed.append(True)
+            return None
+        return real_first(qs)
+
+    monkeypatch.setattr(QuerySet, "first", first_misses_once)
+    again = link_character(info(), TOKEN, None)
+    assert missed and again.user_id == first.user_id
+    assert User.objects.count() == 1  # the losing login's half-made account was rolled back
+
+
+@pytest.mark.django_db
+def test_new_accounts_pick_another_username_when_taken(monkeypatch):
+    from conduit.accounts import services
+
+    User.objects.create(username="char_91000001")
+    names = iter(["char_91000001", "char_91000001_abc"])  # someone took the name between the check and the save
+    monkeypatch.setattr(services, "_new_username", lambda character_id: next(names))
+    assert services.create_user(91000001).username == "char_91000001_abc"

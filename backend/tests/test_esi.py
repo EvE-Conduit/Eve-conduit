@@ -166,3 +166,101 @@ def test_low_bucket_pause_ends_once_tokens_are_back(monkeypatch):
     now[0] += 25
     esi.get("/characters/5/wallet/journal", params={"page": 2})
     assert len(calls) == 2
+
+
+# --- token refresh lock -----------------------------------------------------------
+
+
+@pytest.fixture
+def stale_token(user, monkeypatch):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from conduit.esi import tokens
+
+    token = user.main_character.token
+    token.expires_at = timezone.now() - timedelta(minutes=1)
+    token.save()
+    refreshes = []
+
+    def refresh(data):
+        refreshes.append(data["refresh_token"])
+        return {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 1199}
+
+    monkeypatch.setattr(tokens, "_token_request", refresh)
+    return token, refreshes
+
+
+@pytest.mark.django_db
+def test_lock_holder_refreshes_and_releases_the_lock(user, stale_token):
+    from django.core.cache import cache
+
+    from conduit.esi import tokens
+
+    _, refreshes = stale_token
+    assert tokens.get_access_token(user.main_character) == "new-access"
+    assert refreshes == ["refresh"]
+    assert cache.get(f"esi:refresh-lock:{user.main_character.pk}") is None
+
+
+@pytest.mark.django_db
+def test_waiter_that_times_out_retries_later_without_refreshing(user, stale_token, monkeypatch):
+    """Refreshing with the refresh token the holder is rotating would burn it; and the lock isn't the waiter's to drop."""
+    from django.core.cache import cache
+
+    from conduit.esi import tokens
+
+    _, refreshes = stale_token
+    lock = f"esi:refresh-lock:{user.main_character.pk}"
+    cache.add(lock, 1, 60)
+    monkeypatch.setattr(tokens, "REFRESH_WAIT", 0)
+    with pytest.raises(EsiBackoff):
+        tokens.get_access_token(user.main_character)
+    assert refreshes == []
+    assert cache.get(lock) == 1
+
+
+@pytest.mark.django_db
+def test_waiter_uses_the_token_the_holder_refreshed(user, stale_token, monkeypatch):
+    from datetime import timedelta
+
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    from conduit.accounts.models import Token
+    from conduit.esi import tokens
+
+    _, refreshes = stale_token
+    cache.add(f"esi:refresh-lock:{user.main_character.pk}", 1, 60)
+
+    def holder_finishes(_):
+        Token.objects.filter(character=user.main_character).update(access_token="holders", expires_at=timezone.now() + timedelta(minutes=20))
+
+    monkeypatch.setattr(tokens.time, "sleep", holder_finishes)
+    assert tokens.get_access_token(user.main_character) == "holders"
+    assert refreshes == []
+
+
+@pytest.mark.django_db
+def test_waiter_stops_when_the_holder_found_the_token_dead(user, stale_token, monkeypatch, django_capture_on_commit_callbacks):
+    from django.core.cache import cache
+
+    from conduit.accounts.models import Token
+    from conduit.esi import tokens
+    from conduit.esi.exceptions import TokenInvalid
+    from conduit.notify.models import Notification
+
+    _, refreshes = stale_token
+    cache.add(f"esi:refresh-lock:{user.main_character.pk}", 1, 60)
+    monkeypatch.setattr(tokens.time, "sleep", lambda _: Token.objects.filter(character=user.main_character).update(valid=False))
+    with django_capture_on_commit_callbacks(execute=True), pytest.raises(TokenInvalid):
+        tokens.get_access_token(user.main_character)
+    assert refreshes == []
+    assert not Notification.objects.filter(user=user, category="tokens").exists()  # the holder already told the owner
+
+
+def test_refresh_lock_outlives_a_refresh_request():
+    from conduit.esi import tokens
+
+    assert tokens.REFRESH_LOCK_TTL > tokens.SSO_TIMEOUT > 0

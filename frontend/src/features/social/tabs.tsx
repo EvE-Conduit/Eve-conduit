@@ -517,7 +517,7 @@ export function KillmailsTab({ header }: { header: CharacterHeader }) {
       ),
       className: "max-w-[220px]",
     },
-    { header: "Final blow", cell: (k) => <span className="text-muted">{k.final_blow ?? "NPC"} <span className="text-subtle">+{k.attackers - 1}</span></span>, className: "max-w-[200px]" },
+    { header: "Final blow", cell: (k) => <span className="text-muted">{k.final_blow ?? "NPC"} {k.attackers > 1 && <span className="text-subtle">+{k.attackers - 1}</span>}</span>, className: "max-w-[200px]" },
     { header: "Where", cell: (k) => (k.system ? <span className="inline-flex items-center gap-1.5"><Security value={k.system.security} />{k.system.name}</span> : "—") },
     { header: "Value", align: "right", cell: (k) => isk(k.value) },
     {

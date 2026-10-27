@@ -26,6 +26,8 @@ class Contract(models.Model):
     date_accepted = models.DateTimeField(null=True)
     date_completed = models.DateTimeField(null=True)
     items_fetched = models.BooleanField(default=False)
+    #: Failed item fetches in a row; past a few the items are no longer asked for.
+    fetch_failures = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         unique_together = [("character", "contract_id")]
