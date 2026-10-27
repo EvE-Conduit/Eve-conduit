@@ -36,6 +36,19 @@ account into another; `from_user_id`, `to_user_id`, `records_moved`), `token.inv
   either on every message or only on events that ask for one (`ping: true` in the payload, e.g. a timer with
   *Ping Discord* on). An event may also name roles to ping itself (`mention_roles`: a list of role ids), used
   when it asks for a ping. Nothing else can ping: text people typed is never a mention.
+
+  **Alerts** a plugin's managers may want pinged (fuel running low, a new application) are registered with
+  `alert=True` and the permission that may set their pings:
+
+  ```python
+  bus.register("stock.shortage", "Stock running low", plugin="stock", alert=True, manage="stock.manage_stock")
+  ```
+
+  Put `<DiscordPings plugin="stock" />` from `@conduit/sdk` on the plugin's settings page. Once a Discord webhook
+  exists, people with that permission (or `site.manage_api`) switch the ping on per alert there, and pick roles when
+  the Discord plugin is linked to a server (`/api/pings?plugin=<id>`, `PUT /api/pings/<event>`). The setting is
+  added to the event as it goes to webhooks (`ping`, `mention_roles`), unless the payload already says `ping`
+  itself, as ops and timers do per item. `RoleChips` is the role picker on its own.
 - **Slack**: a text message.
 - **JSON**: `{"event", "at", "data"}` with `X-Conduit-Event` and `X-Conduit-Signature: sha256=<hex>`, the
   HMAC-SHA256 of the raw body keyed with the webhook's secret. Verify it before trusting the body. The secret is

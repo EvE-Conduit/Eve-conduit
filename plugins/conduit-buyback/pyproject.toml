@@ -1,6 +1,6 @@
 [project]
 name = "conduit-buyback"
-version = "1.2.3"
+version = "1.2.4"
 description = "Buyback programs: members paste their items for an instant quote, contract them to you, and every contract is checked against its quote."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -16,7 +16,7 @@ name = "Buyback"
 icon = "shopping-cart"
 category = "Industry"
 # Public programs, and reprocessing data from the SDE.
-min_conduit = "0.5.33"
+min_conduit = "0.5.55"
 esi_scopes = ["esi-contracts.read_character_contracts.v1", "esi-contracts.read_corporation_contracts.v1"]
 
 [build-system]

@@ -11,14 +11,16 @@ News and orders from leadership, on a page of its own and on the dashboard.
 - **Bulletin on the landing page:** announcements are also posted to the home page (`/home`) as a newsletter: the
   pinned or newest one as the lead story with its full text, and the next three beside it. Each member only sees
   what's meant for them. Switch "Post to the landing page" off for announcements that should stay on this page, and
-  hide the whole Bulletin under Administration → Settings → Landing page → From plugins. Needs EvE Conduit 0.5.18 or
-  newer (older versions just don't show it).
+  hide the whole Bulletin under Administration → Settings → Landing page → From plugins.
 - **Telling people:** when an announcement goes out, everyone who can see it gets a notification (urgent ones even
   if they muted announcements), and an event fires, so a Discord webhook under
   Administration → Integrations can post it to a channel. Announcements for everyone fire
   `announcements.published`; ones for some states or groups only fire `announcements.published_restricted`
   instead (with the audience in the payload), so they never land in a channel everyone can read unless you send
   that event there.
+- **Discord pings:** writers can make both events ping on Discord under **Discord pings** at the top of the
+  announcements page. It needs a Discord webhook under Administration → Integrations; with the Discord plugin
+  linked you also pick the roles to ping.
 
 To make it the first page people see after signing in, pick **Announcements** under Administration → Settings →
-Start page (needs EvE Conduit 0.5.7 or newer; the plugin itself works on 0.5.6).
+Start page. Needs EvE Conduit 0.5.55 or newer.

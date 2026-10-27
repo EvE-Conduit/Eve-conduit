@@ -11,4 +11,5 @@ class StockConfig(AppConfig):
         from conduit.notify.services import register_category
 
         register_category("p.stock", "Doctrine stock")
-        bus.register("stock.shortage", "Stock running low", "A ship or item at a staging location fell below its low mark", plugin="stock")
+        bus.register("stock.shortage", "Stock running low", "A ship or item at a staging location fell below its low mark", plugin="stock",
+                     alert=True, manage="stock.manage_stock")

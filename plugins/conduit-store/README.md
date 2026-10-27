@@ -24,7 +24,8 @@ Members earn points for what they do for the corp and spend them in a store that
 - **Managing** (permission `store.manage_store`): items, earning and points by hand.
 - **Dashboard widget:** your balance and what you earned in the last 30 days.
 - **Webhooks:** `store.order_placed` and `store.order_fulfilled` can be sent to Discord or Slack under
-  Administration → Integrations.
+  Administration → Integrations. New orders can ping on Discord: switch it on under Discord pings on the Manage page.
+  It needs a Discord webhook under Administration → Integrations; with the Discord plugin linked you also pick roles.
 
-Members only. Needs EvE Conduit 0.5.52 or newer. Give the two permissions to your officers' group under
+Members only. Needs EvE Conduit 0.5.55 or newer. Give the two permissions to your officers' group under
 Administration → Groups.

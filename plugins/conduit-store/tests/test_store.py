@@ -228,3 +228,24 @@ def test_real_referral_and_project_delivery_pay_points(setup, django_capture_on_
     with django_capture_on_commit_callbacks(execute=True):
         projects_services.confirm(c, officer)
     assert services.balance(member) == 130
+
+
+def test_store_order_placed_is_a_discord_alert():
+    et = bus.EVENT_TYPES["store.order_placed"]
+    assert et.alert and et.manage == "store.manage_store" and et.plugin == "store"
+
+
+@pytest.mark.django_db
+def test_managers_switch_on_discord_pings(api_client):
+    from conduit.events.models import EventPing
+
+    manager = make_user(90000900, "Ping Manager")
+    manager.user_permissions.add(Permission.objects.get(content_type__app_label="store", codename="manage_store"))
+    other = make_user(90000901, "Not A Manager")
+    other.user_permissions.add(Permission.objects.get(content_type__app_label="store", codename="fulfil_orders"))
+    api_client.force_login(other)  # an officer who hands orders over may not
+    assert api_client.call("put", "/api/pings/store.order_placed", {"ping": True}).status_code == 403
+    api_client.force_login(manager)
+    resp = api_client.call("put", "/api/pings/store.order_placed", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="store.order_placed").roles == ["123"]

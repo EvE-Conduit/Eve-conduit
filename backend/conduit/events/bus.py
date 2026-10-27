@@ -40,6 +40,10 @@ class EventType:
     #: Carries things meant for some people only (one member's notifications, a leadership-only announcement): sent
     #: only to webhooks that picked it by name, never to "every event" ones.
     private: bool = False
+    #: An alert people may want pinged for on Discord (a structure running out of fuel, a new application). Who may
+    #: say whether it pings, and whom, is ``manage`` (a permission; ``site.manage_api`` may always). See ``pings``.
+    alert: bool = False
+    manage: str | None = None
 
 
 @dataclass
@@ -56,9 +60,10 @@ EVENT_TYPES: dict[str, EventType] = {}
 _handlers: dict[str, list[Callable[[Event], None]]] = defaultdict(list)
 
 
-def register(name: str, label: str, description: str = "", plugin: str | None = None, private: bool = False) -> EventType:
-    """Declare an event so admins can pick it for webhooks. ``private``: see ``EventType.private``."""
-    EVENT_TYPES[name] = EventType(name, label, description, plugin, private)
+def register(name: str, label: str, description: str = "", plugin: str | None = None, private: bool = False,
+             alert: bool = False, manage: str | None = None) -> EventType:
+    """Declare an event so admins can pick it for webhooks. ``private``, ``alert`` and ``manage``: see ``EventType``."""
+    EVENT_TYPES[name] = EventType(name, label, description, plugin, private, alert, manage)
     return EVENT_TYPES[name]
 
 

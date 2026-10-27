@@ -8,7 +8,7 @@ from conduit.plugins import NavItem, Plugin
 class InactivityPlugin(Plugin):
     id = "inactivity"
     name = "Inactivity"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Members who have gone quiet, from site sign-ins, game logins and fleets, and leave of absence so nobody is chased by mistake."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-inactivity"

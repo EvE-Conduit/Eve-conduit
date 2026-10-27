@@ -130,6 +130,60 @@ def test_private_events_only_go_to_webhooks_that_chose_them(monkeypatch, django_
     assert bus.is_private("notification.created") and not bus.is_private("user.created")
 
 
+@pytest.fixture
+def alert_event():
+    bus.register("demo.alert", "Demo alert", "Something needs looking at", plugin="demo", alert=True, manage="auth.change_group")
+    bus.register("demo.quiet", "Demo event", plugin="demo")
+    yield "demo.alert"
+    bus.EVENT_TYPES.pop("demo.alert", None)
+    bus.EVENT_TYPES.pop("demo.quiet", None)
+
+
+@pytest.mark.django_db
+def test_alert_pings_follow_their_setting(alert_event, monkeypatch, django_capture_on_commit_callbacks):
+    from conduit.events.models import EventPing
+
+    Webhook.objects.create(name="Alerts", kind="discord", url="https://example.com/d", events=[], mention="here")
+    sent = []
+    fake_delivery(monkeypatch, lambda request: sent.append(json.loads(request.content)) or httpx.Response(204))
+    with django_capture_on_commit_callbacks(execute=True):
+        bus.emit("demo.alert", title="Fuel low")
+    assert sent[-1]["content"] == ""  # off until someone switches it on
+    EventPing.objects.create(event="demo.alert", ping=True, roles=["111", "nope"])
+    with django_capture_on_commit_callbacks(execute=True):
+        bus.emit("demo.alert", title="Fuel low")
+        bus.emit("demo.quiet", title="Nothing")
+        bus.emit("demo.alert", title="Asked itself", ping=False)  # an event that decides for itself is left alone
+    assert [m["content"] for m in sent[1:]] == ["@here <@&111>", "", ""]
+
+
+@pytest.mark.django_db
+def test_ping_settings_api(alert_event, user, admin_user, api_client):
+    from conduit.events.models import EventPing
+
+    api_client.force_login(user)
+    # Nothing to show without a Discord webhook, or without the permission.
+    assert api_client.call("get", "/api/pings?plugin=demo").json()["events"] == []
+    Webhook.objects.create(name="Alerts", kind="discord", url="https://example.com/d", events=["demo.alert"])
+    assert api_client.call("get", "/api/pings?plugin=demo").json() == {"configured": True, "events": [], "discord": {"available": False, "roles": []}}
+    assert api_client.call("put", "/api/pings/demo.alert", {"ping": True}).status_code == 403
+    group = Group.objects.create(name="Logistics")
+    group.permissions.add(Permission.objects.get(codename="change_group"))
+    user.groups.add(group)
+    user = type(user).objects.get(pk=user.pk)
+    api_client.force_login(user)
+    out = api_client.call("get", "/api/pings?plugin=demo").json()
+    assert [e["event"] for e in out["events"]] == ["demo.alert"]  # only alerts
+    assert out["events"][0]["webhooks"] == 1 and out["events"][0]["webhook_mentions"] == 0
+    resp = api_client.call("put", "/api/pings/demo.alert", {"ping": True, "roles": ["222", "x", "222"]})
+    assert resp.status_code == 200 and resp.json()["roles"] == ["222"]
+    assert EventPing.objects.get(event="demo.alert").ping
+    assert api_client.call("put", "/api/pings/demo.quiet", {"ping": True}).status_code == 404
+    assert AuditEvent.objects.filter(action="webhook.ping_changed").exists()
+    api_client.force_login(admin_user)  # site.manage_api may set any alert
+    assert api_client.call("put", "/api/pings/demo.alert", {"ping": False}).json()["ping"] is False
+
+
 @pytest.mark.django_db
 def test_failed_delivery_is_recorded(monkeypatch):
     from conduit.events.webhooks import deliver

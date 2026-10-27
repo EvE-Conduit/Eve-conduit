@@ -11,7 +11,8 @@ class ProjectsConfig(AppConfig):
         from conduit.notify.services import register_category
 
         register_category("p.projects", "Industry projects")
-        bus.register("projects.created", "Project started", "A new industry project was put on the board", plugin="projects")
+        bus.register("projects.created", "Project started", "A new industry project was put on the board", plugin="projects",
+                     alert=True, manage="projects.manage_projects")
         bus.register("projects.contribution_delivered", "Project delivery confirmed",
                      "A manager confirmed a member's delivery to an industry project (with the Corp Store points it earns)",
                      plugin="projects")

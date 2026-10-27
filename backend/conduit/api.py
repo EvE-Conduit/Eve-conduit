@@ -13,6 +13,7 @@ from conduit.accounts.api import router as me_router
 from conduit.audit.api import router as admin_logs_router
 from conduit.corp.api import router as corp_router
 from conduit.esi.api import router as admin_esi_router
+from conduit.events.api import pings_router
 from conduit.events.api import router as admin_events_router
 from conduit.external.admin_api import router as admin_external_router
 from conduit.plugins import registry
@@ -42,6 +43,7 @@ api.add_router("/characters", sheet_router, auth=django_auth)
 api.add_router("/member-audit", member_audit_router, auth=django_auth)
 api.add_router("/groups", group_leader_router, auth=django_auth)
 api.add_router("/corporations", corp_router, auth=django_auth)
+api.add_router("/pings", pings_router, auth=django_auth)
 api.add_router("/admin", admin_site_router, auth=django_auth)
 api.add_router("/admin", admin_access_router, auth=django_auth)
 api.add_router("/admin", admin_modules_router, auth=django_auth)

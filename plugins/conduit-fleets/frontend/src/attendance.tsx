@@ -1,6 +1,6 @@
-// Attendance per member (fleets.manage_fleets), and the fleet types.
+// Attendance per member (fleets.manage_fleets), the fleet types and the Discord ping for new fleets.
 import {
-  api, Avatar, Badge, Button, Card, CardHeader, EmptyState, Input, PageHeader, Segmented, Select, Skeleton, Table, TableToolbar, Td, Th,
+  api, Avatar, Badge, Button, Card, CardHeader, DiscordPings, EmptyState, Input, PageHeader, Segmented, Select, Skeleton, Table, TableToolbar, Td, Th,
   THead, timeAgo, toast, Tr,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -91,7 +91,10 @@ export function AttendancePage() {
             </Table>
           )}
         </Card>
-        <FleetTypes />
+        <div className="space-y-6">
+          <FleetTypes />
+          <DiscordPings plugin="fleets" />
+        </div>
       </div>
     </>
   );

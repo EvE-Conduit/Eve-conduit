@@ -423,3 +423,22 @@ def test_copy_jobs_only_from_corporations_the_manager_sees(stocked, api_client, 
     api_client.force_login(manager)
     assert api_client.call("get", f"{BASE}/requests/{r.pk}/jobs").json() == []
     assert api_client.call("post", f"{BASE}/requests/{r.pk}/start", {"job_id": 5151}).status_code == 400
+
+
+def test_requests_and_overdue_loans_are_discord_alerts():
+    for name in ("blueprints.request_created", "blueprints.loan_overdue"):
+        et = bus.EVENT_TYPES[name]
+        assert et.alert and et.manage == "blueprint_library.manage_requests" and et.plugin == "blueprints"
+    assert not bus.EVENT_TYPES["blueprints.request_delivered"].alert
+
+
+def test_managers_switch_on_discord_pings(setup, api_client):
+    from conduit.events.models import EventPing
+
+    manager, pilot, _ = setup
+    api_client.force_login(pilot)  # a member may not
+    assert api_client.call("put", "/api/pings/blueprints.request_created", {"ping": True}).status_code == 403
+    api_client.force_login(manager)
+    resp = api_client.call("put", "/api/pings/blueprints.loan_overdue", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="blueprints.loan_overdue").roles == ["123"]

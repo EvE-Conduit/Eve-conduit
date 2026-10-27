@@ -107,8 +107,9 @@ def send(url: str, body: bytes, headers: dict[str, str]) -> int:
 @bus.on("*")
 def _queue(event: bus.Event):
     from .models import Webhook
+    from .pings import apply
 
-    data = event.as_dict()
+    data = apply(event.as_dict())
     for hook_id, events in Webhook.objects.filter(enabled=True).values_list("pk", "events"):
         # "Every event" leaves out private ones (one member's notifications, leadership-only announcements).
         if (not events and not bus.is_private(event.name)) or event.name in events:

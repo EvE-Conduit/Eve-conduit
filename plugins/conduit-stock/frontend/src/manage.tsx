@@ -1,6 +1,6 @@
 // Setting up staging locations, their targets and how long claims last (stock.manage_stock).
 import {
-  api, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, EmptyState, Field, Input, num, PageHeader, SearchInput, Segmented, Skeleton, toast,
+  api, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, DiscordPings, EmptyState, Field, Input, num, PageHeader, SearchInput, Segmented, Skeleton, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -74,6 +74,7 @@ export function ManagePage() {
             </Card>
           ))}
           <ClaimSettings days={data.settings.claim_days} />
+          <DiscordPings plugin="stock" />
         </div>
       )}
       {addingPlace && <PlaceDialog onClose={() => setAddingPlace(false)} />}

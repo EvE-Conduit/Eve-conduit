@@ -332,3 +332,24 @@ def test_applicants_name_a_member_who_referred_them(setup, api_client):
     stats = api_client.call("get", "/api/p/recruit/referrals").json()
     assert (stats["referred"], stats["recruited"], stats["in_progress"]) == (1, 1, 0)
     assert stats["referrals"][0]["user"]["name"] == "Hopeful Pilot" and stats["referrals"][0]["status"] == "accepted"
+
+
+def test_alerts_can_ping_discord():
+    assert bus.EVENT_TYPES["recruit.application_submitted"].alert and bus.EVENT_TYPES["recruit.application_submitted"].manage == "recruit.manage_forms"
+    assert not bus.EVENT_TYPES["recruit.application_decided"].alert
+
+
+@pytest.mark.django_db
+def test_managers_set_discord_pings(user, api_client):
+    from conduit.events.models import EventPing
+
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="recruit", codename="review_applications"))
+    user = type(user).objects.get(pk=user.pk)
+    api_client.force_login(user)
+    assert api_client.call("put", "/api/pings/recruit.application_submitted", {"ping": True}).status_code == 403
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="recruit", codename="manage_forms"))
+    user = type(user).objects.get(pk=user.pk)  # drop the permission cache
+    api_client.force_login(user)
+    resp = api_client.call("put", "/api/pings/recruit.application_submitted", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="recruit.application_submitted").roles == ["123"]

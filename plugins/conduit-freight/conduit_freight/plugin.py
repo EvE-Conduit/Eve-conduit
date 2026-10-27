@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class FreightPlugin(Plugin):
     id = "freight"
     name = "Freight"
-    version = "1.0.1"
+    version = "1.0.2"
     description = "Routes with your rates, a calculator that gives the exact courier contract to make, and every courier contract checked against its route."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-freight"

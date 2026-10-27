@@ -1,5 +1,5 @@
 // Recruitment-wide options (recruit.manage_forms).
-import { Alert, api, Card, CardBody, PageHeader, Skeleton, Switch, toast } from "@conduit/sdk";
+import { Alert, api, Card, CardBody, DiscordPings, PageHeader, Skeleton, Switch, toast } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 
@@ -14,7 +14,10 @@ export function SettingsPage() {
     <>
       <Link to="/p/recruit" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text"><Back /> Applications</Link>
       <PageHeader eyebrow="Recruitment" title="Settings" icon={<Settings />} description="Rules for everyone who applies, whichever form they use." />
-      <div className="max-w-3xl">{isLoading || !data ? <Skeleton className="h-32" /> : <RequireDiscord settings={data} />}</div>
+      <div className="max-w-3xl space-y-6">
+        {isLoading || !data ? <Skeleton className="h-32" /> : <RequireDiscord settings={data} />}
+        <DiscordPings plugin="recruit" />
+      </div>
     </>
   );
 }

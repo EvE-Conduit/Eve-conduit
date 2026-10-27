@@ -28,6 +28,9 @@ and what still needs research.
 - **Research:** corporation originals short of ME 10 / TE 20, and the ME/TE research, copying and invention jobs
   running in the corporations (a finished job nobody delivered yet shows as ready).
 - **Events and webhooks:** `blueprints.request_created`, `blueprints.request_delivered` and `blueprints.loan_overdue`.
+  New requests and overdue loans can ping on Discord: switch it on under **Discord pings** below the Request queue.
+  It needs a Discord webhook under Administration → Integrations; with the Discord plugin linked you also pick the
+  roles to ping.
 
 ## Where the data comes from
 
@@ -40,5 +43,5 @@ the corporation's assets (offices and containers), so the Assets section of the 
 too. The static data has no blueprint data, so what a blueprint makes is learned from manufacturing and reaction
 jobs seen on the site, then from its name ("Hurricane Blueprint" makes "Hurricane").
 
-Needs EvE Conduit 0.5.52 or newer. Give `blueprint_library.view_library` to members and
+Needs EvE Conduit 0.5.55 or newer. Give `blueprint_library.view_library` to members and
 `blueprint_library.manage_requests` to whoever runs the library under Administration → Groups.
