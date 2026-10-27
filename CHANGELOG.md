@@ -3,6 +3,99 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.54
+
+A security release from a full review of the core and every plugin. Update soon, and update your plugins under
+Administration → Plugins.
+
+### Security
+- **Plugin catalog signing:** the workflow that signs the plugin catalog no longer runs code from the plugins
+  repository while it holds the release signing key. The catalog is built by this repository's own script, and only
+  the signing step sees the key. The catalog's serial is now the time it was built.
+- **SeAT import:** an alt that was sold and registered here by its new owner no longer pulls the seller's main and
+  other alts into the buyer's account (where signing in with them would have opened the buyer's account).
+- **Characters imported without an owner hash** now get it from their own EVE token, when the import's token check
+  runs or at first sign-in. If no working token vouches for the old account the character is treated as sold, as
+  before. If EVE can't be reached, the sign-in is refused for now and nothing changes.
+- **Selling a character** now gives the seller's account a new main, a rechecked state and groups, and a "Character
+  removed" event and audit entry. Before, an account whose main was sold kept that main's state.
+- **Managing access** no longer lets someone grant themselves or anyone else administrator permissions they don't
+  hold. Adding to or removing from groups that grant them, editing or deleting such groups, and moving characters
+  off (or switching off) the accounts of people holding them now need someone who already holds those permissions.
+- **Affiliation updates** no longer stop, leaving members in the wrong state (and with access they should have lost),
+  when a character is unlinked during the run or one member's state update fails.
+- **Links** in notifications, the landing page, the sidebar and the start page are refused if they contain tabs, line
+  breaks or other hidden characters, which browsers could turn into a link to another site.
+- **Alts:** character sheets and Intel only list the alts on an account that the viewer may see. Before, alts you
+  couldn't open were listed without a link.
+- **Hidden groups** can no longer be joined or requested by guessing their id.
+- **Webhook addresses** (which hold Discord's and Slack's secret token) no longer appear in the service logs.
+- **The SeAT import tool** stops instead of following a redirect, so its API key is never sent to another address.
+
+### Fixes
+- Parallel workers no longer refresh the same ESI login twice, which could log a character out.
+- Killmail syncs no longer fail when two characters on the same kill sync at once, and a manual refresh no longer
+  queues each section twice.
+- Mail bodies and contract items that EVE keeps refusing are retried a few times and then given up, and fetching
+  stops early when ESI has trouble, which protects the shared ESI error limit.
+- Corporation member syncs only write the members whose data changed, which is much faster for large corporations.
+- Two sign-ins with the same new character at the same moment no longer fail with a server error.
+- Merging accounts with "move records" no longer rewrites who approved, handled or decided things.
+- Member search results open the Members page correctly for names with `&`, `#` or `?`.
+- Administration pages say "You don't have access to this page" to people without the permission, instead of
+  showing a broken page.
+- Character portraits load correctly where a list reuses a spot whose earlier picture failed, and solo kills no
+  longer show "+0" next to the final blow.
+
+### Plugins
+- **TeamSpeak 1.0.1:** someone who used a link key that was later replaced, cancelled, expired or refused loses the
+  Registered group again, and the six-hourly sync removes it from any identity the site stamped that isn't linked.
+  Registered given by hand stays.
+- **Spy Check 1.0.1:** reviewers no longer see, hear about or review findings on their own characters. A member's
+  page is only there for someone who may see one of their characters. Only one scan runs at a time.
+- **Ops 1.0.1:** ops for some states or groups only (`ops.*_restricted`) no longer go to webhooks set to "every
+  event". The FC picker searches main character names only, so it no longer shows who owns which alt.
+- **Wiki 1.0.1:** edits to pages for some states or groups go out as the private events
+  `wiki.page_created_restricted` / `wiki.page_updated_restricted`. Saving an edit no longer moves the page to the
+  top level, and only wiki managers can move pages. Images load without a referrer, and on public pages images from
+  other sites show as a link.
+- **Recruitment 1.2.2:** two recruiters deciding at once, or a decision and a withdrawal, can no longer both go
+  through. "Who referred you?" needs three letters and only answers while someone can apply.
+- **Mumble 1.0.1:** a member whose certificate is remembered still gets in after someone else typed ten wrong
+  passwords for their name (password logins still wait ten minutes). Temporary access links and their guests stop
+  working when the person who made them loses the permission or leaves.
+- **Mentoring 1.2.2:** a double click no longer makes two requests, and a second mentor claiming a request is told
+  it's taken.
+- **Corp Store 1.0.1:** fleet points no longer pay for FATs members added by hand for their own characters, or for
+  the FC's own FATs unless in-game fleet tracking saw them. Nobody can mark their own order handed over.
+- **Industry Projects 1.0.1:** points per unit are limited to 1,000,000, and so is one delivery's pay. Only
+  deliveries marked delivered on an open project can be confirmed, and an item's points can't change while a
+  delivery waits.
+- **Corp Tax 1.0.1:** marking a wallet-settled bill unpaid gives the payment back as credit (for bills settled from
+  this version on). Nobody can mark their own bill paid. The payment word has to be a word of its own in the reason
+  ("syntax" no longer counts). The minimum must be a real number.
+- **Moon Mining 1.1.2:** nobody can mark their own invoice paid.
+- **Buyback 1.2.3:** each program sets how long quotes are good for (7 days by default, 0 for no limit), and
+  contracts made from an expired quote are flagged "quote expired". The wallet balance only shows to people who may
+  see that corporation's wallets. NaN or infinite numbers are refused.
+- **Freight 1.0.1:** two services in one corporation no longer take each other's contracts. Public quotes refuse
+  numbers that aren't, instead of failing.
+- **Fleets 1.2.2:** a FAT link with no closing time closes 12 hours after the fleet, or its latest FAT round,
+  started.
+- **Leaderboard 1.0.1:** the Fleets board counts fleets flown per member (alts and rounds count once) and ignores
+  FATs members added for themselves.
+- **Skill Plans 1.0.3:** the members' progress list and CSV only name a member's best character when it's their main
+  or one you may see.
+- **Blueprint Library 1.0.1:** request managers only see the libraries of corporations they're in or may view on the
+  corporation sheet. Where blueprints are kept needs that corporation's Assets access, and where its jobs run needs
+  Industry access. Managers can't handle their own requests.
+- **Timers 1.2.1:** notifications that sync late still become timers. Timers read from a corporation's structures
+  only show (and are announced) to people who may see that corporation's Structures, and don't go to webhooks,
+  until a timer manager edits one or a member's notification reports it. Timers already on the board stay public.
+- **Corp Finance 1.0.1:** the settings only list counterparty rules for corporations whose wallets you may see.
+- **Structures & Fuel 1.0.1:** fuel warnings no longer name refuel claims that ran out or were finished.
+- **Planetary Industry 1.0.1:** opening Corporation PI is recorded in the snooper log.
+
 ## 0.5.53
 
 Ten new plugins: Corp Store, Doctrine Stock, Inactivity, Industry Projects, Structures & Fuel, Spy Check, Capital
