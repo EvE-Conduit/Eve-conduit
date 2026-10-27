@@ -539,3 +539,24 @@ def test_a_finding_made_meanwhile_doesnt_fail_the_scan(setup, monkeypatch):
     services.scan()
     f = Finding.objects.get()
     assert f.count == 1
+
+
+def test_spycheck_findings_is_a_discord_alert():
+    et = bus.EVENT_TYPES["spycheck.findings"]
+    assert et.alert and et.manage == "spycheck.manage_spycheck" and et.plugin == "spycheck"
+
+
+@pytest.mark.django_db
+def test_managers_switch_on_discord_pings(api_client):
+    from conduit.events.models import EventPing
+
+    manager = make_user(90000900, "Ping Manager")
+    manager.user_permissions.add(Permission.objects.get(content_type__app_label="spycheck", codename="manage_spycheck"))
+    other = make_user(90000901, "Not A Manager")
+    other.user_permissions.add(Permission.objects.get(content_type__app_label="spycheck", codename="view_findings"))
+    api_client.force_login(other)  # a reviewer who may only see findings may not
+    assert api_client.call("put", "/api/pings/spycheck.findings", {"ping": True}).status_code == 403
+    api_client.force_login(manager)
+    resp = api_client.call("put", "/api/pings/spycheck.findings", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="spycheck.findings").roles == ["123"]

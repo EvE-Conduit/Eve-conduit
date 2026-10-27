@@ -26,7 +26,9 @@ Who has gone quiet, and leave of absence so nobody is chased (or kicked) by mist
 - **Group rules:** "Active recently" (active in the last N days, or on leave) and "On leave of absence", for smart
   groups. They read the daily check, so they're up to a day behind.
 - **Webhooks:** `inactivity.flagged` and `inactivity.leave_posted` can be sent to Discord or Slack under
-  Administration → Integrations. They name members, so they only go to webhooks that pick them by name.
+  Administration → Integrations. They name members, so they only go to webhooks that pick them by name. Both can
+  ping Discord: switch it on under Discord pings in Inactive members → Settings. It needs a Discord webhook
+  that gets them; with the Discord plugin linked you also pick roles.
 
 `inactivity.manage_leave` also changes the settings. Give the permissions to your HR group under Administration →
-Groups. Needs EvE Conduit 0.5.52 or newer.
+Groups. Needs EvE Conduit 0.5.55 or newer.

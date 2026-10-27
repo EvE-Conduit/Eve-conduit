@@ -1,6 +1,6 @@
 [project]
 name = "conduit-spycheck"
-version = "1.0.1"
+version = "1.0.2"
 description = "Spy Check: a daily scan of members' synced data for dealings with blacklisted and watched characters, corporations and alliances, with findings HR reviews."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ spycheck = "conduit_spycheck.plugin:SpyCheckPlugin"
 name = "Spy Check"
 icon = "radar"
 category = "HR"
-min_conduit = "0.5.52"
+min_conduit = "0.5.55"
 
 [build-system]
 requires = ["setuptools>=75"]

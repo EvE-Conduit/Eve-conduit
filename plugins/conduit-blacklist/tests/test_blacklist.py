@@ -200,3 +200,20 @@ def test_search_only_for_people_who_may_see_it(setup, rf):
     assert [h["title"] for h in services.search(request, "spy", 10)["hits"]] == ["Known Spy"]
     request.user = member
     assert services.search(request, "spy", 10)["hits"] == []
+
+
+def test_a_match_is_a_discord_alert():
+    et = bus.EVENT_TYPES["blacklist.match"]
+    assert et.alert and et.manage == "blacklist.manage_blacklist" and et.plugin == "blacklist" and et.private
+
+
+def test_managers_switch_on_discord_pings(setup, api_client):
+    from conduit.events.models import EventPing
+
+    hr, viewer, _ = setup
+    api_client.force_login(viewer)  # seeing the warnings isn't enough
+    assert api_client.call("put", "/api/pings/blacklist.match", {"ping": True}).status_code == 403
+    api_client.force_login(hr)
+    resp = api_client.call("put", "/api/pings/blacklist.match", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="blacklist.match").roles == ["123"]

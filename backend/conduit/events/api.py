@@ -85,7 +85,7 @@ def hook_out(h: Webhook, with_secret: bool = False) -> dict:
 @router.get("/events")
 @require_perm("site.manage_api")
 def event_types(request):
-    return [{"name": e.name, "label": e.label, "description": e.description, "plugin": e.plugin, "private": e.private}
+    return [{"name": e.name, "label": e.label, "description": e.description, "plugin": e.plugin, "private": e.private, "alert": e.alert}
             for e in bus.EVENT_TYPES.values()]
 
 
@@ -160,3 +160,57 @@ def deliveries(request, hook_id: int, limit: int = 50, offset: int = 0):
                    "error": d.error, "duration_ms": d.duration_ms, "attempt": d.attempt},
         limit, offset,
     )
+
+
+# --- Discord pings for plugin alerts (shown on each plugin's settings page) ---------------------------------------
+
+pings_router = Router(tags=["pings"])
+
+
+class PingIn(Schema):
+    ping: bool = False
+    roles: list[str] = []
+
+
+def _ping_out(et: bus.EventType, setting) -> dict:
+    from .pings import discord_hooks
+
+    hooks = discord_hooks(et.name)
+    return {"event": et.name, "label": et.label, "description": et.description, "ping": bool(setting and setting.ping),
+            "roles": list(setting.roles or []) if setting else [],
+            # How many Discord webhooks get it, and whether any pings someone of its own (@here, a role).
+            "webhooks": len(hooks), "webhook_mentions": sum(1 for h in hooks if h.mention)}
+
+
+@pings_router.get("")
+def list_pings(request, plugin: str):
+    """The plugin's alerts the user may set pings for. ``configured`` is False while there's no Discord webhook
+    (Administration → Integrations); the settings page then shows nothing."""
+    from .models import EventPing, Webhook
+    from .pings import can_manage, discord_roles
+
+    alerts = [et for et in bus.EVENT_TYPES.values() if et.plugin == plugin and can_manage(request.user, et)]
+    configured = Webhook.objects.filter(enabled=True, kind=Webhook.Kind.DISCORD).exists()
+    if not alerts or not configured:
+        return {"configured": configured, "events": [], "discord": {"available": False, "roles": []}}
+    settings_ = {p.event: p for p in EventPing.objects.filter(event__in=[et.name for et in alerts])}
+    return {"configured": True, "events": [_ping_out(et, settings_.get(et.name)) for et in alerts], "discord": discord_roles()}
+
+
+@pings_router.put("/{event}")
+def set_ping(request, event: str, payload: PingIn):
+    from django.utils import timezone
+
+    from .models import EventPing
+    from .pings import can_manage, clean_roles
+
+    et = bus.EVENT_TYPES.get(event)
+    if et is None or not et.alert:
+        raise HttpError(404, "There's no such alert")
+    if not can_manage(request.user, et):
+        raise HttpError(403, "You do not have permission to do that")
+    setting, _ = EventPing.objects.update_or_create(
+        event=et.name, defaults={"ping": payload.ping, "roles": clean_roles(payload.roles), "updated_at": timezone.now()})
+    record("webhook.ping_changed", f"{'switched on' if setting.ping else 'switched off'} Discord pings for {et.label}",
+           request=request, target=setting, details={"event": et.name, "ping": setting.ping, "roles": setting.roles})
+    return _ping_out(et, setting)

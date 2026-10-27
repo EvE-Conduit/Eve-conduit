@@ -18,8 +18,11 @@ Characters, corporations and alliances you don't want, with notes, and a warning
 - **Dashboard widget:** open warnings, for people with the view permission.
 - **Webhook:** `blacklist.match` can be sent under Administration → Integrations. It names who was flagged, so it
   only goes to webhooks that picked it by name, never to "every event" ones.
+- **Discord pings:** people with `blacklist.manage_blacklist` can make `blacklist.match` ping on Discord, under
+  **Discord pings** on the *Warnings* tab. It needs a Discord webhook under Administration → Integrations; with the
+  Discord plugin linked you also pick the roles to ping.
 
 Members never see any of it: without `blacklist.view_blacklist` there's no sidebar entry, no page, no API and no
 search results, and nothing is said to the person who matched.
 
-Needs EvE Conduit 0.5.51 or newer. Give the permissions to your HR group under Administration → Groups.
+Needs EvE Conduit 0.5.55 or newer. Give the permissions to your HR group under Administration → Groups.

@@ -8,7 +8,7 @@ from conduit.plugins import NavItem, Plugin
 class BlueprintsPlugin(Plugin):
     id = "blueprints"
     name = "Blueprint Library"
-    version = "1.0.1"
+    version = "1.0.2"
     description = "Every corporation blueprint and members' shared originals, copy and loan requests, and what still needs research."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-blueprints"

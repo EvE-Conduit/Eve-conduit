@@ -24,5 +24,7 @@ Members claim ships they lost on fleet; reviewers check the loss, approve a payo
 Losses come from the character sheet's killmails, so characters need the `esi-killmails.read_killmails.v1` scope.
 Loss values use CCP's average market prices, as on the character sheet.
 
-Events for webhooks: `srp.request_created`, `srp.request_decided`, `srp.request_paid`. Give the permissions to a
+Events for webhooks: `srp.request_created`, `srp.request_decided`, `srp.request_paid`. New requests can ping on
+Discord: switch it on under Discord pings in Settings → General. It needs a Discord webhook under Administration →
+Integrations; with the Discord plugin linked you also pick roles. Give the permissions to a
 state (Administration → States) or a group (Administration → Groups).

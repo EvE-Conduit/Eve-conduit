@@ -1,6 +1,6 @@
 // The watch list (the plugin's own, and the Blacklist's when it's on) and the settings.
 import {
-  Alert, api, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, Dialog, EmptyState, Field, Input, SearchInput, Select, Skeleton,
+  Alert, api, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, Dialog, DiscordPings, EmptyState, Field, Input, SearchInput, Select, Skeleton,
   SwitchRow, Textarea, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -219,6 +219,7 @@ export function SettingsTab() {
       <div className="lg:col-span-2">
         <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Save settings</Button>
       </div>
+      <DiscordPings plugin="spycheck" className="lg:col-span-2" />
     </div>
   );
 }

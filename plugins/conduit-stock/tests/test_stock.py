@@ -180,3 +180,23 @@ def test_doctrine_fit_targets_count_the_hull(setup, api_client):
     assert row["fit"] == {"id": fit.pk, "name": "Ferox Fleet"} and row["have"] == 1 and row["cheapest_contract"] == 150000000
     missing = api_client.call("post", f"/api/p/stock/places/{place.pk}/targets", {"fit_id": 999999, "quantity": 5})
     assert missing.status_code == 400
+
+
+def test_stock_shortage_is_a_discord_alert():
+    et = bus.EVENT_TYPES["stock.shortage"]
+    assert et.alert and et.manage == "stock.manage_stock" and et.plugin == "stock"
+
+
+@pytest.mark.django_db
+def test_managers_switch_on_discord_pings(api_client):
+    from conduit.events.models import EventPing
+
+    manager = make_user(90000900, "Ping Manager")
+    manager.user_permissions.add(Permission.objects.get(content_type__app_label="stock", codename="manage_stock"))
+    other = make_user(90000901, "Not A Manager")
+    api_client.force_login(other)  # a member may not
+    assert api_client.call("put", "/api/pings/stock.shortage", {"ping": True}).status_code == 403
+    api_client.force_login(manager)
+    resp = api_client.call("put", "/api/pings/stock.shortage", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="stock.shortage").roles == ["123"]

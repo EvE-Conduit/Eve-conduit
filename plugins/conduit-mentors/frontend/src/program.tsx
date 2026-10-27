@@ -1,6 +1,6 @@
 // Running the program (mentors.manage_program): every mentorship, mentors' load, goals and settings.
 import {
-  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, Dialog, EmptyState, Field, Input, PageHeader,
+  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, Dialog, DiscordPings, EmptyState, Field, Input, PageHeader,
   RuleSetEditor, type RuleSet, Segmented, Skeleton, StatCard, Switch, Table, TabPanel, Tabs, Td, Textarea, Th, THead, toast, Tr,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -369,6 +369,7 @@ function SettingsForm({ settings, canEditRules }: { settings: ProgramSettings; c
           )}
         </CardBody>
       </Card>
+      <DiscordPings plugin="mentors" className="xl:col-span-2" />
     </div>
   );
 }

@@ -14,7 +14,8 @@ shortages to seed them.
   ends by itself once the target is met. Members can drop theirs at any time.
 - **Alerts:** every hour, targets that fell below their low mark notify everyone with `stock.manage_stock` once, and
   again only after they recovered and fell again. The `stock.shortage` event can go to Discord or Slack under
-  Administration → Integrations.
+  Administration → Integrations. Shortages can ping on Discord: switch it on under Discord pings on the Manage page.
+  It needs a Discord webhook under Administration → Integrations; with the Discord plugin linked you also pick roles.
 - **Dashboard widget:** how many targets are short, and the worst few.
 
 ## What counts as stock
@@ -30,5 +31,5 @@ corporations put up.
   left out. A fitted ship on contract counts for its hull, and its contract price is shown as the fitted price.
   Contract items appear once the core has fetched them.
 
-Needs EvE Conduit 0.5.52 or newer, with members' market orders and contracts (and, for corporation orders, the
+Needs EvE Conduit 0.5.55 or newer, with members' market orders and contracts (and, for corporation orders, the
 corporations) syncing. Give `stock.manage_stock` to your logistics team under Administration → Groups.

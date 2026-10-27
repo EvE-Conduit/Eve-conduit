@@ -9,5 +9,6 @@ class FleetsConfig(AppConfig):
     def ready(self):
         from conduit.events import bus
 
-        bus.register("fleets.created", "Fleet created", "An FC started a fleet", plugin="fleets")
+        bus.register("fleets.created", "Fleet created", "An FC started a fleet", plugin="fleets",
+                     alert=True, manage="fleets.manage_fleets")
         bus.register("fleets.ended", "Fleet ended", "A fleet ended, with how many pilots got a FAT", plugin="fleets")

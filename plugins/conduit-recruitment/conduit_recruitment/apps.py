@@ -11,5 +11,6 @@ class RecruitmentConfig(AppConfig):
         from conduit.notify.services import register_category
 
         register_category("p.recruit", "Recruitment")
-        bus.register("recruit.application_submitted", "Application submitted", "Someone applied to join", plugin="recruit")
+        bus.register("recruit.application_submitted", "Application submitted", "Someone applied to join", plugin="recruit",
+                     alert=True, manage="recruit.manage_forms")
         bus.register("recruit.application_decided", "Application decided", "An application was accepted or rejected", plugin="recruit")

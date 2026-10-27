@@ -1,6 +1,7 @@
 import {
-  api, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, dateTime, definePlugin, Dialog, EmptyState, Field, Input,
-  PageHeader, SearchInput, Segmented, Select, Skeleton, TabPanel, Table, Tabs, Td, Textarea, Th, THead, timeAgo, toast, Tr,
+  api, Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, date, dateTime, definePlugin, Dialog, DiscordPings, EmptyState, Field,
+  Input, PageHeader, SearchInput, Segmented, Select, Skeleton, TabPanel, Table, Tabs, Td, Textarea, Th, THead, timeAgo, toast, Tr,
+  useHasPerm,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -221,21 +222,25 @@ function useResolve() {
 function WarningsTab() {
   const [status, setStatus] = useState<"open" | "resolved">("open");
   const resolve = useResolve();
+  const canManage = useHasPerm("blacklist.manage_blacklist");
   const { data, isLoading } = useQuery({ queryKey: ["blacklist", "matches", status], queryFn: () => api.get<{ items: Match[] }>(`${BASE}/matches?status=${status}`) });
   return (
-    <Card>
-      <div className="flex items-center justify-between gap-3 border-b border-border p-3">
-        <p className="text-sm text-muted">Members' and applicants' characters that are blacklisted, or in a blacklisted corporation or alliance.</p>
-        <Segmented<"open" | "resolved"> value={status} onChange={setStatus} options={[{ value: "open", label: "Open" }, { value: "resolved", label: "Dealt with" }]} />
-      </div>
-      {isLoading || !data ? (
-        <CardBody><Skeleton className="h-32" /></CardBody>
-      ) : data.items.length === 0 ? (
-        <EmptyState icon={<Check />} title={status === "open" ? "No open warnings" : "Nothing dealt with yet"} description={status === "open" ? "Characters are checked when they're linked, when someone applies and every hour." : undefined} />
-      ) : (
-        <MatchesTable items={data.items} onResolve={(m, resolved) => resolve.mutate({ m, resolved })} />
-      )}
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center justify-between gap-3 border-b border-border p-3">
+          <p className="text-sm text-muted">Members' and applicants' characters that are blacklisted, or in a blacklisted corporation or alliance.</p>
+          <Segmented<"open" | "resolved"> value={status} onChange={setStatus} options={[{ value: "open", label: "Open" }, { value: "resolved", label: "Dealt with" }]} />
+        </div>
+        {isLoading || !data ? (
+          <CardBody><Skeleton className="h-32" /></CardBody>
+        ) : data.items.length === 0 ? (
+          <EmptyState icon={<Check />} title={status === "open" ? "No open warnings" : "Nothing dealt with yet"} description={status === "open" ? "Characters are checked when they're linked, when someone applies and every hour." : undefined} />
+        ) : (
+          <MatchesTable items={data.items} onResolve={(m, resolved) => resolve.mutate({ m, resolved })} />
+        )}
+      </Card>
+      {canManage && <DiscordPings plugin="blacklist" className="panel p-card" />}
+    </div>
   );
 }
 

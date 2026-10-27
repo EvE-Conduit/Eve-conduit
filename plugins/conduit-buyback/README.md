@@ -64,10 +64,12 @@ Other permissions: `buyback.view_all_statistics` sees every program's contracts 
 `buyback.view_leaderboard` sees the top sellers of the programs a member can use. Give them to a state
 (Administration → States) or a group (Administration → Groups).
 
-Reprocessing and compression come from the static data, so this needs EvE Conduit 0.5.33 or newer. Contracts are
-read with `esi-contracts.read_character_contracts.v1` and `esi-contracts.read_corporation_contracts.v1`.
+Needs EvE Conduit 0.5.55 or newer. Contracts are read with `esi-contracts.read_character_contracts.v1` and
+`esi-contracts.read_corporation_contracts.v1`.
 
 Events for webhooks: `buyback.contract_created`, `buyback.contract_finished` (a contract was accepted, rejected,
-deleted or expired). Post them to a Discord channel with a webhook (Administration → Integrations).
+deleted or expired). Post them to a Discord channel with a webhook (Administration → Integrations). New contracts
+can ping on Discord: switch it on under **Discord pings** on the settings page (permission
+`buyback.manage_all_programs`). With the Discord plugin linked you also pick the roles to ping.
 
 Inspired by [allianceauth-buyback-program](https://gitlab.com/paulipa/allianceauth-buyback-program).

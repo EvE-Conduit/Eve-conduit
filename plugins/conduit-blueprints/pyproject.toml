@@ -1,6 +1,6 @@
 [project]
 name = "conduit-blueprints"
-version = "1.0.1"
+version = "1.0.2"
 description = "Blueprint Library: every corporation blueprint and members' shared originals, copy and loan requests, and what still needs research."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ blueprints = "conduit_blueprints.plugin:BlueprintsPlugin"
 name = "Blueprint Library"
 icon = "scroll"
 category = "Industry"
-min_conduit = "0.5.52"
+min_conduit = "0.5.55"
 esi_scopes = ["esi-corporations.read_blueprints.v1"]
 
 [build-system]

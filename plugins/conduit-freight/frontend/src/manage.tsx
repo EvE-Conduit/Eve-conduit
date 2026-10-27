@@ -1,5 +1,5 @@
 // The managers' pages: services, their routes and rates.
-import { api, Badge, Button, Card, CardBody, ConfirmDialog, DataTable, Dialog, EmptyState, Field, Input, isk, PageHeader, Select, Skeleton, SwitchRow, Textarea, toast } from "@conduit/sdk";
+import { api, Badge, Button, Card, CardBody, ConfirmDialog, DataTable, Dialog, DiscordPings, EmptyState, Field, Input, isk, PageHeader, Select, Skeleton, SwitchRow, Textarea, toast } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -80,6 +80,7 @@ export function ManagePage() {
           ]}
         />
       </Card>
+      <DiscordPings plugin="freight" className="panel mt-6 p-card" />
     </div>
   );
 }

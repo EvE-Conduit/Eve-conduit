@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class StockPlugin(Plugin):
     id = "stock"
     name = "Doctrine Stock"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "How many of each ship and item should be for sale at each staging location, what's short, and members claiming shortages to seed them."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-stock"

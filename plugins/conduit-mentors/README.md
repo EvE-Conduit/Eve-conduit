@@ -26,7 +26,9 @@ New members get a mentor to show them the ropes, with goals to work through toge
   focus areas. **Graduates** lists who graduated, when, with whom and after how long. **Reopen** (there or on the
   mentorship) takes a graduated or ended mentorship up again with its goals and thread: back with its mentor if they
   still mentor, otherwise on the waiting list; not while the mentee has another one open. Setting a goal's rules, or **Who counts as new** (members who match and never had a mentor are invited
-  on the dashboard), uses the group rule editor and so needs `site.manage_access` as well.
+  on the dashboard), uses the group rule editor and so needs `site.manage_access` as well. A mentor request can ping
+  Discord: switch it on under Discord pings in Mentoring → Settings. It needs a Discord webhook under Administration →
+  Integrations; with the Discord plugin linked you also pick roles.
 
 Group rules for smart groups and Discord roles: **Mentoring status** (being mentored, waiting for a mentor or
 graduated), e.g. for a "New bro" role, and **Is an active mentor**. Ctrl+K finds mentees for mentors and program

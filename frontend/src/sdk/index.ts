@@ -50,3 +50,7 @@ export { RuleSetEditor } from "@/features/groups/RuleBuilder";
 export type { Rule, RuleSet } from "@/features/groups/types";
 export { BarChart } from "@/components/BarChart";
 export { toast } from "sonner";
+/** `<DiscordPings plugin="id" />` on a settings page: switch Discord pings on for the plugin's alerts and pick roles.
+ * Shows nothing until there's a Discord webhook. RoleChips is the role picker on its own. */
+export { DiscordPings, RoleChips } from "@/components/DiscordPings";
+export type { DiscordRole } from "@/components/DiscordPings";

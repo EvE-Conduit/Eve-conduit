@@ -11,6 +11,7 @@ class MentorsConfig(AppConfig):
         from conduit.notify.services import register_category
 
         register_category("p.mentors", "Mentoring")
-        bus.register("mentors.requested", "Mentor requested", "A new member asked for a mentor", plugin="mentors")
+        bus.register("mentors.requested", "Mentor requested", "A new member asked for a mentor", plugin="mentors",
+                     alert=True, manage="mentors.manage_program")
         bus.register("mentors.assigned", "Mentor assigned", "A mentor took on a new member", plugin="mentors")
         bus.register("mentors.graduated", "Mentee graduated", "A new member finished their mentorship", plugin="mentors")

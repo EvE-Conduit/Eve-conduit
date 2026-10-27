@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class StorePlugin(Plugin):
     id = "store"
     name = "Corp Store"
-    version = "1.0.1"
+    version = "1.0.2"
     description = "Members earn points for referrals, fleets, mentoring and industry projects, and spend them in a store officers fill by hand."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-store"

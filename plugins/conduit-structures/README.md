@@ -16,6 +16,8 @@ thresholds you choose, and members saying "I'm refuelling this".
   Warnings notify the chosen groups (or, with none chosen, everyone who may see the corporation) and emit
   `structures.fuel_low` for Discord, Slack or JSON webhooks (Administration → Integrations), with the threshold, hours
   left, burn and who's refuelling it. Below 24 hours they're `danger`, otherwise `warning`.
+  Fuel warnings can ping on Discord: switch it on under Discord pings in Settings. It needs a Discord webhook under
+  Administration → Integrations; with the Discord plugin linked you also pick roles.
 - **Refuel claims:** a member presses **I'm on it** (with an optional note) so nobody else hauls the same blocks. The
   claim ends by itself once the structure's fuel goes up, or after 48 hours (Settings). The board, the plan and the
   warning say who's on it. Claims emit `structures.refuel_claimed`; refuels emit `structures.refuelled`, with who had
@@ -68,4 +70,4 @@ Station Manager's or Director's login, every 30 minutes). Fuel left is worked ou
 every 15 minutes needn't wait for the next sync. **POS starbases aren't covered:** the core syncs them without their
 fuel.
 
-Needs EvE Conduit 0.5.52 or newer.
+Needs EvE Conduit 0.5.55 or newer.

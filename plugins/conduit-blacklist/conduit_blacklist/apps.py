@@ -15,4 +15,4 @@ class BlacklistConfig(AppConfig):
         register_category("p.blacklist", "Blacklist warnings")
         # Private: it names who was flagged, so it only goes to webhooks that picked it by name.
         bus.register("blacklist.match", "Blacklisted character found", "A member or applicant has a blacklisted character",
-                     plugin="blacklist", private=True)
+                     plugin="blacklist", private=True, alert=True, manage="blacklist.manage_blacklist")

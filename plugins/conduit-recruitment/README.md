@@ -27,6 +27,8 @@ Application forms, a review queue, and accepting people into groups.
   pilots who named them, how many were recruited (accepted), still in progress and not accepted, and each
   application's status.
 - **Webhooks:** `recruit.application_submitted` and `recruit.application_decided` can be sent to Discord or Slack
-  under Administration → Integrations.
+  under Administration → Integrations. A new application can ping Discord: switch it on under Discord pings in
+  Recruitment → Settings (`recruit.manage_forms`). It needs a Discord webhook that gets it; with the Discord plugin
+  linked you also pick roles.
 
-Needs EvE Conduit 0.5.6 or newer. Give the two permissions to your recruiters' group under Administration → Groups.
+Needs EvE Conduit 0.5.55 or newer. Give the two permissions to your recruiters' group under Administration → Groups.

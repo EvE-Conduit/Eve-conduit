@@ -1,6 +1,6 @@
 [project]
 name = "conduit-blacklist"
-version = "1.0.0"
+version = "1.0.1"
 description = "Blacklist: characters, corporations and alliances you don't want, with notes, and a warning when one links a character or applies."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ blacklist = "conduit_blacklist.plugin:BlacklistPlugin"
 name = "Blacklist"
 icon = "shield"
 category = "HR"
-min_conduit = "0.5.51"
+min_conduit = "0.5.55"
 
 [build-system]
 requires = ["setuptools>=75"]

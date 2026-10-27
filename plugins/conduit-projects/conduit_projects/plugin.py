@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class ProjectsPlugin(Plugin):
     id = "projects"
     name = "Industry Projects"
-    version = "1.0.1"
+    version = "1.0.2"
     description = "A corp build board: members claim parts of a project, deliver them and see their industry jobs against it."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-projects"

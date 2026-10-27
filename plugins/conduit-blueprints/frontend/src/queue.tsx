@@ -1,5 +1,5 @@
 // Library managers: requests waiting on someone, blueprints out on loan, and what's finished.
-import { api, Avatar, Badge, Button, Card, date, EmptyState, Field, Input, PageHeader, Segmented, Select, Skeleton, Table, Td, Th, THead, timeAgo, Tr } from "@conduit/sdk";
+import { api, Avatar, Badge, Button, Card, date, DiscordPings, EmptyState, Field, Input, PageHeader, Segmented, Select, Skeleton, Table, Td, Th, THead, timeAgo, Tr } from "@conduit/sdk";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -93,6 +93,7 @@ export function QueuePage() {
           </Table>
         )}
       </Card>
+      <DiscordPings plugin="blueprints" className="panel mt-6 p-card" />
       {acting && <ActionDialog r={acting.r} action={acting.action} onClose={() => setActing(null)} />}
     </>
   );

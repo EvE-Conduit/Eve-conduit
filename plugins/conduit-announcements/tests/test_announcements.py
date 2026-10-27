@@ -188,3 +188,23 @@ def test_merging_accounts_moves_reads_but_never_duplicates_them(people, api_clie
                           move_records_too=True)
     assert out["records"]["moved"]["announcement reads"] == 1 and out["records"]["kept"]["announcement reads"] == 1
     assert set(AnnouncementRead.objects.filter(user=main).values_list("announcement_id", flat=True)) == {both["id"], only["id"]}
+
+
+def test_announcements_are_discord_alerts():
+    from conduit.events import bus
+
+    for name in ("announcements.published", "announcements.published_restricted"):
+        et = bus.EVENT_TYPES[name]
+        assert et.alert and et.manage == "announcements.post_announcements" and et.plugin == "announcements"
+    assert bus.EVENT_TYPES["announcements.published_restricted"].private
+
+
+def test_writers_switch_on_discord_pings(people, api_client):
+    from conduit.events.models import EventPing
+
+    api_client.force_login(people["officer"])  # without the permission
+    assert api_client.call("put", "/api/pings/announcements.published", {"ping": True}).status_code == 403
+    api_client.force_login(people["writer"])
+    resp = api_client.call("put", "/api/pings/announcements.published_restricted", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="announcements.published_restricted").roles == ["123"]

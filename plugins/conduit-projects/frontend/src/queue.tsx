@@ -1,5 +1,5 @@
-// Managers: deliveries waiting to be checked, oldest first.
-import { api, Avatar, Button, Card, EmptyState, num, PageHeader, Segmented, Skeleton, Table, Td, Th, THead, timeAgo, toast, Tr } from "@conduit/sdk";
+// Managers: deliveries waiting to be checked, oldest first, and the Discord ping for new projects.
+import { api, Avatar, Button, Card, DiscordPings, EmptyState, num, PageHeader, Segmented, Skeleton, Table, Td, Th, THead, timeAgo, toast, Tr } from "@conduit/sdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -82,6 +82,7 @@ export function QueuePage() {
           </Table>
         )}
       </Card>
+      <DiscordPings plugin="projects" className="mt-6 max-w-3xl" />
       {rejecting && (
         <NoteDialog
           title={`Send back ${rejecting.user.name}'s delivery?`}

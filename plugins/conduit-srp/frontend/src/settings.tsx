@@ -1,6 +1,6 @@
 // SRP settings and payout rules (srp.manage_srp).
 import {
-  api, Badge, Button, Dialog, EmptyState, Field, Input, isk, SearchInput, Segmented, Skeleton, Switch, SwitchRow, TabPanel, Tabs, Textarea, toast,
+  api, Badge, Button, Dialog, DiscordPings, EmptyState, Field, Input, isk, SearchInput, Segmented, Skeleton, Switch, SwitchRow, TabPanel, Tabs, Textarea, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -85,6 +85,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <Field label="Rules shown to members" hint="Which fleets count, doctrine fits, when payouts go out…">
                 <Textarea rows={4} value={value.rules_text} onChange={(e) => set({ rules_text: e.target.value })} placeholder="Strategic and CTA fleets only. Doctrine fits get the full payout. Payouts go out every Sunday." />
               </Field>
+              <DiscordPings plugin="srp" />
             </div>
           </TabPanel>
           <TabPanel value="corps">

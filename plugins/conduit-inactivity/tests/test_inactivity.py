@@ -283,3 +283,24 @@ def test_settings(setup, api_client):
     assert ok.status_code == 200 and ok.json()["days"] == 7
     # Saving checks everyone again, without notifying.
     assert status(member).inactive and not Notification.objects.filter(title__contains="went inactive").exists()
+
+
+def test_alerts_can_ping_discord():
+    assert bus.EVENT_TYPES["inactivity.flagged"].alert and bus.EVENT_TYPES["inactivity.flagged"].manage == "inactivity.manage_leave"
+    assert bus.EVENT_TYPES["inactivity.leave_posted"].alert and bus.EVENT_TYPES["inactivity.leave_posted"].manage == "inactivity.manage_leave"
+
+
+@pytest.mark.django_db
+def test_managers_set_discord_pings(user, api_client):
+    from conduit.events.models import EventPing
+
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="inactivity", codename="view_inactivity"))
+    user = type(user).objects.get(pk=user.pk)
+    api_client.force_login(user)
+    assert api_client.call("put", "/api/pings/inactivity.flagged", {"ping": True}).status_code == 403
+    user.user_permissions.add(Permission.objects.get(content_type__app_label="inactivity", codename="manage_leave"))
+    user = type(user).objects.get(pk=user.pk)  # drop the permission cache
+    api_client.force_login(user)
+    resp = api_client.call("put", "/api/pings/inactivity.flagged", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="inactivity.flagged").roles == ["123"]

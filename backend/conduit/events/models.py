@@ -56,3 +56,17 @@ class WebhookDelivery(models.Model):
 
     class Meta:
         ordering = ["-id"]
+
+
+class EventPing(models.Model):
+    """Whether an alert event (``EventType.alert``) makes Discord webhooks ping, and which roles on top of each
+    webhook's own mention. Set from the plugin's settings; see ``conduit.events.pings``."""
+
+    event = models.CharField(max_length=60, unique=True)
+    ping = models.BooleanField(default=False)
+    #: Discord role ids.
+    roles = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.event

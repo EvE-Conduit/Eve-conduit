@@ -33,4 +33,6 @@ Records who flew in each fleet (FATs, also called PAPs) and lets groups require 
   FATs someone added by hand for their own characters don't count (so an FC can't hand themselves attendance). Use it for group requirements or smart groups under
   Administration → Groups.
 
-Events for webhooks: `fleets.created`, `fleets.ended`.
+Events for webhooks: `fleets.created`, `fleets.ended`. A new fleet can ping Discord as a form-up call: switch it on
+under Discord pings on the Attendance page (`fleets.manage_fleets`). It needs a Discord webhook under Administration →
+Integrations; with the Discord plugin linked you also pick roles.

@@ -330,3 +330,23 @@ def test_guests_get_nothing(setup, api_client):
     guest = make_user(90000070, "Just Visiting", member=False)
     api_client.force_login(guest)
     assert api_client.call("get", f"{BASE}/board").status_code in (403, 404)
+
+
+def test_structures_fuel_low_is_a_discord_alert():
+    et = bus.EVENT_TYPES["structures.fuel_low"]
+    assert et.alert and et.manage == "structures.manage_structures" and et.plugin == "structures"
+
+
+@pytest.mark.django_db
+def test_managers_switch_on_discord_pings(api_client):
+    from conduit.events.models import EventPing
+
+    manager = make_user(90000900, "Ping Manager")
+    manager.user_permissions.add(Permission.objects.get(content_type__app_label="structures", codename="manage_structures"))
+    other = make_user(90000901, "Not A Manager")
+    api_client.force_login(other)  # a member may not
+    assert api_client.call("put", "/api/pings/structures.fuel_low", {"ping": True}).status_code == 403
+    api_client.force_login(manager)
+    resp = api_client.call("put", "/api/pings/structures.fuel_low", {"ping": True, "roles": ["123"]})
+    assert resp.status_code == 200 and resp.json()["ping"] is True
+    assert EventPing.objects.get(event="structures.fuel_low").roles == ["123"]
