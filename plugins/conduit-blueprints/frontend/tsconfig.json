@@ -1,0 +1,4 @@
+{
+  "extends": "../../../frontend/tsconfig.plugin.json",
+  "include": ["src"]
+}

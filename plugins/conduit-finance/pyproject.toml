@@ -1,0 +1,28 @@
+[project]
+name = "conduit-finance"
+version = "1.0.0"
+description = "Corp Finance: income and spending per month by category, wallet balance history, internal transfers kept apart, and a monthly report."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+finance = "conduit_finance.plugin:FinancePlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Corp Finance"
+icon = "wallet"
+category = "Finance"
+min_conduit = "0.5.52"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_finance*"]
+
+[tool.setuptools.package-data]
+conduit_finance = ["static/**/*"]
