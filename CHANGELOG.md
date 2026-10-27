@@ -3,6 +3,41 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.55
+
+Plugin alerts can ping Discord. Update the plugins below under Administration → Plugins after updating EvE Conduit;
+they need 0.5.55.
+
+### New
+- **Discord pings for plugin alerts:** once a Discord webhook is set up under Administration → Integrations, each
+  plugin's settings or management page has a **Discord pings** section with a switch per alert. A switched-on alert
+  makes the Discord webhooks that get it mention their own @here, @everyone or role, and, with the Discord plugin
+  linked to your server, the roles picked there. Changes save straight away and are in the audit log. The section
+  warns when no webhook gets the alert, or when nobody would be pinged.
+- **For plugin authors:** `bus.register(..., alert=True, manage="<permission>")` marks an event as an alert, and
+  `<DiscordPings plugin="id" />` from `@conduit/sdk` is the settings section (see docs/platform.md). `RoleChips` is
+  the Discord role picker on its own.
+
+### Plugins
+These alerts can now ping, set by the people named:
+- Announcements 1.1.2: a new announcement (writers).
+- Blacklist 1.0.1: a blacklisted character found (blacklist managers).
+- Blueprint Library 1.0.2: a copy or loan request, an overdue loan (request managers).
+- Buyback 1.2.4: a new contract (managers of all programs).
+- Freight 1.0.2: a new courier contract (freight managers).
+- Fleets & FATs 1.2.3: a fleet created (fleet managers).
+- Inactivity 1.0.1: members gone inactive, a leave of absence posted (leave managers).
+- Mentoring 1.2.3: a mentor requested (program managers).
+- Industry Projects 1.0.2: a project started (project managers).
+- Recruitment 1.2.3: an application submitted (form managers).
+- Spy Check 1.0.2: new findings (Spy Check managers).
+- Ship Replacement 1.0.4: an SRP request (SRP managers).
+- Doctrine Stock 1.0.1: stock running low (stock managers).
+- Corp Store 1.0.2: an order placed (store managers).
+- Structures & Fuel 1.0.2: fuel low (structure managers).
+
+Ops and Timers keep their per-op and per-timer ping choice.
+
 ## 0.5.54
 
 A security release from a full review of the core and every plugin. Update soon, and update your plugins under
