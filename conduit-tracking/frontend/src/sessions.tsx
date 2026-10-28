@@ -113,7 +113,7 @@ function StartDialog({ onClose }: { onClose: () => void }) {
   const search = useDebounced(q);
   const { data, isFetching } = useQuery({
     queryKey: ["tracking", "members", search],
-    queryFn: () => api.get<{ items: Candidate[] }>(`${BASE}/members?q=${encodeURIComponent(search)}`),
+    queryFn: () => api.get<{ items: Candidate[]; reason: "" | "own" | "no_reach" }>(`${BASE}/members?q=${encodeURIComponent(search)}`),
     enabled: search.length >= 2 && !picked,
   });
   const n = Number(days);
@@ -161,7 +161,13 @@ function StartDialog({ onClose }: { onClose: () => void }) {
                   {isFetching && !data ? (
                     <li className="px-3 py-2 text-sm text-muted">Searching…</li>
                   ) : data?.items.length === 0 ? (
-                    <li className="px-3 py-2 text-sm text-muted">No member you can see has a character called that.</li>
+                    <li className="px-3 py-2 text-sm text-muted">
+                      {data?.reason === "own"
+                        ? "That's one of your own characters. Nobody can track themselves."
+                        : data?.reason === "no_reach"
+                          ? "You can't see anyone else's characters. Tracking also needs a character sheet permission (all, alliance or corporation characters) under Administration → Groups."
+                          : "No member you can see has a character called that."}
+                    </li>
                   ) : (
                     data?.items.map((c) => (
                       <li key={c.id}>

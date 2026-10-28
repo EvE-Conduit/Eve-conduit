@@ -1,6 +1,6 @@
 [project]
 name = "conduit-tracking"
-version = "1.0.0"
+version = "1.0.1"
 description = "Activity Tracking: follow a member and all their alts for 1 to 60 days, with a report of the systems they were in, the ships they flew, what they earned and when they played."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

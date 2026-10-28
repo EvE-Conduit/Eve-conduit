@@ -296,3 +296,16 @@ def test_report(setup, esi, api_client, clock):
     # Opening it is in the audit log and the snooper log, for each character.
     assert AuditEvent.objects.filter(action="tracking.report_viewed").exists()
     assert set(SnoopEvent.objects.values_list("character_id", flat=True)) == {main, alt.pk}
+
+
+def test_search_prefers_the_main_and_says_why_it_found_nobody(setup, esi, api_client):
+    hr, member, alt = setup
+    api_client.force_login(hr)
+    r = api_client.call("get", f"{BASE}/members?q=Sam").json()
+    assert [(i["id"], i["matched"]) for i in r["items"]] == [(member.pk, None)]  # "Shady Sam" matched, not "Sam Alt"
+    assert api_client.call("get", f"{BASE}/members?q=Hannah").json() == {"items": [], "reason": "own"}
+    assert api_client.call("get", f"{BASE}/members?q=Nobody").json() == {"items": [], "reason": ""}
+    blind = make_user(90000080, "Blind Bob")
+    blind.user_permissions.add(Permission.objects.get(codename="track_members"))
+    api_client.force_login(blind)
+    assert api_client.call("get", f"{BASE}/members?q=Sam").json() == {"items": [], "reason": "no_reach"}
