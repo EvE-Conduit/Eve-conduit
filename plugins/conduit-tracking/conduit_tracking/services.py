@@ -74,23 +74,33 @@ def user_brief(u) -> dict:
 
 
 def find_members(viewer, q: str) -> list[dict]:
-    """Members the viewer may track whose main or any alt matches ``q``, each with the character that matched."""
+    """Members the viewer may track whose main or any alt matches ``q``, each with the alt that matched (None when the
+    main did)."""
     q = q.strip()
     if len(q) < 2:
         return []
     hits = others(viewer).filter(name__icontains=q, user__main_character__isnull=False).select_related(
         "user__main_character__corporation")[:50]
-    out, seen = [], set()
+    matched = {}
     for c in hits:
-        if c.user_id in seen:
-            continue
-        seen.add(c.user_id)
+        if c.pk == c.user.main_character_id or c.user_id not in matched:
+            matched[c.user_id] = c
+    out = []
+    for c in list(matched.values())[:20]:
         out.append({**user_brief(c.user), "matched": c.name if c.pk != c.user.main_character_id else None,
                     "characters": Character.objects.filter(user_id=c.user_id).count(),
                     "tracked": Session.objects.running().filter(target_id=c.user_id).exists()})
-        if len(out) == 20:
-            break
     return out
+
+
+def why_nothing(viewer, q: str) -> str:
+    """Why a search found nobody, when it isn't simply that no such character exists: "own" (it's one of the
+    viewer's characters) or "no_reach" (no character sheet permission lets them see anyone else's characters)."""
+    if Character.objects.filter(user=viewer, name__icontains=q.strip()).exists():
+        return "own"
+    if not others(viewer).exists():
+        return "no_reach"
+    return ""
 
 
 # --- starting and stopping -----------------------------------------------------------------------------------------

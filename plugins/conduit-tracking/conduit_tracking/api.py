@@ -42,7 +42,8 @@ def sessions(request, state: str = "", limit: int = 50, offset: int = 0):
 @require_perm(PERM)
 def members(request, q: str = ""):
     """Members to pick from, by any of their characters' names."""
-    return {"items": services.find_members(request.user, q)}
+    items = services.find_members(request.user, q)
+    return {"items": items, "reason": "" if items or len(q.strip()) < 2 else services.why_nothing(request.user, q)}
 
 
 class StartIn(Schema):
