@@ -34,6 +34,7 @@ results, group rules and ESI scopes.
 - [`conduit-finance`](conduit-finance): Corp Finance: corporation income and spending per month by category with internal transfers kept apart, balance history per wallet division, a printable monthly report and a CSV journal.
 - [`conduit-blueprints`](conduit-blueprints): Blueprint Library: the corporations' BPOs and BPCs with ME/TE and location, members' shared originals, copy and loan requests with overdue reminders, and research gaps.
 - [`conduit-pi`](conduit-pi): Planetary Industry: every colony of a member's characters with extractor countdowns, output and its value, expiry reminders, and a corporation view of products and idle colonies.
+- [`conduit-tracking`](conduit-tracking): Activity Tracking: follow a member and all their alts for 1 to 60 days, with a report of the systems they were in, the ships they flew, what they earned and when they played.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
