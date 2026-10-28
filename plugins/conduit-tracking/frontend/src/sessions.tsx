@@ -8,13 +8,15 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { Plus, Radar } from "./icons";
-import { BASE, type Candidate, type Page, type Session } from "./types";
+import { NewMembers } from "./newmembers";
+import { BASE, type Candidate, type Page, QUICK_DAYS, type Session } from "./types";
 
 type Filter = "" | "running" | "finished";
 
 export function SessionsPage() {
   const [filter, setFilter] = useState<Filter>("");
-  const [starting, setStarting] = useState(false);
+  // true: pick anyone; a candidate: that member, from the new members list
+  const [starting, setStarting] = useState<boolean | Candidate>(false);
   const { data, isLoading } = useQuery({
     queryKey: ["tracking", "sessions", filter],
     queryFn: () => api.get<Page<Session>>(`${BASE}/sessions?state=${filter}&limit=200`),
@@ -29,6 +31,7 @@ export function SessionsPage() {
         description="Follow a member and all their alts for 1 to 60 days: the systems they're in, the ships they fly, what they earn and when they play. The member is not told."
         actions={<Button variant="primary" onClick={() => setStarting(true)}><Plus /> Track a member</Button>}
       />
+      <NewMembers onTrack={setStarting} />
       <div className="mb-4">
         <Segmented<Filter>
           size="sm"
@@ -81,7 +84,7 @@ export function SessionsPage() {
           </tbody>
         </Table>
       )}
-      {starting && <StartDialog onClose={() => setStarting(false)} />}
+      {starting && <StartDialog initial={starting === true ? null : starting} onClose={() => setStarting(false)} />}
     </>
   );
 }
@@ -101,13 +104,11 @@ function useDebounced(value: string) {
   return out;
 }
 
-const QUICK_DAYS = [1, 7, 14, 30, 60];
-
-function StartDialog({ onClose }: { onClose: () => void }) {
+function StartDialog({ initial, onClose }: { initial: Candidate | null; onClose: () => void }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
-  const [picked, setPicked] = useState<Candidate | null>(null);
+  const [picked, setPicked] = useState<Candidate | null>(initial);
   const [days, setDays] = useState("7");
   const [reason, setReason] = useState("");
   const search = useDebounced(q);

@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class TrackingPlugin(Plugin):
     id = "tracking"
     name = "Activity Tracking"
-    version = "1.0.1"
+    version = "1.1.0"
     description = "Follow a member and all their alts for 1 to 60 days, with a report of the systems they were in, the ships they flew, what they earned and when they played."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-tracking"

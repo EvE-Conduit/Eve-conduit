@@ -59,6 +59,31 @@ def start(request, payload: StartIn):
     return services.session_out(s)
 
 
+@router.get("/new-members")
+@require_perm(PERM)
+def new_members(request, days: int = 7):
+    """Who joined a corporation in the last ``days`` days (1 to 60), to start tracking them."""
+    if not 1 <= days <= 60:
+        raise HttpError(400, "Look back 1 to 60 days")
+    return services.new_joiners(request.user, days)
+
+
+class StartManyIn(Schema):
+    user_ids: list[int]
+    days: int
+    reason: str = ""
+
+
+@router.post("/sessions/many")
+@require_perm(PERM)
+def start_many(request, payload: StartManyIn):
+    if not payload.user_ids or len(payload.user_ids) > 100:
+        raise HttpError(400, "Pick 1 to 100 members")
+    if not services.MIN_DAYS <= payload.days <= services.MAX_DAYS:
+        raise HttpError(400, f"Track for {services.MIN_DAYS} to {services.MAX_DAYS} days")
+    return services.start_many(request.user, payload.user_ids, payload.days, payload.reason, request=request)
+
+
 @router.get("/sessions/{session_id}")
 @require_perm(PERM)
 def report(request, session_id: int):

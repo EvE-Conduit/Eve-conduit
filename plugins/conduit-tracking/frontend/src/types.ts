@@ -1,5 +1,7 @@
 export const BASE = "/api/p/tracking";
 
+export const QUICK_DAYS = [1, 7, 14, 30, 60];
+
 export interface Page<T> {
   count: number;
   items: T[];
@@ -127,4 +129,18 @@ export function hours(seconds: number): string {
   const m = Math.round(seconds / 60);
   const h = Math.floor(m / 60);
   return h ? `${h}h ${m % 60}m` : `${m}m`;
+}
+
+export interface NewMember extends Person {
+  tracked: boolean;
+  session_id: number | null;
+  joined_at: string;
+  characters: { id: number; name: string; portrait: string; main: boolean; corporation: string | null; joined_at: string }[];
+}
+
+export interface NewMembers {
+  days: number;
+  members: NewMember[];
+  /** Joined according to corporation member tracking, but nobody added them to the site. */
+  unregistered: { id: number; name: string; portrait: string; corporation: string; joined_at: string }[];
 }
