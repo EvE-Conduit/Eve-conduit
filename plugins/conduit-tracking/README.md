@@ -6,6 +6,12 @@ what they earned and when they played. The member is never told.
 - **Track a member:** pick them by their main or any alt, choose 1 to 60 days and optionally a reason. Every
   character on their account is followed, including alts they link while it runs; a character moved to another
   account stops being followed. One tracking per member at a time; stop it to start again.
+- **New members:** the top of the page lists members (not guests) with a character that joined its current corporation in the
+  last 3, 7, 14 or 30 days (7 by default), with when and which characters. The join date is the corporation's member
+  tracking when a Director's login syncs it, otherwise the character's own corporation history; only the corporation
+  they're in now counts. **Track** starts tracking one; tick several and **Track selected** starts them all at once
+  with the same number of days and reason. Characters member tracking shows joining that nobody has added to the site
+  are listed apart, for corporations whose member list you may see: they can't be tracked until they log in with them.
 - **Where and in what:** every minute, each of their characters is checked: online or not, and if online, which
   system, docked where, and in which ship. Unchanged, the time since the last check is added to what it's doing;
   changed, a new stint starts. Time offline, and gaps of more than five minutes (the worker stalled, ESI trouble),

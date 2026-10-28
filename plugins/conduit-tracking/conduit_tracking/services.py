@@ -103,6 +103,74 @@ def why_nothing(viewer, q: str) -> str:
     return ""
 
 
+# --- new members ---------------------------------------------------------------------------------------------------
+
+
+def new_joiners(viewer, days: int) -> dict:
+    """Who joined a corporation in the last ``days`` days, to start tracking them.
+
+    ``members``: site members the viewer may track with a character whose current corporation it joined since then,
+    grouped by member. The join date is the corporation's member tracking (when a Director's login syncs it) or else
+    the character's own corporation history. ``unregistered``: characters a corporation's member tracking shows
+    joining that nobody has added to the site, in corporations whose member list the viewer may see; they can't be
+    tracked until they do.
+    """
+    from conduit.access.services import site_members
+    from conduit.corp.access import can_view_section
+    from conduit.corp.models import CorporationMember
+    from conduit.eve.models import EveCorporation, EveName
+    from conduit.sheet.overview.models import CorporationHistory
+
+    since = timezone.now() - timedelta(days=days)
+    joined: dict[tuple[int, int], datetime] = {}
+    for cid, start_date, corp_id in CorporationHistory.objects.filter(start_date__gte=since, is_deleted=False).values_list(
+            "character_id", "start_date", "corporation_id"):
+        joined[(cid, corp_id)] = max(start_date, joined.get((cid, corp_id), start_date))
+    tracking = list(CorporationMember.objects.filter(start_date__gte=since).values_list("character_id", "start_date", "corporation_id"))
+    for cid, start_date, corp_id in tracking:
+        joined[(cid, corp_id)] = start_date  # the corporation's own record wins
+
+    registered = {c.pk: c for c in others(viewer).filter(
+        pk__in={cid for cid, _ in joined}, user__in=site_members(), user__main_character__isnull=False,
+    ).select_related("corporation", "user__main_character__corporation")}
+    running = dict(Session.objects.running().filter(target_id__in={c.user_id for c in registered.values()}).values_list("target_id", "pk"))
+    members: dict[int, dict] = {}
+    for (cid, corp_id), at in joined.items():
+        c = registered.get(cid)
+        if c is None or c.corporation_id != corp_id:  # only the corporation they're in now
+            continue
+        m = members.setdefault(c.user_id, {**user_brief(c.user), "tracked": c.user_id in running, "session_id": running.get(c.user_id),
+                                           "joined_at": at, "characters": []})
+        m["joined_at"] = max(m["joined_at"], at)
+        m["characters"].append({"id": c.pk, "name": c.name, "portrait": portrait_url(c.pk, 64), "main": c.pk == c.user.main_character_id,
+                                "corporation": c.corporation.name if c.corporation else None, "joined_at": _iso(at)})
+    out = sorted(members.values(), key=lambda m: m["joined_at"], reverse=True)
+    for m in out:
+        m["joined_at"] = _iso(m["joined_at"])
+        m["characters"].sort(key=lambda c: (not c["main"], c["name"]))
+
+    known = set(Character.objects.filter(pk__in={cid for cid, _, _ in tracking}).values_list("pk", flat=True))
+    corps = {c.pk: c for c in EveCorporation.objects.filter(pk__in={corp for _, _, corp in tracking})}
+    visible_corps = {pk for pk, c in corps.items() if can_view_section(viewer, c, "members")}
+    strangers = [(cid, at, corp) for cid, at, corp in tracking if cid not in known and corp in visible_corps]
+    names = dict(EveName.objects.filter(pk__in={cid for cid, _, _ in strangers}).values_list("pk", "name"))
+    unregistered = [{"id": cid, "name": names.get(cid, f"Character {cid}"), "portrait": portrait_url(cid, 64),
+                     "corporation": corps[corp].name, "joined_at": _iso(at)}
+                    for cid, at, corp in sorted(strangers, key=lambda r: r[1], reverse=True)]
+    return {"days": days, "members": out, "unregistered": unregistered}
+
+
+def start_many(viewer, user_ids: list[int], days: int, reason: str = "", request=None) -> dict:
+    """Start tracking several members at once. One that can't be (already tracked, out of reach) doesn't stop the rest."""
+    started, failed = [], []
+    for uid in dict.fromkeys(user_ids):
+        try:
+            started.append(session_out(start(viewer, uid, days, reason, request=request)))
+        except TrackingError as exc:
+            failed.append({"user_id": uid, "error": str(exc)})
+    return {"started": started, "failed": failed}
+
+
 # --- starting and stopping -----------------------------------------------------------------------------------------
 
 

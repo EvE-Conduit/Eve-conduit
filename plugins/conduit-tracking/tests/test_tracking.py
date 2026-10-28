@@ -309,3 +309,40 @@ def test_search_prefers_the_main_and_says_why_it_found_nobody(setup, esi, api_cl
     blind.user_permissions.add(Permission.objects.get(codename="track_members"))
     api_client.force_login(blind)
     assert api_client.call("get", f"{BASE}/members?q=Sam").json() == {"items": [], "reason": "no_reach"}
+
+
+def test_new_members_list_and_tracking_several_at_once(setup, esi, api_client, corp):
+    from conduit.corp.models import CorporationMember
+    from conduit.eve.models import EveName
+    from conduit.sheet.overview.models import CorporationHistory
+
+    hr, member, alt = setup
+    hr.user_permissions.add(Permission.objects.get(codename="view_all_corporations"))
+    main = member.main_character
+    Character.objects.filter(pk__in=[main.pk, alt.pk]).update(corporation=corp)
+    # The main joined 3 days ago by its corporation history; the alt 36 hours ago by the corporation's member tracking.
+    CorporationHistory.objects.create(character=main, record_id=1, corporation_id=corp.pk, start_date=timezone.now() - timedelta(days=3))
+    CorporationMember.objects.create(corporation=corp, character_id=alt.pk, start_date=timezone.now() - timedelta(hours=36))
+    # A veteran who joined long ago, and a recruit nobody registered yet.
+    vet = make_user(90000070, "Old Timer", corporation=corp)
+    CorporationHistory.objects.create(character=vet.main_character, record_id=2, corporation_id=corp.pk, start_date=timezone.now() - timedelta(days=300))
+    CorporationMember.objects.create(corporation=corp, character_id=90000099, start_date=timezone.now() - timedelta(days=1))
+    EveName.objects.create(id=90000099, name="Fresh Recruit", category="character")
+    # Someone who joined a corporation recently but has since moved on doesn't count for it.
+    other = make_user(90000071, "Hopper", corporation=None)
+    CorporationHistory.objects.create(character=other.main_character, record_id=3, corporation_id=corp.pk, start_date=timezone.now() - timedelta(days=1))
+
+    api_client.force_login(hr)
+    r = api_client.call("get", f"{BASE}/new-members?days=7").json()
+    assert [m["id"] for m in r["members"]] == [member.pk]
+    m = r["members"][0]
+    assert [c["name"] for c in m["characters"]] == ["Shady Sam", "Sam Alt"] and not m["tracked"]
+    assert [u["name"] for u in r["unregistered"]] == ["Fresh Recruit"]
+    assert api_client.call("get", f"{BASE}/new-members?days=2").json()["members"][0]["characters"][0]["name"] == "Sam Alt"
+    assert api_client.call("get", f"{BASE}/new-members?days=61").status_code == 400
+
+    r = api_client.call("post", f"{BASE}/sessions/many", {"user_ids": [member.pk, vet.pk, hr.pk], "days": 14, "reason": "New"}).json()
+    assert [s["target"]["id"] for s in r["started"]] == [member.pk, vet.pk]
+    assert [f["user_id"] for f in r["failed"]] == [hr.pk]
+    m = api_client.call("get", f"{BASE}/new-members").json()["members"][0]
+    assert m["tracked"] and m["session_id"] == r["started"][0]["id"]
