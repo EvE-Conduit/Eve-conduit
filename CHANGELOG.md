@@ -3,6 +3,22 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.56
+
+Backups can be made and restored from the website.
+
+### New
+- **Administration → Backups:** the backups on the server (made before every update and plugin install, by the
+  server's own schedule, or with **Back up now**), with when each was made, the version that made it and its size.
+  Windows and Linux installs; Docker installs see the commands to run.
+- **Restore** puts a backup's database back, after typing "restore" to confirm. The site is offline while it runs.
+  The current database is backed up first, and if anything fails it is put back. A backup made by a newer version
+  is refused. This install's settings are kept; the backup's EVE login keys are carried over so its stored logins
+  keep working. Everything since the backup is lost, sessions included, so members may have to sign in again.
+  Requests and restores are in the audit log.
+- **`conduit restore <backup>`** does the same on the server (Windows and Linux). See "Backups" in the install
+  guides, which also cover restoring onto a new machine.
+
 ## 0.5.55
 
 Plugin alerts can ping Discord. Update the plugins below under Administration → Plugins after updating EvE Conduit;
