@@ -70,6 +70,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   danger,
+  confirmDisabled,
   onConfirm,
   children,
 }: {
@@ -80,6 +81,8 @@ export function ConfirmDialog({
   confirmLabel?: ReactNode;
   cancelLabel?: ReactNode;
   danger?: boolean;
+  /** Keeps the confirm button off until the caller is happy (a word typed to confirm, say). */
+  confirmDisabled?: boolean;
   onConfirm: () => unknown | Promise<unknown>;
   children?: ReactNode;
 }) {
@@ -116,7 +119,7 @@ export function ConfirmDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button variant={danger ? "solidDanger" : "primary"} loading={busy} onClick={confirm}>
+          <Button variant={danger ? "solidDanger" : "primary"} loading={busy} disabled={confirmDisabled} onClick={confirm}>
             {confirmLabel}
           </Button>
         </>

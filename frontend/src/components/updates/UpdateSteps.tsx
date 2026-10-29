@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 const LABEL: Record<UpdateProgress["step"], string> = {
   backup: "Backing up",
   install: "Installing",
+  restore: "Restoring the backup",
   migrate: "Updating the database",
   restart: "Restarting",
 };
@@ -41,5 +42,6 @@ export function UpdateSteps({ progress, className }: { progress: UpdateProgress;
 
 export function updateTitle(progress: UpdateProgress) {
   if (progress.kind === "plugins") return "Installing plugins";
+  if (progress.kind === "restore") return "Restoring a backup";
   return progress.target ? `Updating to EvE Conduit ${progress.target}` : "Updating EvE Conduit";
 }

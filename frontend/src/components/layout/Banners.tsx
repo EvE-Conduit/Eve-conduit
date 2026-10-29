@@ -11,7 +11,7 @@ import { updateTitle } from "@/components/updates/UpdateSteps";
 
 import { BrandMark } from "./Brand";
 
-const STEP_WORDS = { backup: "backing up", install: "installing", migrate: "updating the database", restart: "restarting" } as const;
+const STEP_WORDS = { backup: "backing up", install: "installing", restore: "restoring the backup", migrate: "updating the database", restart: "restarting" } as const;
 export const UPDATING_KEY = "conduit:updating";
 
 /** Everyone sees this while the updater works: the site goes offline for a minute or two at the end. Once the
