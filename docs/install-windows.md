@@ -151,6 +151,7 @@ The installer put the `conduit` command on the PATH.
 | Run a management command | `conduit manage <command>` |
 | Print the setup code again (until setup is done) | `conduit setup-code` |
 | Back up the database and config | `conduit backup` (writes to `<install folder>\backups`) |
+| Put a backup's database back | `conduit restore conduit-<date>.zip` (or **Administration → Backups**) |
 | Install a plugin from the server | `conduit plugin install <package>` |
 | List installed plugins | `conduit plugin list` |
 | Upgrade to a new release by hand | `conduit upgrade eve-conduit-X.Y.Z-windows.zip` |
@@ -200,6 +201,29 @@ Register-ScheduledTask -TaskName "EvE Conduit backup" -Action $action -Trigger $
 
 Adjust the path if you installed somewhere else.
 
+Backups also appear under **Administration → Backups**, with **Back up now** and **Restore**. The website
+can't read the backups folder; the updater task lists it for the website (within two minutes of a backup made
+by a scheduled task or the tray) and does the work when an administrator asks.
+
+**Restoring**, from the website or with `conduit restore conduit-<date>.zip` in an Administrator terminal:
+
+1. The backup is checked first. One made by a newer EvE Conduit is refused (update to that version first).
+2. The current database is backed up (`conduit-<date>-before-restore.zip`) and the EvE Conduit services stop
+   (the database and Garnet keep running).
+3. The database is replaced with the backup's (PostgreSQL in a single transaction), then migrated up to the
+   running version.
+4. This install's `conduit.env` is kept. If the backup's EVE login keys differ, they are added to
+   `CONDUIT_TOKEN_KEY_PREVIOUS` and `rotate_token_key` re-encrypts the stored logins with the current key.
+5. The cache and queued background jobs are emptied, and the services start again.
+
+If any step fails, the database is put back from the backup made in step 2 and the services start again.
+Everything since the backup was made is lost, sessions included, so members may have to sign in again.
+What happened is in `logs\updater.log` when the website asked for it.
+
+**Restoring on a new machine:** install the same version (or newer), copy the backup into the `backups`
+folder and run `conduit restore <file>`. Don't copy the backup's `conduit.env` over the new one: it has the
+old machine's database password. The restore takes the EVE login keys it needs from the backup by itself.
+
 ## Updating
 
 New versions are published as [GitHub releases](https://github.com/EvE-Conduit/Eve-conduit/releases);
@@ -223,7 +247,8 @@ Two ways to do it by hand:
 
 If an upgrade stops half-way after switching releases (for example because a service was down), fix the
 cause and run `conduit repair` to redo the remaining steps. `conduit rollback` returns to the previous
-release; database migrations are not undone, so restore the backup if the old version will not start.
+release; database migrations are not undone, so restore the backup made before the upgrade (`conduit restore`)
+if the old version will not start.
 
 ## Uninstalling
 

@@ -98,9 +98,9 @@ export interface PluginEntry {
 
 /** What the install's updater is doing right now (from its progress file). */
 export interface UpdateProgress {
-  kind: "release" | "plugins";
+  kind: "release" | "plugins" | "restore";
   target: string;
-  step: "backup" | "install" | "migrate" | "restart";
+  step: "backup" | "install" | "restore" | "migrate" | "restart";
   steps: UpdateProgress["step"][];
   started_at: string;
 }

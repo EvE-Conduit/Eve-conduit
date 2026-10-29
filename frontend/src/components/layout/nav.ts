@@ -1,4 +1,4 @@
-import { Building2, Crown, Download, HeartPulse, Home, Layers, ScanSearch, ShieldAlert, Webhook } from "lucide-react";
+import { Building2, Crown, DatabaseBackup, Download, HeartPulse, Home, Layers, ScanSearch, ShieldAlert, Webhook } from "lucide-react";
 import { KeyRound, LayoutDashboard, Package, Puzzle, ScrollText, Settings2, ShieldCheck, Users, UsersRound, Wallet, type LucideIcon } from "lucide-react";
 
 import { isSitePath } from "@/lib/externalLinks";
@@ -40,6 +40,7 @@ export const ADMIN_PAGES: { label: string; to: string; icon: LucideIcon; perm: s
   { label: "Logs", to: "/admin/logs", icon: ScrollText, perm: "site.view_logs" },
   { label: "Health", to: "/admin/health", icon: HeartPulse, perm: "site.view_health" },
   { label: "Updates", to: "/admin/updates", icon: Download, perm: "site.manage_site" },
+  { label: "Backups", to: "/admin/backups", icon: DatabaseBackup, perm: "site.manage_site" },
   { label: "Settings", to: "/admin/settings", icon: Settings2, perm: "site.manage_site" },
 ];
 

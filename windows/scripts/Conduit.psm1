@@ -878,13 +878,13 @@ function Set-ConduitProgress {
     <#
       How far an update has got: progress.json in the updates folder (for the website) and in the tray folder (the
       tray panel runs as the signed-in user, who can only read that folder). -Clear removes both when it's over.
-      Steps: backup, install, migrate, restart.
+      Steps: backup, install (a restore: restore), migrate, restart.
     #>
     param(
         [Parameter(Mandatory)][string]$Root,
-        [ValidateSet('release', 'plugins')][string]$Kind = 'release',
+        [ValidateSet('release', 'plugins', 'restore')][string]$Kind = 'release',
         [string]$Target = '',
-        [ValidateSet('backup', 'install', 'migrate', 'restart')][string]$Step = 'backup',
+        [ValidateSet('backup', 'install', 'restore', 'migrate', 'restart')][string]$Step = 'backup',
         [switch]$Clear
     )
     $paths = @((Join-Path (Get-ConduitUpdatesDir -Root $Root) 'progress.json'), (Join-Path (Join-Path $Root 'tray') 'progress.json'))
@@ -907,10 +907,10 @@ function Set-ConduitProgress {
 # two-minute trigger only matters when the watcher isn't running (after a reboot, an install, or if it stopped):
 # with -MultipleInstances IgnoreNew it does nothing while one is.
 $script:UpdaterCommand = 'watch-updates'
-$script:UpdateRequestFiles = @('install-request.json', 'plugins-request.json')
+$script:UpdateRequestFiles = @('install-request.json', 'plugins-request.json', 'backup-request.json')
 
 function Test-ConduitUpdateRequest {
-    <# True when the website has left an install or plugin request in the updates folder. #>
+    <# True when the website has left an install, plugin or backup request in the updates folder. #>
     param([Parameter(Mandatory)][string]$UpdatesDir)
     foreach ($name in $script:UpdateRequestFiles) {
         if (Test-Path -LiteralPath (Join-Path $UpdatesDir $name)) { return $true }

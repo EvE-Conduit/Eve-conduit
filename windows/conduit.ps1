@@ -13,11 +13,14 @@
       conduit manage <command> [args]        any Django management command
       conduit setup-code                     show the first-run setup code again
       conduit backup                         database + config to <root>\backups
+      conduit restore <backup>               put a backup's database back (a zip in <root>\backups, or its name);
+                                             backs up the current one first and keeps this install's conduit.env
       conduit upgrade <eve-conduit-X.Y.Z-windows.zip>
       conduit rollback                       back to the previous release
       conduit repair                         redo the last steps of an upgrade that stopped half-way
       conduit web-headers                    stop browsers caching the site (older Caddyfiles; upgrades do it)
-      conduit apply-update                   install an update or plugins approved on the website, if there is one
+      conduit apply-update                   install an update or plugins approved on the website, or make or
+                                             restore a backup asked for there, if there is one
       conduit watch-updates                  wait for such requests and install them (run by the updater task)
       conduit plugin install <package>       PyPI name, git URL or path
       conduit plugin list
@@ -95,13 +98,33 @@ function Find-DatabaseTool([string]$Name) {
     throw "$Name not found (install the database client tools or add them to the PATH)"
 }
 
-function Invoke-Backup {
+function Invoke-RestoreHelper([string[]]$Arguments, [string]$What) {
+    <# conduit.updates.restore with the install's Python. Returns its output lines; throws with them if it fails. #>
+    $python = Join-Path $p.Venv 'Scripts\python.exe'
+    $out = @(Invoke-NativeCommand -FilePath $python -ArgumentList (@('-I', '-m', 'conduit.updates.restore') + $Arguments))
+    if ($LASTEXITCODE -ne 0) { throw "${What}: $($out -join ' ')" }
+    return $out
+}
+
+function Update-BackupIndex {
+    <# The website can't read the backups folder (Administrators only), so the list it shows is kept in the updates folder. #>
+    $updates = Get-ConduitUpdatesDir -Root $Root
+    if (-not (Test-Path -LiteralPath $updates) -or -not (Test-Path -LiteralPath $p.Backups)) { return }
+    try { Invoke-RestoreHelper @('index', $p.Backups, $updates) 'Listing the backups for the website' | Out-Null }
+    catch { Write-Warning "$_" }
+}
+
+# Invoke-Backup leaves the zip it wrote here.
+$script:LastBackup = ''
+
+function Invoke-Backup([string]$Suffix = '') {
     Assert-Admin
     $settings = Read-EnvFile $p.EnvFile
     $url = [Uri]$settings['DATABASE_URL']
     $user, $password = [Uri]::UnescapeDataString($url.UserInfo).Split(':', 2)
     $dbName = $url.AbsolutePath.TrimStart('/')
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    if ($Suffix) { $stamp = "$stamp-$Suffix" }
     $work = Join-Path $p.Backups "conduit-$stamp"
     New-Item -ItemType Directory -Force -Path $work | Out-Null
     try {
@@ -125,9 +148,87 @@ function Invoke-Backup {
         (Get-Item $p.App).Target | Set-Content (Join-Path $work 'release.txt')
         $zip = "$work.zip"
         Compress-Archive -Path (Join-Path $work '*') -DestinationPath $zip
+        $script:LastBackup = $zip
         Write-Host "Backup written to $zip (contains secrets; keep it safe)"
     }
     finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+    Update-BackupIndex
+}
+
+function Invoke-LoadDatabase([string]$Folder) {
+    <# Replaces the database with an unpacked backup's (conduit.updates.restore load-db). #>
+    $url = (Read-EnvFile $p.EnvFile)['DATABASE_URL']
+    $tools = Split-Path (Find-DatabaseTool $(if ($url -like 'postgres*') { 'psql.exe' } else { 'mariadb.exe' }))
+    # The password stays off the command line.
+    $env:DATABASE_URL = $url
+    try { Invoke-RestoreHelper @('load-db', $Folder, '--tools', $tools) 'Restoring the database' | Out-Host }
+    finally { Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue }
+}
+
+function Invoke-RestoreStep([string]$Folder, [string]$Name, [string]$RequestedBy) {
+    <# Load the backup's database, migrate it up to this release and carry its EVE login keys over. #>
+    Invoke-LoadDatabase $Folder
+    Set-ConduitProgress -Root $Root -Kind restore -Step migrate
+    Invoke-ConduitPython -Root $Root -Arguments @('manage', 'migrate', '--noinput')
+    Invoke-ConduitPython -Root $Root -Arguments @('manage', 'conduit_init') | Out-Null
+    $backupEnv = Join-Path $Folder 'conduit.env'
+    if (Test-Path -LiteralPath $backupEnv) {
+        $added = @(Invoke-RestoreHelper @('carry-keys', $p.EnvFile, $backupEnv) "Carrying the backup's EVE login keys over")[-1]
+        if ($added -ne '0') { Write-Host "Added $added of the backup's EVE login keys to CONDUIT_TOKEN_KEY_PREVIOUS in $($p.EnvFile)." }
+    }
+    try { Invoke-ConduitPython -Root $Root -Arguments @('manage', 'rotate_token_key') }
+    catch { Write-Warning "Some stored EVE logins couldn't be re-encrypted; those members sign in again. ($_)" }
+    $after = @('manage', 'after_restore', $Name)
+    # Windows PowerShell drops empty arguments, so only pass a name that's there.
+    if ($RequestedBy) { $after += @('--requested-by', $RequestedBy) }
+    Invoke-ConduitPython -Root $Root -Arguments $after
+}
+
+function Invoke-Restore([string]$Archive, [string]$RequestedBy = '') {
+    Assert-Admin
+    if ($Archive -and -not (Test-Path -LiteralPath $Archive) -and (Test-Path -LiteralPath (Join-Path $p.Backups $Archive))) {
+        $Archive = Join-Path $p.Backups $Archive
+    }
+    if (-not $Archive -or -not (Test-Path -LiteralPath $Archive -PathType Leaf)) {
+        throw "usage: conduit restore <backup> (a zip in $($p.Backups), or its name)"
+    }
+    $name = Split-Path $Archive -Leaf
+    # Unpacked inside the backups folder (Administrators only): it holds the backup's secrets.
+    $work = Join-Path $p.Backups ('restore-' + [guid]::NewGuid().ToString('N'))
+    try {
+        # Refuses a backup made by a newer EvE Conduit before anything is touched.
+        $version = @(Invoke-RestoreHelper @('unpack', $Archive, (Join-Path $work 'backup')) "Can't restore $name")[-1]
+        Write-Host "Restoring $name (made by EvE Conduit $version). The site is offline until it's done."
+        Set-ConduitProgress -Root $Root -Kind restore -Step backup
+        Write-Host 'Backing up the current database first...'
+        Invoke-Backup -Suffix 'before-restore'
+        $safety = $script:LastBackup
+        $envBefore = Join-Path $work 'conduit.env.before'
+        Copy-Item -LiteralPath $p.EnvFile -Destination $envBefore
+        Stop-AppService
+        Set-ConduitProgress -Root $Root -Kind restore -Step restore
+        try { Invoke-RestoreStep -Folder (Join-Path $work 'backup') -Name $name -RequestedBy $RequestedBy }
+        catch {
+            $failure = $_
+            Write-Warning "Restoring $name failed: $failure. Putting the database back as it was..."
+            Copy-Item -LiteralPath $envBefore -Destination $p.EnvFile -Force
+            try {
+                Invoke-RestoreHelper @('unpack', $safety, (Join-Path $work 'safety')) 'Reading the backup made just before' | Out-Null
+                Invoke-LoadDatabase (Join-Path $work 'safety')
+                Invoke-ConduitPython -Root $Root -Arguments @('manage', 'migrate', '--noinput')
+            }
+            catch { Write-Warning "PUTTING THE DATABASE BACK FAILED TOO ($_). Restore $safety by hand: conduit restore `"$safety`"" }
+            Restart-All
+            throw "Restoring $name failed; the database is as it was before. $($failure.Exception.Message)"
+        }
+        Set-ConduitProgress -Root $Root -Kind restore -Step restart
+        Restart-All
+        Write-Host "Restored $name. The database as it was just before is in $safety."
+    }
+    finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+        Set-ConduitProgress -Root $Root -Clear
+    }
 }
 
 function Get-DatabaseKind {
@@ -281,6 +382,54 @@ function Invoke-ApplyUpdate {
     finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Invoke-ApplyBackupRequest {
+    <#
+      "Back up now" or "Restore" under Administration -> Backups. conduit.updates.restore checks the request (a restore
+      must name a plain file in the backups folder) and removes it; the result goes to backup-result.json.
+    #>
+    Assert-Admin
+    $updates = Get-ConduitUpdatesDir -Root $Root
+    if (-not (Test-Path -LiteralPath (Join-Path $updates 'backup-request.json'))) { return }
+    $log = Join-Path $p.Logs 'updater.log'
+    try { $line = @(Invoke-RestoreHelper @('request', $updates, $p.Backups) 'rejected a backup request')[-1] }
+    catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) $_"; return }
+    $action, $id, $name, $by = "$line".Split("`t")
+    if ($name -eq '-') { $name = '' }
+    if ($by -eq '-') { $by = '' }
+    function Write-BackupResult([string]$Status, [string]$Message) {
+        $resultArgs = @('result', $updates, $id, $action, $Status, $Message)
+        if ($name) { $resultArgs += @('--name', $name) }
+        try { Invoke-RestoreHelper $resultArgs 'Writing the backup result' | Out-Null }
+        catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) $_" }
+    }
+    if ($action -eq 'backup') {
+        Write-BackupResult 'running' 'Backing up'
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) backup asked for by $by"
+        try {
+            Invoke-Backup *>&1 | ForEach-Object { "$_" } | Add-Content -LiteralPath $log
+            Write-BackupResult 'succeeded' 'The backup is at the top of the list.'
+        }
+        catch {
+            Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) backup failed: $_"
+            Write-BackupResult 'failed' 'The backup failed (details in logs\updater.log).'
+        }
+    }
+    else {
+        Write-BackupResult 'running' "Restoring $name"
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) restore of $name asked for by $by"
+        try {
+            Invoke-Restore (Join-Path $p.Backups $name) $by *>&1 | ForEach-Object { "$_" } | Add-Content -LiteralPath $log
+            Write-BackupResult 'succeeded' "The database is back as it was in $name. The one it replaced was backed up first."
+        }
+        catch {
+            Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) restore failed: $_"
+            Set-ConduitProgress -Root $Root -Clear
+            Write-BackupResult 'failed' "Restoring $name failed; the database is as it was before (details in logs\updater.log)."
+        }
+    }
+    Update-BackupIndex
+}
+
 function Invoke-WatchUpdates {
     <#
       Run by the "EvE Conduit updater" scheduled task as SYSTEM. Looks for a request from the website every five
@@ -289,11 +438,14 @@ function Invoke-WatchUpdates {
     #>
     Assert-Admin
     $updates = Get-ConduitUpdatesDir -Root $Root
+    # Backups made by hand or by a scheduled task show up on the website within two minutes.
+    Update-BackupIndex
     $until = (Get-Date).AddHours(12)
     while ((Get-Date) -lt $until) {
         if (Test-ConduitUpdateRequest -UpdatesDir $updates) {
             Invoke-ApplyUpdate
             Invoke-ApplyPluginRequest
+            Invoke-ApplyBackupRequest
             return
         }
         Start-Sleep -Seconds 5
@@ -438,6 +590,7 @@ switch ($Command) {
     'manage' { Assert-Admin; Invoke-ConduitPython -Root $Root -Arguments (@('manage') + $Rest) }
     'setup-code' { Assert-Admin; Invoke-ConduitPython -Root $Root -Arguments @('manage', 'conduit_init') }
     'backup' { Invoke-Backup }
+    'restore' { Invoke-Restore ($Rest | Select-Object -First 1) }
     'upgrade' { Invoke-Upgrade ($Rest | Select-Object -First 1) }
     'rollback' { Invoke-Rollback }
     'web-headers' { Invoke-WebHeader -NoRestart:($Rest -contains '-NoRestart') }
@@ -447,6 +600,7 @@ switch ($Command) {
         if (-not (Test-ConduitUpdaterCurrent -Root $Root)) { Register-ConduitUpdater -Root $Root }
         Invoke-ApplyUpdate
         Invoke-ApplyPluginRequest
+        Invoke-ApplyBackupRequest
     }
     'watch-updates' { Invoke-WatchUpdates }
     'repair' {

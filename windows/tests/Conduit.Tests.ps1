@@ -478,6 +478,13 @@ Describe 'Update progress' {
         Test-Path (Join-Path $root 'tray/progress.json') | Should -BeFalse
         Read-ConduitProgress -Path (Join-Path $root 'tray/progress.json') | Should -BeNullOrEmpty
     }
+    It 'names a restore and its own step' {
+        Set-ConduitProgress -Root $root -Kind restore -Step restore
+        $site = Get-Content -LiteralPath (Join-Path $root 'data/updates/progress.json') -Raw | ConvertFrom-Json
+        $site.kind | Should -Be 'restore'
+        (Read-ConduitProgress -Path (Join-Path $root 'tray/progress.json')).Text | Should -Be 'Restoring a backup: restoring the backup...'
+        Set-ConduitProgress -Root $root -Clear
+    }
     It 'ignores <Why>' -ForEach @(
         @{ Json = '{"kind":"release","target":"0.5.2","step":"install","at":"2020-01-01T00:00:00Z"}'; Why = 'a file left over from long ago' }
         @{ Json = '{"kind":"release","target":"0.5.2","step":"format c:","at":"2099-01-01T00:00:00Z"}'; Why = 'an unknown step' }
@@ -542,7 +549,7 @@ Describe 'External programs under Windows PowerShell 5.1 with captured output' -
 }
 
 Describe 'Updater watcher' {
-    It 'sees install and plugin requests, and nothing else' {
+    It 'sees install, plugin and backup requests, and nothing else' {
         $dir = Join-Path $TestDrive 'updates'
         New-Item -ItemType Directory -Path $dir | Out-Null
         Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeFalse
@@ -554,6 +561,11 @@ Describe 'Updater watcher' {
         Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeTrue
         Remove-Item -LiteralPath (Join-Path $dir 'plugins-request.json')
         Set-Content -LiteralPath (Join-Path $dir 'install-request.json') -Value '{}'
+        Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeTrue
+        Remove-Item -LiteralPath (Join-Path $dir 'install-request.json')
+        Set-Content -LiteralPath (Join-Path $dir 'backups.json') -Value '{}'
+        Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeFalse
+        Set-Content -LiteralPath (Join-Path $dir 'backup-request.json') -Value '{}'
         Test-ConduitUpdateRequest -UpdatesDir $dir | Should -BeTrue
     }
     It 'runs the watcher from the install folder' {

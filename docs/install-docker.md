@@ -300,7 +300,8 @@ chmod 600 /var/backups/eve-conduit/*
 ```
 
 Copy the backup folder somewhere off the server. Caddy's certificates do not need backing up; they are
-re-issued automatically.
+re-issued automatically. **Administration → Backups** (back up and restore from the website) works on the
+Windows and Linux installs only; on Docker it shows these commands.
 
 **Restoring** on a fresh install (same `.env`, containers built and started once):
 

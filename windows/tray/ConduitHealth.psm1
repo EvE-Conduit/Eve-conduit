@@ -101,7 +101,7 @@ function Get-HttpStatus {
     catch { return 0 }
 }
 
-$script:StepWords = @{ backup = 'backing up'; install = 'installing'; migrate = 'updating the database'; restart = 'restarting' }
+$script:StepWords = @{ backup = 'backing up'; install = 'installing'; restore = 'restoring the backup'; migrate = 'updating the database'; restart = 'restarting' }
 
 function Read-ConduitProgress {
     <#
@@ -120,7 +120,7 @@ function Read-ConduitProgress {
     if (($Now.ToUniversalTime() - $at).TotalMinutes -gt 30) { return $null }
     $step = [string]$json.step
     if (-not $script:StepWords.ContainsKey($step)) { return $null }
-    $what = if ([string]$json.kind -eq 'plugins') { 'Installing plugins' } elseif ($json.target) { "Updating to $($json.target)" } else { 'Updating' }
+    $what = if ([string]$json.kind -eq 'plugins') { 'Installing plugins' } elseif ([string]$json.kind -eq 'restore') { 'Restoring a backup' } elseif ($json.target) { "Updating to $($json.target)" } else { 'Updating' }
     return @{ Kind = [string]$json.kind; Target = [string]$json.target; Step = $step; Text = "${what}: $($script:StepWords[$step])..." }
 }
 

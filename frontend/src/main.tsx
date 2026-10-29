@@ -34,6 +34,7 @@ import { AdminMembers } from "@/pages/admin/Members";
 import { AdminPlugins } from "@/pages/admin/Plugins";
 import { AdminSettings } from "@/pages/admin/Settings";
 import { AdminUpdates } from "@/pages/admin/Updates";
+import { AdminBackups } from "@/pages/admin/Backups";
 import { AssetsPage } from "@/pages/AssetsPage";
 import { WalletPage } from "@/pages/WalletPage";
 import { Characters } from "@/pages/Characters";
@@ -127,6 +128,7 @@ async function start() {
         adminRoute("admin/settings", <AdminSettings />),
         adminRoute("admin/settings/landing", <LandingEditor />),
         adminRoute("admin/updates", <AdminUpdates />),
+        adminRoute("admin/backups", <AdminBackups />),
         ...pluginRoutes(plugins),
         { path: "*", element: <NotFound /> },
       ],

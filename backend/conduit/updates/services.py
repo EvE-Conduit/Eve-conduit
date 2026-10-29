@@ -35,6 +35,8 @@ REQUEST_FILE = "install-request.json"
 RESULT_FILE = "install-result.json"
 PROGRESS_FILE = "progress.json"
 PROGRESS_STEPS = ("backup", "install", "migrate", "restart")
+#: A restore (conduit.updates.backups) has its own steps; updates and plugin installs share PROGRESS_STEPS.
+RESTORE_STEPS = ("backup", "restore", "migrate", "restart")
 STALE_PROGRESS = timedelta(minutes=30)
 ALLOWED_DOWNLOAD_HOSTS = {"github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"}
 CHECK_COOLDOWN_KEY = "conduit:updates:manual-check"
@@ -331,18 +333,19 @@ def _finish(state: UpdateState, ok: bool, message: str):
 
 def progress() -> dict | None:
     """What the updater is doing right now (it writes progress.json at each step and removes it when done):
-    {kind: release|plugins, target, step, steps, started_at}. None when nothing is running."""
+    {kind: release|plugins|restore, target, step, steps, started_at}. None when nothing is running."""
     try:
         path = Path(settings.CONDUIT_UPDATES_DIR) / PROGRESS_FILE
         raw = json.loads(path.read_text())
         at = datetime.fromisoformat(str(raw["at"]).replace("Z", "+00:00"))
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    if timezone.now() - at > STALE_PROGRESS or raw.get("kind") not in ("release", "plugins") or raw.get("step") not in PROGRESS_STEPS:
+    steps = RESTORE_STEPS if raw.get("kind") == "restore" else PROGRESS_STEPS
+    if timezone.now() - at > STALE_PROGRESS or raw.get("kind") not in ("release", "plugins", "restore") or raw.get("step") not in steps:
         return None
     target = str(raw.get("target", ""))
     return {"kind": raw["kind"], "target": target if versions.parse(target) else "", "step": raw["step"],
-            "steps": list(PROGRESS_STEPS), "started_at": str(raw.get("started_at", ""))[:40]}
+            "steps": list(steps), "started_at": str(raw.get("started_at", ""))[:40]}
 
 
 def state_out(state: UpdateState) -> dict:

@@ -156,6 +156,7 @@ All of these need root (`sudo`):
 | Run a management command | `conduit manage <command>` |
 | Print the setup code again (until setup is done) | `conduit setup-code` |
 | Back up the database and config | `conduit backup` (writes `/var/backups/conduit/conduit-<date>.tar.gz`) |
+| Put a backup's database back | `conduit restore conduit-<date>.tar.gz` (or **Administration → Backups**) |
 | Install a plugin from the server | `conduit plugin install <package>` |
 | List installed plugins | `conduit plugin list` |
 | Upgrade to a new release by hand | `conduit upgrade eve-conduit-X.Y.Z.tar.gz` |
@@ -190,11 +191,27 @@ only. Run it from a nightly cron job:
 echo '15 3 * * * root /usr/local/bin/conduit backup >/dev/null 2>&1' | sudo tee /etc/cron.d/conduit-backup
 ```
 
-**Restoring** on a fresh install of the same version: unpack the tarball, copy `conduit.env` to
-`/etc/conduit/` (it holds the keys that decrypt members' stored EVE logins; without it the database is
-useless), stop the services (`sudo conduit stop`), restore the database (`pg_restore -U conduit -d conduit
---clean --if-exists database.dump` as the postgres user, or `mariadb conduit < database.sql`), then
-`sudo conduit start`.
+Backups also appear under **Administration → Backups**, with **Back up now** and **Restore**. The website
+can't read `/var/backups/conduit`; the root updater lists it for the website (within two minutes of a backup
+made by cron) and does the work when an administrator asks.
+
+**Restoring** on the same server, from the website or with `sudo conduit restore conduit-<date>.tar.gz`:
+
+1. The backup is checked first. One made by a newer EvE Conduit is refused (update to that version first).
+2. The current database is backed up (`conduit-<date>-before-restore.tar.gz`) and the services stop.
+3. The database is replaced with the backup's (PostgreSQL in a single transaction), then migrated up to the
+   running version.
+4. This server's `conduit.env` is kept. If the backup's EVE login keys differ, they are added to
+   `CONDUIT_TOKEN_KEY_PREVIOUS` and `rotate_token_key` re-encrypts the stored logins with the current key.
+5. The cache and queued background jobs are emptied, and the services start again.
+
+If any step fails, the database is put back from the backup made in step 2 and the services start again.
+Everything since the backup was made is lost, sessions included, so members may have to sign in again.
+
+**Restoring on a new server:** install the same version (or newer), copy the backup into
+`/var/backups/conduit/` and run `sudo conduit restore <file>`. Don't copy the backup's `conduit.env` over the
+new one: it has the old server's database password. The restore takes the EVE login keys it needs from the
+backup by itself.
 
 ## Updating
 

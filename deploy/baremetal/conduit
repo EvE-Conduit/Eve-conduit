@@ -8,7 +8,10 @@
 #   conduit upgrade <release.tar.gz>      install a new release (keeps the old one for rollback)
 #   conduit rollback                      switch back to the previous release
 #   conduit backup                        dump the database and config to /var/backups/conduit
-#   conduit apply-update                  install an update or plugins approved on the website (run as root by
+#   conduit restore <backup>              put a backup's database back (a file in /var/backups/conduit, or its
+#                                         name); backs up the current one first and keeps this server's conduit.env
+#   conduit apply-update                  install an update or plugins approved on the website, or make or
+#                                         restore a backup asked for there (run as root by
 #                                         the conduit-update.path watcher, with cron as a backup)
 #   conduit setup-updater                 (re)install that watcher
 #   conduit web-headers                   stop browsers caching the site (older nginx configs; upgrades do it)
@@ -120,8 +123,8 @@ log_line() { safeio append "$UPDATER_LOG" "$(date -Is) $*"; }
 log_run() { "$@" 2>&1 | safeio append "$UPDATER_LOG"; return "${PIPESTATUS[0]}"; }
 
 # How far an update has got, for Administration -> Updates / Plugins and the banner members see:
-# <updates>/progress.json, removed when the update is over. "progress <release|plugins> <version|-> <step>"
-# with step backup, install, migrate or restart; "progress clear" removes it.
+# <updates>/progress.json, removed when the update is over. "progress <release|plugins|restore> <version|-> <step>"
+# with step backup, install (restore: restore), migrate or restart; "progress clear" removes it.
 progress() {
   local dir="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}" now
   [[ -d "$dir" ]] || return 0
@@ -226,10 +229,20 @@ cmd_rollback() {
   supervisor restart "$SUPERVISOR_GROUP:*"
 }
 
+# The website can't read the backups folder, so the updater lists it in the updates folder (conduit.updates.restore).
+restore_py() { "$VENV/bin/python" -I -m conduit.updates.restore "$@"; }
+refresh_backup_index() {
+  local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
+  [[ -d "$updates" && -d "$CONDUIT_BACKUPS" ]] || return 0
+  restore_py index "$CONDUIT_BACKUPS" "$updates" --owner "$CONDUIT_USER" || true
+}
+
+# cmd_backup [suffix]: the file it wrote is left in LAST_BACKUP.
+LAST_BACKUP=""
 cmd_backup() {
   require_root
   load_env
-  local stamp dir
+  local stamp dir suffix="${1:+-$1}"
   stamp=$(date +%Y%m%d-%H%M%S)
   dir=$(mktemp -d)
   mkdir -p "$CONDUIT_BACKUPS"
@@ -254,10 +267,66 @@ PY
   [[ -f "$PLUGINS_FILE" ]] && cp "$PLUGINS_FILE" "$dir/plugins.txt"
   [[ -f "$PLUGINS_SITE_FILE" ]] && cp "$PLUGINS_SITE_FILE" "$dir/plugins-site.txt"
   readlink -f "$APP" > "$dir/release.txt" || true
-  tar -czf "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz" -C "$dir" .
-  chmod 600 "$CONDUIT_BACKUPS/conduit-$stamp.tar.gz"
+  LAST_BACKUP="$CONDUIT_BACKUPS/conduit-$stamp$suffix.tar.gz"
+  tar -czf "$LAST_BACKUP" -C "$dir" .
+  chmod 600 "$LAST_BACKUP"
   rm -rf "$dir"
-  echo "Backup written to $CONDUIT_BACKUPS/conduit-$stamp.tar.gz (contains secrets; keep it safe)"
+  refresh_backup_index
+  echo "Backup written to $LAST_BACKUP (contains secrets; keep it safe)"
+}
+
+# Load an unpacked backup's database, then migrate it up to this release and carry its EVE login keys over. Every
+# step is checked by hand: callers run this inside "if", where set -e does nothing.
+restore_steps() {  # unpacked backup folder, backup name, requested by
+  restore_py load-db "$1" || return 1
+  progress restore - migrate
+  manage migrate --noinput || return 1
+  manage conduit_init >/dev/null || return 1
+  if [[ -f "$1/conduit.env" ]]; then
+    local added
+    added=$(restore_py carry-keys "$ENV_FILE" "$1/conduit.env") || return 1
+    [[ "$added" == 0 ]] || echo "Added $added of the backup's EVE login keys to CONDUIT_TOKEN_KEY_PREVIOUS in $ENV_FILE."
+  fi
+  manage rotate_token_key || echo "Warning: some stored EVE logins couldn't be re-encrypted; those members sign in again." >&2
+  manage after_restore "$2" --requested-by "$3" || return 1
+}
+
+cmd_restore() {  # backup file or name, [who asked on the website]
+  require_root
+  local archive="${1:-}" by="${2:-}"
+  [[ -n "$archive" && ! -f "$archive" && -f "$CONDUIT_BACKUPS/$archive" ]] && archive="$CONDUIT_BACKUPS/$archive"
+  [[ -f "$archive" ]] || die "usage: conduit restore <backup> (a file in $CONDUIT_BACKUPS, or its name)"
+  load_env
+  local name work version safety
+  name=$(basename "$archive")
+  work=$(mktemp -d)
+  # shellcheck disable=SC2064  # expand now: $work is local and gone when the trap fires
+  trap "rm -rf '$work'; progress clear" EXIT
+  # Refuses a backup made by a newer EvE Conduit before anything is touched.
+  version=$(restore_py unpack "$archive" "$work/backup") || die "can't restore $name"
+  echo "Restoring $name (made by EvE Conduit $version). The site is offline until it's done."
+  progress restore - backup
+  echo "Backing up the current database first..."
+  cmd_backup before-restore
+  safety=$LAST_BACKUP
+  cp -p "$ENV_FILE" "$work/conduit.env.before"
+  supervisor stop "$SUPERVISOR_GROUP:*" || true
+  progress restore - restore
+  if ! restore_steps "$work/backup" "$name" "$by"; then
+    echo "Restoring $name failed. Putting the database back as it was..." >&2
+    cp -p "$work/conduit.env.before" "$ENV_FILE"
+    if ! { restore_py unpack "$safety" "$work/safety" >/dev/null && restore_py load-db "$work/safety" \
+           && manage migrate --noinput; }; then
+      echo "PUTTING THE DATABASE BACK FAILED TOO. Restore $safety by hand: sudo conduit restore $safety" >&2
+    fi
+    supervisor start "$SUPERVISOR_GROUP:*" || true
+    progress clear
+    die "restoring $name failed; the database is as it was before (details above)"
+  fi
+  progress restore - restart
+  supervisor start "$SUPERVISOR_GROUP:*"
+  progress clear
+  echo "Restored $name. The database as it was just before is in $safety."
 }
 
 cmd_plugin() {
@@ -301,6 +370,8 @@ cmd_apply_update() {
   install_update_watcher
   apply_release_request
   apply_plugin_request
+  apply_backup_request
+  refresh_backup_index
 }
 
 # conduit-update.path watches the updates folder and starts conduit-update.service ("conduit apply-update") as soon
@@ -465,6 +536,43 @@ apply_plugin_request() {
   fi
 }
 
+# "Back up now" or "Restore" under Administration -> Backups. conduit.updates.restore checks the request (a restore
+# must name a plain file in the backups folder) and removes it; the result goes to backup-result.json.
+apply_backup_request() {
+  local updates="${CONDUIT_UPDATES_DIR:-$CONDUIT_STATE/updates}"
+  [[ -e "$updates/backup-request.json" || -L "$updates/backup-request.json" ]] || return 0
+  local line action id name by
+  if ! line=$(restore_py request "$updates" "$CONDUIT_BACKUPS" 2>&1); then
+    log_line "rejected a backup request: $line"
+    return 0
+  fi
+  IFS=$'\t' read -r action id name by <<<"$line"
+  [[ "$name" == - ]] && name=""
+  [[ "$by" == - ]] && by=""
+  backup_result() {  # status message
+    restore_py result "$updates" "$id" "$action" "$1" "$2" --name "$name" --owner "$CONDUIT_USER"
+  }
+  if [[ "$action" == backup ]]; then
+    backup_result running "Backing up"
+    log_line "backup asked for by $by"
+    if log_run "$SELF" backup; then
+      backup_result succeeded "The backup is at the top of the list."
+    else
+      backup_result failed "The backup failed (details in $UPDATER_LOG)."
+    fi
+  else
+    backup_result running "Restoring $name"
+    log_line "restore of $name asked for by $by"
+    if log_run "$SELF" restore "$CONDUIT_BACKUPS/$name" "$by"; then
+      backup_result succeeded "The database is back as it was in $name. The one it replaced was backed up first."
+    else
+      progress clear
+      backup_result failed "Restoring $name failed; the database is as it was before (details in $UPDATER_LOG)."
+    fi
+  fi
+  refresh_backup_index
+}
+
 # Internal (apply_plugin_request): back up, uninstall/reinstall what the plan says, install every listed plugin,
 # migrate and restart. Arguments are "uninstall=<package>" and "reinstall=<git URL>".
 cmd_apply_plugins() {
@@ -588,6 +696,7 @@ case "${1:-}" in
   upgrade) shift; cmd_upgrade "$@" ;;
   rollback) cmd_rollback ;;
   backup) cmd_backup ;;
+  restore) shift; cmd_restore "$@" ;;
   apply-update) cmd_apply_update ;;
   setup-updater) cmd_setup_updater ;;
   web-headers) cmd_web_headers ;;
@@ -596,5 +705,5 @@ case "${1:-}" in
   plugin) shift; cmd_plugin "$@" ;;
   uninstall) shift; cmd_uninstall "$@" ;;
   run) shift; cmd_run "$@" ;;
-  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
