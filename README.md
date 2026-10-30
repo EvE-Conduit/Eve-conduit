@@ -35,6 +35,7 @@ results, group rules and ESI scopes.
 - [`conduit-blueprints`](conduit-blueprints): Blueprint Library: the corporations' BPOs and BPCs with ME/TE and location, members' shared originals, copy and loan requests with overdue reminders, and research gaps.
 - [`conduit-pi`](conduit-pi): Planetary Industry: every colony of a member's characters with extractor countdowns, output and its value, expiry reminders, and a corporation view of products and idle colonies.
 - [`conduit-tracking`](conduit-tracking): Activity Tracking: follow a member and all their alts for 1 to 60 days, with a report of the systems they were in, the ships they flew, what they earned and when they played.
+- [`conduit-tickets`](conduit-tickets): Discord Tickets: open a private Discord channel with a member you pick, with a staff role, closing and an audit trail.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.
