@@ -1,0 +1,29 @@
+[project]
+name = "conduit-tickets"
+version = "1.0.0"
+description = "Discord Tickets: open a private Discord channel with a member you pick, and close it when you're done."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+tickets = "conduit_tickets.plugin:TicketsPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Discord Tickets"
+icon = "ticket"
+category = "Communication"
+min_conduit = "0.5.50"
+requires = ["discord"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_tickets*"]
+
+[tool.setuptools.package-data]
+conduit_tickets = ["static/**/*"]
