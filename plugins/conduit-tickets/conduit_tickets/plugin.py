@@ -6,12 +6,14 @@ from conduit.plugins import NavItem, Plugin
 class TicketsPlugin(Plugin):
     id = "tickets"
     name = "Discord Tickets"
-    version = "1.1.0"
-    description = "Reach a member you pick through a private Discord channel, an EVE mail or both, and close it when you're done."
+    version = "1.2.0"
+    description = "Reach a member you pick through a private Discord channel, an EVE mail or both, or let people open their own from a panel with buttons."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-tickets"
     app = "conduit_tickets.apps.TicketsConfig"
     api = "conduit_tickets.api:router"
+    # Discord sends clicks on panels here, signed with the application's key.
+    public_api = "conduit_tickets.public_api:router"
     frontend = "conduit_tickets/plugin.js"
     # Uses the Discord plugin's bot, server and linked accounts.
     requires = ("discord",)
@@ -21,7 +23,11 @@ class TicketsPlugin(Plugin):
     # Closing queues the transcript straight away; this picks up what failed or never got started.
     periodic_tasks = {"archive-pending": {"task": "conduit_tickets.tasks.archive_pending", "schedule": 900.0}}
     permission_tiers = {"open_tickets": "hr", "manage_tickets": "director"}
+    # Recruits and guests can open tickets from panels too, and read them here. Every staff route checks its permission.
+    members_only = False
     nav = (
         NavItem("Discord Tickets", "", "ticket", permission="tickets.open_tickets"),
+        NavItem("My tickets", "mine", "life-buoy"),
+        NavItem("Panels", "panels", "layout-dashboard", permission="tickets.manage_tickets"),
         NavItem("Settings", "settings", "settings", permission="tickets.manage_tickets"),
     )

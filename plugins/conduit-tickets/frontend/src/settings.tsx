@@ -1,5 +1,5 @@
-// Settings: where ticket channels go, which staff role sees them, and anything stopping the bot.
-import { api, Button, Callout, Card, CardBody, Field, Input, PageHeader, Select, Skeleton, toast } from "@conduit/sdk";
+// Settings: where ticket channels go, which Discord roles are ticked by default, and anything stopping the bot.
+import { api, Button, Callout, Card, CardBody, Field, Input, PageHeader, RoleChips, Skeleton, toast } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
@@ -10,15 +10,15 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["tickets", "settings"], queryFn: () => api.get<Settings>(`${BASE}/settings`) });
   const [category, setCategory] = useState("");
-  const [role, setRole] = useState("");
+  const [roles, setRoles] = useState<string[]>([]);
   useEffect(() => {
     if (data) {
       setCategory(data.category_id);
-      setRole(data.staff_role_id);
+      setRoles(data.default_role_ids);
     }
   }, [data]);
   const save = useMutation({
-    mutationFn: () => api.put<Settings>(`${BASE}/settings`, { category_id: category, staff_role_id: role }),
+    mutationFn: () => api.put<Settings>(`${BASE}/settings`, { category_id: category, default_role_ids: roles }),
     onSuccess: (s) => {
       qc.setQueryData(["tickets", "settings"], s);
       toast.success("Saved");
@@ -42,11 +42,8 @@ export function SettingsPage() {
               <Field label="Category id" hint="Optional. With Developer Mode on, right-click a Discord category and Copy Channel ID. Empty puts channels at the top of the server.">
                 <Input value={category} onChange={(e) => setCategory(e.target.value)} />
               </Field>
-              <Field label="Staff role" hint="Optional. This Discord role sees and can answer every ticket.">
-                <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="">Nobody else</option>
-                  {data.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </Select>
+              <Field label="Default Discord roles" hint="Optional. Ticked when someone opens a ticket; they can change it for that ticket.">
+                <RoleChips roles={data.roles} value={roles} onChange={setRoles} />
               </Field>
               <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
             </CardBody>

@@ -1,6 +1,6 @@
 // The main page: every ticket, opening a new one, and closing.
 import {
-  api, Avatar, Badge, Button, Callout, ConfirmDialog, dateTime, Dialog, EmptyState, Field, Input, PageHeader, SearchInput, Segmented, Skeleton,
+  api, Avatar, Badge, Button, Callout, ConfirmDialog, dateTime, Dialog, EmptyState, Field, Input, PageHeader, RoleChips, SearchInput, Segmented, Skeleton,
   Table, Td, Textarea, Th, THead, toast, Tr,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { External, Plus, TicketIcon } from "./icons";
-import { BASE, type Candidate, type Page, type Sender, type Ticket, type Via, VIA_LABEL } from "./types";
+import { BASE, type Candidate, type Page, type RoleChoices, type Sender, type Ticket, type Via, VIA_LABEL } from "./types";
 
 type Filter = "" | "open" | "closed";
 
@@ -37,7 +37,7 @@ export function TicketsPage() {
         eyebrow="Discord"
         title="Discord Tickets"
         icon={<TicketIcon />}
-        description="Reach a member you pick through a private Discord channel, an EVE mail or both. Only the two of you and the staff role can see the channel."
+        description="Reach a member you pick through a private Discord channel, an EVE mail or both. Only the two of you and the Discord roles you choose can see the channel."
         actions={<Button variant="primary" onClick={() => setOpening(true)}><Plus /> Open a ticket</Button>}
       />
       <div className="mb-4">
@@ -65,6 +65,7 @@ export function TicketsPage() {
               <Th>Subject</Th>
               <Th>Member</Th>
               <Th>Opened</Th>
+              <Th>Closed</Th>
               <Th>Status</Th>
               <Th />
             </tr>
@@ -74,7 +75,7 @@ export function TicketsPage() {
               <Tr key={t.id}>
                 <Td className="max-w-xs font-medium">
                   <Link to={`/p/tickets/${t.id}`} className="block truncate hover:text-accent-ink" title={t.subject}>{t.subject}</Link>
-                  <span className="block text-xs font-normal text-muted">{VIA_LABEL[t.via]}</span>
+                  <span className="block text-xs font-normal text-muted">{t.panel ? `Panel: ${t.panel}` : VIA_LABEL[t.via]}{t.roles.length > 0 && ` · ${t.roles.map((r) => `@${r.name}`).join(", ")}`}</span>
                   {t.mail_error && <span className="block text-xs font-normal text-danger-fg">Mail not sent: {t.mail_error}</span>}
                 </Td>
                 <Td>
@@ -90,9 +91,17 @@ export function TicketsPage() {
                   <span className="block">{dateTime(t.opened_at)}</span>
                   <span className="block text-xs">by {t.opened_by}</span>
                 </Td>
+                <Td className="whitespace-nowrap text-muted">
+                  {t.closed_at ? (
+                    <>
+                      <span className="block">{dateTime(t.closed_at)}</span>
+                      {t.closed_by && <span className="block text-xs">by {t.closed_by}</span>}
+                    </>
+                  ) : "—"}
+                </Td>
                 <Td>
                   {t.closed_at
-                    ? <Badge tone="neutral">Closed{t.closed_by ? ` by ${t.closed_by}` : ""}</Badge>
+                    ? <Badge tone="neutral">Closed</Badge>
                     : <Badge tone="accent">Open</Badge>}
                 </Td>
                 <Td>
@@ -150,12 +159,20 @@ function OpenDialog({ onClose }: { onClose: () => void }) {
     enabled: search.length >= 2 && !picked,
   });
   const usesDiscord = via !== "mail";
+  const { data: choices } = useQuery({
+    queryKey: ["tickets", "roles"],
+    queryFn: () => api.get<RoleChoices>(`${BASE}/roles`),
+    enabled: usesDiscord,
+  });
+  // null until someone changes it: the defaults from Settings
+  const [chosenRoles, setRoles] = useState<string[] | null>(null);
+  const roles = chosenRoles ?? choices?.defaults ?? [];
   const usesMail = via !== "discord";
   const noDiscord = usesDiscord && picked && !picked.discord;
   const noMail = usesMail && sender && !sender.can_mail;
   const valid = picked && !picked.open_ticket && !noDiscord && !noMail && subject.trim().length > 0 && (via !== "mail" || message.trim().length > 0);
   const open = useMutation({
-    mutationFn: () => api.post<Ticket>(`${BASE}/tickets`, { user_id: picked!.id, subject, message, via }),
+    mutationFn: () => api.post<Ticket>(`${BASE}/tickets`, { user_id: picked!.id, subject, message, via, ...(usesDiscord ? { role_ids: roles } : {}) }),
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["tickets"] });
       if (t.mail_error) toast.warning(`Channel made, but the mail didn't go: ${t.mail_error}`);
@@ -231,6 +248,11 @@ function OpenDialog({ onClose }: { onClose: () => void }) {
         </Field>
         {noDiscord && <Callout tone="warning">{picked.name} hasn't linked Discord. Send an EVE mail instead.</Callout>}
         {noMail && <Callout tone="warning">{sender.problem}</Callout>}
+        {usesDiscord && (
+          <Field label="Discord roles that can see it" hint="Besides the two of you. Everyone with these roles can read and answer in the channel.">
+            {choices?.error ? <Callout tone="warning">{choices.error}</Callout> : <RoleChips roles={choices?.roles ?? []} value={roles} onChange={setRoles} />}
+          </Field>
+        )}
         <Field label="Subject">
           <Input maxLength={100} value={subject} onChange={(e) => setSubject(e.target.value)} />
         </Field>

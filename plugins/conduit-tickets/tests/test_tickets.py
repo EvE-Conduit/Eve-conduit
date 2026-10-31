@@ -2,10 +2,15 @@
 removing the channel, who may do what, and settings. Discord and ESI are faked."""
 
 import json
+import re
+import time
 
 import httpx
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from django.contrib.auth.models import Permission
+from django.test import Client
 
 from conduit.accounts.models import Character, Token
 from conduit.audit.models import AuditEvent
@@ -14,15 +19,16 @@ from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
 from conduit_discord import discord_api
 from conduit_discord.models import DiscordAccount, DiscordSettings
-from conduit_tickets import services, tasks
-from conduit_tickets.models import Ticket, TicketAttachment, TicketMessage, TicketSettings
+from conduit_tickets import panels, services, tasks
+from conduit_tickets.models import PanelButton, Ticket, TicketAttachment, TicketMessage, TicketPanel, TicketSettings
 from tests.conftest import make_user
 
 pytestmark = pytest.mark.django_db
 
 BASE = "/api/p/tickets"
 GUILD, BOT, OFFICER, PILOT = "100000000000000001", "200000000000000002", "300000000000000003", "300000000000000004"
-CATEGORY, ROLE_STAFF, R_BOT = "500000000000000001", "400000000000000001", "400000000000000002"
+CATEGORY, ROLE_STAFF, R_BOT, ROLE_HR = "500000000000000001", "400000000000000001", "400000000000000002", "400000000000000003"
+PANEL_CHANNEL, OTHER_CHANNEL = "700000000000000001", "700000000000000002"
 
 
 class FakeDiscord:
@@ -42,6 +48,11 @@ class FakeDiscord:
         self.downloads: list[str] = []
         self.app_flags = 1 << 19
         self.refuse_channels = False
+        self.verify_key = ""
+        self.endpoint = None
+        self.answers: list[str] = []
+        self.panel_calls: list[tuple[str, str, dict | None]] = []
+        self.panel_message_gone = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.url.host == "cdn.discordapp.com":
@@ -52,13 +63,19 @@ class FakeDiscord:
         path, method = request.url.path.removeprefix("/api/v10"), request.method
         body = json.loads(request.content) if request.content else None
         if path == "/applications/@me":
-            return httpx.Response(200, json={"id": "7", "flags": self.app_flags})
+            return httpx.Response(200, json={"id": "7", "flags": self.app_flags, "verify_key": self.verify_key, "interactions_endpoint_url": self.endpoint})
+        if path.startswith("/webhooks/"):
+            self.answers.append(body["content"])
+            return httpx.Response(200, json={})
+        if path == f"/guilds/{GUILD}/channels" and method == "GET":
+            return httpx.Response(200, json=[{"id": c, "name": c, "type": 0} for c in (PANEL_CHANNEL, OTHER_CHANNEL)] + [{"id": CATEGORY, "name": "Tickets", "type": 4}])
         if path == "/users/@me":
             return httpx.Response(200, json={"id": BOT, "username": "Conduit"})
         if path == f"/guilds/{GUILD}/roles":
             return httpx.Response(200, json=[
                 {"id": GUILD, "name": "@everyone", "position": 0, "permissions": "0"},
                 {"id": ROLE_STAFF, "name": "Staff", "position": 1, "permissions": "0"},
+                {"id": ROLE_HR, "name": "HR", "position": 3, "permissions": "0", "color": 5},
                 {"id": R_BOT, "name": "Conduit", "position": 2, "permissions": str(self.bot_perms), "managed": True},
             ])
         if path.startswith(f"/guilds/{GUILD}/members/"):
@@ -70,6 +87,11 @@ class FakeDiscord:
             cid = str(600000000000000000 + len(self.channels))
             self.channels[cid] = {"id": cid, **body}
             return httpx.Response(201, json=self.channels[cid])
+        if path.startswith("/channels/") and path.split("/")[2] in (PANEL_CHANNEL, OTHER_CHANNEL):
+            self.panel_calls.append((method, path, body))
+            if method == "PATCH" and self.panel_message_gone:
+                return httpx.Response(404, json={"message": "Unknown Message", "code": 10008})
+            return httpx.Response(200, json={"id": "900000000000000001"})
         if path.startswith("/channels/"):
             parts = path.split("/")
             cid = parts[2]
@@ -149,7 +171,7 @@ def test_channel_is_private_to_the_two_of_them(api_client, people, discord):
 
 def test_category_and_staff_role_are_used(api_client, people, discord):
     officer, pilot = people
-    TicketSettings.objects.update_or_create(pk=1, defaults={"category_id": CATEGORY, "staff_role_id": ROLE_STAFF})
+    TicketSettings.objects.update_or_create(pk=1, defaults={"category_id": CATEGORY, "default_role_ids": [ROLE_STAFF]})
     assert open_ticket(api_client, officer, pilot).status_code == 200
     channel = only_channel(discord)
     assert channel["parent_id"] == CATEGORY
@@ -252,15 +274,15 @@ def test_settings_show_problems_and_are_checked(api_client, people, discord):
     discord.bot_perms &= ~services.MANAGE_CHANNELS
     out = api_client.call("get", f"{BASE}/settings").json()
     assert out["problems"] == ["The bot's role is missing the Manage Channels permission."]
-    assert [r["name"] for r in out["roles"]] == ["Staff"]
+    assert [r["name"] for r in out["roles"]] == ["HR", "Staff"]
     permissions = int(dict(p.split("=") for p in out["invite_url"].split("?")[1].split("&"))["permissions"])
     assert permissions & services.MANAGE_CHANNELS and permissions & discord_api.MANAGE_ROLES
 
     put = lambda **b: api_client.call("put", f"{BASE}/settings", b)  # noqa: E731
     assert put(category_id="abc").status_code == 400
     assert put(category_id="999").status_code == 400
-    assert put(staff_role_id="999").status_code == 400
-    resp = put(category_id=CATEGORY, staff_role_id=ROLE_STAFF)
+    assert put(default_role_ids=["999"]).status_code == 400
+    resp = put(category_id=CATEGORY, default_role_ids=[ROLE_STAFF])
     assert resp.status_code == 200 and resp.json()["category_id"] == CATEGORY
 
 
@@ -307,7 +329,7 @@ def test_mail_only_makes_no_channel_and_escapes_the_message(api_client, people, 
     path, body, sender = esi.mails[0]
     assert path == f"/characters/{officer.main_character_id}/mail" and sender == officer.main_character_id
     assert body["recipients"] == [{"recipient_id": pilot.main_character_id, "recipient_type": "character"}]
-    assert body["subject"] == "A word" and body["body"] == "Mind the &lt;gate&gt;<br>Today" and body["approved_cost"] == 0
+    assert body["subject"] == "A word" and body["body"].startswith("Mind the &lt;gate&gt;<br>Today<br><br>Ticket opened ") and body["body"].endswith("EVE time") and body["approved_cost"] == 0
     assert Ticket.objects.get().mail_id == 777
     assert AuditEvent.objects.get(action="tickets.opened").details["via"] == "mail"
     assert Notification.objects.filter(user=pilot, title="EVE mail: A word").exists()
@@ -613,3 +635,363 @@ def test_files_are_only_fetched_from_discord(api_client, people, discord):
     assert ticket.channel_gone and TicketAttachment.objects.get().state == "unavailable" and discord.downloads == []
     a = TicketAttachment.objects.get()
     assert api_client.call("get", f"{BASE}/attachments/{a.pk}").status_code == 404
+
+
+# --- who sees it, and when ------------------------------------------------------------------------------------------
+
+
+def role_overwrites(discord):
+    return {o["id"] for o in only_channel(discord)["permission_overwrites"] if o["type"] == 0 and o["id"] != GUILD}
+
+
+def test_the_roles_picked_see_the_channel_instead_of_the_defaults(api_client, people, discord):
+    officer, pilot = people
+    TicketSettings.objects.update_or_create(pk=1, defaults={"default_role_ids": [ROLE_STAFF]})
+    out = open_ticket(api_client, officer, pilot, role_ids=[ROLE_HR]).json()
+    assert role_overwrites(discord) == {ROLE_HR}
+    assert out["roles"] == [{"id": ROLE_HR, "name": "HR"}]
+
+
+def test_no_roles_means_only_the_two_of_them(api_client, people, discord):
+    officer, pilot = people
+    TicketSettings.objects.update_or_create(pk=1, defaults={"default_role_ids": [ROLE_STAFF]})
+    assert open_ticket(api_client, officer, pilot, role_ids=[]).status_code == 200
+    assert role_overwrites(discord) == set()
+
+
+def test_defaults_are_used_when_none_are_given_and_deleted_ones_left_off(api_client, people, discord):
+    officer, pilot = people
+    TicketSettings.objects.update_or_create(pk=1, defaults={"default_role_ids": [ROLE_STAFF, "999"]})
+    assert open_ticket(api_client, officer, pilot).status_code == 200
+    assert role_overwrites(discord) == {ROLE_STAFF}
+
+
+@pytest.mark.parametrize("bad", [GUILD, R_BOT, "999"])
+def test_everyone_bot_and_unknown_roles_cant_be_picked(api_client, people, discord, bad):
+    officer, pilot = people
+    resp = open_ticket(api_client, officer, pilot, role_ids=[bad])
+    assert resp.status_code == 400 and not Ticket.objects.exists() and list(discord.channels) == [CATEGORY]
+
+
+def test_openers_get_the_roles_to_pick_from(api_client, people, discord):
+    officer, pilot = people
+    TicketSettings.objects.update_or_create(pk=1, defaults={"default_role_ids": [ROLE_STAFF, "999"]})
+    api_client.force_login(officer)
+    out = api_client.call("get", f"{BASE}/roles").json()
+    assert [r["id"] for r in out["roles"]] == [ROLE_HR, ROLE_STAFF] and out["defaults"] == [ROLE_STAFF] and out["error"] == ""
+    api_client.force_login(pilot)
+    assert api_client.call("get", f"{BASE}/roles").status_code == 403
+
+
+def test_mail_only_ignores_roles_and_asks_discord_nothing(api_client, people, can_mail, esi, discord, monkeypatch):
+    officer, pilot = people
+    monkeypatch.setattr(discord_api, "roles", lambda *a: pytest.fail("no Discord call for a mail"))
+    out = open_ticket(api_client, officer, pilot, via="mail", message="Hi", role_ids=[ROLE_HR]).json()
+    assert out["roles"] == []
+
+
+def test_times_are_on_the_ticket_in_discord_and_readable_in_the_transcript(api_client, people, discord):
+    officer, pilot = people
+    out = open_ticket(api_client, officer, pilot).json()
+    assert out["opened_at"] and out["closed_at"] is None
+    first = discord.messages[0][1]["content"]
+    assert re.search(r"opened this ticket <t:\d+:F>", first)
+    closed = api_client.call("post", f"{BASE}/tickets/{out['id']}/close").json()
+    assert closed["closed_at"]
+    assert re.search(r"closed by Officer One <t:\d+:F>", discord.messages[1][1]["content"])
+    channel = only_channel(discord)["id"]
+    discord.history[channel] = [said(1, author=BOT, content="Opened <t:1793000000:F> ok", author_extra={"bot": True})]
+    tasks.archive_pending()
+    assert TicketMessage.objects.get().content == "Opened 26 Oct 2026 07:33 EVE time ok"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_upgrading_keeps_the_staff_role():
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    executor.migrate([("tickets", "0003_transcripts")])
+    old = executor.loader.project_state([("tickets", "0003_transcripts")]).apps
+    old.get_model("tickets", "TicketSettings").objects.create(pk=1, staff_role_id=ROLE_STAFF)
+    fields = {"subject": "s", "opened_by_name": "a", "target_name": "b"}
+    old.get_model("tickets", "Ticket").objects.create(channel_id="1", **fields)
+    old.get_model("tickets", "Ticket").objects.create(via="mail", **fields)
+
+    executor = MigrationExecutor(connection)
+    executor.migrate([("tickets", "0005_panels")])
+    assert TicketSettings.load().default_role_ids == [ROLE_STAFF]
+    assert Ticket.objects.get(channel_id="1").roles == [{"id": ROLE_STAFF, "name": "Staff role"}]
+    assert Ticket.objects.get(via="mail").roles == []
+
+
+# --- panels -----------------------------------------------------------------------------------------------------------
+
+URL = "/api/public/p/tickets/interactions"
+KEY = Ed25519PrivateKey.generate()
+
+
+@pytest.fixture
+def signed(people):
+    TicketSettings.objects.update_or_create(pk=1, defaults={"public_key": KEY.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()})
+
+
+def post(payload, key=KEY, age=0, signature=None):
+    body, stamp = json.dumps(payload), str(int(time.time()) - age)
+    sig = signature if signature is not None else key.sign(stamp.encode() + body.encode()).hex()
+    return Client(enforce_csrf_checks=True).post(URL, body, content_type="application/json", headers={"X-Signature-Ed25519": sig, "X-Signature-Timestamp": stamp})
+
+
+def clicked(custom_id, who=PILOT, roles=(), kind=3, **data):
+    return {"type": kind, "guild_id": GUILD, "application_id": "7", "token": "tok", "member": {"user": {"id": who}, "roles": list(roles)},
+            "data": {"custom_id": custom_id, **data}}
+
+
+def form(button, subject="Help", message="Please"):
+    rows = [{"type": 1, "components": [{"custom_id": "subject", "value": subject}]}, {"type": 1, "components": [{"custom_id": "message", "value": message}]}]
+    return clicked(f"tickets:form:{button.pk}", kind=5, components=rows)
+
+
+def make_button(role_ids=(ROLE_STAFF,), category_id=""):
+    panel = TicketPanel.objects.create(channel_id=PANEL_CHANNEL, message_id="9", title="Help")
+    return PanelButton.objects.create(panel=panel, label="Recruitment", role_ids=list(role_ids), category_id=category_id)
+
+
+@pytest.fixture
+def run_tasks(monkeypatch):
+    monkeypatch.setattr(tasks.open_from_panel, "delay", lambda *a: tasks.open_from_panel(*a))
+    monkeypatch.setattr(tasks.close_from_discord, "delay", lambda *a: tasks.close_from_discord(*a))
+
+
+@pytest.mark.parametrize("attempt", [
+    {"key": Ed25519PrivateKey.generate()}, {"signature": ""}, {"signature": "zz"}, {"age": 3600},
+])
+def test_clicks_without_discords_signature_are_refused(signed, attempt):
+    assert post({"type": 1}, **attempt).status_code == 401
+
+
+def test_no_key_yet_refuses_everything(people):
+    assert post({"type": 1}).status_code == 401
+
+
+def test_discords_ping_is_answered(signed):
+    resp = post({"type": 1})
+    assert resp.status_code == 200 and resp.json() == {"type": 1}
+
+
+def test_clicking_asks_for_a_subject(signed):
+    button = make_button()
+    data = post(clicked(f"tickets:open:{button.pk}")).json()
+    assert data["type"] == panels.SHOW_MODAL and data["data"]["custom_id"] == f"tickets:form:{button.pk}"
+
+
+def test_people_who_have_not_linked_are_told_to_link(signed, discord, run_tasks):
+    button = make_button()
+    for attempt in (clicked(f"tickets:open:{button.pk}", who="999"), {**form(button), "member": {"user": {"id": "999"}}}):
+        data = post(attempt).json()
+        assert data["type"] == panels.REPLY and data["data"]["flags"] == panels.EPHEMERAL and "/p/discord" in data["data"]["content"]
+    assert not Ticket.objects.exists()
+
+
+def test_another_server_is_refused(signed):
+    button = make_button()
+    assert "own Discord server" in post({**clicked(f"tickets:open:{button.pk}"), "guild_id": "1"}).json()["data"]["content"]
+
+
+def test_submitting_opens_a_private_channel_and_pings_the_roles(signed, people, discord, run_tasks):
+    _officer, pilot = people
+    button = make_button(role_ids=[ROLE_STAFF, "400000000000000099"], category_id=CATEGORY)
+    assert post(form(button, message="Help @everyone")).json()["type"] == panels.DEFERRED_REPLY
+    ticket = Ticket.objects.get()
+    assert (ticket.opened_by, ticket.target, ticket.panel_label) == (pilot, pilot, "Recruitment")
+    assert ticket.roles == [{"id": ROLE_STAFF, "name": "Staff"}], "a role since deleted is left off"
+    channel = only_channel(discord)
+    assert channel["parent_id"] == CATEGORY
+    assert sorted(o["id"] for o in channel["permission_overwrites"]) == sorted([GUILD, BOT, PILOT, ROLE_STAFF]), "one overwrite each"
+    _cid, message = discord.messages[0]
+    assert message["allowed_mentions"] == {"users": [PILOT], "roles": [ROLE_STAFF]}
+    assert message["components"][0]["components"][0]["custom_id"] == f"tickets:close:{ticket.pk}"
+    assert discord.answers == [f"Your ticket is open: {services.channel_url(ticket)}"]
+
+
+def test_one_open_ticket_per_button_and_a_cooldown(signed, people, discord, run_tasks):
+    button = make_button()
+    post(form(button))
+    assert "already have a ticket" in post(clicked(f"tickets:open:{button.pk}")).json()["data"]["content"]
+    other = PanelButton.objects.create(panel=button.panel, label="Other", role_ids=[ROLE_STAFF])
+    assert "only just" in post(clicked(f"tickets:open:{other.pk}")).json()["data"]["content"]
+    post(form(button))
+    assert Ticket.objects.count() == 1 and "already have a ticket" in discord.answers[-1]
+    Ticket.objects.update(opened_at=Ticket.objects.get().opened_at - panels.COOLDOWN)
+    post(form(other))
+    assert Ticket.objects.count() == 2, "another button can have its own"
+
+
+def test_panel_tickets_and_staff_tickets_do_not_block_each_other(api_client, signed, people, discord, run_tasks):
+    officer, pilot = people
+    assert open_ticket(api_client, officer, pilot).status_code == 200
+    post(form(make_button()))
+    assert Ticket.objects.count() == 2
+
+
+def test_a_refused_channel_is_explained_and_leaves_nothing(signed, discord, run_tasks):
+    discord.refuse_channels = True
+    post(form(make_button()))
+    assert not Ticket.objects.exists() and "isn't allowed" in discord.answers[0]
+
+
+def test_buttons_without_roles_left_say_so(signed, discord, run_tasks):
+    post(form(make_button(role_ids=["400000000000000099"])))
+    assert not Ticket.objects.exists() and "ask staff" in discord.answers[0]
+
+
+def test_deleted_button_says_it_no_longer_works(signed):
+    assert "no longer works" in post(clicked("tickets:open:12345")).json()["data"]["content"]
+    assert "no longer works" in post(clicked("tickets:nonsense")).json()["data"]["content"]
+
+
+def open_panel_ticket(button=None):
+    post(form(button or make_button()))
+    return Ticket.objects.get()
+
+
+def test_closing_from_discord_asks_first(signed, discord, run_tasks):
+    ticket = open_panel_ticket()
+    data = post(clicked(f"tickets:close:{ticket.pk}")).json()
+    assert data["data"]["components"][0]["components"][0]["custom_id"] == f"tickets:closeyes:{ticket.pk}"
+    ticket.refresh_from_db()
+    assert ticket.closed_at is None
+    assert post(clicked(f"tickets:closeyes:{ticket.pk}")).json()["type"] == panels.DEFERRED_REPLY
+    tasks.archive_pending()
+    ticket.refresh_from_db()
+    assert ticket.closed_at and ticket.archive_state == Ticket.ARCHIVE_DONE and ticket.channel_gone
+    assert not Notification.objects.filter(title__startswith="Discord ticket closed").exists(), "they closed it themselves"
+    assert "already closed" in post(clicked(f"tickets:closeyes:{ticket.pk}")).json()["data"]["content"]
+
+
+def test_who_can_close_from_discord(signed, people, discord, run_tasks):
+    officer, pilot = people
+    officer.user_permissions.clear()
+    stranger = make_user(90000003, "Third Pilot")
+    DiscordAccount.objects.create(user=stranger, discord_id="333", username="third")
+    ticket = open_panel_ticket()
+    assert "can't close" in post(clicked(f"tickets:closeyes:{ticket.pk}", who="333")).json()["data"]["content"]
+    ticket.refresh_from_db()
+    assert ticket.closed_at is None
+    assert post(clicked(f"tickets:close:{ticket.pk}", who="333", roles=[ROLE_STAFF])).json()["data"]["components"], "holds a role of the ticket"
+    stranger.user_permissions.add(Permission.objects.get(codename="open_tickets"))
+    assert post(clicked(f"tickets:close:{ticket.pk}", who="333")).json()["data"]["components"], "staff"
+
+
+def test_a_member_staff_opened_a_ticket_with_cannot_close_it(api_client, signed, people, discord):
+    officer, pilot = people
+    ticket = open_ticket(api_client, officer, pilot).json()
+    assert "can't close" in post(clicked(f"tickets:close:{ticket['id']}")).json()["data"]["content"]
+
+
+def test_people_read_their_own_panel_tickets_only(api_client, signed, people, discord, run_tasks):
+    officer, pilot = people
+    staff_ticket = open_ticket(api_client, officer, pilot).json()
+    post(form(make_button()))
+    ticket = Ticket.objects.exclude(panel_label="").get()
+    api_client.force_login(pilot)
+    assert [t["id"] for t in api_client.call("get", f"{BASE}/mine").json()["items"]] == [ticket.pk]
+    assert api_client.call("get", f"{BASE}/tickets/{ticket.pk}").json()["mine"] is True
+    assert api_client.call("get", f"{BASE}/tickets/{ticket.pk}/messages").status_code == 200
+    assert api_client.call("get", f"{BASE}/tickets/{staff_ticket['id']}").status_code == 403
+    other = make_user(90000003, "Third Pilot")
+    api_client.force_login(other)
+    assert api_client.call("get", f"{BASE}/mine").json()["items"] == []
+    assert api_client.call("get", f"{BASE}/tickets/{ticket.pk}").status_code == 403
+
+
+def panel_body(**extra):
+    return {"channel_id": PANEL_CHANNEL, "title": "Need help?", "text": "Click below", "buttons": [{"label": "Recruitment", "role_ids": [ROLE_STAFF]}], **extra}
+
+
+@pytest.fixture
+def manager(people):
+    officer, _pilot = people
+    officer.user_permissions.add(Permission.objects.get(codename="manage_tickets"))
+    return officer
+
+
+def test_panels_need_the_permission(api_client, people):
+    officer, _pilot = people
+    api_client.force_login(officer)
+    assert api_client.call("get", f"{BASE}/panels").status_code == 403
+    assert api_client.call("post", f"{BASE}/panels", panel_body()).status_code == 403
+
+
+def test_posting_a_panel(api_client, manager, discord):
+    api_client.force_login(manager)
+    resp = api_client.call("post", f"{BASE}/panels", panel_body())
+    assert resp.status_code == 200, resp.content
+    button = PanelButton.objects.get()
+    method, path, body = discord.panel_calls[-1]
+    assert (method, path) == ("POST", f"/channels/{PANEL_CHANNEL}/messages")
+    assert body["embeds"][0] == {"title": "Need help?", "description": "Click below"}
+    assert body["components"][0]["components"][0]["custom_id"] == f"tickets:open:{button.pk}"
+    assert TicketPanel.objects.get().message_id == "900000000000000001"
+    assert AuditEvent.objects.filter(action="tickets.panel_saved").exists()
+
+
+@pytest.mark.parametrize("change,word", [
+    ({"title": " "}, "title"), ({"text": "x" * 2001}, "text"), ({"buttons": []}, "buttons"), ({"channel_id": CATEGORY}, "channel"),
+    ({"buttons": [{"label": "A", "role_ids": []}]}, "roles"), ({"buttons": [{"label": "", "role_ids": [ROLE_STAFF]}]}, "label"),
+    ({"buttons": [{"label": "A", "role_ids": [GUILD]}]}, "role"), ({"buttons": [{"label": "A", "role_ids": [R_BOT]}]}, "role"),
+    ({"buttons": [{"label": "A", "role_ids": [ROLE_STAFF], "category_id": "1"}]}, "category"),
+    ({"buttons": [{"label": str(i), "role_ids": [ROLE_STAFF]} for i in range(6)]}, "buttons"),
+])
+def test_bad_panels_are_refused(api_client, manager, change, word):
+    api_client.force_login(manager)
+    resp = api_client.call("post", f"{BASE}/panels", panel_body(**change))
+    assert resp.status_code == 400 and word in resp.json()["detail"]
+    assert not TicketPanel.objects.exists()
+
+
+def test_editing_keeps_the_message_and_button_ids(api_client, manager, discord):
+    api_client.force_login(manager)
+    panel = api_client.call("post", f"{BASE}/panels", panel_body()).json()
+    kept = panel["buttons"][0]["id"]
+    resp = api_client.call("put", f"{BASE}/panels/{panel['id']}", panel_body(title="New", buttons=[
+        {"id": kept, "label": "Renamed", "role_ids": [ROLE_HR]}, {"label": "Added", "role_ids": [ROLE_STAFF]}]))
+    assert resp.status_code == 200, resp.content
+    assert discord.panel_calls[-1][0] == "PATCH" and PanelButton.objects.get(pk=kept).label == "Renamed" and PanelButton.objects.count() == 2
+
+
+def test_editing_posts_again_if_the_message_was_deleted(api_client, manager, discord):
+    api_client.force_login(manager)
+    panel = api_client.call("post", f"{BASE}/panels", panel_body()).json()
+    discord.panel_message_gone = True
+    assert api_client.call("put", f"{BASE}/panels/{panel['id']}", panel_body()).status_code == 200
+    assert [c[0] for c in discord.panel_calls[-2:]] == ["PATCH", "POST"]
+
+
+def test_moving_a_panel_removes_the_old_message(api_client, manager, discord):
+    api_client.force_login(manager)
+    panel = api_client.call("post", f"{BASE}/panels", panel_body()).json()
+    assert api_client.call("put", f"{BASE}/panels/{panel['id']}", panel_body(channel_id=OTHER_CHANNEL)).status_code == 200
+    assert discord.panel_calls[-1][:2] == ("DELETE", f"/channels/{PANEL_CHANNEL}/messages/900000000000000001")
+
+
+def test_deleting_a_panel_leaves_its_tickets_open(api_client, signed, manager, discord, run_tasks):
+    button = make_button()
+    post(form(button))
+    api_client.force_login(manager)
+    assert api_client.call("delete", f"{BASE}/panels/{button.panel_id}").status_code == 200
+    ticket = Ticket.objects.get()
+    assert ticket.closed_at is None and ticket.panel_button is None and ticket.panel_label == "Recruitment"
+
+
+def test_the_page_remembers_the_key_and_warns_about_the_address(api_client, manager, discord, settings):
+    settings.SITE_URL = "https://corp.example"
+    discord.verify_key = "ab" * 32
+    api_client.force_login(manager)
+    data = api_client.call("get", f"{BASE}/panels").json()
+    assert TicketSettings.load().public_key == "ab" * 32
+    assert data["endpoint_url"] == f"https://corp.example{URL}" and any("Interactions Endpoint" in p for p in data["problems"])
+    discord.endpoint = data["endpoint_url"]
+    assert api_client.call("get", f"{BASE}/panels").json()["problems"] == []
+    settings.SITE_URL = "http://localhost:5173"
+    assert any("public https" in p for p in api_client.call("get", f"{BASE}/panels").json()["problems"])

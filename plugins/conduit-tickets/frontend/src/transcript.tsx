@@ -32,10 +32,14 @@ export function TranscriptPage() {
   return (
     <>
       <PageHeader
-        eyebrow={<Link to="/p/tickets" className="inline-flex items-center gap-1 hover:text-accent-ink"><ArrowLeft className="size-3.5" /> Discord Tickets</Link>}
+        eyebrow={<Link to={t.mine ? "/p/tickets/mine" : "/p/tickets"} className="inline-flex items-center gap-1 hover:text-accent-ink"><ArrowLeft className="size-3.5" /> {t.mine ? "My tickets" : "Discord Tickets"}</Link>}
         title={t.subject}
         icon={<TicketIcon />}
-        description={`With ${t.target_name}, opened by ${t.opened_by} on ${dateTime(t.opened_at)}`}
+        description={[
+          t.panel ? `Opened by ${t.opened_by} from the ${t.panel} button on ${dateTime(t.opened_at)}.` : `With ${t.target_name}. Opened by ${t.opened_by} on ${dateTime(t.opened_at)}.`,
+          t.closed_at ? `Closed${t.closed_by ? ` by ${t.closed_by}` : ""} on ${dateTime(t.closed_at)}.` : "",
+          t.roles.length > 0 ? `Visible to ${t.roles.map((r) => `@${r.name}`).join(", ")}.` : "",
+        ].filter(Boolean).join(" ")}
         actions={t.closed_at ? <Badge tone="neutral">Closed{t.closed_by ? ` by ${t.closed_by}` : ""}</Badge> : <Badge tone="accent">Open</Badge>}
       />
       <div className="space-y-4">

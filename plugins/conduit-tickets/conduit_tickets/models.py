@@ -7,8 +7,10 @@ class TicketSettings(models.Model):
 
     #: The Discord category new channels are put in; empty puts them at the top of the server.
     category_id = models.CharField(max_length=32, blank=True)
-    #: A Discord role that can see and answer every ticket; empty means only the two people in it.
-    staff_role_id = models.CharField(max_length=32, blank=True)
+    #: Discord roles ticked for a new ticket, which whoever opens it can change.
+    default_role_ids = models.JSONField(default=list, blank=True)
+    #: The Discord application's public key, read from Discord. Clicks on panels are checked against it.
+    public_key = models.CharField(max_length=64, blank=True)
 
     class Meta:
         verbose_name_plural = "Ticket settings"
@@ -19,8 +21,41 @@ class TicketSettings(models.Model):
         return obj
 
 
+class TicketPanel(models.Model):
+    """A message the bot posts in a channel, whose buttons let people open a ticket themselves."""
+
+    channel_id = models.CharField(max_length=32)
+    message_id = models.CharField(max_length=32, blank=True)
+    title = models.CharField(max_length=100)
+    text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+
+    def __str__(self):
+        return self.title
+
+
+class PanelButton(models.Model):
+    """One button of a panel: the Discord roles that see its tickets, and where their channels go."""
+
+    panel = models.ForeignKey(TicketPanel, on_delete=models.CASCADE, related_name="buttons")
+    label = models.CharField(max_length=80)
+    role_ids = models.JSONField(default=list)
+    #: Empty uses the category from Settings.
+    category_id = models.CharField(max_length=32, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+
+    def __str__(self):
+        return self.label
+
+
 class Ticket(models.Model):
-    """Whoever opened it reaching the member they picked: a private Discord channel, an EVE mail or both."""
+    """Whoever opened it reaching the member they picked, through a private Discord channel, an EVE mail or both; or
+    someone opening their own from a panel, when they are both ``opened_by`` and ``target``."""
 
     DISCORD, MAIL, BOTH = "discord", "mail", "both"
     #: The transcript: nothing to save (no channel, or still open), being saved, saved, or the channel went first.
@@ -35,6 +70,8 @@ class Ticket(models.Model):
     target = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     target_name = models.CharField(max_length=100)
     target_discord_id = models.CharField(max_length=32, blank=True)
+    #: The Discord roles that can see the channel, as ``[{"id", "name"}]``.
+    roles = models.JSONField(default=list, blank=True)
     guild_id = models.CharField(max_length=32, blank=True)
     #: Empty for a mail-only ticket, and for the moment between reserving a ticket and Discord making its channel.
     channel_id = models.CharField(max_length=32, blank=True)
@@ -51,12 +88,17 @@ class Ticket(models.Model):
     closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     #: The channel no longer exists: removed after its transcript was saved, or found missing on Discord.
     channel_gone = models.BooleanField(default=False)
+    #: The panel button it was opened from. The label stays if the button is deleted; empty for tickets staff opened.
+    panel_button = models.ForeignKey(PanelButton, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    panel_label = models.CharField(max_length=80, blank=True)
 
     class Meta:
         ordering = ["-opened_at"]
         constraints = [
-            models.UniqueConstraint(fields=["opened_by", "target"], condition=models.Q(closed_at__isnull=True),
+            models.UniqueConstraint(fields=["opened_by", "target"], condition=models.Q(closed_at__isnull=True, panel_label=""),
                                     name="tickets_one_open_per_pair"),
+            models.UniqueConstraint(fields=["target", "panel_button"], condition=models.Q(closed_at__isnull=True, panel_button__isnull=False),
+                                    name="tickets_one_open_per_button"),
         ]
         permissions = [
             ("open_tickets", "Can open tickets with members and see all tickets"),
