@@ -1,7 +1,7 @@
 [project]
 name = "conduit-tickets"
-version = "1.0.0"
-description = "Discord Tickets: open a private Discord channel with a member you pick, and close it when you're done."
+version = "1.1.0"
+description = "Discord Tickets: reach a member you pick through a private Discord channel, an EVE mail or both, and close it when you're done."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
 # The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
