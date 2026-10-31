@@ -1,40 +1,63 @@
-"""Discord Tickets: a private channel on the Discord server between whoever opens it, the member they pick and,
-if one is set, a staff role.
+"""Discord Tickets: whoever opens a ticket reaches the member they pick through a private channel on the Discord
+server (with a staff role, if one is set), an EVE mail or both.
 
-Everything on Discord goes through the Discord plugin's bot and linked accounts, so both people must have linked
-Discord and be on the server. Closing takes the member out of the channel and keeps it for staff to read; deleting
-the channel is a separate step. Opening, closing and deleting go in the audit log.
+Everything on Discord goes through the Discord plugin's bot and linked accounts, so for a channel both people must have
+linked Discord and be on the server. Mail goes from the opener's main character to the member's main, and can't be taken
+back, so it's sent last: if the channel fails nothing has gone out, and if the mail of a "both" ticket fails the channel
+stays and the ticket says so. Closing takes the member out of the channel straight away. A background task, because a long channel takes a while,
+then copies its messages here as a transcript and only then removes the channel from Discord; both are tried again until
+they work, and the channel is never removed before its transcript is complete. Attached files are copied too, into the
+database, up to a size limit. Anyone can attach anything, so only plain image types are ever shown in the browser.
+Opening, closing, removing a channel and reading a transcript go in the audit log.
 
 Search by alt only reaches characters the viewer's sheet permissions cover, so tickets don't reveal whose alt is whose.
 """
 
 from __future__ import annotations
 
+import html
 import logging
 import re
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
+import httpx
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from conduit.audit.services import record
 from conduit.eve.models import portrait_url
 from conduit.notify.services import notify
 from conduit.sheet.access import viewable_characters
 
-from .models import Ticket, TicketSettings
+from .models import Ticket, TicketAttachment, TicketMessage, TicketSettings
 
 log = logging.getLogger(__name__)
 
 OPEN_PERM = "tickets.open_tickets"
 MANAGE_PERM = "tickets.manage_tickets"
 SUBJECT_MAX, MESSAGE_MAX = 100, 1500
+MAIL_SCOPE = "esi-mail.send_mail.v1"
 
 GUILD_TEXT, GUILD_CATEGORY = 0, 4
 ROLE, MEMBER = 0, 1
 UNKNOWN_CHANNEL = 10003
+#: Application flags: without one of these, Discord blanks the text of messages the bot reads.
+MESSAGE_CONTENT_INTENT = (1 << 18) | (1 << 19)
+PAGE_SIZE = 100
+#: Largest attached file kept, and most kept per ticket. They live in the database and so in every backup.
+MAX_FILE_BYTES = 25 * 1024 * 1024
+MAX_TICKET_BYTES = 200 * 1024 * 1024
+#: Where Discord keeps attached files. Nothing is fetched from anywhere else, whatever a message says.
+CDN_HOSTS = {"cdn.discordapp.com", "media.discordapp.net"}
+#: Shown in the browser. Not SVG, which can run scripts. Everything else downloads as plain bytes.
+INLINE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+#: Ordinary messages and replies. Others are "pinned a message" and the like.
+TEXT_MESSAGE_TYPES = {0, 19}
+HIDDEN_TEXT = ("Discord hid the messages' text from the bot. Turn on Message Content Intent on the Bot page of your "
+               "Discord application; the transcript is then saved within 15 minutes and the channel removed.")
 
 # Permission bits on top of what the Discord plugin's bot already asks for.
 MANAGE_CHANNELS = 1 << 4
@@ -96,10 +119,15 @@ def channel_url(ticket: Ticket) -> str | None:
     return f"https://discord.com/channels/{ticket.guild_id}/{ticket.channel_id}"
 
 
-def ticket_out(t: Ticket, viewer) -> dict:
+def ticket_out(t: Ticket) -> dict:
     return {
         "id": t.pk,
+        "via": t.via,
         "subject": t.subject,
+        "mail_sent": t.mail_id is not None,
+        "mail_error": t.mail_error,
+        "archive_state": t.archive_state,
+        "archive_error": t.archive_error,
         "target": _user_out(t.target),
         "target_name": t.target_name,
         "opened_by": t.opened_by_name,
@@ -107,7 +135,6 @@ def ticket_out(t: Ticket, viewer) -> dict:
         "closed_at": t.closed_at.isoformat() if t.closed_at else None,
         "closed_by": _name(t.closed_by) if t.closed_by else None,
         "url": channel_url(t),
-        "can_delete_channel": t.closed_at is not None and not t.channel_gone and bool(t.channel_id) and may_delete(t, viewer),
     }
 
 
@@ -124,23 +151,39 @@ def tickets_qs(state: str = ""):
 
 
 def find_members(viewer, q: str) -> list[dict]:
-    """Members with a linked Discord account, by main character, Discord name, or an alt the viewer may see."""
-    from conduit_discord.models import DiscordAccount
-
+    """Members with a main character, by main, Discord name, or an alt the viewer may see. Those without a linked
+    Discord account can still get a mail."""
     q = q.strip()
     if len(q) < 2:
         return []
-    base = DiscordAccount.objects.exclude(user=viewer).select_related("user__main_character__corporation")
-    accounts = {a.user_id: (a, None) for a in base.filter(Q(user__main_character__name__icontains=q) | Q(username__icontains=q))[:20]}
-    alts = viewable_characters(viewer).filter(name__icontains=q, user__discord__isnull=False).exclude(user=viewer)[:50]
-    missing = {c.user_id: c.name for c in alts if c.user_id not in accounts}
-    for a in base.filter(user_id__in=missing):
-        accounts[a.user_id] = (a, missing[a.user_id])
-    picked = list(accounts.values())[:20]
-    open_with = dict(Ticket.objects.filter(opened_by=viewer, closed_at__isnull=True, target__in=[a.user_id for a, _ in picked])
+    base = get_user_model().objects.filter(is_active=True, main_character__isnull=False).exclude(pk=viewer.pk).select_related(
+        "main_character__corporation", "discord")
+    users = {u.pk: (u, None) for u in base.filter(Q(main_character__name__icontains=q) | Q(discord__username__icontains=q))[:20]}
+    alts = viewable_characters(viewer).filter(name__icontains=q).exclude(user=viewer)[:50]
+    missing = {c.user_id: c.name for c in alts if c.user_id not in users}
+    for u in base.filter(pk__in=missing):
+        users[u.pk] = (u, missing[u.pk])
+    picked = list(users.values())[:20]
+    open_with = dict(Ticket.objects.filter(opened_by=viewer, closed_at__isnull=True, target__in=[u.pk for u, _ in picked])
                      .values_list("target_id", "pk"))
-    return [{**_user_out(a.user), "matched": alt, "discord": a.username, "on_server": a.on_server,
-             "open_ticket": open_with.get(a.user_id)} for a, alt in picked]
+    out = []
+    for u, alt in picked:
+        account = getattr(u, "discord", None)
+        out.append({**_user_out(u), "matched": alt, "discord": account.username if account else None,
+                    "on_server": bool(account and account.on_server), "open_ticket": open_with.get(u.pk)})
+    return out
+
+
+def mail_sender(viewer) -> dict:
+    """The character the viewer's mail goes from, and why it can't if it can't."""
+    main = viewer.main_character
+    if main is None:
+        return {"name": None, "can_mail": False, "problem": "Pick a main character first"}
+    token = getattr(main, "token", None)
+    if token is None or not token.has_scopes(MAIL_SCOPE):
+        return {"name": main.name, "can_mail": False,
+                "problem": f"{main.name} hasn't allowed sending mail; log in with it again (Characters → Add character)"}
+    return {"name": main.name, "can_mail": True, "problem": ""}
 
 
 # --- opening -------------------------------------------------------------------------------------------------------
@@ -156,52 +199,106 @@ def _on_server(api, s, discord_id: str, who: str) -> None:
         raise TicketError(f"{who} on the Discord server", 409)
 
 
-def open_ticket(viewer, target_id: int, subject: str, message: str = "", request=None) -> Ticket:
+def open_ticket(viewer, target_id: int, subject: str, message: str = "", via: str = Ticket.DISCORD, request=None) -> Ticket:
     from conduit_discord.models import DiscordAccount
 
     subject = " ".join(subject.split())
     message = message.strip()
+    if via not in {v for v, _ in Ticket.VIA_CHOICES}:
+        raise TicketError("Choose Discord, EVE mail or both")
     if not subject:
         raise TicketError("Give the ticket a subject")
     if len(subject) > SUBJECT_MAX:
         raise TicketError(f"Keep the subject to {SUBJECT_MAX} characters")
     if len(message) > MESSAGE_MAX:
         raise TicketError(f"Keep the message to {MESSAGE_MAX} characters")
+    if via == Ticket.MAIL and not message:
+        raise TicketError("Write the mail's message")
     target = get_user_model().objects.filter(pk=target_id).select_related("main_character").first()
     if target is None:
         raise TicketError("That member no longer exists", 404)
     if target == viewer:
         raise TicketError("You can't open a ticket with yourself")
-    theirs = DiscordAccount.objects.filter(user=target).first()
-    if theirs is None:
-        raise TicketError(f"{_name(target)} hasn't linked Discord", 409)
-    mine = DiscordAccount.objects.filter(user=viewer).first()
-    if mine is None:
-        raise TicketError("Link your own Discord account first (on the Discord page)", 409)
-    api, s = _discord()
+    if via != Ticket.DISCORD:
+        if target.main_character is None:
+            raise TicketError(f"{_name(target)} has no main character to mail")
+        sender = mail_sender(viewer)
+        if not sender["can_mail"]:
+            raise TicketError(sender["problem"], 409)
+    theirs = mine = bot_id = api = s = None
+    if via != Ticket.MAIL:
+        theirs = DiscordAccount.objects.filter(user=target).first()
+        if theirs is None:
+            raise TicketError(f"{_name(target)} hasn't linked Discord", 409)
+        mine = DiscordAccount.objects.filter(user=viewer).first()
+        if mine is None:
+            raise TicketError("Link your own Discord account first (on the Discord page)", 409)
+        api, s = _discord()
+        try:
+            _on_server(api, s, theirs.discord_id, f"{_name(target)} isn't")
+            _on_server(api, s, mine.discord_id, "You aren't")
+            bot_id = api.bot_user(s.bot_token)["id"]
+        except api.DiscordError as exc:
+            raise _explain(exc) from None
     try:
-        _on_server(api, s, theirs.discord_id, f"{_name(target)} isn't")
-        _on_server(api, s, mine.discord_id, "You aren't")
-        bot_id = api.bot_user(s.bot_token)["id"]
-    except api.DiscordError as exc:
-        raise _explain(exc) from None
-    try:
-        # Reserved first, so two clicks can't make two channels.
+        # Reserved first, so two clicks can't make two channels or send two mails.
         with transaction.atomic():
-            ticket = Ticket.objects.create(subject=subject, opened_by=viewer, opened_by_name=_name(viewer), target=target,
-                                           target_name=_name(target), target_discord_id=theirs.discord_id, guild_id=s.guild_id)
+            ticket = Ticket.objects.create(via=via, subject=subject, opened_by=viewer, opened_by_name=_name(viewer), target=target,
+                                           target_name=_name(target), target_discord_id=theirs.discord_id if theirs else "",
+                                           guild_id=s.guild_id if s else "", message=message if via != Ticket.DISCORD else "")
     except IntegrityError:
         raise TicketError(f"You already have an open ticket with {_name(target)}", 409) from None
-    try:
-        _make_channel(api, s, ticket, bot_id, mine.discord_id, message)
-    except api.DiscordError as exc:
-        ticket.delete()
-        raise _explain(exc) from None
-    record("tickets.opened", f"opened a Discord ticket with {ticket.target_name}: {subject}", request=request, actor=viewer,
-           target=target, details={"ticket": ticket.pk, "channel": ticket.channel_id})
-    notify(target, f"Discord ticket: {subject}", f"{ticket.opened_by_name} opened a private channel with you on Discord.",
-           link=channel_url(ticket) or "", category="p.tickets")
+    if via != Ticket.MAIL:
+        try:
+            _make_channel(api, s, ticket, bot_id, mine.discord_id, message)
+        except api.DiscordError as exc:
+            ticket.delete()
+            raise _explain(exc) from None
+    if via != Ticket.DISCORD:
+        try:
+            _send_mail(viewer, target, ticket, message)
+        except TicketError as exc:
+            if via == Ticket.MAIL:
+                ticket.delete()
+                raise
+            ticket.mail_error = str(exc)[:300]
+            ticket.save(update_fields=["mail_error"])
+    where = {Ticket.DISCORD: "a Discord ticket", Ticket.MAIL: "an EVE mail ticket", Ticket.BOTH: "a Discord and EVE mail ticket"}[via]
+    record("tickets.opened", f"opened {where} with {ticket.target_name}: {subject}", request=request, actor=viewer, target=target,
+           details={"ticket": ticket.pk, "via": via, "channel": ticket.channel_id, "mail": ticket.mail_id, "mail_error": ticket.mail_error})
+    if via == Ticket.MAIL:
+        notify(target, f"EVE mail: {subject}", f"{ticket.opened_by_name} sent you an EVE mail.", category="p.tickets")
+    else:
+        notify(target, f"Discord ticket: {subject}", f"{ticket.opened_by_name} opened a private channel with you on Discord.",
+               link=channel_url(ticket) or "", category="p.tickets")
     return ticket
+
+
+def _send_mail(viewer, target, ticket: Ticket, message: str) -> None:
+    from conduit.esi.client import esi
+    from conduit.esi.exceptions import EsiBackoff, EsiError, TokenInvalid
+
+    sender = viewer.main_character
+    # A mail's body is the game's own markup, so what was typed is escaped and only line breaks and the link are added.
+    body = html.escape(message).replace("\n", "<br>")
+    url = channel_url(ticket)
+    if url:
+        link = f'Private Discord channel: <a href="{html.escape(url)}">{html.escape(url)}</a>'
+        body = f"{body}<br><br>{link}" if body else link
+    payload = {"approved_cost": 0, "body": body or html.escape(ticket.subject), "subject": ticket.subject,
+               "recipients": [{"recipient_id": target.main_character_id, "recipient_type": "character"}]}
+    try:
+        data = esi().post(f"/characters/{sender.pk}/mail", payload, character=sender).data
+    except TokenInvalid:
+        raise TicketError(f"{sender.name}'s login has stopped working; log in with it again", 409) from None
+    except EsiBackoff:
+        raise TicketError("ESI is busy; try again in a minute", 503) from None
+    except EsiError as exc:
+        if exc.status == 520:
+            raise TicketError(f"The game refused the mail: {_name(target)} may charge to be mailed, or too many mails went out recently", 502) from None
+        raise TicketError(f"ESI didn't take the mail ({exc.status}); try again in a moment", 502) from None
+    ticket.mail_id = int(data) if isinstance(data, int) else None
+    ticket.save(update_fields=["mail_id"])
 
 
 def _make_channel(api, s, ticket: Ticket, bot_id: str, opener_discord_id: str, message: str) -> None:
@@ -240,11 +337,12 @@ def _make_channel(api, s, ticket: Ticket, bot_id: str, opener_discord_id: str, m
 
 
 def close(ticket: Ticket, viewer, request=None) -> Ticket:
-    """Take the member out of the channel. It stays for whoever opened it and the staff role."""
+    """Take the member out of the channel. The background task then saves the transcript and removes the channel."""
     if ticket.closed_at is not None:
         raise TicketError("This ticket is already closed")
     if ticket.channel_id and not ticket.channel_gone:
         api, s = _discord()
+        ticket.archive_state = Ticket.ARCHIVE_PENDING
         try:
             api.call("PUT", f"/channels/{ticket.channel_id}/permissions/{ticket.target_discord_id}", bot_token=s.bot_token,
                      json={"type": MEMBER, "allow": "0", "deny": str(VIEW_CHANNEL)})
@@ -252,16 +350,19 @@ def close(ticket: Ticket, viewer, request=None) -> Ticket:
             if exc.status != 404:
                 raise _explain(exc) from None
             ticket.channel_gone = True  # someone deleted it on Discord
+            ticket.archive_state = Ticket.ARCHIVE_LOST
         else:
             try:
                 api.call("POST", f"/channels/{ticket.channel_id}/messages", bot_token=s.bot_token, json={
-                    "content": f"Ticket closed by {_name(viewer)}. {ticket.target_name} can no longer see this channel.",
+                    "content": f"Ticket closed by {_name(viewer)}. {ticket.target_name} can no longer see this channel, and it's removed once its transcript is saved.",
                     "allowed_mentions": {"parse": []}})
             except api.DiscordError as exc:
                 log.warning("Couldn't say ticket %s closed: %s", ticket.pk, exc)
     ticket.closed_at = timezone.now()
     ticket.closed_by = viewer
-    ticket.save(update_fields=["closed_at", "closed_by", "channel_gone"])
+    ticket.save(update_fields=["closed_at", "closed_by", "channel_gone", "archive_state"])
+    if ticket.archive_state == Ticket.ARCHIVE_PENDING:
+        transaction.on_commit(lambda: _queue_archive(ticket.pk))
     record("tickets.closed", f"closed the Discord ticket with {ticket.target_name}: {ticket.subject}", request=request, actor=viewer,
            target=ticket.target, details={"ticket": ticket.pk})
     if ticket.target_id:
@@ -269,28 +370,185 @@ def close(ticket: Ticket, viewer, request=None) -> Ticket:
     return ticket
 
 
-def may_delete(ticket: Ticket, viewer) -> bool:
-    return ticket.opened_by_id == viewer.pk or viewer.has_perm(MANAGE_PERM)
+# --- transcripts ---------------------------------------------------------------------------------------------------
 
 
-def delete_channel(ticket: Ticket, viewer, request=None) -> Ticket:
-    """Delete a closed ticket's channel for good. The ticket stays listed."""
-    if not may_delete(ticket, viewer):
-        raise TicketError("Only whoever opened the ticket or a tickets manager can delete its channel", 403)
-    if ticket.closed_at is None:
-        raise TicketError("Close the ticket first")
-    if ticket.channel_id and not ticket.channel_gone:
+def _queue_archive(ticket_id: int) -> None:
+    from .tasks import archive_ticket
+
+    try:
+        archive_ticket.delay(ticket_id)
+    except Exception:  # the ticket is closed either way, and archive_pending picks it up
+        log.exception("Couldn't queue the transcript of ticket %s", ticket_id)
+
+
+def _unfinished():
+    """Closed tickets whose transcript isn't saved yet, or whose channel is still to be removed."""
+    return Ticket.objects.filter(Q(archive_state=Ticket.ARCHIVE_PENDING) | Q(archive_state=Ticket.ARCHIVE_DONE, channel_gone=False))
+
+
+def pending_archives() -> list[int]:
+    return list(_unfinished().values_list("pk", flat=True))
+
+
+def archive_in_background(ticket_id: int) -> None:
+    """Save a transcript and remove the channel, from a background task, where waiting out Discord's rate limits is
+    allowed. The channel goes only once the transcript is complete."""
+    ticket = _unfinished().filter(pk=ticket_id).first()
+    if ticket is None:
+        return
+    try:
         api, s = _discord()
+    except TicketError as exc:
+        ticket.archive_error = str(exc)[:300]
+        ticket.save(update_fields=["archive_error"])
+        return
+    with api.allow_waiting():
         try:
-            api.call("DELETE", f"/channels/{ticket.channel_id}", bot_token=s.bot_token)
+            archive(ticket)
+            if ticket.archive_state == Ticket.ARCHIVE_DONE and not ticket.channel_gone:
+                _remove_channel(api, s, ticket)
+        except api.DiscordError as exc:
+            log.warning("Couldn't finish closing ticket %s: %s", ticket.pk, exc)
+            ticket.archive_error = str(_explain(exc))[:300]
+            ticket.save(update_fields=["archive_error"])
+
+
+def _remove_channel(api, s, ticket: Ticket) -> None:
+    try:
+        api.call("DELETE", f"/channels/{ticket.channel_id}", bot_token=s.bot_token)
+    except api.DiscordError as exc:
+        if exc.status != 404:
+            raise
+    ticket.channel_gone = True
+    ticket.archive_error = ""
+    ticket.save(update_fields=["channel_gone", "archive_error"])
+    record("tickets.channel_deleted", f"removed the Discord channel of the ticket with {ticket.target_name}: {ticket.subject}",
+           actor=ticket.closed_by, target=ticket.target, details={"ticket": ticket.pk})
+
+
+def archive(ticket: Ticket) -> None:
+    """Copy the channel's messages. A finished transcript only fetches what's new; an unfinished one starts over, which
+    also fills in text Discord was hiding. Raises DiscordError if it can't finish."""
+    api, s = _discord()
+    done_before = ticket.archive_state == Ticket.ARCHIVE_DONE
+    last = ticket.messages.order_by("-sent_at").values_list("message_id", flat=True).first() if done_before else None
+    after, hidden = last or "0", False
+    while True:
+        try:
+            page = api.call("GET", f"/channels/{ticket.channel_id}/messages?limit={PAGE_SIZE}&after={after}", bot_token=s.bot_token)
         except api.DiscordError as exc:
             if exc.status != 404:
-                raise _explain(exc) from None
-    ticket.channel_gone = True
-    ticket.save(update_fields=["channel_gone"])
-    record("tickets.channel_deleted", f"deleted the Discord channel of the ticket with {ticket.target_name}: {ticket.subject}",
-           request=request, actor=viewer, target=ticket.target, details={"ticket": ticket.pk})
-    return ticket
+                raise
+            # Deleted on Discord. What was already saved stays.
+            ticket.channel_gone = True
+            ticket.archive_state = Ticket.ARCHIVE_DONE if done_before else Ticket.ARCHIVE_LOST
+            ticket.archive_error = ""
+            ticket.save(update_fields=["channel_gone", "archive_state", "archive_error"])
+            return
+        if not page:
+            break
+        hidden = _store_messages(ticket, page) or hidden
+        after = str(max(int(m["id"]) for m in page))
+        if len(page) < PAGE_SIZE:
+            break
+    ticket.archive_state = Ticket.ARCHIVE_PENDING if hidden else Ticket.ARCHIVE_DONE
+    ticket.archive_error = HIDDEN_TEXT[:300] if hidden else ""
+    ticket.save(update_fields=["archive_state", "archive_error"])
+
+
+def _store_messages(ticket: Ticket, page: list[dict]) -> bool:
+    """Save a page of messages. True if Discord hid the text of any of them."""
+    from conduit_discord.models import DiscordAccount
+
+    wanted = [m for m in page if m.get("type", 0) in TEXT_MESSAGE_TYPES]
+    ids = {m["author"]["id"] for m in wanted} | {u["id"] for m in wanted for u in m.get("mentions", [])}
+    names = {a.discord_id: _name(a.user) for a in DiscordAccount.objects.filter(discord_id__in=ids).select_related("user__main_character")}
+    hidden = False
+    rows = []
+    for m in wanted:
+        author = m["author"]
+        content = m.get("content") or ""
+        for u in m.get("mentions", []):
+            label = names.get(u["id"]) or u.get("global_name") or u.get("username") or u["id"]
+            content = content.replace(f"<@{u['id']}>", f"@{label}").replace(f"<@!{u['id']}>", f"@{label}")
+        embeds = [{"title": e.get("title", ""), "description": e.get("description", "")} for e in m.get("embeds", [])
+                  if e.get("title") or e.get("description")]
+        if not (content or m.get("attachments") or m.get("embeds") or m.get("sticker_items") or m.get("poll") or author.get("bot")):
+            hidden = True
+        rows.append(TicketMessage(
+            ticket=ticket, message_id=m["id"], author_id=author["id"], is_bot=bool(author.get("bot")),
+            author_name=(names.get(author["id"]) or author.get("global_name") or author.get("username") or "Unknown")[:100],
+            content=content, embeds=embeds, sent_at=parse_datetime(m["timestamp"]),
+            edited_at=parse_datetime(m["edited_timestamp"]) if m.get("edited_timestamp") else None,
+        ))
+    TicketMessage.objects.bulk_create(rows, update_conflicts=True, unique_fields=["ticket", "message_id"],
+                                      update_fields=["author_name", "is_bot", "content", "embeds", "edited_at"])
+    pks = dict(ticket.messages.filter(message_id__in=[m["id"] for m in wanted]).values_list("message_id", "pk"))
+    for m in wanted:
+        for a in m.get("attachments", []):
+            _store_attachment(ticket, pks[m["id"]], a)
+    return hidden
+
+
+def _store_attachment(ticket: Ticket, message_pk: int, a: dict) -> None:
+    """Copy one file. Raises DiscordError if it's worth trying again, which keeps the channel until it's done."""
+    if TicketAttachment.objects.filter(message_id=message_pk, attachment_id=a["id"]).exists():
+        return
+    used = TicketAttachment.objects.filter(message__ticket=ticket).aggregate(total=Sum("size"))["total"] or 0
+    room = min(MAX_FILE_BYTES, MAX_TICKET_BYTES - used)
+    state, content = TicketAttachment.TOO_BIG, None
+    if a.get("size", 0) <= room:
+        state, content = _download(a.get("url") or "", room)
+    TicketAttachment.objects.create(message_id=message_pk, attachment_id=a["id"], name=(a.get("filename") or "file")[:255],
+                                    content_type=(a.get("content_type") or "")[:100], state=state, content=content,
+                                    size=len(content) if content is not None else 0)
+
+
+def _download(url: str, limit: int) -> tuple[str, bytes | None]:
+    api, _s = _discord()
+    parts = urlsplit(url)
+    if parts.scheme != "https" or parts.hostname not in CDN_HOSTS:
+        return TicketAttachment.UNAVAILABLE, None
+    chunks, total = [], 0
+    try:
+        # The Discord plugin's client: no bot token goes to the CDN, and it doesn't follow redirects.
+        with api._client() as client, client.stream("GET", url) as resp:
+            if resp.status_code in (403, 404):  # the links are fresh from Discord, so this one's gone for good
+                return TicketAttachment.UNAVAILABLE, None
+            if resp.status_code != 200:
+                raise api.DiscordError(resp.status_code, f"Couldn't copy an attached file (HTTP {resp.status_code}); trying again soon")
+            for chunk in resp.iter_bytes():
+                total += len(chunk)
+                if total > limit:  # Discord's stated size is only a hint
+                    return TicketAttachment.TOO_BIG, None
+                chunks.append(chunk)
+    except httpx.HTTPError as exc:
+        raise api.DiscordError(0, f"Couldn't copy an attached file ({exc.__class__.__name__}); trying again soon") from None
+    return TicketAttachment.SAVED, b"".join(chunks)
+
+
+def serve_type(a: TicketAttachment) -> tuple[str, bool]:
+    """What to serve a file as: its type, and whether a browser may show it rather than download it."""
+    kind = a.content_type.split(";")[0].strip().lower()
+    return (kind, True) if kind in INLINE_TYPES else ("application/octet-stream", False)
+
+
+def messages_qs(ticket: Ticket):
+    return ticket.messages.prefetch_related(Prefetch("files", queryset=TicketAttachment.objects.defer("content")))
+
+
+def message_out(m: TicketMessage) -> dict:
+    files = [{"id": a.pk, "name": a.name, "size": a.size, "state": a.state, "image": serve_type(a)[1]} for a in m.files.all()]
+    return {"id": m.pk, "author": m.author_name, "is_bot": m.is_bot, "content": m.content, "attachments": files,
+            "embeds": m.embeds, "sent_at": m.sent_at.isoformat(), "edited_at": m.edited_at.isoformat() if m.edited_at else None}
+
+
+def read_ticket(ticket: Ticket, viewer, request=None) -> dict:
+    """A ticket with its mail, for its transcript page. Tickets can be private, so reading one is audited."""
+    record("tickets.transcript_read", f"read the ticket with {ticket.target_name}: {ticket.subject}", request=request, actor=viewer,
+           target=ticket.target, details={"ticket": ticket.pk})
+    return {**ticket_out(ticket), "message": ticket.message}
 
 
 # --- settings ------------------------------------------------------------------------------------------------------
@@ -326,9 +584,12 @@ def settings_out() -> dict:
     try:
         roles = api.roles(s.bot_token, s.guild_id)
         bot_member = api.member(s.bot_token, s.guild_id, api.bot_user(s.bot_token)["id"])
+        application = api.call("GET", "/applications/@me", bot_token=s.bot_token)
     except api.DiscordError as exc:
         out["problems"].append(str(_explain(exc)))
         return out
+    if not _bits(application.get("flags")) & MESSAGE_CONTENT_INTENT:
+        out["problems"].append("Transcripts will be blank: turn on Message Content Intent on the Bot page of your Discord application.")
     by_id = {r["id"]: r for r in roles}
     out["roles"] = [{"id": r["id"], "name": r["name"]} for r in sorted(roles, key=lambda r: -r["position"])
                     if r["id"] != s.guild_id and not r.get("managed")]
