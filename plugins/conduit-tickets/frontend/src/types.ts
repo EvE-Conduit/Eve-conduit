@@ -1,3 +1,5 @@
+import type { DiscordRole } from "@conduit/sdk";
+
 export const BASE = "/api/p/tickets";
 
 export type Via = "discord" | "mail" | "both";
@@ -39,6 +41,9 @@ export interface Ticket {
   archive_error: string;
   target: Person | null;
   target_name: string;
+  roles: { id: string; name: string }[];
+  /** The panel button it was opened from; empty if staff opened it. */
+  panel: string;
   opened_by: string;
   opened_at: string;
   closed_at: string | null;
@@ -48,6 +53,8 @@ export interface Ticket {
 
 export interface TicketDetail extends Ticket {
   message: string;
+  /** The viewer opened it themselves from a panel. */
+  mine: boolean;
 }
 
 export interface Attachment {
@@ -69,10 +76,40 @@ export interface Message {
   edited_at: string | null;
 }
 
+export interface RoleChoices {
+  roles: DiscordRole[];
+  defaults: string[];
+  error: string;
+}
+
 export interface Settings {
   category_id: string;
-  staff_role_id: string;
-  roles: { id: string; name: string }[];
+  default_role_ids: string[];
+  roles: DiscordRole[];
   invite_url: string | null;
+  problems: string[];
+}
+
+export interface PanelButton {
+  id?: number;
+  label: string;
+  role_ids: string[];
+  category_id: string;
+}
+
+export interface Panel {
+  id: number;
+  channel_id: string;
+  title: string;
+  text: string;
+  buttons: PanelButton[];
+}
+
+export interface Panels {
+  panels: Panel[];
+  channels: { id: string; name: string }[];
+  categories: { id: string; name: string }[];
+  roles: DiscordRole[];
+  endpoint_url: string;
   problems: string[];
 }
