@@ -1,5 +1,5 @@
 """Discord Tickets: whoever opens a ticket reaches the member they pick through a private channel on the Discord
-server (with a staff role, if one is set), an EVE mail or both.
+server (with the Discord roles they choose), an EVE mail or both.
 
 Everything on Discord goes through the Discord plugin's bot and linked accounts, so for a channel both people must have
 linked Discord and be on the server. Mail goes from the opener's main character to the member's main, and can't be taken
@@ -18,6 +18,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+from datetime import UTC, datetime
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -130,6 +131,8 @@ def ticket_out(t: Ticket) -> dict:
         "archive_error": t.archive_error,
         "target": _user_out(t.target),
         "target_name": t.target_name,
+        "roles": t.roles,
+        "panel": t.panel_label,
         "opened_by": t.opened_by_name,
         "opened_at": t.opened_at.isoformat(),
         "closed_at": t.closed_at.isoformat() if t.closed_at else None,
@@ -189,6 +192,15 @@ def mail_sender(viewer) -> dict:
 # --- opening -------------------------------------------------------------------------------------------------------
 
 
+def _eve_time(when: datetime) -> str:
+    return when.astimezone(UTC).strftime("%d %b %Y %H:%M EVE time")
+
+
+def _discord_time(when: datetime) -> str:
+    """A date and time Discord shows in each reader's own time zone."""
+    return f"<t:{int(when.timestamp())}:F>"
+
+
 def _channel_name(ticket: Ticket) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", ticket.target_name.lower()).strip("-")
     return f"ticket-{ticket.pk}-{slug}"[:100].rstrip("-")
@@ -199,7 +211,19 @@ def _on_server(api, s, discord_id: str, who: str) -> None:
         raise TicketError(f"{who} on the Discord server", 409)
 
 
-def open_ticket(viewer, target_id: int, subject: str, message: str = "", via: str = Ticket.DISCORD, request=None) -> Ticket:
+def _pick_roles(api, s, role_ids: list[str] | None) -> list[dict]:
+    """The roles that will see the channel, checked against the server. ``None`` means the defaults from Settings,
+    leaving out any since deleted on Discord. @everyone is never one of them, so a ticket can't be made public."""
+    known = {r["id"]: r["name"] for r in pickable_roles(api.roles(s.bot_token, s.guild_id))}
+    if role_ids is None:
+        return [{"id": i, "name": known[i]} for i in TicketSettings.load().default_role_ids if i in known]
+    if unknown := [i for i in role_ids if i not in known]:
+        raise TicketError(f"That Discord role isn't available any more ({unknown[0]}); pick again")
+    return [{"id": i, "name": known[i]} for i in dict.fromkeys(role_ids)]
+
+
+def open_ticket(viewer, target_id: int, subject: str, message: str = "", via: str = Ticket.DISCORD, role_ids: list[str] | None = None,
+                request=None) -> Ticket:
     from conduit_discord.models import DiscordAccount
 
     subject = " ".join(subject.split())
@@ -226,6 +250,7 @@ def open_ticket(viewer, target_id: int, subject: str, message: str = "", via: st
         if not sender["can_mail"]:
             raise TicketError(sender["problem"], 409)
     theirs = mine = bot_id = api = s = None
+    roles = []
     if via != Ticket.MAIL:
         theirs = DiscordAccount.objects.filter(user=target).first()
         if theirs is None:
@@ -238,6 +263,7 @@ def open_ticket(viewer, target_id: int, subject: str, message: str = "", via: st
             _on_server(api, s, theirs.discord_id, f"{_name(target)} isn't")
             _on_server(api, s, mine.discord_id, "You aren't")
             bot_id = api.bot_user(s.bot_token)["id"]
+            roles = _pick_roles(api, s, role_ids)
         except api.DiscordError as exc:
             raise _explain(exc) from None
     try:
@@ -245,7 +271,7 @@ def open_ticket(viewer, target_id: int, subject: str, message: str = "", via: st
         with transaction.atomic():
             ticket = Ticket.objects.create(via=via, subject=subject, opened_by=viewer, opened_by_name=_name(viewer), target=target,
                                            target_name=_name(target), target_discord_id=theirs.discord_id if theirs else "",
-                                           guild_id=s.guild_id if s else "", message=message if via != Ticket.DISCORD else "")
+                                           guild_id=s.guild_id if s else "", message=message if via != Ticket.DISCORD else "", roles=roles)
     except IntegrityError:
         raise TicketError(f"You already have an open ticket with {_name(target)}", 409) from None
     if via != Ticket.MAIL:
@@ -280,12 +306,12 @@ def _send_mail(viewer, target, ticket: Ticket, message: str) -> None:
 
     sender = viewer.main_character
     # A mail's body is the game's own markup, so what was typed is escaped and only line breaks and the link are added.
-    body = html.escape(message).replace("\n", "<br>")
+    parts = [html.escape(message).replace("\n", "<br>")] if message else []
     url = channel_url(ticket)
     if url:
-        link = f'Private Discord channel: <a href="{html.escape(url)}">{html.escape(url)}</a>'
-        body = f"{body}<br><br>{link}" if body else link
-    payload = {"approved_cost": 0, "body": body or html.escape(ticket.subject), "subject": ticket.subject,
+        parts.append(f'Private Discord channel: <a href="{html.escape(url)}">{html.escape(url)}</a>')
+    parts.append(f"Ticket opened {_eve_time(ticket.opened_at)}")
+    payload = {"approved_cost": 0, "body": "<br><br>".join(parts), "subject": ticket.subject,
                "recipients": [{"recipient_id": target.main_character_id, "recipient_type": "character"}]}
     try:
         data = esi().post(f"/characters/{sender.pk}/mail", payload, character=sender).data
@@ -301,28 +327,38 @@ def _send_mail(viewer, target, ticket: Ticket, message: str) -> None:
     ticket.save(update_fields=["mail_id"])
 
 
-def _make_channel(api, s, ticket: Ticket, bot_id: str, opener_discord_id: str, message: str) -> None:
-    settings = TicketSettings.load()
+def close_button(ticket: Ticket) -> list[dict]:
+    return [{"type": 1, "components": [{"type": 2, "style": 4, "label": "Close ticket", "custom_id": f"tickets:close:{ticket.pk}"}]}]
+
+
+def _make_channel(api, s, ticket: Ticket, bot_id: str, opener_discord_id: str, message: str, category_id: str | None = None) -> None:
     allow = str(IN_TICKET)
+    people = list(dict.fromkeys([ticket.target_discord_id, opener_discord_id]))  # one person when opened from a panel
     overwrites = [
         {"id": s.guild_id, "type": ROLE, "deny": str(VIEW_CHANNEL)},  # @everyone has the server's id
         {"id": bot_id, "type": MEMBER, "allow": allow},
-        {"id": ticket.target_discord_id, "type": MEMBER, "allow": allow},
-        {"id": opener_discord_id, "type": MEMBER, "allow": allow},
     ]
-    if settings.staff_role_id:
-        overwrites.append({"id": settings.staff_role_id, "type": ROLE, "allow": allow})
+    overwrites += [{"id": i, "type": MEMBER, "allow": allow} for i in people]
+    overwrites += [{"id": r["id"], "type": ROLE, "allow": allow} for r in ticket.roles]
+    category_id = category_id or TicketSettings.load().category_id
     body = {"name": _channel_name(ticket), "type": GUILD_TEXT, "topic": ticket.subject, "permission_overwrites": overwrites}
-    if settings.category_id:
-        body["parent_id"] = settings.category_id
+    if category_id:
+        body["parent_id"] = category_id
     channel = api.call("POST", f"/guilds/{s.guild_id}/channels", bot_token=s.bot_token, json=body)
     try:
-        text = f"<@{ticket.target_discord_id}>, <@{opener_discord_id}> opened this ticket.\n**{ticket.subject}**"
+        # Only the people in the ticket may be pinged, whatever the subject or message says. Nobody picked the staff on
+        # a panel ticket, so their roles are pinged too; Staff opening a ticket are already there.
+        mentions = {"users": people}
+        if ticket.panel_label:
+            mentions["roles"] = [r["id"] for r in ticket.roles]
+            pings = " ".join(f"<@&{r['id']}>" for r in ticket.roles)
+            text = f"{pings}\n<@{opener_discord_id}> opened this ticket {_discord_time(ticket.opened_at)} ({ticket.panel_label}).\n**{ticket.subject}**"
+        else:
+            text = f"<@{ticket.target_discord_id}>, <@{opener_discord_id}> opened this ticket {_discord_time(ticket.opened_at)}.\n**{ticket.subject}**"
         if message:
             text += f"\n\n{message}"
-        # Only the two people may be pinged, whatever the subject or message says.
         api.call("POST", f"/channels/{channel['id']}/messages", bot_token=s.bot_token, json={
-            "content": text, "allowed_mentions": {"users": [ticket.target_discord_id, opener_discord_id]}})
+            "content": text, "allowed_mentions": mentions, "components": close_button(ticket)})
     except api.DiscordError:
         try:
             api.call("DELETE", f"/channels/{channel['id']}", bot_token=s.bot_token)
@@ -354,7 +390,7 @@ def close(ticket: Ticket, viewer, request=None) -> Ticket:
         else:
             try:
                 api.call("POST", f"/channels/{ticket.channel_id}/messages", bot_token=s.bot_token, json={
-                    "content": f"Ticket closed by {_name(viewer)}. {ticket.target_name} can no longer see this channel, and it's removed once its transcript is saved.",
+                    "content": f"Ticket closed by {_name(viewer)} {_discord_time(timezone.now())}. {ticket.target_name} can no longer see this channel, and it's removed once its transcript is saved.",
                     "allowed_mentions": {"parse": []}})
             except api.DiscordError as exc:
                 log.warning("Couldn't say ticket %s closed: %s", ticket.pk, exc)
@@ -365,7 +401,7 @@ def close(ticket: Ticket, viewer, request=None) -> Ticket:
         transaction.on_commit(lambda: _queue_archive(ticket.pk))
     record("tickets.closed", f"closed the Discord ticket with {ticket.target_name}: {ticket.subject}", request=request, actor=viewer,
            target=ticket.target, details={"ticket": ticket.pk})
-    if ticket.target_id:
+    if ticket.target_id and ticket.target_id != viewer.pk:
         notify(ticket.target_id, f"Discord ticket closed: {ticket.subject}", f"{_name(viewer)} closed your ticket.", category="p.tickets")
     return ticket
 
@@ -472,6 +508,9 @@ def _store_messages(ticket: Ticket, page: list[dict]) -> bool:
         for u in m.get("mentions", []):
             label = names.get(u["id"]) or u.get("global_name") or u.get("username") or u["id"]
             content = content.replace(f"<@{u['id']}>", f"@{label}").replace(f"<@!{u['id']}>", f"@{label}")
+        for r in ticket.roles:
+            content = content.replace(f"<@&{r['id']}>", f"@{r['name']}")
+        content = re.sub(r"<t:(\d+)(?::\w)?>", lambda t: _eve_time(datetime.fromtimestamp(int(t[1]), UTC)), content)
         embeds = [{"title": e.get("title", ""), "description": e.get("description", "")} for e in m.get("embeds", [])
                   if e.get("title") or e.get("description")]
         if not (content or m.get("attachments") or m.get("embeds") or m.get("sticker_items") or m.get("poll") or author.get("bot")):
@@ -548,10 +587,30 @@ def read_ticket(ticket: Ticket, viewer, request=None) -> dict:
     """A ticket with its mail, for its transcript page. Tickets can be private, so reading one is audited."""
     record("tickets.transcript_read", f"read the ticket with {ticket.target_name}: {ticket.subject}", request=request, actor=viewer,
            target=ticket.target, details={"ticket": ticket.pk})
-    return {**ticket_out(ticket), "message": ticket.message}
+    return {**ticket_out(ticket), "message": ticket.message, "mine": can_read_as_owner(ticket, viewer)}
+
+
+def can_read_as_owner(ticket: Ticket, viewer) -> bool:
+    """People who opened a ticket from a panel can read it. Tickets staff opened with a member stay with staff."""
+    return bool(ticket.panel_label) and ticket.target_id == viewer.pk
+
+
+def can_read(ticket: Ticket, viewer) -> bool:
+    return viewer.has_perm(OPEN_PERM) or can_read_as_owner(ticket, viewer)
 
 
 # --- settings ------------------------------------------------------------------------------------------------------
+
+
+def application_info(api, s) -> dict:
+    """The bot's application. Its public key is kept, to check that clicks on panels really come from Discord."""
+    application = api.call("GET", "/applications/@me", bot_token=s.bot_token)
+    settings = TicketSettings.load()
+    key = application.get("verify_key") or ""
+    if key != settings.public_key:
+        settings.public_key = key
+        settings.save(update_fields=["public_key"])
+    return application
 
 
 def _bits(value) -> int:
@@ -571,10 +630,33 @@ def invite_url(api, s) -> str | None:
     })
 
 
+def pickable_roles(roles: list[dict]) -> list[dict]:
+    """Roles a ticket can be shown to, top of the server first. Not @everyone (position 0), nor bots' own roles."""
+    return sorted((r for r in roles if r.get("position") and not r.get("managed")), key=lambda r: -r["position"])
+
+
+def _role_out(r: dict) -> dict:
+    return {"id": r["id"], "name": r["name"], "color": r.get("color", 0)}
+
+
+def roles_out() -> dict:
+    """The roles to pick from when opening a ticket, with those ticked by default."""
+    try:
+        api, s = _discord()
+    except TicketError as exc:
+        return {"roles": [], "defaults": [], "error": str(exc)}
+    try:
+        roles = [_role_out(r) for r in pickable_roles(api.roles(s.bot_token, s.guild_id))]
+    except api.DiscordError as exc:
+        return {"roles": [], "defaults": [], "error": str(_explain(exc))}
+    known = {r["id"] for r in roles}
+    return {"roles": roles, "defaults": [i for i in TicketSettings.load().default_role_ids if i in known], "error": ""}
+
+
 def settings_out() -> dict:
     """The settings, the server's roles to pick from, and anything that will stop tickets working."""
     settings = TicketSettings.load()
-    out = {"category_id": settings.category_id, "staff_role_id": settings.staff_role_id, "roles": [], "invite_url": None, "problems": []}
+    out = {"category_id": settings.category_id, "default_role_ids": settings.default_role_ids, "roles": [], "invite_url": None, "problems": []}
     try:
         api, s = _discord()
     except TicketError as exc:
@@ -584,15 +666,14 @@ def settings_out() -> dict:
     try:
         roles = api.roles(s.bot_token, s.guild_id)
         bot_member = api.member(s.bot_token, s.guild_id, api.bot_user(s.bot_token)["id"])
-        application = api.call("GET", "/applications/@me", bot_token=s.bot_token)
+        application = application_info(api, s)
     except api.DiscordError as exc:
         out["problems"].append(str(_explain(exc)))
         return out
     if not _bits(application.get("flags")) & MESSAGE_CONTENT_INTENT:
         out["problems"].append("Transcripts will be blank: turn on Message Content Intent on the Bot page of your Discord application.")
     by_id = {r["id"]: r for r in roles}
-    out["roles"] = [{"id": r["id"], "name": r["name"]} for r in sorted(roles, key=lambda r: -r["position"])
-                    if r["id"] != s.guild_id and not r.get("managed")]
+    out["roles"] = [_role_out(r) for r in pickable_roles(roles)]
     if bot_member is None:
         out["problems"].append("The bot isn't on the server. Invite it with the link below.")
         return out
@@ -603,14 +684,14 @@ def settings_out() -> dict:
         for bit, label in (*BOT_NEEDS, (api.MANAGE_ROLES, "Manage Roles")):
             if not perms & bit:
                 out["problems"].append(f"The bot's role is missing the {label} permission.")
-    if settings.staff_role_id and settings.staff_role_id not in by_id:
-        out["problems"].append("The staff role no longer exists on the server; pick another.")
+    if any(i not in by_id for i in settings.default_role_ids):
+        out["problems"].append("A default role no longer exists on the server; it's left off new tickets. Save to clear it.")
     return out
 
 
-def save_settings(category_id: str, staff_role_id: str, viewer, request=None) -> TicketSettings:
-    category_id, staff_role_id = category_id.strip(), staff_role_id.strip()
-    if not all(v.isdigit() for v in (category_id, staff_role_id) if v):
+def save_settings(category_id: str, role_ids: list[str], viewer, request=None) -> TicketSettings:
+    category_id = category_id.strip()
+    if category_id and not category_id.isdigit():
         raise TicketError("Ids are numbers: with Developer Mode on, right-click the category and Copy Channel ID")
     api, s = _discord()
     try:
@@ -623,13 +704,14 @@ def save_settings(category_id: str, staff_role_id: str, viewer, request=None) ->
                 raise
             if channel.get("type") != GUILD_CATEGORY or channel.get("guild_id") != s.guild_id:
                 raise TicketError("That id isn't a category on this server")
-        if staff_role_id and staff_role_id not in {r["id"] for r in api.roles(s.bot_token, s.guild_id)}:
+        pickable = {r["id"] for r in pickable_roles(api.roles(s.bot_token, s.guild_id))}
+        if any(i not in pickable for i in role_ids):
             raise TicketError("There's no such role on the server")
     except api.DiscordError as exc:
         raise _explain(exc) from None
     settings = TicketSettings.load()
-    settings.category_id, settings.staff_role_id = category_id, staff_role_id
+    settings.category_id, settings.default_role_ids = category_id, list(dict.fromkeys(role_ids))
     settings.save()
     record("tickets.settings", "changed the Discord ticket settings", request=request, actor=viewer,
-           details={"category": category_id, "staff_role": staff_role_id})
+           details={"category": category_id, "default_roles": settings.default_role_ids})
     return settings
