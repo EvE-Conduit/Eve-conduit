@@ -3,6 +3,11 @@
 Buyback programs: members paste their items for an instant quote, contract them to you with the tracking number as
 the description, and every contract is checked against its quote before you accept it.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): getting quotes, making contracts and following them, for sellers (including public quotes).
+- [Admin guide](docs/admin-guide.md): prices, locations, programs, item terms, contract checks and troubleshooting, for officers.
+
 - **Getting a quote** (everyone a program is open to): paste from the inventory (list or detail view), contracts,
   the mining ledger, or type `Tritanium x 1000`. Each item shows how it was valued, the tax and what it pays;
   items the program doesn't buy say why. The quote comes with the steps to make the contract: who to, where, the

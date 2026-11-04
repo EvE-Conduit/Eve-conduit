@@ -2,6 +2,11 @@
 
 A corp build board: "20 Hurricanes for the deployment", split into items members claim, build and deliver.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): claiming, delivering and following your contributions.
+- [Admin guide](docs/admin-guide.md): installing, permissions, running projects, confirming deliveries and webhooks.
+
 - **Projects** (permission `projects.manage_projects`): a name, details, where to deliver and an optional deadline.
   Every member sees a project, or only people in chosen states or groups; they're told when it starts. Close it as
   done or cancelled, reopen it, or delete it while nobody has claimed anything.

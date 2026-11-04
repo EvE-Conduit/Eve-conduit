@@ -3,6 +3,11 @@
 Follow a member and all their alts for 1 to 60 days, with a report of the systems they were in, the ships they flew,
 what they earned and when they played. The member is never told.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Track a member:** pick them by their main or any alt, choose 1 to 60 days and optionally a reason. Every
   character on their account is followed, including alts they link while it runs; a character moved to another
   account stops being followed. One tracking per member at a time; stop it to start again.

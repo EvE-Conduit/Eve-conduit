@@ -3,6 +3,11 @@
 CTAs, stratops, roams, mining ops and everything else on one calendar in EVE time, counting down live, with who's
 coming (and in what), reminders before form-up and Discord pings.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members, and for FCs scheduling ops.
+- [Admin guide](docs/admin-guide.md): requirements, permissions, settings, webhooks and troubleshooting.
+
 - **The calendar** (every member): upcoming ops by EVE day, each with a live countdown (red in the last 15 minutes,
   "Live" while it runs), the form-up time in EVE time and your own time zone, how long it runs, the kind (CTA,
   stratop, roam, home defense, mining, training, social, other), the FC, the doctrine, the form-up location and comms.

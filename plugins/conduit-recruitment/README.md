@@ -2,6 +2,11 @@
 
 Application forms, a review queue, and accepting people into groups.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Applicants** (anyone who signs in, usually with a new EVE login) pick a form, answer its questions and follow
   their application: its progress and messages from the recruiters. They can withdraw and apply again later.
 - **Recruiters** (permission `recruit.review_applications`) get a queue (open, mine, accepted, rejected,

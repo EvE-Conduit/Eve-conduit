@@ -3,6 +3,11 @@
 Members make a Mumble account here and connect with the Mumble client. Their name and groups in Mumble follow their
 main character, groups and state. Guests get in through temporary access links.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members.
+- [Admin guide](docs/admin-guide.md): for officers and administrators.
+
 - **Mumble** (permission `mumble.access_mumble`, given to every members' state by default): "Create my Mumble
   account" makes the login (`Pilot_One` from the main character by default; a random password, or one they choose, shown
   once). The page then shows the server, port and username, a `mumble://` link that fills them in, their Mumble groups,

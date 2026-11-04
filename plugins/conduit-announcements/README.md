@@ -2,6 +2,11 @@
 
 News and orders from leadership, on a page of its own and on the dashboard.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members.
+- [Admin guide](docs/admin-guide.md): for officers and administrators.
+
 - **Announcements** (everyone): pinned announcements on top, then the newest. Unread ones are marked new until
   the page is opened. Ctrl+K search finds them. A dashboard widget shows the latest three.
 - **Writing** (permission `announcements.post_announcements`): title and message (light Markdown: **bold**,

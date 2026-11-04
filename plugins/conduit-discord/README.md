@@ -3,6 +3,11 @@
 Members link their Discord account and join your server in one click. Their roles and nickname then follow their
 groups, state and main character.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members.
+- [Admin guide](docs/admin-guide.md): for officers and administrators.
+
 - **Discord** (permission `discord.access_discord`): "Link Discord and join" signs them in with Discord and puts
   them on the server with their roles and nickname (`[TCORP] Pilot One` by default). Afterwards the page shows
   their roles, a "Fix my roles" button (once every 30 seconds), and unlinking. Unlinking only forgets the account

@@ -3,6 +3,11 @@
 Every blueprint your corporations own in one searchable library, members asking for copies or to borrow an original,
 and what still needs research.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): browsing, requesting copies and loans, sharing and research, for members.
+- [Admin guide](docs/admin-guide.md): setup, permissions, the request queue, background jobs and troubleshooting, for officers.
+
 - **Library** (permission `blueprint_library.view_library`): corporation originals and copies grouped by blueprint,
   with the item each one makes, how many originals and copies there are (and their runs), and the best ME/TE.
   Open one to see every copy and original, its owner and where it is (station or structure and hangar division).

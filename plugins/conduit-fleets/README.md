@@ -2,6 +2,11 @@
 
 Records who flew in each fleet (FATs, also called PAPs) and lets groups require attendance.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for pilots and FCs.
+- [Admin guide](docs/admin-guide.md): for officers and admins.
+
 - **Fleets** (everyone): recent fleets with their type, FC and pilot count, the fleets you flew in, and your FATs
   over 30 days, 90 days and all time. A dashboard widget shows the last 30 days.
 - **Running a fleet** (permission `fleets.run_fleets`): start a fleet with a name, type (CTA, Stratop, Roam, Home

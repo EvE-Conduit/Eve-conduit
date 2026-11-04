@@ -3,6 +3,11 @@
 Structure and sovereignty timers on one board, counting down live, with who's going and reminders before each one
 comes out. Timers for your own structures arrive by themselves.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members.
+- [Admin guide](docs/admin-guide.md): requirements, permissions, settings, webhooks and troubleshooting.
+
 - **The board** (every member): upcoming timers by EVE day, each with a live countdown (red in the last 15 minutes,
   "Out now" for the hour after), the time in EVE time and your own time zone, the structure with its type icon, the
   system with its security and region, the owner, the timer kind (armor, hull, anchoring, unanchoring, sovereignty,

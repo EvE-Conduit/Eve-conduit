@@ -2,6 +2,11 @@
 
 Characters, corporations and alliances you don't want, with notes, and a warning when one of them shows up.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Entries** (permission `blacklist.manage_blacklist`): add a character, corporation or alliance by its exact name
   (looked up in EVE), with a reason, a severity (**Banned** or **Watch**) and an optional expiry. Expired entries
   stop matching but stay listed under *Expired*. Changes and removals are kept in the audit log.
