@@ -3,6 +3,11 @@
 The tax your corporations took from each member's bounties, ESS payouts and missions, an extra tax billed on it every
 month, payments picked up from the corporation wallet, and reminders.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Ledger** (permission `tax.view_ledger`): what the corporations took from every member in a month, with their alts
   grouped under them and characters nobody has registered listed separately. Each member's earnings are estimated
   from the corporation's tax rate. A daily chart, a breakdown by kind, and a CSV export.

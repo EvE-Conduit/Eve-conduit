@@ -3,6 +3,11 @@
 A daily look through every member character's synced data for dealings with characters, corporations and alliances
 you don't trust, so nobody has to search Member Audit by hand for each one.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): reviewing findings, for HR and counter-intelligence reviewers (members never see Spy Check).
+- [Admin guide](docs/admin-guide.md): setup, permissions, settings, logging and troubleshooting, for officers.
+
 - **What is watched:** the plugin's own **watch list** (Spy Check → Watch list), plus every active entry of the
   [Blacklist](../conduit-blacklist) plugin when that is installed and on (switch it off, or leave out "watch" entries,
   under Settings). Spy Check works without the Blacklist plugin. Each entity is matched by its own id, like Member

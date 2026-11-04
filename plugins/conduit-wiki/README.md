@@ -2,6 +2,11 @@
 
 Guides, rules and reference pages written by your corporation, in a tree, with history.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): reading, writing and restoring pages.
+- [Admin guide](docs/admin-guide.md): permissions, page visibility, public pages, webhooks and troubleshooting.
+
 - **Reading** (every member): the page tree on the left, the page on the right, and an "On this page" list of its
   headings. The page saved at the address `home` opens first; until someone writes it, the wiki shows the recently
   updated pages instead. Pages turn up in Ctrl+K search, and the dashboard widget lists the latest changes.

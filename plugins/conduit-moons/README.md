@@ -2,6 +2,11 @@
 
 Who mined what from your corporations' moon drills each month, what it's worth, and moon tax.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): your own moon mining, what you owe and how to pay.
+- [Admin guide](docs/admin-guide.md): installing, permissions, tax settings, closing months and recording payments.
+
 - **Ledger** (permission `moons.view_ledger`): every member's mining for a month, with their alts grouped under
   them and characters nobody has registered listed separately. Breakdowns by moon drill and by ore, a daily chart,
   and a CSV export.

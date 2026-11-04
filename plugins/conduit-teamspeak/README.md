@@ -3,6 +3,11 @@
 Members link their TeamSpeak identity here once; from then on their server groups follow their groups and state on
 the site. No passwords, no nickname matching: the site talks to the server through ServerQuery.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): linking your TeamSpeak identity and keeping your server groups up to date.
+- [Admin guide](docs/admin-guide.md): connecting the server, mapping groups, permissions and troubleshooting.
+
 - **TeamSpeak** (permission `teamspeak.access_teamspeak`, given to every members' state by default): "Link my
   TeamSpeak" makes a one-time **privilege key** for the member. The page shows the key and a `ts3server://` link that
   connects with the right nickname and uses the key; the page watches for it and, once used, shows the linked

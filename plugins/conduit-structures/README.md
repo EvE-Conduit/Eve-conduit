@@ -3,6 +3,11 @@
 Every Upwell structure your corporations own on one board, the fuel blocks each one burns and needs, warnings at the
 thresholds you choose, and members saying "I'm refuelling this".
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members.
+- [Admin guide](docs/admin-guide.md): requirements, permissions, settings, webhooks and troubleshooting.
+
 - **The board** (anyone who may see a corporation's structures): every structure across the corporations you may view,
   with its type, corporation, system and region, fuel left as a live countdown, warning level, what it burns an hour,
   its services online and offline, its state (and a running timer) and reinforce hour. Filter by low or out of fuel,

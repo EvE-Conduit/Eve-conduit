@@ -2,6 +2,11 @@
 
 Who has gone quiet, and leave of absence so nobody is chased (or kicked) by mistake.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Activity** comes from three signals, each switched on or off under Inactivity members → Settings. A member is
   active while any switched-on one is recent enough (30 days by default), and is never counted from before they
   joined the site:

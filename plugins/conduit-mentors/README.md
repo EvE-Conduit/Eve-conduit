@@ -2,6 +2,11 @@
 
 New members get a mentor to show them the ropes, with goals to work through together.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Asking for a mentor** (every member): pick what you want help with (PvP, PvE, Industry, Mining... the list is
   configurable), when you play and a note, then ask for one of the mentors with free places by name, or anyone.
   Mentors are told (just the one asked for, or every active mentor), and the `mentors.requested` event fires.

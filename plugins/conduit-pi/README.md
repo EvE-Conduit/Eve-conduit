@@ -3,6 +3,11 @@
 Every colony across a member's characters in one place, reminders before extractors run out, and a corporation view
 for running a PI program.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): your colonies, output, reminders and the daily digest.
+- [Admin guide](docs/admin-guide.md): installing, permissions, Corporation PI, webhooks, background jobs and privacy.
+
 - **Colonies** come from the character sheet's PI section, which reads each planet's layout from EVE about once an
   hour (scope `esi-planets.manage_planets.v1`, already asked for by the character sheet). The plugin makes no ESI calls
   of its own. Characters that haven't granted the scope are named on the page.

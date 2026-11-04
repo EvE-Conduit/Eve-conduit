@@ -2,6 +2,11 @@
 
 Members earn points for what they do for the corp and spend them in a store that officers fill by hand.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): earning points, buying items and following your orders.
+- [Admin guide](docs/admin-guide.md): permissions, items, earning settings, handling orders and troubleshooting.
+
 - **Earning:** points come in by themselves from other plugins, each paid once whatever happens twice. Set how many
   under Corp Store → Manage; 0 switches one off.
   - **Referral** ([Recruitment](../conduit-recruitment)): to the member a recruit named as their referrer, when the
