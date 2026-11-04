@@ -3,6 +3,11 @@
 Who tops the corporation: members ranked by what their characters did, with a podium for every board and medals
 for the top three each month.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): reading the boards, medals and hiding yourself.
+- [Admin guide](docs/admin-guide.md): requirements, permissions, settings, medals and troubleshooting.
+
 - **Boards** (everyone): Kills, ISK destroyed, Fleets (fleets flown in, from FATs when the Fleets plugin is on;
   alts in one fleet count once, FATs members added for themselves don't), Mining, Bounties, Industry, Skillpoints
   and Losses. Pick a month (or all time) and, with several corporations, one corporation.

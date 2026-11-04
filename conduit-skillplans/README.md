@@ -2,6 +2,11 @@
 
 What to train and in what order, with each character's progress and training time, copied straight into the game.
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Plans** (everyone): shared plans from leadership and your own personal plans. A plan lists every skill level in
   training order, with prerequisites first. Each of your characters shows how far it is (trained, in the skill queue,
   still to train) and how long the rest takes with its current attributes and implants.

@@ -2,6 +2,11 @@
 
 Members claim ships they lost on fleet; reviewers check the loss, approve a payout and mark it paid.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members and pilots.
+- [Admin guide](docs/admin-guide.md): for officers and admins.
+
 - **My SRP** (everyone): the member's losses from the last 30 days (configurable) that haven't been claimed, with
   what the rules would pay. Claiming asks for the fleet, the FC and a note. Losses that haven't synced can be
   claimed by pasting their zKillboard link or the in-game "Copy external kill link" (up to 10 links in 10 minutes).

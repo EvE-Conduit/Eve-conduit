@@ -4,6 +4,11 @@ Reach a member you pick through a private Discord channel, an EVE mail or both, 
 from a panel of buttons in a Discord channel. Needs the
 [Discord](../conduit-discord) plugin: tickets use its bot, its server and its linked accounts.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members.
+- [Admin guide](docs/admin-guide.md): for officers and administrators.
+
 - **Discord Tickets** (permission `tickets.open_tickets`): search for a member by their main, their Discord name or an
   alt you may see on their character sheet, choose **Discord ticket**, **EVE mail** or **Both**, and give a subject
   and a message (optional unless it's only a mail). Everyone with the permission sees all tickets and can close them.

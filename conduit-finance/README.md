@@ -4,6 +4,11 @@ What your corporations earned and spent, month by month and by category, read fr
 corporation sheet already syncs. No ESI scopes of its own: a corporation shows up once its Wallets section syncs
 (with an Accountant's or Director's login).
 
+## Documentation
+
+- [User guide](docs/user-guide.md)
+- [Admin guide](docs/admin-guide.md)
+
 - **Overview:** income against spending per month (6, 12 or 24 months) for one corporation or all you may see, the
   month's net marked on each column, a table by category, and this month per corporation. Click a month for its
   report, a category for its entries.

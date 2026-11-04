@@ -3,6 +3,11 @@
 Your fleet doctrines and their fits, shown like the in-game fitting window, ready to copy into the game, with which
 of your characters can fly each fit and what they're missing.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members and pilots.
+- [Admin guide](docs/admin-guide.md): for officers and admins.
+
 - **Doctrines** (everyone): a card per doctrine with its ships and how many of its fits you can fly, and below them
   **Other fits**: fits that aren't in any doctrine, each with your best character's status. A doctrine
   lists its fits by role (DPS, Logistics, Tackle...), each with your best character's status: **Ready** (required and

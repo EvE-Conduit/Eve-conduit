@@ -3,6 +3,11 @@
 How many of each ship and item should be for sale at each staging location, what's short, and members claiming
 shortages to seed them.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): the board and seeding, for members.
+- [Admin guide](docs/admin-guide.md): setup, permissions, alerts and troubleshooting, for officers.
+
 - **Staging locations** (permission `stock.manage_stock`): pick a station or structure the site already knows (someone
   has assets, orders or contracts there) and give it a label, e.g. "Main staging".
 - **Targets:** for each location, a ship or item and how many should be for sale, with an optional low mark (alert

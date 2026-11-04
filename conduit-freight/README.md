@@ -3,6 +3,11 @@
 Freight services: routes with your rates, a calculator that gives members the exact courier contract to make, and
 every courier contract to the hauling corporation checked against its route before anyone accepts it.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): getting a price, making the contract and following it.
+- [Admin guide](docs/admin-guide.md): installing, permissions, services, routes, webhooks and troubleshooting.
+
 - **Getting a price** (everyone a service is open to): pick a route, enter the volume and the collateral (`1.5b`,
   `250m` and `12k` work), and get the reward with the steps to make the contract: who to, pick-up, delivery, reward,
   collateral, expiration and days to complete, each with a copy button. Cargo over the route's limits is flagged

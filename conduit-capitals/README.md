@@ -2,6 +2,11 @@
 
 Who can fly and who owns each capital class, where the hulls are parked, and who is ready to jump.
 
+## Documentation
+
+- [User guide](docs/user-guide.md): for members and pilots.
+- [Admin guide](docs/admin-guide.md): for officers and admins.
+
 - **Capital classes:** Carrier, Dreadnought, Lancer Dreadnought, Force Auxiliary, Supercarrier, Titan, Capital
   Industrial (Rorqual) and Jump Freighter. The hulls are every published ship in those static data (SDE) groups, so new
   hulls show up with the next SDE import.
