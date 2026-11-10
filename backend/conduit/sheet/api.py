@@ -106,10 +106,14 @@ def _alts(request, character: Character) -> list[dict]:
 @router.post("/{character_id}/refresh")
 def refresh(request, character_id: int):
     """Queue a sync of every section now. ESI is otherwise only called on schedule, so this takes a permission."""
-    from .tasks import sync_now
+    from django.core.cache import cache
+
+    from .tasks import REFRESH_COOLDOWN, sync_now
 
     character = viewable_character(request, character_id)
     if not request.user.has_perm(REFRESH_PERM):
         raise HttpError(403, "You don't have permission to refresh characters")
-    sync_now(character)
+    # One refresh queues a job per section; pressing it again right away would only queue the same jobs twice.
+    if cache.add(f"sheet:refresh:{character.pk}", 1, REFRESH_COOLDOWN):
+        sync_now(character)
     return {"ok": True}

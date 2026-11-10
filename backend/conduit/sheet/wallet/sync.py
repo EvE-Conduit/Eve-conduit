@@ -41,7 +41,8 @@ def sync(character, esi):
                 )
                 for j in journal
             ],
-            ignore_conflicts=True,
+            # In batches: years of history from a SeAT import don't fit in one statement on every database.
+            ignore_conflicts=True, batch_size=1000,
         )
         WalletTransaction.objects.bulk_create(
             [
@@ -60,7 +61,7 @@ def sync(character, esi):
                 )
                 for t in transactions
             ],
-            ignore_conflicts=True,
+            ignore_conflicts=True, batch_size=1000,
         )
     resolve({t["location_id"] for t in transactions}, character=character, client=esi)
     ensure_eve_names(

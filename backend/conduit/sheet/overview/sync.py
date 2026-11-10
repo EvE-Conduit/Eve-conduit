@@ -18,13 +18,14 @@ def sync(character, esi):
 
     public = esi.get(f"/characters/{cid}").data
     info.birthday = parse_dt(public.get("birthday"))
-    info.gender = public.get("gender", "")
+    # Cut to what the columns hold: one over-long value would otherwise fail the whole section on every sync.
+    info.gender = (public.get("gender") or "")[:10]
     info.race_id = public.get("race_id")
     info.bloodline_id = public.get("bloodline_id")
     info.security_status = public.get("security_status")
     # In-game bios are HTML-ish (<font>, <a>); keep plain text.
     info.description = TAG_RE.sub("", public.get("description") or "").strip()
-    info.title = TAG_RE.sub("", public.get("title") or "")
+    info.title = TAG_RE.sub("", public.get("title") or "")[:200]
     info.faction_id = public.get("faction_id")
 
     history = esi.get(f"/characters/{cid}/corporationhistory").data
@@ -39,7 +40,7 @@ def sync(character, esi):
         locations |= {info.station_id, info.structure_id}
     if has("esi-location.read_ship_type.v1"):
         ship = esi.get(f"/characters/{cid}/ship", character=character).data
-        info.ship_type_id, info.ship_name = ship["ship_type_id"], ship["ship_name"]
+        info.ship_type_id, info.ship_name = ship["ship_type_id"], (ship["ship_name"] or "")[:100]
     if has("esi-location.read_online.v1"):
         online = esi.get(f"/characters/{cid}/online", character=character).data
         info.online = online["online"]

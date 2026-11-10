@@ -13,6 +13,8 @@ class CalendarEvent(models.Model):
     owner_type = models.CharField(max_length=20, blank=True)
     text = models.TextField(blank=True)
     detail_fetched = models.BooleanField(default=False)
+    #: Failed detail fetches in a row; past a few the details are no longer asked for.
+    fetch_failures = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         unique_together = [("character", "event_id")]

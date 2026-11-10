@@ -14,6 +14,8 @@ def _value(data: dict) -> float:
     prices = prices_by_type({victim["ship_type_id"], *(i["item_type_id"] for i in flat)})
     total = prices.get(victim["ship_type_id"], 0)
     for i in flat:
+        if i.get("singleton") == 2:
+            continue  # a blueprint copy: worth next to nothing, not the price of the original
         total += prices.get(i["item_type_id"], 0) * ((i.get("quantity_destroyed") or 0) + (i.get("quantity_dropped") or 0))
     return total
 

@@ -48,8 +48,8 @@ def wallets(ctx, params, cid):
     if ctx.synced:  # never put an older balance over the one EVE gave
         seat.update({d.division: float(d.balance) for d in WalletDivision.objects.filter(corporation_id=cid)})
     for table in ("corporation_wallet_journals", "corporation_wallet_transactions"):
-        for r in ctx.store.rows(table, corporation_id=cid):
-            seat.setdefault(int(r["division"]), 0.0)  # history for a division SeAT had no balance for
+        for division in ctx.store.distinct(table, "division", corporation_id=cid):
+            seat.setdefault(int(division), 0.0)  # history for a division SeAT had no balance for
     return [{"division": d, "balance": b} for d, b in sorted(seat.items())]
 
 
@@ -63,7 +63,7 @@ def journal(ctx, params, cid, division):
             "context_id": _int(r["context_id"]), "context_id_type": r["context_id_type"], "tax": _num(r["tax"]),
             "tax_receiver_id": _int(r["tax_receiver_id"]),
         })
-        for r in ctx.store.rows("corporation_wallet_journals", corporation_id=cid, division=division)
+        for r in ctx.store.iter_rows("corporation_wallet_journals", corporation_id=cid, division=division)
     ]
 
 
@@ -76,7 +76,7 @@ def transactions(ctx, params, cid, division):
             "client_id": int(r["client_id"]), "location_id": int(r["location_id"]),
             "journal_ref_id": _int(r["journal_ref_id"]),
         }
-        for r in ctx.store.rows("corporation_wallet_transactions", corporation_id=cid, division=division)
+        for r in ctx.store.iter_rows("corporation_wallet_transactions", corporation_id=cid, division=division)
     ]
 
 

@@ -17,7 +17,9 @@ from conduit.eve.tasks import names_for
 from conduit.schemas import alliance_out, corp_out
 from conduit.sde.models import SolarSystem
 from conduit.sheet.industry.models import ACTIVITIES
+from conduit.sheet.killmails.totals import killmail_totals
 from conduit.sheet.locations import describe
+from conduit.sheet.access import in_reach
 from conduit.sheet.models import Location
 from conduit.sheet.util import prices_by_type, type_out, types_by_id
 
@@ -173,12 +175,16 @@ def corporation_header(request, corporation_id: int):
 
 @router.post("/{corporation_id}/refresh")
 def refresh(request, corporation_id: int):
-    from .tasks import sync_now
+    from django.core.cache import cache
+
+    from .tasks import REFRESH_COOLDOWN, sync_now
 
     corp = viewable_corporation(request, corporation_id)
     if not request.user.has_perm("corp.refresh_corporations"):
         raise HttpError(403, "You don't have permission to refresh corporations")
-    sync_now(corp.pk)
+    # One refresh queues a job per section; pressing it again right away would only queue the same jobs twice.
+    if cache.add(f"corp:refresh:{corp.pk}", 1, REFRESH_COOLDOWN):
+        sync_now(corp.pk)
     return {"ok": True}
 
 
@@ -235,6 +241,9 @@ def members(request, corporation_id: int):
     owners = {
         c.pk: c for c in Character.objects.filter(pk__in=[r.character_id for r in rows]).select_related("user__main_character")
     }
+    # Whose account a member belongs to is character-sheet knowledge: shown only for characters the viewer may
+    # open the sheet of, like the sheet's own list of alts. Others are still marked as registered.
+    linkable = {pk for pk, c in owners.items() if in_reach(request.user, c)}
     types = types_by_id({r.ship_type_id for r in rows if r.ship_type_id})
     locations = _locations({r.location_id for r in rows})
     out = []
@@ -248,7 +257,7 @@ def members(request, corporation_id: int):
                 "portrait": portrait_url(r.character_id, 64),
                 "registered": owner is not None,
                 "owner": {"id": owner.user_id, "name": owner.user.display_name, "main_id": owner.user.main_character_id}
-                if owner
+                if owner and r.character_id in linkable
                 else None,
                 "tracked": r.tracked,
                 "online": online,
@@ -704,7 +713,8 @@ def starbases(request, corporation_id: int):
 @paginate
 def killmails(request, corporation_id: int, kind: str = ""):
     corp = viewable_corporation(request, corporation_id, "killmails")
-    qs = CorporationKillmail.objects.filter(corporation=corp).select_related("killmail").order_by("-killmail__time")
+    # The list shows a few columns; the stored killmail JSON (attackers, items) is big and not needed here.
+    qs = CorporationKillmail.objects.filter(corporation=corp).select_related("killmail").defer("killmail__data").order_by("-killmail__time")
     if kind == "kills":
         qs = qs.filter(is_loss=False)
     elif kind == "losses":
@@ -735,10 +745,7 @@ def killmails(request, corporation_id: int, kind: str = ""):
 @router.get("/{corporation_id}/killmails/summary")
 def killmail_summary(request, corporation_id: int):
     corp = viewable_corporation(request, corporation_id, "killmails")
-    links = list(CorporationKillmail.objects.filter(corporation=corp).select_related("killmail"))
-    kills = [link.killmail.value for link in links if not link.is_loss]
-    losses = [link.killmail.value for link in links if link.is_loss]
-    return {"kills": len(kills), "losses": len(losses), "isk_destroyed": sum(kills), "isk_lost": sum(losses)}
+    return killmail_totals(CorporationKillmail.objects.filter(corporation=corp))
 
 
 @router.get("/{corporation_id}/killmails/zkillboard")

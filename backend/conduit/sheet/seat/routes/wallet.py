@@ -28,7 +28,7 @@ def journal(ctx, params, cid):
             "context_id": r["context_id"], "context_id_type": r["context_id_type"], "tax": r["tax"],
             "tax_receiver_id": r["tax_receiver_id"],
         })
-        for r in ctx.store.rows("character_wallet_journals", character_id=cid)
+        for r in ctx.store.iter_rows("character_wallet_journals", character_id=cid)
     ]
 
 
@@ -41,5 +41,5 @@ def transactions(ctx, params, cid):
             "is_personal": bool(r["is_personal"]), "client_id": r["client_id"], "location_id": r["location_id"],
             "journal_ref_id": r["journal_ref_id"],
         }
-        for r in ctx.store.rows("character_wallet_transactions", character_id=cid)
+        for r in ctx.store.iter_rows("character_wallet_transactions", character_id=cid)
     ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from collections import defaultdict
 from datetime import timedelta
 
@@ -21,6 +22,10 @@ log = logging.getLogger(__name__)
 MAX_BACKOFF = timedelta(hours=6)
 #: Announce ``sync.failed`` once a section has failed this many times in a row.
 SYNC_FAILED_AFTER = 3
+#: Seconds a retry after an ESI pause is spread over, so the whole queue doesn't come back in the same second.
+RETRY_SPREAD = 60
+#: Seconds before the same character can be refreshed by hand again.
+REFRESH_COOLDOWN = 60
 
 
 @shared_task
@@ -81,7 +86,7 @@ def sync_section(self, character_id: int, section_key: str) -> str:
             section.sync_function()(character, esi())
     except EsiBackoff as exc:
         status.save(update_fields=["last_attempt"])
-        raise self.retry(countdown=exc.retry_after + 5) from exc
+        raise self.retry(countdown=exc.retry_after + 5 + random.uniform(0, RETRY_SPREAD)) from exc
     except TokenInvalid as exc:
         return _finish(status, SyncStatus.Result.TOKEN_INVALID, str(exc)[:300])
     except EsiError as exc:
