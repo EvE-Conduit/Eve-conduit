@@ -390,6 +390,45 @@ def test_taking_someone_out_is_refused_when_it_breaks_an_exclusion(site, api_cli
     assert Participant.objects.filter(pk=carol.pk).exists()
 
 
+def test_a_deleted_account_does_not_leave_a_gap_in_the_chain(site, api_client, drawn):
+    carol = site["people"]["Carol"]
+    carols_santa = Participant.objects.get(event_id=drawn, giftee__user=carol)
+    carols_giftee = giftee_of(carol, drawn)
+    carol.delete()  # not taken out by an organiser: the account itself went
+    carols_santa.refresh_from_db()
+    assert carols_santa.giftee is None
+    services.remind_due()  # the hourly task
+    carols_santa.refresh_from_db()
+    assert carols_santa.giftee.user == carols_giftee
+    left = dict(Participant.objects.filter(event_id=drawn).values_list("pk", "giftee_id"))
+    assert len(left) == 3 and _is_one_cycle(left)
+    assert Notification.objects.filter(user=carols_santa.user, title__startswith="Secret Santa: you're now giving to").exists()
+    assert services.mend(SantaEvent.objects.get(pk=drawn)) is False  # nothing left to do
+
+
+def test_taking_out_someone_at_a_gap_that_cannot_be_closed(site, api_client, drawn):
+    from conduit_secretsanta.models import Exclusion
+
+    carol = site["people"]["Carol"]
+    santa = Participant.objects.get(event_id=drawn, giftee__user=carol)
+    waiting = Participant.objects.get(event_id=drawn, user=giftee_of(carol, drawn))
+    a, b = sorted((santa.pk, waiting.pk))
+    Exclusion.objects.create(event_id=drawn, first_id=a, second_id=b)
+    carol.delete()
+    assert services.mend(SantaEvent.objects.get(pk=drawn)) is False  # the two are kept apart
+    # Whoever is waiting for a gift nobody gives can still be taken out.
+    ok(as_(api_client, site["organiser"]).call("delete", f"{BASE}/events/{drawn}/participants/{waiting.pk}"))
+    assert not Participant.objects.filter(pk=waiting.pk).exists()
+
+
+def test_a_budget_too_large_to_store_is_refused(site, api_client):
+    e = create_event(api_client, site["organiser"])
+    body = {"name": "Winter gifts", "signup_closes_at": e["signup_closes_at"], "gift_deadline": e["gift_deadline"],
+            "budget_isk": 10**19}
+    resp = as_(api_client, site["organiser"]).call("put", f"{BASE}/events/{e['id']}", body)
+    assert resp.status_code == 400 and "too large" in resp.json()["detail"]
+
+
 def test_reminder_before_the_deadline_goes_to_those_who_have_not_sent(site, api_client, drawn):
     alice, bob = site["people"]["Alice"], site["people"]["Bob"]
     Participant.objects.filter(event_id=drawn, user=alice).update(sent_at=timezone.now())
