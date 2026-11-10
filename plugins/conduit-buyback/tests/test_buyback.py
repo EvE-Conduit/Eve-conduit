@@ -420,7 +420,7 @@ def test_contracts_are_matched_and_checked(program, seller, boss, offline):
     assert sorted(n.level for n in notes) == ["info", "warning", "warning"]
 
     # Accepted: the seller hears about it; the next run doesn't fetch items again.
-    esi.routes[f"/corporations/{CORP_ID}/contracts"][0] = {**row(1, good, 3600, status="finished"), "date_completed": "2026-10-10T08:00:00Z"}
+    esi.routes[f"/corporations/{CORP_ID}/contracts"][0] = {**row(1, good, 3600, status="finished"), "date_completed": (timezone.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")}  # within the 30 days
     del esi.routes[f"/corporations/{CORP_ID}/contracts/1/items"]
     assert contracts.sync_owner(owner, client=esi)["new"] == 0
     ok.refresh_from_db()
