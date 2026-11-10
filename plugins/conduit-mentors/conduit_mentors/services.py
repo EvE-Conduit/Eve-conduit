@@ -484,7 +484,7 @@ def end(m: Mentorship, by, reason: str, request=None) -> Mentorship:
 def reopen(m: Mentorship, by, request=None) -> Mentorship:
     """Program managers take a graduated or ended mentorship up again: back with its mentor if they still mentor,
     otherwise back on the waiting list. Ticked goals and the thread are kept."""
-    m = Mentorship.objects.select_for_update().select_related("mentee", "mentor").get(pk=m.pk)
+    m = Mentorship.objects.select_for_update().select_related("mentee").get(pk=m.pk)
     if role(m, by) != "manager":
         raise MentorError("Only program managers can reopen a mentorship", 403)
     if m.is_open:

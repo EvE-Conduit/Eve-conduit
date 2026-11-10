@@ -284,7 +284,7 @@ def extend_link(link: GuestLink, hours: float) -> GuestLink:
         raise LinkError("Say how much longer")
     now = timezone.now()
     with transaction.atomic():
-        link = GuestLink.objects.select_for_update().select_related("created_by").get(pk=link.pk)
+        link = GuestLink.objects.select_for_update().get(pk=link.pk)
         if status(link, now) not in ("active", "used_up"):
             raise LinkError("This link has ended; make a new one")
         until = link.expires_at + timedelta(hours=hours)
@@ -359,7 +359,7 @@ def finish(request, code: str, state: str) -> Guest:
         raise LinkError("You're already on the server through another link", 409)
     try:
         with transaction.atomic():
-            link = GuestLink.objects.select_for_update().select_related("created_by").get(pk=link.pk)
+            link = GuestLink.objects.select_for_update().get(pk=link.pk)
             if status(link) != "active":
                 raise LinkError("This link is closed", 410)
             # Recorded before asking Discord, inside the lock, so the uses limit holds when several arrive at once.
