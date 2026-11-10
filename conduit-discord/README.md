@@ -19,8 +19,8 @@ groups, state and main character.
   `tempaccess`) and a guest role, under a guest name such as `[GUEST] Jane`. When the link runs out or is withdrawn
   they lose the temporary role and keep the guest role (or are removed from the server, if the
   site is set to do that); nobody who was on the server before is ever removed. A running link can be extended. A
-  Discord manager can choose the channels guests may be let into; each link then opens some of them and its guests
-  see nothing else. A history lists everyone who came through a link.
+  Discord manager can choose the channels guests may be let into; each link then opens some of them to its guests,
+  on top of what their roles see. The plugin never changes a role's channel settings. A history lists everyone who came through a link.
 - **Server setup** (permission `discord.manage_discord`): step-by-step setup of the Discord application, the bot and
   the server, with a connection check that lists anything in the way (missing bot permissions, roles above the
   bot's own). Map groups and states to Discord roles, and see every linked member with their roles and the last
