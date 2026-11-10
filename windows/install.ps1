@@ -117,7 +117,8 @@ function Get-InstallRootDriveProblem([string]$Path) {
     if ((Test-Path -LiteralPath $Path) -and (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) {
         return "$Path already contains files. Choose an empty or new folder; the installer locks down its permissions."
     }
-    return $null
+    # An empty folder somebody else made beforehand could stay under their control.
+    return Get-InstallRootOwnerProblem $Path
 }
 
 function Read-InstallRoot {
@@ -275,7 +276,13 @@ $script:InstallStart = Get-Date
 
 # --- 4. folders and downloads -------------------------------------------------------------------------
 Write-Step 'Creating folders'
-foreach ($dir in @($p.Root, $p.Releases, $p.Bin, $p.Config, $p.Data, $p.Static, $p.Logs, $p.Backups, $p.Services, $p.Cache, $p.Tmp, (Join-Path $p.Data 'caddy'))) {
+# The install folder first, locked down at once: a new folder gets the drive's permissions, which let every user of
+# this machine add and change files in it. Nothing is downloaded and no password is written before this.
+New-Item -ItemType Directory -Force -Path $p.Root | Out-Null
+$ownerProblem = Get-InstallRootOwnerProblem $p.Root
+if ($ownerProblem) { throw $ownerProblem }
+Protect-ConduitInstallRoot -Root $p.Root
+foreach ($dir in @($p.Releases, $p.Bin, $p.Config, $p.Data, $p.Static, $p.Logs, $p.Backups, $p.Services, $p.Cache, $p.Tmp, $p.UpdaterLogs, (Join-Path $p.Data 'caddy'), (Join-Path $p.Data 'updates'))) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 # Keep every download and cache inside the install folder.

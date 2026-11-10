@@ -18,8 +18,11 @@ Free of Django on purpose: the updater runs it with the install's own Python::
     python -I -m conduit.updates.safeio read-json <path>
     python -I -m conduit.updates.safeio copy-regular <src> <dst>
 
-Windows has none of these flags (and its updater folder is protected by ACLs instead), so there the functions
-fall back to a plain temporary file and ``os.replace``.
+Windows has none of these flags, so there the functions fall back to a plain temporary file and ``os.replace``,
+after checking that neither the folder nor the file is a link (a junction, symlink or other reparse point). That
+check and the use that follows are two steps, so on Windows the real protection is the updates folder's ACL: the
+service account may add and change files in it but can't replace the folder itself, and can't create folders or
+symlinks in it (``Protect-ConduitUpdatesDir`` in windows/scripts/Conduit.psm1).
 """
 
 from __future__ import annotations
@@ -65,11 +68,25 @@ def _chown(fd: int, ids: tuple[int, int] | None) -> None:
         pass  # not root (tests, the web process): the file stays ours, as before
 
 
+_REPARSE_POINT = 0x400  # stat.FILE_ATTRIBUTE_REPARSE_POINT: a junction, symlink or mount point on Windows
+
+
+def _is_link(path: Path | str) -> bool:
+    """Whether ``path`` exists and is a link of any kind rather than a plain file or folder (the Windows check)."""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISLNK(st.st_mode) or bool(getattr(st, "st_file_attributes", 0) & _REPARSE_POINT)
+
+
 class _Dir:
     """The destination folder, opened once without following a symlink; files are opened relative to it."""
 
     def __init__(self, path: Path):
         self.path = path
+        if not POSIX and _is_link(path):
+            raise UnsafePath(f"{path} is a link, not a folder")
         self.fd = os.open(str(path), os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) if POSIX else None
 
     def __enter__(self):
@@ -81,6 +98,8 @@ class _Dir:
 
     def open(self, name: str, flags: int, mode: int = 0o644) -> int:
         if self.fd is None:
+            if _is_link(self.path / name):
+                raise UnsafePath(f"{self.path / name} is a link, not a file")
             return os.open(str(self.path / name), flags, mode)
         return os.open(name, flags | O_NOFOLLOW | O_CLOEXEC, mode, dir_fd=self.fd)
 

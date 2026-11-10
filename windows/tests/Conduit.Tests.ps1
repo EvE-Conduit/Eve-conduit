@@ -574,3 +574,48 @@ Describe 'Updater watcher' {
         $arguments | Should -Match '-NonInteractive'
     }
 }
+
+Describe 'Links and text from outside' {
+    BeforeAll {
+        function New-TestLink([string]$Path, [string]$Target) {
+            # A junction needs no special rights on Windows; elsewhere a symlink is the nearest thing.
+            if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { New-Item -ItemType Junction -Path $Path -Target $Target | Out-Null }
+            else { New-Item -ItemType SymbolicLink -Path $Path -Target $Target | Out-Null }
+        }
+    }
+    It 'tells a link from a real folder' {
+        $real = Join-Path $TestDrive 'real'
+        New-Item -ItemType Directory -Path $real | Out-Null
+        $link = Join-Path $TestDrive 'link'
+        New-TestLink $link $real
+        Test-ConduitReparsePoint $real | Should -BeFalse
+        Test-ConduitReparsePoint $link | Should -BeTrue
+        Test-ConduitReparsePoint (Join-Path $TestDrive 'missing') | Should -BeFalse
+    }
+    It 'finds a link where the updates folder should be' {
+        $root = Join-Path $TestDrive 'install'
+        $data = Join-Path $root 'data'
+        $elsewhere = Join-Path $TestDrive 'elsewhere'
+        New-Item -ItemType Directory -Path $data, $elsewhere | Out-Null
+        $updates = Join-Path $data 'updates'
+        New-Item -ItemType Directory -Path $updates | Out-Null
+        Get-ConduitLinkedFolder -Root $root -Path $updates | Should -BeNullOrEmpty
+        Remove-Item -LiteralPath $updates
+        New-TestLink $updates $elsewhere
+        Get-ConduitLinkedFolder -Root $root -Path $updates | Should -Be $updates
+        # Progress is not written through the link.
+        Set-ConduitProgress -Root $root -Kind release -Target '0.5.9' -Step install
+        Test-Path -LiteralPath (Join-Path $elsewhere 'progress.json') | Should -BeFalse
+    }
+    It 'makes text from a request fit for one log line' {
+        Format-ConduitLogText "one`r`ntwo`tthree" | Should -Be 'one  two three'
+        (Format-ConduitLogText ('x' * 900)).Length | Should -Be 503
+        Format-ConduitLogText $null | Should -Be ''
+    }
+    It 'does not repeat a bad request in its refusal' {
+        $message = ''
+        try { Get-ConduitUpdateRequest -Json '{"version":"import os; os.system(1)","file":"x"}' } catch { $message = "$_" }
+        $message | Should -Not -BeNullOrEmpty
+        $message | Should -Not -Match 'import os'
+    }
+}

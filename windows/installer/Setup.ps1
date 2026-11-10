@@ -40,7 +40,8 @@ function Get-DriveProblem([string]$Path) {
     if ((Test-Path -LiteralPath $Path) -and (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) {
         return "$Path already contains files. Choose an empty or new folder; the installer locks down its permissions."
     }
-    return $null
+    # An empty folder somebody else made beforehand could stay under their control.
+    return Get-InstallRootOwnerProblem $Path
 }
 
 function Expand-Release([string]$ZipPath) {

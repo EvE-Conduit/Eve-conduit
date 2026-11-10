@@ -95,6 +95,9 @@ function Get-ConduitPath {
         # Plugins installed from Administration -> Plugins (written only by apply-update) and the newest catalog used.
         PluginsSite  = Join-Path (Join-Path $Root 'config') 'plugins-site.txt'
         PluginSerial = Join-Path (Join-Path $Root 'config') 'plugin-catalog.serial'
+        # The updater's own log. Not in logs\: the services can write there, and the updater (SYSTEM) must never
+        # write into a folder they control.
+        UpdaterLogs  = Join-Path $Root 'updater'
     }
 }
 
@@ -566,7 +569,155 @@ function Write-TraySetting {
     [IO.File]::WriteAllText((Join-Path $dir 'settings.json'), $json, (New-Object Text.UTF8Encoding $false))
 }
 
+# --- links, and text from outside in logs ------------------------------------------------------
+
+function Test-ConduitReparsePoint {
+    <# True when $Path exists and is a link (junction, symlink, mount point) rather than a plain file or folder. #>
+    param([Parameter(Mandatory)][string]$Path)
+    try { $attributes = [IO.File]::GetAttributes($Path) }
+    catch { return $false }
+    return [bool]([int]$attributes -band [int][IO.FileAttributes]::ReparsePoint)
+}
+
+function Get-ConduitLinkedFolder {
+    <#
+      The first link among $Path and the folders between it and the install root (the root itself isn't
+      checked: only administrators can replace it); $null when they are all plain folders. For a folder outside
+      the install root only $Path itself is checked. The updater (SYSTEM) refuses to work in a folder this
+      returns something for: the services can write to data\ and could swap a folder there for a junction.
+    #>
+    param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Path)
+    $stop = $Root.TrimEnd('\', '/')
+    $current = $Path.TrimEnd('\', '/')
+    $inside = $current.StartsWith($stop + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+    while ($current -and $current -ne $stop) {
+        if (Test-ConduitReparsePoint $current) { return $current }
+        if (-not $inside) { break }
+        $parent = Split-Path -Path $current -Parent
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $null
+}
+
+function Format-ConduitLogText {
+    <# Text that came from a request or a program, made safe for one log line: no control characters, not endless. #>
+    param([AllowEmptyString()][AllowNull()][string]$Text, [int]$MaxLength = 500)
+    $clean = ([string]$Text) -replace '[\x00-\x1f\x7f]', ' '
+    if ($clean.Length -gt $MaxLength) { $clean = $clean.Substring(0, $MaxLength) + '...' }
+    return $clean
+}
+
+function Get-ConduitUpdaterLog {
+    <# The updater's log file, in a folder only administrators and SYSTEM can write (created when missing). #>
+    param([Parameter(Mandatory)][string]$Root)
+    $dir = (Get-ConduitPath $Root).UpdaterLogs
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    return Join-Path $dir 'updater.log'
+}
+
 # --- Windows-only helpers --------------------------------------------------------------------
+
+$script:TrustedOwnerSids = @('S-1-5-32-544', 'S-1-5-18')   # Administrators, SYSTEM
+
+function Get-ConduitOwnerSid {
+    <# The SID of whoever owns a file or folder. #>
+    param([Parameter(Mandatory)][string]$Path)
+    return (Get-Acl -LiteralPath $Path).GetOwner([Security.Principal.SecurityIdentifier]).Value
+}
+
+function Get-InstallRootOwnerProblem {
+    <#
+      Why an existing folder can't become the install root because of who made it, or $null. Any user may create
+      folders in C:\; someone who made C:\EvE-Conduit beforehand could keep a hold on it (as its owner, or
+      through a handle opened earlier) however its permissions are set afterwards. So an existing folder must
+      belong to Administrators, SYSTEM or the administrator running the installer, and must not be a link.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    if (Test-ConduitReparsePoint $Path) { return "$Path is a link to another folder. Choose a real folder." }
+    try { $owner = Get-ConduitOwnerSid $Path }
+    catch { return "Couldn't check who owns $Path ($($_.Exception.Message)). Delete the folder and let the installer create it." }
+    $trusted = $script:TrustedOwnerSids + @([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
+    if ($trusted -notcontains $owner) {
+        return "$Path already exists and was made by another account ($owner), which could keep access to everything installed there. Delete the folder and let the installer create it, or choose another folder."
+    }
+    return $null
+}
+
+function New-ConduitAccessRule {
+    param(
+        [Parameter(Mandatory)][string]$Sid,
+        [Parameter(Mandatory)][Security.AccessControl.FileSystemRights]$Rights,
+        [Security.AccessControl.InheritanceFlags]$Inherit = 'ContainerInherit, ObjectInherit',
+        [Security.AccessControl.PropagationFlags]$Propagation = 'None'
+    )
+    $identity = New-Object Security.Principal.SecurityIdentifier $Sid
+    return New-Object Security.AccessControl.FileSystemAccessRule($identity, $Rights, $Inherit, $Propagation, [Security.AccessControl.AccessControlType]::Allow)
+}
+
+function Set-ConduitFolderOwner {
+    <# Makes Administrators the owner of a folder. Returns whether a trusted account owns it afterwards. #>
+    param([Parameter(Mandatory)][string]$Path, [switch]$AllowCurrentUser)
+    $trusted = $script:TrustedOwnerSids
+    if ($AllowCurrentUser) { $trusted = $trusted + @([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) }
+    if ($script:TrustedOwnerSids -notcontains (Get-ConduitOwnerSid $Path)) {
+        Invoke-NativeCommand -FilePath 'icacls.exe' -ArgumentList @($Path, '/setowner', '*S-1-5-32-544', '/C', '/Q') | Out-Null
+    }
+    return $trusted -contains (Get-ConduitOwnerSid $Path)
+}
+
+function Protect-ConduitInstallRoot {
+    <#
+      Replaces every permission on the install folder itself: Administrators and SYSTEM in full, the services
+      (Local Service) read-only, nobody else, nothing inherited from the drive. install.ps1 runs this right
+      after creating the folder, before anything is downloaded or any secret is written: until then the folder
+      has the drive's permissions, which let every user of the machine add and change files. Unlike
+      "icacls /grant:r" this also drops entries someone else added to the folder. Throws when it didn't work.
+    #>
+    param([Parameter(Mandatory)][string]$Root)
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)   # no inherited entries, and don't keep copies of them
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-32-544' -Rights FullControl))
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-18' -Rights FullControl))
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-19' -Rights ReadAndExecute))
+    Set-Acl -LiteralPath $Root -AclObject $acl
+    if (-not (Set-ConduitFolderOwner -Path $Root -AllowCurrentUser)) {
+        throw "Couldn't make Administrators the owner of $Root."
+    }
+    $allowed = @('S-1-5-32-544', 'S-1-5-18', 'S-1-5-19')
+    $rules = @((Get-Acl -LiteralPath $Root).GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    $others = @($rules | Where-Object { $allowed -notcontains $_.IdentityReference.Value })
+    if (-not $rules.Count -or $others.Count) {
+        throw "Couldn't lock down $Root (unexpected permissions for: $(($others | ForEach-Object { $_.IdentityReference.Value }) -join ', '))."
+    }
+}
+
+function Protect-ConduitUpdatesDir {
+    <#
+      Permissions of the updates folder, where the website (Local Service) leaves requests and the updater
+      (SYSTEM) leaves results. The services may list it and add, change and delete files in it, but may not
+      delete, rename or re-permission the folder itself, nor create folders in it. That is what stops a
+      compromised website from swapping the folder (or a file name in it) for a junction that SYSTEM would then
+      read, write or delete through. Creates the folder when missing, so it never starts out as the website's.
+    #>
+    param([Parameter(Mandatory)][string]$Root)
+    $dir = Get-ConduitUpdatesDir -Root $Root
+    $linked = Get-ConduitLinkedFolder -Root $Root -Path $dir
+    if ($linked) { throw "$linked is a link, not a folder. Remove it; the updater doesn't work through links." }
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-32-544' -Rights FullControl))
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-18' -Rights FullControl))
+    # On the folder itself: look inside and add files. No Delete, no "create folders".
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-19' -Rights 'ReadAndExecute, CreateFiles' -Inherit None))
+    # On the files in it: everything but changing their permissions.
+    $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-19' -Rights Modify -Inherit ObjectInherit -Propagation InheritOnly))
+    Set-Acl -LiteralPath $dir -AclObject $acl
+    # The website created the folder on installs made before this: its owner could change the permissions back.
+    if (-not (Set-ConduitFolderOwner -Path $dir)) { throw "Couldn't make Administrators the owner of $dir." }
+}
 
 function Set-ConduitAcl {
     <#
@@ -607,6 +758,13 @@ function Set-ConduitAcl {
         }
         else { Invoke-Icacls $item.FullName /reset /T }
     }
+    # icacls /grant:r above leaves entries for other accounts on the install folder in place; replace the lot.
+    # A warning rather than a stop: this also runs in the middle of an upgrade, and the grants above are in place.
+    try { Protect-ConduitInstallRoot -Root $Root }
+    catch { Write-Warning "Couldn't replace the permissions of ${Root}: $_" }
+    # The updates folder gets its own, narrower permissions (the reset above just made it inherit data's).
+    try { Protect-ConduitUpdatesDir -Root $Root }
+    catch { Write-Warning "Couldn't set the permissions of the updates folder: $_" }
     # The tray panel runs as whoever is signed in: let all users read its folder (no secrets in it).
     $tray = Join-Path $Root 'tray'
     if (Test-Path -LiteralPath $tray) { Invoke-Icacls $tray /grant '*S-1-5-32-545:(OI)(CI)RX' }
@@ -856,9 +1014,11 @@ function Get-ConduitUpdateRequest {
     param([Parameter(Mandatory)][string]$Json)
     $req = $Json | ConvertFrom-Json
     $version = [string]$req.version
-    if ($version -notmatch '^\d{1,4}\.\d{1,4}\.\d{1,4}$') { throw "The update request has an invalid version: '$version'" }
+    # The messages don't repeat what the request said: they end up in the updater's log, and the request comes
+    # from the website's side.
+    if ($version -notmatch '^\d{1,4}\.\d{1,4}\.\d{1,4}$') { throw 'The update request has an invalid version.' }
     $file = "eve-conduit-$version-windows.zip"
-    if ([string]$req.file -ne $file) { throw "The update request names an unexpected file: '$($req.file)'" }
+    if ([string]$req.file -ne $file) { throw "The update request for $version names an unexpected file." }
     return @{ Version = $version; File = $file }
 }
 
@@ -888,6 +1048,8 @@ function Set-ConduitProgress {
         [switch]$Clear
     )
     $paths = @((Join-Path (Get-ConduitUpdatesDir -Root $Root) 'progress.json'), (Join-Path (Join-Path $Root 'tray') 'progress.json'))
+    # Never through a link: the services can write to data\ and could put a junction where the updates folder was.
+    $paths = @($paths | Where-Object { -not (Get-ConduitLinkedFolder -Root $Root -Path (Split-Path $_ -Parent)) -and -not (Test-ConduitReparsePoint $_) })
     if ($Clear) {
         foreach ($path in $paths) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
         $script:ProgressStarted = $null

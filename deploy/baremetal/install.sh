@@ -126,7 +126,9 @@ step "Creating the $SERVICE_USER user and directories"
 id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$CONDUIT_HOME" --shell /usr/sbin/nologin "$SERVICE_USER"
 install -d -o root -g "$SERVICE_USER" -m 0755 "$CONDUIT_HOME" "$CONDUIT_HOME/releases"
 install -d -o root -g "$SERVICE_USER" -m 0750 "$CONDUIT_ETC"
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_LOG"
+# Root's: Supervisor (as root) opens the service logs here by name, so the service user must not be able to put a
+# link in their place. Its group may read them.
+install -d -o root -g "$SERVICE_USER" -m 0750 "$CONDUIT_LOG"
 install -d -o root -g root -m 0755 "$CONDUIT_WWW" "$CONDUIT_WWW/web" "$CONDUIT_WWW/acme"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0755 "$CONDUIT_WWW/static"
 # Writable state (the scheduler's bookkeeping) lives outside the code.
@@ -214,11 +216,11 @@ chown root:"$SERVICE_USER" "$CONDUIT_ETC/plugins.txt"
 step "Installing EvE Conduit $VERSION"
 EXTRAS=""
 [[ $DB == mariadb ]] && EXTRAS="[mysql]"
-(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q "./backend$EXTRAS")
+(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -I -m pip install -q "./backend$EXTRAS")
 # Plugins depend on "conduit" by name, and PyPI has an unrelated package called conduit: pin it to the backend just
 # installed so pip never fetches that one instead (the conduit script keeps this file up to date on upgrades).
 "$CONDUIT_HOME/venv/bin/python" -I -m conduit.plugins.installer constraints > "$CONDUIT_HOME/venv/pip-constraints.txt"
-(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -m pip install -q -c "$CONDUIT_HOME/venv/pip-constraints.txt" -r "$CONDUIT_ETC/plugins.txt")
+(cd "$RELEASE_DIR" && "$CONDUIT_HOME/venv/bin/python" -I -m pip install -q -c "$CONDUIT_HOME/venv/pip-constraints.txt" -r "$CONDUIT_ETC/plugins.txt")
 cp -a "$RELEASE_DIR/web/." "$CONDUIT_WWW/web/"
 conduit manage migrate --noinput
 conduit manage collectstatic --noinput -v0
