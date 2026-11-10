@@ -3,6 +3,96 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.58
+
+Fixes from a full security and correctness review of the core, every plugin, the website and the installers.
+Update soon: the first item lets someone with an import API key sign in as any account.
+
+### Security
+- **SeAT import:** an API key with the import scope could add a character to any existing account, the owner's
+  included, and then sign in as that account. Characters are now only added to an account when the import lists
+  one of its characters with the owner details this site already has, and never to an administrator's account
+  (administrators add their own characters by signing in). Characters whose owner can't be told are left out and
+  reported. Squads no longer join an existing group that grants permissions. Use the 0.5.58 import program.
+- **Linux:** the log folder `/var/log/conduit` now belongs to root, closing a way from the service account to
+  root. Existing installs correct themselves within two minutes of updating. Backups no longer put the database
+  password on a command line.
+- **Windows:** the installer refuses an existing folder made by another account and locks the folder down before
+  it downloads anything or writes a secret. The updater refuses to work through links, its log moved to
+  `updater\updater.log`, and the updates folder has narrower permissions. If another local account could have made
+  the install folder before EvE Conduit was installed, reinstall into a fresh folder.
+- **Docker:** the Caddy container no longer receives the site's secrets (`docker compose up -d` recreates it).
+- Only administrators can move characters between accounts.
+- People who manage access can't make state changes that take administrator permissions they don't hold from
+  someone else, and a state can't be deleted while it is the only state allowed in a group (the group would open
+  to everyone).
+- Signing in as another user ends as soon as it would no longer be allowed.
+- Search no longer shows the names of groups limited to other states, nor switched-off accounts.
+- The corporation Members tab names a character's owner only when you may open that character's sheet, and "view
+  characters of their corporation" no longer applies between people whose mains share an NPC corporation.
+- Made-up API keys sent to addresses that don't exist no longer fill the request log.
+- Links typed as `[text](address)` show as plain text in Discord webhook messages.
+- `manage.py rotate_token_key` now re-encrypts plugins' stored secrets too (Discord, TeamSpeak); before, they were
+  lost once the old key was removed.
+- The docs now say plainly that `CONDUIT_PLUGIN_URLS=true` lets plugin administrators run code as root or SYSTEM.
+
+### Fixed
+- **Linux:** an update that fails after switching to the new release puts the previous release back and says so
+  (database changes the new version already made are not undone). The Updates page shows a failed install as
+  failed even if the new version ended up running.
+- Tables return to the first page when a search or filter changes; before, they could show "nothing matches" with
+  no way back. Sections that fail to load show the error and a **Try again** button instead of loading forever.
+- Chart dates are always EVE time; west of UTC they were a day early.
+- The update pop-up covers backup restores and no longer reports a failed plugin install or restore as a success.
+- Four accent colour presets couldn't be saved; a colour tried but not saved no longer sticks until reload.
+- One name EVE can't resolve no longer blocks the names next to it, and isn't asked for again for a week.
+- Corporation syncs stop after a few refusals instead of asking every member, and NPC corporations aren't synced
+  as a member. A newly granted corporation role can take up to six hours to be used if that member was just refused.
+- Calendar event details stop being requested after five failures, and new events come first.
+- Opening Killmails for a character or corporation with tens of thousands of them no longer loads them all, and
+  the SeAT import reads large tables in pieces. Killmail values count blueprint copies as nothing (new killmails).
+- A structure transferred to another corporation no longer breaks the new owner's structures sync.
+- Refresh buttons queue at most once a minute per character or corporation.
+- Signing in while EVE's login service is down shows the usual error instead of a server error, and a handful of
+  other requests with malformed input are refused cleanly.
+
+### Plugins
+Each fix is described in the plugin's own guides. Update them under Administration → Plugins.
+- **Buyback 1.2.5:** a blueprint copy in a contract is caught (it used to pass as the quoted original), and every
+  blueprint line goes to manual review. Prices with no recent trading, or whose history hasn't loaded, are flagged
+  instead of trusted, and no longer rest on a single order. Quotes aren't deleted while still valid. Public quotes
+  take 200 lines and use stored prices only.
+- **SRP 1.0.5:** loss value and suggested payout count the hull and fitted modules only: no cargo, no blueprint
+  copies at the original's price. Only ships can be claimed.
+- **Mumble 1.0.2:** people who lose access, and guests whose link ended, are disconnected within about 30 seconds.
+  This needs the new authenticator (1.1.0): download it again from Setup. It also attaches again after a quick
+  server restart. A new password forgets the remembered certificate.
+- **TeamSpeak 1.0.2:** one conversation with the server at a time, so mass changes can't trip its flood ban;
+  failed syncs are tried again; the query password must be entered again when the address or login changes; a
+  pending link is withdrawn when its owner loses access.
+- **Discord Tickets 1.2.1:** a message with an impossible time tag no longer stops a transcript from saving, and
+  transcripts save on MariaDB. Openers don't see what staff write after their ticket closed. Attached files have a
+  total limit (5000 MB by default, in Settings) and an optional keeping time.
+- **Wiki 1.0.2:** images hosted elsewhere show as links on every page; a page can't be made its own parent; a new
+  page under a restricted one starts with its audience.
+- **Recruitment 1.2.4:** accepting no longer adds someone to a group whose own rules refuse them, and putting a
+  group on a form needs the right to manage it. A short wait before applying again.
+- **Fleets 1.2.4:** one in-game fleet is tracked by one fleet at a time, and FATs from the link of a fleet you run
+  yourself don't count.
+- **Industry Projects 1.0.3:** projects limited to some members stay out of public webhooks.
+- **Activity Tracking 1.1.1:** only characters the tracker may view are followed and shown.
+- **Capital Registry 1.0.1:** everything shown about someone goes in the snooper log.
+- **Inactivity 1.0.2:** **Check now** and saving settings no longer swallow the daily digest, and a character
+  whose login stopped working while online no longer counts as active for good.
+- **Blacklist 1.0.2:** nobody sees or resolves a warning about themselves; resolving is in the audit log.
+- **Spy Check 1.0.3, Leaderboard 1.0.2:** counts no longer hint that a reviewer is flagged themselves; hiding
+  yourself from the leaderboard hides your medals too.
+- **Tax 1.0.2, Moon Mining 1.1.3:** a month can't be closed before its last hours have synced, and characters
+  taken off an account during the month are pointed out.
+- **Store 1.0.3, Freight 1.0.3, Ops 1.0.2, Timers 1.2.2, Mentoring 1.2.4, Blueprint Library 1.0.3,
+  Announcements 1.1.3:** smaller fixes; editing a timer's notes no longer moves it or repeats its reminder.
+- **Secret Santa 1.0.1:** an account deleted during an event no longer leaves someone without a gift.
+
 ## 0.5.57
 
 The SeAT import brings more over: members' join dates and last sign-in, and their corporations' history. Two new
