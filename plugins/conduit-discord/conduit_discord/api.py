@@ -9,6 +9,7 @@ from ninja.security import django_auth
 from conduit.access.models import State
 from conduit.accounts.models import User
 from conduit.audit.services import record
+from conduit.paging import page
 from conduit.permissions import require_perm
 
 from . import discord_api, guests, services, tasks
@@ -119,8 +120,12 @@ def admin_out() -> dict:
             "guest_enabled": s.guest_enabled,
             "guest_role_id": s.guest_role_id,
             "guest_role_name": s.guest_role_name,
+            "guest_temp_role_id": s.guest_temp_role_id,
+            "guest_temp_role_name": s.guest_temp_role_name,
             "guest_max_hours": s.guest_max_hours,
             "guest_channels": s.guest_channels,
+            "guest_end_action": s.guest_end_action,
+            "guest_nickname_format": s.guest_nickname_format,
         },
         "redirect_uri": services.redirect_uri(),
         "guest_redirect_uri": guests.redirect_uri(),
@@ -295,11 +300,21 @@ def remove_member(request, user_id: int, kick: bool = False, force: bool = False
 
 class GuestSettingsIn(Schema):
     enabled: bool = False
+    #: The guest role: guests get it and keep it.
     role_id: str = ""
     role_name: str = ""
+    #: The temporary role: guests have it while their link lasts. None leaves it as it is; "" is none, and the
+    #: guest role is then the one taken away when a link ends.
+    temp_role_id: str | None = None
+    temp_role_name: str = ""
     max_hours: int = 72
     #: The channels guests may be let into. None leaves them as they are; [] stops limiting channels.
     channels: list[str] | None = None
+    #: When a link ends: "role" takes the temporary role away and leaves them on the server, "kick" removes them.
+    #: None leaves it as it is.
+    end_action: str | None = None
+    #: How guests appear, with {name}; "" leaves their name alone. None leaves the setting as it is.
+    nickname_format: str | None = None
 
 
 @router.get("/admin/channels")
@@ -320,15 +335,31 @@ def put_guest_settings(request, payload: GuestSettingsIn):
         raise HttpError(400, "Choose the role guests get before switching temporary access on")
     if role_id and role_id == s.guild_id:
         raise HttpError(400, "Choose a role of its own for guests, not @everyone")
+    temp_id = s.guest_temp_role_id if payload.temp_role_id is None else _snowflake(payload.temp_role_id, "role id")
+    if temp_id and temp_id == s.guild_id:
+        raise HttpError(400, "Choose a role of its own as the temporary role, not @everyone")
+    if temp_id and temp_id == role_id:
+        raise HttpError(400, "The temporary role and the guest role have to be two different roles")
     if not 1 <= payload.max_hours <= guests.HOURS_CEILING:
         raise HttpError(400, f"Links may last between 1 and {guests.HOURS_CEILING} hours")
+    if payload.end_action is not None and payload.end_action not in guests.END_ACTIONS:
+        raise HttpError(400, "When a link ends, guests either lose the role or are removed")
+    if payload.nickname_format is not None:
+        _run(guests.check_nickname_format, payload.nickname_format.strip())
     was_on = s.guest_enabled
     s.guest_enabled, s.guest_role_id, s.guest_role_name = payload.enabled, role_id, payload.role_name.strip()[:100]
     s.guest_max_hours = payload.max_hours
-    s.save(update_fields=["guest_enabled", "guest_role_id", "guest_role_name", "guest_max_hours"])
+    if payload.temp_role_id is not None:
+        s.guest_temp_role_id, s.guest_temp_role_name = temp_id, payload.temp_role_name.strip()[:100] if temp_id else ""
+    if payload.end_action is not None:
+        s.guest_end_action = payload.end_action
+    if payload.nickname_format is not None:
+        s.guest_nickname_format = payload.nickname_format.strip()[:60]
+    s.save(update_fields=["guest_enabled", "guest_role_id", "guest_role_name", "guest_max_hours", "guest_end_action",
+                          "guest_nickname_format", "guest_temp_role_id", "guest_temp_role_name"])
     record("discord.guest_settings", f"switched temporary Discord access {'on' if s.guest_enabled else 'off'}"
            if was_on != s.guest_enabled else "changed the temporary Discord access settings",
-           request=request, target_type="plugin", details={"plugin": "discord", "role": s.guest_role_name, "max_hours": s.guest_max_hours})
+           request=request, target_type="plugin", details={"plugin": "discord", "role": s.guest_role_name, "temp_role": s.guest_temp_role_name, "max_hours": s.guest_max_hours})
     if payload.channels is not None:
         ids = [_snowflake(c, "channel id") for c in payload.channels if c.strip()]
         if len(ids) > 50:
@@ -347,7 +378,16 @@ def put_guest_settings(request, payload: GuestSettingsIn):
     if was_on and not s.guest_enabled:
         tasks.end_guest_stays.delay()  # switched off: the guests still on the server go
     # Channels guests can still see although they shouldn't; nobody is let in while there are any.
-    return {**admin_out(), "guest_channels_seen": seen, "guest_channels_hiding": hiding}
+    # With no temporary role, the guest role is what a link's end takes away, and a former guest left on the server
+    # sees what anyone without a role sees. With channels limited that can be more than they saw as a guest, so
+    # say which channels those are.
+    after: list[str] = []
+    if s.guest_enabled and s.guest_channels and s.guest_end_action == "role" and not s.guest_temp_role_id:
+        try:
+            after = guests.seen_without_roles(s)
+        except discord_api.DiscordError:
+            pass
+    return {**admin_out(), "guest_channels_seen": seen, "guest_channels_hiding": hiding, "guest_after_end_sees": after}
 
 
 @router.get("/guests")
@@ -382,10 +422,31 @@ def _guest_link(request, link_id: int) -> GuestLink:
     return link
 
 
+@router.get("/guests/history")
+@require_perm(guests.CREATE_PERM)
+def guest_history(request, q: str = "", limit: int = 50, offset: int = 0):
+    """Everyone who came through a link, newest first (your own links' guests; Discord managers see everyone's)."""
+    return page(guests.history(request.user, q), guests.history_out, limit, offset)
+
+
+class ExtendIn(Schema):
+    hours: float
+
+
+@router.post("/guests/{link_id}/extend")
+@require_perm(guests.CREATE_PERM)
+def extend_guest_link(request, link_id: int, payload: ExtendIn):
+    """Give a running link more time; its guests stay."""
+    link = _run(guests.extend_link, _guest_link(request, link_id), payload.hours)
+    record("discord.guest_link_extended", f"gave the temporary Discord link \"{link.label}\" {payload.hours:g} more hours",
+           request=request, target_type="plugin", details={"plugin": "discord", "link_id": link.pk, "expires_at": link.expires_at.isoformat()})
+    return guests.link_out(link)
+
+
 @router.delete("/guests/{link_id}")
 @require_perm(guests.CREATE_PERM)
 def revoke_guest_link(request, link_id: int):
-    """Withdraw a link: it stops working and its guests are removed from the server."""
+    """Withdraw a link: it stops working and its guests' stay ends."""
     link = _guest_link(request, link_id)
     waiting = guests.revoke_link(link)
     record("discord.guest_link_revoked", f"withdrew the temporary Discord link \"{link.label}\"", request=request,
@@ -396,11 +457,11 @@ def revoke_guest_link(request, link_id: int):
 @router.delete("/guests/users/{guest_id}")
 @require_perm(guests.CREATE_PERM)
 def remove_guest(request, guest_id: int):
-    """Take one guest off the server; the link keeps working for the others."""
+    """End one guest's stay; the link keeps working for the others."""
     guest = Guest.objects.filter(pk=guest_id).select_related("link__created_by").first()
     if guest is None or not guests.can_handle(request.user, guest.link):
         raise HttpError(404, "No such guest")
     _run(guests.remove_guest, guest)
-    record("discord.guest_removed", f"removed the guest {guest.username} from the Discord server", request=request,
+    record("discord.guest_removed", f"ended the temporary Discord access of {guest.username}", request=request,
            target_type="plugin", details={"plugin": "discord", "link_id": guest.link_id, "discord_id": guest.discord_id})
     return guests.link_out(guest.link)

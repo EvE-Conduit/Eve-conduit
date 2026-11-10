@@ -1,14 +1,14 @@
 // Temporary access (discord.create_guest_links): make links for guests, see who came through them, withdraw them.
 import {
-  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, cn, ConfirmDialog, Dialog, EmptyState, Field, Input, PageHeader, Select, Skeleton,
-  timeAgo, toast,
+  Alert, api, Avatar, Badge, Button, Card, CardBody, CardHeader, cn, type Column, ConfirmDialog, Dialog, EmptyState, Field, Input, PagedTable, PageHeader,
+  SearchInput, Select, Skeleton, TabPanel, Tabs, timeAgo, toast,
 } from "@conduit/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { ArrowLeft, Ban, Clock, Copy, LinkIcon, Plus, Users } from "./icons";
-import { BASE, type GuestChannel, type GuestLink, type GuestLinkStatus, type GuestOverview, type GuestUser } from "./types";
+import { ArrowLeft, Ban, Clock, Copy, DiscordLogo, LinkIcon, Plus, Users } from "./icons";
+import { BASE, type GuestChannel, type GuestLink, type GuestLinkStatus, type GuestOverview, type GuestUser, type GuestVisit } from "./types";
 
 const KEY = ["discord", "guests"];
 const PRESETS = [1, 2, 4, 8, 12, 24, 48, 72, 168, 336, 720];
@@ -47,12 +47,14 @@ export function GuestsPage() {
   const [creating, setCreating] = useState(false);
   const [made, setMade] = useState<GuestLink | null>(null);
   const [revoking, setRevoking] = useState<GuestLink | null>(null);
+  const [extending, setExtending] = useState<GuestLink | null>(null);
   const [showPast, setShowPast] = useState(false);
+  const [tab, setTab] = useState("links");
   const revoke = useMutation({
     mutationFn: (id: number) => api.delete<GuestLink & { waiting: number }>(`${BASE}/guests/${id}`),
     onSuccess: (l) => {
-      if (l.waiting) toast.warning(`Link withdrawn. ${l.waiting} guest${l.waiting === 1 ? "" : "s"} couldn't be removed yet; that is tried again every couple of minutes.`);
-      else toast.success("Link withdrawn and its guests removed from the server");
+      if (l.waiting) toast.warning(`Link withdrawn. For ${l.waiting} guest${l.waiting === 1 ? "" : "s"} Discord couldn't be reached yet; that is tried again every couple of minutes.`);
+      else toast.success(data?.end_action === "kick" ? "Link withdrawn and its guests removed from the server" : "Link withdrawn; its guests lost their access");
       qc.invalidateQueries({ queryKey: KEY });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -69,15 +71,31 @@ export function GuestsPage() {
         eyebrow={<Link to="/p/discord" className="inline-flex items-center gap-1 hover:text-text"><ArrowLeft className="size-3" /> Discord</Link>}
         title="Temporary access"
         icon={<Clock />}
-        description="Hand a link to people without an account here: diplomats, guests on a fleet, a recruit. They sign in with Discord, join the server with the guest role, and are removed again when the link runs out."
+        description="Hand a link to people without an account here: diplomats, guests on a fleet, a recruit. They sign in with Discord and get access to the server until the link runs out."
         actions={data?.enabled ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> New link</Button> : undefined}
       />
       {isLoading || !data ? (
         <Skeleton className="h-64" />
       ) : !data.enabled ? (
-        <Card><EmptyState icon={<Clock />} title="Temporary access is switched off" description="A Discord manager can switch it on and choose the guest role under Server setup." /></Card>
+        <Card><EmptyState icon={<Clock />} title="Temporary access is switched off" description="A Discord manager can switch it on and choose the roles for guests under Server setup." /></Card>
       ) : (
+        <Tabs
+          variant="pills"
+          value={tab}
+          onValueChange={setTab}
+          className="space-y-4"
+          items={[{ value: "links", label: "Links", count: live.length }, { value: "history", label: "History" }]}
+        >
+        <TabPanel value="history"><History showOwner={data.can_manage} /></TabPanel>
+        <TabPanel value="links">
         <div className="space-y-6">
+          <p className="text-sm text-muted">
+            {data.end_action === "kick"
+              ? "When a link ends, the people who joined through it are removed from the server. Anyone who was on the server before only loses their access."
+              : data.kept_role
+                ? `When a link ends, its guests lose @${data.role} and their channels. They stay on the server with @${data.kept_role}.`
+                : "When a link ends, its guests lose the guest role and stay on the server."}
+          </p>
           {made && (
             <Alert tone="success" title="Link made. Send it to your guests." action={<Button size="sm" variant="ghost" onClick={() => setMade(null)}>Done</Button>}>
               <div className="mt-2 flex items-stretch">
@@ -97,7 +115,7 @@ export function GuestsPage() {
             </Card>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
-              {live.map((l) => <LinkCard key={l.id} link={l} showOwner={data.can_manage} onRevoke={() => setRevoking(l)} />)}
+              {live.map((l) => <LinkCard key={l.id} link={l} showOwner={data.can_manage} onRevoke={() => setRevoking(l)} onExtend={() => setExtending(l)} />)}
             </div>
           )}
           {past.length > 0 && (
@@ -113,6 +131,11 @@ export function GuestsPage() {
             </div>
           )}
         </div>
+        </TabPanel>
+        </Tabs>
+      )}
+      {data && extending && (
+        <ExtendDialog link={extending} maxHours={data.max_hours} onClose={() => setExtending(null)} onDone={() => { setExtending(null); qc.invalidateQueries({ queryKey: KEY }); }} />
       )}
       {data && (
         <NewLinkDialog
@@ -128,8 +151,8 @@ export function GuestsPage() {
         title={`Withdraw "${revoking?.label}"?`}
         description={
           revoking && here(revoking)
-            ? `The link stops working and the ${here(revoking)} guest${here(revoking) === 1 ? "" : "s"} it let in ${here(revoking) === 1 ? "is" : "are"} removed from the server now.`
-            : "The link stops working. Nobody is on the server through it."
+            ? `The link stops working and the ${here(revoking)} guest${here(revoking) === 1 ? "" : "s"} it let in ${data?.end_action === "kick" ? (here(revoking) === 1 ? "is removed from the server" : "are removed from the server") : (here(revoking) === 1 ? "loses access" : "lose access")} now.`
+            : "The link stops working. Nobody has guest access through it."
         }
         danger
         confirmLabel={<><Ban /> Withdraw</>}
@@ -139,12 +162,12 @@ export function GuestsPage() {
   );
 }
 
-function LinkCard({ link, showOwner, onRevoke }: { link: GuestLink; showOwner: boolean; onRevoke?: () => void }) {
+function LinkCard({ link, showOwner, onRevoke, onExtend }: { link: GuestLink; showOwner: boolean; onRevoke?: () => void; onExtend?: () => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const remove = useMutation({
     mutationFn: (id: number) => api.delete<GuestLink>(`${BASE}/guests/users/${id}`),
-    onSuccess: () => { toast.success("Guest removed from the server"); qc.invalidateQueries({ queryKey: KEY }); },
+    onSuccess: () => { toast.success("Their guest access has ended"); qc.invalidateQueries({ queryKey: KEY }); },
     onError: (e: Error) => toast.error(e.message),
   });
   const live = running(link);
@@ -162,6 +185,7 @@ function LinkCard({ link, showOwner, onRevoke }: { link: GuestLink; showOwner: b
         actions={
           <div className="flex gap-1">
             {link.status === "active" && <Button variant="ghost" size="sm" onClick={() => copy(link.url, "Link copied")}><Copy /> Copy link</Button>}
+            {live && onExtend && <Button variant="ghost" size="sm" onClick={onExtend}><Clock /> Extend</Button>}
             {live && onRevoke && <Button variant="ghost" size="sm" onClick={onRevoke}><Ban /> Withdraw</Button>}
           </div>
         }
@@ -197,10 +221,10 @@ function LinkCard({ link, showOwner, onRevoke }: { link: GuestLink; showOwner: b
 }
 
 const ENDED: Record<string, string> = {
-  expired: "left when the link ran out",
-  revoked: "removed with the link",
-  removed: "removed",
-  creator_lost: "removed: the link's maker lost access",
+  expired: "ended when the link ran out",
+  revoked: "ended with the link",
+  removed: "ended by hand",
+  creator_lost: "ended: the link's maker lost access",
   member: "a member here now",
 };
 
@@ -213,11 +237,11 @@ function GuestRow({ guest, onRemove }: { guest: GuestUser; onRemove?: () => void
         <div className="truncate text-xs text-subtle">
           joined {timeAgo(guest.joined_at)}
           {guest.ended_at ? ` · ${ENDED[guest.ended_reason] ?? "left"}` : ""}
-          {guest.error ? ` · couldn't be removed yet: ${guest.error}` : ""}
+          {guest.error ? ` · couldn't be ended yet: ${guest.error}` : ""}
         </div>
       </div>
-      {guest.ended_at ? <Badge tone={guest.ended_reason === "member" ? "success" : "neutral"}>{guest.ended_reason === "member" ? "member" : "gone"}</Badge> : onRemove ? (
-        <Button variant="ghost" size="xs" onClick={onRemove}><Ban /> Remove</Button>
+      {guest.ended_at ? <Badge tone={guest.ended_reason === "member" ? "success" : "neutral"}>{guest.ended_reason === "member" ? "member" : "ended"}</Badge> : onRemove ? (
+        <Button variant="ghost" size="xs" onClick={onRemove}><Ban /> End access</Button>
       ) : null}
     </li>
   );
@@ -260,10 +284,10 @@ function NewLinkDialog({ open, onOpenChange, overview, onMade }: { open: boolean
           <Input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} maxLength={100} placeholder="Diplo meeting Saturday" />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Lasts" hint={`At most ${overview.max_hours} hours. Guests are removed when it ends.`}>
+          <Field label="Lasts" hint={`At most ${overview.max_hours} hours. You can extend it while it runs.`}>
             <Select value={hours} onChange={(e) => setHours(e.target.value)}>
               {presets.map((h) => (
-                <option key={h} value={h}>{h < 24 ? `${h} hour${h === 1 ? "" : "s"}` : `${h / 24} day${h === 24 ? "" : "s"}`}</option>
+                <option key={h} value={h}>{hoursLabel(h)}</option>
               ))}
             </Select>
           </Field>
@@ -290,5 +314,98 @@ function NewLinkDialog({ open, onOpenChange, overview, onMade }: { open: boolean
         )}
       </div>
     </Dialog>
+  );
+}
+
+const hoursLabel = (h: number) => (h < 24 ? `${h} hour${h === 1 ? "" : "s"}` : `${h / 24} day${h === 24 ? "" : "s"}`);
+
+function ExtendDialog({ link, maxHours, onClose, onDone }: { link: GuestLink; maxHours: number; onClose: () => void; onDone: () => void }) {
+  // The link may end at most maxHours from now, so what can be added shrinks with what it has left.
+  const left = Math.max(0, (new Date(link.expires_at).getTime() - Date.now()) / 3_600_000);
+  const room = Math.floor(maxHours - left);
+  const presets = PRESETS.filter((h) => h <= room);
+  const [hours, setHours] = useState(String(presets[0] ?? ""));
+  const extend = useMutation({
+    mutationFn: () => api.post<GuestLink>(`${BASE}/guests/${link.id}/extend`, { hours: Number(hours) }),
+    onSuccess: (l) => { toast.success(`"${l.label}" now runs until ${new Date(l.expires_at).toLocaleString()}`); onDone(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Extend "${link.label}"`}
+      description={`It has ${untilText(link.expires_at)}. Its guests keep their access for the extra time.`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={extend.isPending} disabled={!presets.length} onClick={() => extend.mutate()}><Clock /> Extend</Button>
+        </>
+      }
+    >
+      {presets.length ? (
+        <Field label="Add" hint={`A link may run at most ${maxHours} hours from now.`}>
+          <Select value={hours} onChange={(e) => setHours(e.target.value)}>
+            {presets.map((h) => <option key={h} value={h}>{hoursLabel(h)}</option>)}
+          </Select>
+        </Field>
+      ) : (
+        <Alert tone="info" title="It already runs as long as a link may">Links may run at most {maxHours} hours from now. Try again later, or make a new link when this one ends.</Alert>
+      )}
+    </Dialog>
+  );
+}
+
+/** Everyone who came through a link, newest first, with a search. */
+function History({ showOwner }: { showOwner: boolean }) {
+  const [q, setQ] = useState("");
+  const columns: Column<GuestVisit>[] = [
+    {
+      header: "Guest",
+      cell: (g) => (
+        <div className="flex min-w-0 items-center gap-2">
+          <Avatar src={g.avatar} name={g.username} size="sm" />
+          <div className="min-w-0">
+            <div className="truncate font-medium">{g.username}</div>
+            <div className="truncate font-mono text-xs text-subtle">{g.discord_id}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: "Link",
+      cell: (g) => (
+        <div className="min-w-0">
+          <div className="truncate">{g.link.label}</div>
+          <div className="truncate text-xs text-subtle">
+            @{g.link.role}{g.link.channels.length ? ` · ${g.link.channels.map(channelLabel).join(" ")}` : ""}
+          </div>
+        </div>
+      ),
+    },
+    ...(showOwner ? [{ header: "Invited by", cell: (g: GuestVisit) => g.invited_by ?? <span className="text-subtle">deleted account</span> }] : []),
+    { header: "Joined", cell: (g) => <span title={new Date(g.joined_at).toLocaleString()}>{timeAgo(g.joined_at)}</span> },
+    {
+      header: "Access",
+      cell: (g) => g.ended_at
+        ? <span className="text-muted" title={new Date(g.ended_at).toLocaleString()}>{ENDED[g.ended_reason] ?? "ended"} {timeAgo(g.ended_at)}</span>
+        : <Badge tone="success">{untilText(g.link.expires_at)}</Badge>,
+    },
+  ];
+  return (
+    <Card>
+      <CardHeader
+        title="Who came through a link"
+        description={showOwner ? "Every guest of every link, newest first." : "The guests of your links, newest first."}
+        actions={<SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Discord name or id, link, who invited" className="w-72" />}
+      />
+      <PagedTable<GuestVisit>
+        url={`${BASE}/guests/history`}
+        params={q.trim() ? `q=${encodeURIComponent(q.trim())}` : ""}
+        columns={columns}
+        rowKey={(g) => g.id}
+        empty={{ icon: <DiscordLogo />, title: q.trim() ? "Nobody matches" : "Nobody has come through a link yet", description: q.trim() ? "Try another name or link." : undefined }}
+      />
+    </Card>
   );
 }

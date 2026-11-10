@@ -1,12 +1,18 @@
 """Temporary access: links that let someone without an account here onto the Discord server for a while.
 
-Whoever opens a link signs in with Discord, and the bot adds them to the server with the guest role, the same way
-it adds members. Each guest is recorded with the link they came through, so when the link runs out or is withdrawn
-(or its maker may no longer hand out access) exactly those people are removed again.
+Whoever opens a link signs in with Discord, and the bot adds them to the server with two roles, the same way it
+adds members: the guest role, which they keep for good, and the temporary role, which they have while the link
+lasts. Each guest is recorded with the link they came through, so when the link runs out or is withdrawn (or its
+maker may no longer hand out access) exactly those people lose what the link gave them: the temporary role and
+their channels, and, when the site is set to remove guests, their place on the server. The guest role stays, so
+it shows who has been a guest, and, hidden from every channel when channels are limited, leaves them seeing nothing.
 
-Two rules keep a link from doing harm: someone who is already on the server isn't recorded, so they can never be
-removed because a link ended; and a guest who has since linked their Discord account as a member here keeps their
-place and only loses the guest role.
+A site set up before there were two roles has only the guest role; it is then the one taken away.
+
+Rules that keep a link from doing harm: someone who was on the server before using a link is never removed from
+it; a temporary role they already had by hand is left with them; a Discord account linked to a member here is
+refused, since members have their own access; and a guest who becomes a member loses the guest role, which would
+otherwise hide the members' channels from them.
 """
 
 from __future__ import annotations
@@ -32,6 +38,8 @@ CREATE_PERM = "discord.create_guest_links"
 MANAGE_PERM = "discord.manage_discord"
 SESSION_KEY = "conduit_discord_guest"
 MAX_USES = 1000
+NICK_MAX = 32
+END_ACTIONS = ("role", "kick")
 #: The most an administrator can allow a link to last (30 days).
 HOURS_CEILING = 720
 
@@ -100,16 +108,24 @@ def _overwrite(channel: dict, target_id: str) -> tuple[int, int]:
     return 0, 0
 
 
-def role_sees(channel: dict, guild_id: str, role_id: str, base: int) -> bool:
-    """Whether someone whose only role is ``role_id`` can see the channel. ``base`` is what @everyone and that role
+def roles_see(channel: dict, guild_id: str, role_ids: list[str], base: int) -> bool:
+    """Whether someone with exactly these roles can see the channel. ``base`` is what @everyone and those roles
     are allowed server-wide."""
     if base & api.ADMINISTRATOR:
         return True
-    perms = base
-    for target in (guild_id, role_id):  # @everyone's exception first, then the role's
-        allow, deny = _overwrite(channel, target)
-        perms = (perms & ~deny) | allow
+    allow, deny = _overwrite(channel, guild_id)  # @everyone's exception first
+    perms = (base & ~deny) | allow
+    allow = deny = 0
+    for role_id in role_ids:  # then the roles' together, where one role's allow beats another's deny
+        a, d = _overwrite(channel, role_id)
+        allow, deny = allow | a, deny | d
+    perms = (perms & ~deny) | allow
     return bool(perms & api.VIEW_CHANNEL)
+
+
+def taken_role(link: GuestLink) -> str:
+    """The role a stay through this link ends by taking away."""
+    return link.temp_role_id or link.role_id
 
 
 def channel_out(c: dict, names: dict | None = None) -> dict:
@@ -133,35 +149,55 @@ def available_channels(s: DiscordSettings | None = None) -> list[dict]:
 
 
 def hide_other_channels(s: DiscordSettings, *, change: bool = True) -> list[str]:
-    """Deny the guest role View Channel wherever it could see a channel. Returns the names of channels guests can
-    still see afterwards (the bot wasn't allowed to change them); with ``change`` off it only looks, and returns
-    every channel that needs hiding. Nothing is written for channels that are hidden already, so once the server
-    is in order this is a single question to Discord."""
+    """Hide every channel from guests: deny the guest role View Channel wherever a guest (with the guest role, with
+    or without the temporary one) could see a channel, and take away any exception that lets the temporary role
+    in. Returns the names of channels guests can still see afterwards (the bot wasn't allowed to change them);
+    with ``change`` off it only looks, and returns every channel that needs hiding. Nothing is written for
+    channels that are hidden already, so once the server is in order this is a single question to Discord."""
     if not (s.guest_channels and s.guest_role_id):
         return []
     rows = api.channels(s.bot_token, s.guild_id)
     by_id = {r["id"]: r for r in api.roles(s.bot_token, s.guild_id)}
-    base = _bits(by_id.get(s.guild_id, {}).get("permissions")) | _bits(by_id.get(s.guest_role_id, {}).get("permissions"))
-    if base & api.ADMINISTRATOR:
-        return ["every channel (the guest role or @everyone has Administrator)"]
+    guest, temp = s.guest_role_id, s.guest_temp_role_id
+    everyone = _bits(by_id.get(s.guild_id, {}).get("permissions"))
+    alone = everyone | _bits(by_id.get(guest, {}).get("permissions"))
+    both = alone | _bits(by_id.get(temp, {}).get("permissions"))
+    if both & api.ADMINISTRATOR:
+        return ["every channel (a role guests get, or @everyone, has Administrator)"]
     left = []
     for c in rows:
-        if not role_sees(c, s.guild_id, s.guest_role_id, base):
+        # During the stay they have both roles, afterwards the guest role alone.
+        if not (roles_see(c, s.guild_id, [guest], alone) or (temp and roles_see(c, s.guild_id, [guest, temp], both))):
             continue
         name = ("" if c.get("type") == api.CATEGORY else "#") + c.get("name", str(c["id"]))
         if not change:
             left.append(name)
             continue
-        allow, deny = _overwrite(c, s.guest_role_id)
         try:
-            api.set_overwrite(s.bot_token, str(c["id"]), s.guest_role_id, member=False,
-                              allow=allow & ~api.VIEW_CHANNEL, deny=deny | api.VIEW_CHANNEL)
+            allow, deny = _overwrite(c, guest)
+            if allow & api.VIEW_CHANNEL or not deny & api.VIEW_CHANNEL:
+                api.set_overwrite(s.bot_token, str(c["id"]), guest, member=False,
+                                  allow=allow & ~api.VIEW_CHANNEL, deny=deny | api.VIEW_CHANNEL)
+            allow, deny = _overwrite(c, temp) if temp else (0, 0)
+            if allow & api.VIEW_CHANNEL:  # it would win over the guest role's denial
+                api.set_overwrite(s.bot_token, str(c["id"]), temp, member=False, allow=allow & ~api.VIEW_CHANNEL, deny=deny)
         except api.DiscordError as exc:
             if exc.status == 429 or exc.status == 0:
                 raise
-            log.warning("Couldn't hide channel %s from the guest role: %s", c.get("name"), exc)
+            log.warning("Couldn't hide channel %s from guests: %s", c.get("name"), exc)
             left.append(name)
     return left
+
+
+def seen_without_roles(s: DiscordSettings) -> list[str]:
+    """The channels someone on the server with no role at all can see. On a site with no temporary role, where the
+    guest role is taken away when a link ends, this is what former guests see from then on: more than as a guest,
+    if channels are limited."""
+    rows = api.channels(s.bot_token, s.guild_id)
+    by_id = {r["id"]: r for r in api.roles(s.bot_token, s.guild_id)}
+    base = _bits(by_id.get(s.guild_id, {}).get("permissions"))
+    return [("#" if c.get("type") not in (2, 13) else "") + c.get("name", str(c["id"])) for c in rows
+            if c.get("type") in api.OPENABLE and roles_see(c, s.guild_id, [], base)]
 
 
 def _open_channels(s: DiscordSettings, link: GuestLink, discord_id: str) -> None:
@@ -215,9 +251,47 @@ def create_link(user, label: str, hours: float, max_uses: int = 0, channel_ids: 
     link = GuestLink.objects.create(
         token=secrets.token_urlsafe(24), label=label, created_by=user, max_uses=max_uses, channels=channels,
         expires_at=timezone.now() + timedelta(hours=hours), role_id=s.guest_role_id, role_name=s.guest_role_name,
+        temp_role_id=s.guest_temp_role_id, temp_role_name=s.guest_temp_role_name,
     )
     bus.emit("discord.guest_link_created", user_id=user.pk, user=user.display_name, label=label,
              summary=f"{user.display_name} made a temporary Discord link \"{label}\" ({hours:g} h)")
+    return link
+
+
+def guest_nickname(fmt: str, name: str) -> str | None:
+    """How a guest appears on the server, cut to Discord's 32 characters; None when names are left alone."""
+    if not fmt:
+        return None
+    try:
+        nick = fmt.format(name=name)
+    except (KeyError, IndexError, ValueError):
+        return None
+    return " ".join(nick.split())[:NICK_MAX] or None
+
+
+def check_nickname_format(fmt: str) -> None:
+    try:
+        fmt.format(name="")
+    except (KeyError, IndexError, ValueError):
+        raise LinkError("The guest name has an unknown placeholder; use {name}") from None
+
+
+def extend_link(link: GuestLink, hours: float) -> GuestLink:
+    """Give a running link more time. It never ends later than the longest a new link could last from now."""
+    s = DiscordSettings.load()
+    _ready(s)
+    if not hours or not math.isfinite(hours) or hours <= 0:
+        raise LinkError("Say how much longer")
+    now = timezone.now()
+    with transaction.atomic():
+        link = GuestLink.objects.select_for_update().select_related("created_by").get(pk=link.pk)
+        if status(link, now) not in ("active", "used_up"):
+            raise LinkError("This link has ended; make a new one")
+        until = link.expires_at + timedelta(hours=hours)
+        if until > now + timedelta(hours=s.guest_max_hours):
+            raise LinkError(f"Links may run at most {s.guest_max_hours} hours from now")
+        link.expires_at = until
+        link.save(update_fields=["expires_at"])
     return link
 
 
@@ -291,22 +365,40 @@ def finish(request, code: str, state: str) -> Guest:
             # Recorded before asking Discord, inside the lock, so the uses limit holds when several arrive at once.
             guest = Guest.objects.create(link=link, discord_id=discord_id, username=username, avatar_url=api.avatar_url(info))
             try:
-                if api.member(s.bot_token, s.guild_id, discord_id) is not None:
-                    # Not ours to remove later, so not recorded as a guest (the rollback forgets the row).
-                    raise LinkError("You're already on the server", 409)
                 # Before they are on the server: nobody is let in while a channel can't be hidden from guests.
                 seen = hide_other_channels(s)
                 if seen:
                     log.warning("Guests could see %s; refusing to add a guest", ", ".join(seen[:10]))
                     raise LinkError("Guests can't be let in right now: the server isn't ready for them. Tell whoever gave "
                                     "you the link that a Discord manager needs to look at Server setup.", 503)
-                api.add_member(s.bot_token, s.guild_id, discord_id, token, [link.role_id], None)
+                member = api.member(s.bot_token, s.guild_id, discord_id)
+                nick = guest_nickname(s.guest_nickname_format, username)
+                roles = list(dict.fromkeys([link.role_id, taken_role(link)]))
+                if member is None:
+                    api.add_member(s.bot_token, s.guild_id, discord_id, token, roles, nick)
+                    guest.nick_set = bool(nick)
+                else:
+                    # On the server already (often a guest from an earlier link, still with the guest role): they
+                    # get the roles for now and are never removed from the server because of this link.
+                    guest.was_on_server = True
+                    guest.had_role = taken_role(link) in member.get("roles", [])
+                    for role in roles:
+                        if role not in member.get("roles", []):
+                            api.add_role(s.bot_token, s.guild_id, discord_id, role)
+                    if nick and member.get("nick") != nick:
+                        try:
+                            api.modify_member(s.bot_token, s.guild_id, discord_id, nick=nick)
+                            guest.nick_set, guest.previous_nick = True, (member.get("nick") or "")[:NICK_MAX]
+                        except api.DiscordError as exc:
+                            if exc.status != 403:  # the server owner's name can't be changed by anyone
+                                raise
+                guest.save(update_fields=["was_on_server", "had_role", "nick_set", "previous_nick"])
                 try:
                     _open_channels(s, link, discord_id)
                 except api.DiscordError:
-                    # On the server but seeing nothing: take them off again rather than leave them stranded.
-                    # Off the server first, whatever else fails; then whatever access did get opened.
-                    for undo in (lambda: api.kick(s.bot_token, s.guild_id, discord_id),
+                    # With the role but seeing nothing: undo it rather than leave them stranded. Each step is
+                    # tried whatever the one before did.
+                    for undo in (lambda: _take_back(s, guest),
                                  *(lambda c=c: api.delete_overwrite(s.bot_token, c["id"], discord_id) for c in link.channels)):
                         try:
                             undo()
@@ -326,25 +418,46 @@ def finish(request, code: str, state: str) -> Guest:
 # --- ending stays ---------------------------------------------------------------------------------------------------
 
 
+def _take_back(s: DiscordSettings, guest: Guest, *, keep_role: bool = False, drop_guest_role: bool = False) -> None:
+    """Undo what the link gave on the server itself: the temporary role and the guest name, or their place on the
+    server when guests are removed and they weren't there before. The guest role stays with them, unless
+    ``drop_guest_role``."""
+    link = guest.link
+    if not guest.was_on_server and s.guest_end_action == "kick" and not keep_role:
+        api.kick(s.bot_token, s.guild_id, guest.discord_id)  # already gone counts as done
+        return
+    if not guest.had_role and not keep_role:
+        api.remove_role(s.bot_token, s.guild_id, guest.discord_id, taken_role(link))
+    if drop_guest_role and link.temp_role_id:
+        api.remove_role(s.bot_token, s.guild_id, guest.discord_id, link.role_id)
+    if guest.nick_set:
+        try:
+            api.modify_member(s.bot_token, s.guild_id, guest.discord_id, nick=guest.previous_nick or None)
+        except api.DiscordError as exc:
+            if exc.status not in (403, 404):  # can't be changed, or they have left: nothing to put back
+                raise
+
+
 def _end(guest: Guest, reason: str, s: DiscordSettings) -> bool:
-    """Take a guest off the server. A guest who became a member here keeps their place and only loses the guest
-    role (unless their groups give them that role anyway). False when Discord couldn't be reached: they stay
-    recorded and are tried again."""
+    """End a guest's stay: their channels close and the temporary role goes (or they are removed from the server,
+    when the site is set to do that and they weren't on it before). A guest who became a member here keeps a role
+    their groups give them anyway, and loses the guest role, which would hide the members' channels from them. False when Discord couldn't be reached: they stay recorded and are tried
+    again."""
     if not s.configured:
         return False
     acct = DiscordAccount.objects.filter(discord_id=guest.discord_id).select_related("user").first()
     try:
-        # Their personal access to the link's channels goes either way: it would outlive a kick, and be waiting
-        # for them if they ever came back.
+        # Their personal access to the link's channels goes in every case: it would outlive the role, and a kick.
         _close_channels(s, guest.link, guest.discord_id)
         if acct is None:
-            api.kick(s.bot_token, s.guild_id, guest.discord_id)  # already gone counts as done
+            _take_back(s, guest)
         else:
             reason = "member"
-            member = api.member(s.bot_token, s.guild_id, guest.discord_id)
-            role = guest.link.role_id
-            if member is not None and role in member.get("roles", []) and role not in desired_roles(acct.user):
-                api.modify_member(s.bot_token, s.guild_id, guest.discord_id, roles=sorted(set(member["roles"]) - {role}))
+            guest.was_on_server = True  # a member here is never removed because a link ended
+            # Their name is the members' one by now; leave it.
+            guest.nick_set = False
+            wanted = desired_roles(acct.user)
+            _take_back(s, guest, keep_role=taken_role(guest.link) in wanted, drop_guest_role=guest.link.role_id not in wanted)
     except api.DiscordError as exc:
         log.warning("Couldn't end the stay of guest %s: %s", guest.discord_id, exc)
         guest.error = explain(exc)[:300]
@@ -355,6 +468,19 @@ def _end(guest: Guest, reason: str, s: DiscordSettings) -> bool:
     bus.emit("discord.guest_removed", discord=guest.username, label=guest.link.label, reason=reason,
              summary=f"{guest.username}'s temporary Discord access through \"{guest.link.label}\" ended ({reason.replace('_', ' ')})")
     return True
+
+
+def became_member(acct: DiscordAccount, s: DiscordSettings) -> None:
+    """A Discord account was linked to a member here. If they are or were a guest, that is over: a stay still
+    running ends, and the guest role they kept goes, since it would hide the members' channels from them."""
+    for guest in Guest.objects.filter(discord_id=acct.discord_id, ended_at__isnull=True).select_related("link__created_by"):
+        _end(guest, "member", s)
+    kept = set(GuestLink.objects.filter(guests__discord_id=acct.discord_id).exclude(temp_role_id="").values_list("role_id", flat=True))
+    for role in kept - desired_roles(acct.user):
+        try:
+            api.remove_role(s.bot_token, s.guild_id, acct.discord_id, role)
+        except api.DiscordError as exc:
+            log.warning("Couldn't take the guest role from new member %s: %s", acct.discord_id, exc)
 
 
 def _end_guests(guests: list[Guest], reason: str) -> int:
@@ -395,11 +521,16 @@ def end_due() -> dict:
 # --- output ---------------------------------------------------------------------------------------------------------
 
 
+def _role_label(link: GuestLink) -> str:
+    """The role its guests have for the time."""
+    return link.temp_role_name or link.temp_role_id or link.role_name or link.role_id
+
+
 def guest_out(g: Guest) -> dict:
     return {
         "id": g.pk, "discord_id": g.discord_id, "username": g.username, "avatar": g.avatar_url,
         "joined_at": g.joined_at.isoformat(), "ended_at": g.ended_at.isoformat() if g.ended_at else None,
-        "ended_reason": g.ended_reason, "error": g.error,
+        "ended_reason": g.ended_reason, "error": g.error, "was_on_server": g.was_on_server,
     }
 
 
@@ -410,11 +541,33 @@ def link_out(link: GuestLink) -> dict:
         "created_at": link.created_at.isoformat(), "expires_at": link.expires_at.isoformat(),
         # When it stopped working, for the ones that have.
         "ended_at": min(link.revoked_at or link.expires_at, link.expires_at).isoformat(),
-        "max_uses": link.max_uses, "uses": len(guests), "role": link.role_name or link.role_id,
+        "max_uses": link.max_uses, "uses": len(guests), "role": _role_label(link),
         "channels": link.channels,
         "created_by": {"id": link.created_by_id, "name": link.created_by.display_name} if link.created_by else None,
         "guests": [guest_out(g) for g in guests],
     }
+
+
+def history(user, q: str = ""):
+    """Everyone who came through a link, newest first; a link maker sees their own links' guests, a Discord manager
+    everyone's. ``q`` matches the Discord name or id, the link's label, or who made it."""
+    from django.db.models import Q
+
+    rows = Guest.objects.select_related("link__created_by__main_character").order_by("-joined_at", "-pk")
+    if not user.has_perm(MANAGE_PERM):
+        rows = rows.filter(link__created_by=user)
+    q = " ".join(q.split())[:100]
+    if q:
+        rows = rows.filter(Q(username__icontains=q) | Q(discord_id=q) | Q(link__label__icontains=q)
+                           | Q(link__created_by__main_character__name__icontains=q))
+    return rows
+
+
+def history_out(g: Guest) -> dict:
+    link = g.link
+    return {**guest_out(g), "link": {"id": link.pk, "label": link.label, "role": _role_label(link),
+                                     "channels": link.channels, "expires_at": link.expires_at.isoformat()},
+            "invited_by": link.created_by.display_name if link.created_by else None}
 
 
 def overview(user) -> dict:
@@ -427,7 +580,11 @@ def overview(user) -> dict:
         "enabled": s.guest_enabled and s.configured and bool(s.guest_role_id),
         "can_manage": manage,
         "max_hours": s.guest_max_hours,
-        "role": s.guest_role_name or s.guest_role_id,
+        # The role guests have for the time, and the one they keep (None on a site with only a guest role).
+        "role": s.guest_temp_role_name or s.guest_temp_role_id or s.guest_role_name or s.guest_role_id,
+        "kept_role": (s.guest_role_name or s.guest_role_id) if s.guest_temp_role_id else None,
+        # Whether guests are removed from the server when a link ends, or only lose the role.
+        "end_action": s.guest_end_action,
         # The channels a link can open; empty when guests simply see what the guest role sees.
         "channels": s.guest_channels,
         "server": s.guild_name,

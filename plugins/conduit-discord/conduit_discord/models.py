@@ -25,12 +25,23 @@ class DiscordSettings(models.Model):
     require_for_compliance = models.BooleanField(default=False)
     last_full_sync = models.DateTimeField(null=True, blank=True)
     #: Temporary access: people with discord.create_guest_links hand out links that let someone without an account
-    #: here onto the server for a while, with this role.
+    #: here onto the server for a while. They get two roles. The guest role marks them as a guest and is kept for
+    #: good; it is the one hidden from every channel when channels are limited, so a former guest sees nothing.
     guest_enabled = models.BooleanField(default=False)
     guest_role_id = models.CharField(max_length=32, blank=True)
     guest_role_name = models.CharField(max_length=100, blank=True)
+    #: The temporary role ("tempaccess") is given for as long as the link lasts and taken away when it ends. Empty
+    #: on sites set up before 1.4: the guest role itself is then the one taken away.
+    guest_temp_role_id = models.CharField(max_length=32, blank=True)
+    guest_temp_role_name = models.CharField(max_length=100, blank=True)
     #: The longest a link may last.
     guest_max_hours = models.PositiveIntegerField(default=72)
+    #: What happens to guests when their link ends: "role" takes the temporary role (and their channels) away and
+    #: leaves them on the server with the guest role; "kick" removes them from it. Someone who was on the server before using a link
+    #: is never removed, whichever is chosen.
+    guest_end_action = models.CharField(max_length=8, default="role")
+    #: How guests appear on the server; empty leaves their name alone. Placeholder: {name}.
+    guest_nickname_format = models.CharField(max_length=60, default="[GUEST] {name}", blank=True)
     #: The channels guests may be let into, as [{"id", "name", "kind"}]. While any are chosen the bot hides every
     #: other channel from the guest role, and each link opens some of these to its guests. Empty: guests see
     #: whatever the guest role sees on Discord.
@@ -109,9 +120,13 @@ class GuestLink(models.Model):
     expires_at = models.DateTimeField()
     #: How many people may use it; 0 is no limit.
     max_uses = models.PositiveIntegerField(default=0)
-    #: The role the guests get (the guest role when the link was made).
+    #: The guest role when the link was made: its guests get it and keep it.
     role_id = models.CharField(max_length=32)
     role_name = models.CharField(max_length=100, blank=True)
+    #: The temporary role when the link was made: its guests have it until their stay ends. Empty: the guest role
+    #: is the one taken away.
+    temp_role_id = models.CharField(max_length=32, blank=True)
+    temp_role_name = models.CharField(max_length=100, blank=True)
     #: The channels this link opens to its guests, as [{"id", "name", "kind"}]; empty when channels aren't limited.
     channels = models.JSONField(default=list, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
@@ -132,12 +147,19 @@ class Guest(models.Model):
     username = models.CharField(max_length=100)
     avatar_url = models.CharField(max_length=300, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
-    #: Set once they were taken off the server again (or found to have left, or to be a member here by now).
+    #: Set once their stay ended: the temporary role was taken away, or they were removed from the server.
     ended_at = models.DateTimeField(null=True, blank=True)
     #: Why it ended: expired, revoked (the link was withdrawn), removed (this guest alone), creator_lost, member.
     ended_reason = models.CharField(max_length=20, blank=True)
     #: Why the last try to remove them failed; tried again every couple of minutes.
     error = models.CharField(max_length=300, blank=True)
+    #: They were on the server before using the link, so they are never removed from it when the stay ends.
+    was_on_server = models.BooleanField(default=False)
+    #: They already had the role the link takes away at the end (given by hand), so it is left with them.
+    had_role = models.BooleanField(default=False)
+    #: The guest nickname was set, and what they were called before, to put back when the stay ends.
+    nick_set = models.BooleanField(default=False)
+    previous_nick = models.CharField(max_length=32, blank=True)
 
     class Meta:
         ordering = ["joined_at"]
