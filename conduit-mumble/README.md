@@ -28,13 +28,14 @@ The Mumble server holds no passwords. A small **authenticator** runs next to it 
 login through the external API (`/api/v1/p/mumble/`, scope `p.mumble:auth`). The answer says whether to let the person
 in, what to call them and which Mumble groups they're in, worked out right then from their groups and state, so
 changes on the site apply at the next connect. Names the site doesn't know fall through to the server's own users, so
-`SuperUser` keeps working.
+`SuperUser` keeps working. The authenticator (1.1.0 and newer) also asks the site every 30 seconds who of the people
+connected has to go, and disconnects members who lost access and guests whose link ended or was withdrawn.
 
 - Login names are fixed when the account is made (letters, digits, `_`, `.` and `-`; unique across members and
   guests, without regard to case). The name shown in Mumble follows the main character at every login.
 - After a member's first login with the password, their Mumble client certificate is remembered and that computer gets
   in without the password (as Mumble normally works). Switch it off under Setup, or members can forget it themselves.
-- Ten failed logins for one name refuse password logins for that name for ten minutes, so passwords can't be
+- Ten failed logins for one account refuse password logins for it for ten minutes, so passwords can't be
   guessed. A remembered certificate that matches still gets in during that time, so someone typing wrong passwords
   can't lock out a member whose computer has signed in before (Mumble doesn't tell the site where a login comes
   from). Members without a remembered certificate wait the ten minutes out.

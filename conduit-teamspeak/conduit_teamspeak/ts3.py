@@ -106,14 +106,30 @@ class ConnectionFailed(QueryError):
         super().__init__(-1, msg)
 
 
-class Client:
-    """One ServerQuery session. Use it as a context manager so it logs out and closes the socket."""
+class Busy(ConnectionFailed):
+    """Another session from this site is talking to the server; this one didn't get its turn in time."""
 
-    def __init__(self, host: str, port: int = 10011, *, timeout: float = TIMEOUT, throttle: float = THROTTLE):
+    def __init__(self):
+        super().__init__("The site is busy talking to the TeamSpeak server; try again in a moment")
+
+
+class Client:
+    """One ServerQuery session. Use it as a context manager so it logs out and closes the socket.
+
+    ``on_command`` is called before every command and ``on_close`` once when the session ends: the plugin uses them
+    to hold the site's one turn at the server (see ``services.connect``).
+    """
+
+    def __init__(self, host: str, port: int = 10011, *, timeout: float = TIMEOUT, throttle: float = THROTTLE,
+                 on_command=None, on_close=None):
         self.host, self.port, self.timeout, self.throttle = host, port, timeout, throttle
         self._sock: socket.socket | None = None
         self._buffer = b""
         self._last = 0.0
+        self._on_command, self._on_close = on_command, on_close
+        #: The connection failed part-way. Nothing more is sent on this session: an answer that arrives late would
+        #: be taken for the answer to the next command.
+        self.broken = False
 
     # --- the wire --------------------------------------------------------------------------------------------
 
@@ -121,12 +137,16 @@ class Client:
         try:
             self._sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
         except OSError as exc:
-            raise ConnectionFailed(f"Couldn't connect to {self.host}:{self.port} ({exc.__class__.__name__}: {exc})") from None
+            # Members see this too (Fix my groups), so it names neither the address nor what the system said about it;
+            # managers have the address under Setup.
+            raise ConnectionFailed(f"Couldn't connect to the TeamSpeak server's query port ({exc.__class__.__name__})") from None
         # The banner: "TS3" and a "Welcome to the TeamSpeak ... ServerQuery interface" line.
         first = self._readline()
         if first.strip() != "TS3":
-            self.close()
-            raise ConnectionFailed(f"{self.host}:{self.port} isn't a ServerQuery port (it said {first.strip()[:40]!r})")
+            self._drop()
+            # What it did say is not repeated: the address is whatever a manager typed, and this would read out the
+            # greeting of any service the site can reach.
+            raise ConnectionFailed("The query address isn't a ServerQuery port; check the address and port under Setup")
         for _ in range(3):
             if self._readline().startswith("Welcome"):
                 break
@@ -137,10 +157,26 @@ class Client:
                 self._sock.sendall(b"quit\n")
             except OSError:
                 pass
+        self._drop()
+        on_close, self._on_close = self._on_close, None
+        if on_close is not None:
+            on_close()
+
+    def _drop(self) -> None:
+        """Close the socket without a goodbye."""
+        if self._sock is not None:
             try:
                 self._sock.close()
+            except OSError:
+                pass
             finally:
                 self._sock = None
+
+    def _fail(self, msg: str) -> ConnectionFailed:
+        """The connection is no good any more: close it and refuse further commands on this session."""
+        self.broken = True
+        self._drop()
+        return ConnectionFailed(msg)
 
     def __enter__(self) -> "Client":
         if self._sock is None:
@@ -156,11 +192,11 @@ class Client:
             try:
                 chunk = self._sock.recv(4096)
             except TimeoutError:
-                raise ConnectionFailed("The server didn't answer in time") from None
+                raise self._fail("The server didn't answer in time") from None
             except OSError as exc:
-                raise ConnectionFailed(f"The connection dropped ({exc.__class__.__name__})") from None
+                raise self._fail(f"The connection dropped ({exc.__class__.__name__})") from None
             if not chunk:
-                raise ConnectionFailed("The server closed the connection")
+                raise self._fail("The server closed the connection")
             self._buffer += chunk
         line, _, self._buffer = self._buffer.partition(b"\n")
         # Answers end with "\n\r", so the "\r" of the previous line leads this one.
@@ -168,16 +204,20 @@ class Client:
 
     def command(self, name: str, params: dict | None = None, options: tuple[str, ...] = ()) -> list[dict[str, str]]:
         """Send one command and return its data rows. Raises QueryError for any ``error id`` but 0."""
+        if self.broken:
+            raise ConnectionFailed("The connection to the server was lost")
         if self._sock is None:
             self.connect()
         assert self._sock is not None
+        if self._on_command is not None:
+            self._on_command()
         wait = self.throttle - (time.monotonic() - self._last)
         if wait > 0:
             time.sleep(wait)
         try:
             self._sock.sendall((build(name, params, options) + "\n").encode("utf-8"))
         except OSError as exc:
-            raise ConnectionFailed(f"Couldn't send to the server ({exc.__class__.__name__})") from None
+            raise self._fail(f"Couldn't send to the server ({exc.__class__.__name__})") from None
         self._last = time.monotonic()
         rows: list[dict[str, str]] = []
         while True:

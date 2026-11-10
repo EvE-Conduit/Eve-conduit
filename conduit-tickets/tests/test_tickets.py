@@ -719,7 +719,7 @@ def test_upgrading_keeps_the_staff_role():
     old.get_model("tickets", "Ticket").objects.create(via="mail", **fields)
 
     executor = MigrationExecutor(connection)
-    executor.migrate([("tickets", "0005_panels")])
+    executor.migrate(executor.loader.graph.leaf_nodes("tickets"))
     assert TicketSettings.load().default_role_ids == [ROLE_STAFF]
     assert Ticket.objects.get(channel_id="1").roles == [{"id": ROLE_STAFF, "name": "Staff role"}]
     assert Ticket.objects.get(via="mail").roles == []
@@ -995,3 +995,124 @@ def test_the_page_remembers_the_key_and_warns_about_the_address(api_client, mana
     assert api_client.call("get", f"{BASE}/panels").json()["problems"] == []
     settings.SITE_URL = "http://localhost:5173"
     assert any("public https" in p for p in api_client.call("get", f"{BASE}/panels").json()["problems"])
+
+
+# --- regressions ---------------------------------------------------------------------------------------------------
+
+
+def test_a_time_tag_no_calendar_holds_does_not_stop_the_transcript(api_client, people, discord):
+    """Anyone in a channel can type <t:999999999999>; it used to stop the transcript being saved, for good."""
+    ticket = closed_ticket(api_client, people, discord, [said(1, content="at <t:999999999999> or <t:99999999999999999999:R>, not <t:1761825600>")])
+    tasks.archive_pending()
+    ticket.refresh_from_db()
+    assert ticket.archive_state == "done" and ticket.channel_gone
+    assert TicketMessage.objects.get().content == "at <t:999999999999> or <t:99999999999999999999:R>, not 30 Oct 2025 12:00 EVE time"
+
+
+def test_one_ticket_that_cannot_be_saved_does_not_hold_up_the_others(api_client, people, discord, monkeypatch):
+    officer, pilot = people
+    first = closed_ticket(api_client, people, discord, [said(1, content="one")])
+    other = make_user(90000042, "Pilot Three")
+    DiscordAccount.objects.create(user=other, discord_id="300000000000000005", username="three")
+    discord.members["300000000000000005"] = {"roles": []}
+    out = open_ticket(api_client, officer, other).json()
+    second = Ticket.objects.get(pk=out["id"])
+    discord.history[second.channel_id] = [said(2, content="two")]
+    assert api_client.call("post", f"{BASE}/tickets/{second.pk}/close").status_code == 200
+    real = services._store_messages
+
+    def broken(ticket, page):
+        if ticket.pk == min(first.pk, second.pk):
+            raise KeyError("something unexpected in this channel")
+        return real(ticket, page)
+
+    monkeypatch.setattr(services, "_store_messages", broken)
+    tasks.archive_pending()
+    bad, good = sorted([first, second], key=lambda t: t.pk)
+    bad.refresh_from_db(), good.refresh_from_db()
+    assert bad.archive_state == "pending" and "KeyError" in bad.archive_error and not bad.channel_gone
+    assert good.archive_state == "done" and good.channel_gone
+
+
+def test_transcripts_are_saved_through_the_cores_upsert(api_client, people, discord, monkeypatch):
+    """MariaDB refuses bulk_create with the conflict columns named; the core's upsert knows."""
+    calls = []
+    real = services.upsert
+    monkeypatch.setattr(services, "upsert", lambda model, rows, **kw: calls.append(model) or real(model, rows, **kw))
+    closed_ticket(api_client, people, discord, [said(1)])
+    tasks.archive_pending()
+    tasks.archive_pending()
+    assert calls and set(calls) == {TicketMessage} and TicketMessage.objects.count() == 1
+
+
+def test_what_staff_say_after_closing_stays_with_staff(api_client, people, discord):
+    """Whoever opened a ticket from a panel is out of the channel once it closes; what's written there afterwards
+    (while the channel waits to be removed) isn't shown to them."""
+    officer, pilot = people
+    discord.files["/f/9/notes.png"] = (200, b"data")
+    later = {**said(2, author=OFFICER, content="Between us: no.", attachments=[file("notes.png", fid="9")]), "timestamp": "2031-01-01T00:00:00+00:00"}
+    ticket = closed_ticket(api_client, people, discord, [said(1, content="Please"), later])
+    Ticket.objects.filter(pk=ticket.pk).update(panel_label="Help", opened_by=pilot)
+    tasks.archive_pending()
+    staff = api_client.call("get", f"{BASE}/tickets/{ticket.pk}/messages").json()
+    assert [m["content"] for m in staff["items"]] == ["Please", "Between us: no."]
+    hidden_file = staff["items"][1]["attachments"][0]["id"]
+    assert api_client.call("get", f"{BASE}/attachments/{hidden_file}").status_code == 200
+    api_client.force_login(pilot)
+    mine = api_client.call("get", f"{BASE}/tickets/{ticket.pk}/messages").json()
+    assert mine["count"] == 1 and [m["content"] for m in mine["items"]] == ["Please"]
+    assert api_client.call("get", f"{BASE}/attachments/{hidden_file}").status_code == 403
+
+
+def test_space_for_files_is_capped_overall_and_per_person(api_client, people, discord, monkeypatch):
+    officer, pilot = people
+    for n in (1, 2, 3):
+        discord.files[f"/f/{n}/f{n}.bin"] = (200, b"x" * 600_000)
+    TicketSettings.objects.update_or_create(pk=1, defaults={"file_storage_mb": 1})
+    ticket = closed_ticket(api_client, people, discord, [said(1, attachments=[file("f1.bin", fid="1", size=600_000), file("f2.bin", fid="2", size=600_000)])])
+    tasks.archive_pending()
+    assert list(TicketAttachment.objects.values_list("name", "state")) == [("f1.bin", "saved"), ("f2.bin", "too_big")]
+    ticket.refresh_from_db()
+    assert ticket.channel_gone, "a file that isn't kept doesn't keep the channel"
+    out = services.settings_out()
+    assert any("space for attached files" in p for p in out["problems"]) is False  # 0.6 of 1 MB: not full yet
+    assert out["file_storage_mb"] == 1 and out["files_stored_mb"] == 0.6 and out["file_keep_days"] == 0
+    # Without an overall limit, what one person's own panel tickets hold is still limited.
+    TicketSettings.objects.update(file_storage_mb=0)
+    monkeypatch.setattr(services, "MAX_OPENER_BYTES", 700_000)
+    Ticket.objects.filter(pk=ticket.pk).update(panel_label="Help", opened_by=pilot)
+    panel_button = PanelButton.objects.create(panel=TicketPanel.objects.create(channel_id=PANEL_CHANNEL, title="Help"), label="Help", role_ids=[ROLE_STAFF])
+    again = Ticket.objects.create(subject="More", opened_by=pilot, opened_by_name="Pilot Two", target=pilot, target_name="Pilot Two",
+                                  target_discord_id=PILOT, guild_id=GUILD, channel_id="900000000000000009", panel_button=panel_button, panel_label="Help")
+    discord.channels[again.channel_id] = {"id": again.channel_id}
+    discord.history[again.channel_id] = [said(3, attachments=[file("f3.bin", fid="3", size=600_000)])]
+    api_client.force_login(officer)
+    assert api_client.call("post", f"{BASE}/tickets/{again.pk}/close").status_code == 200
+    tasks.archive_pending()
+    assert TicketAttachment.objects.get(name="f3.bin").state == "too_big"
+
+
+def test_files_are_kept_for_good_unless_a_keeping_time_is_set(api_client, people, discord):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    discord.files["/f/1/fit.png"] = (200, b"\x89PNG")
+    ticket = closed_ticket(api_client, people, discord, [said(1, attachments=[file("fit.png")])])
+    tasks.archive_pending()
+    Ticket.objects.filter(pk=ticket.pk).update(closed_at=timezone.now() - timedelta(days=40))
+    tasks.archive_pending()
+    assert TicketAttachment.objects.get().state == "saved", "nothing is deleted by default"
+    officer, _ = people
+    officer.user_permissions.add(Permission.objects.get(codename="manage_tickets"))
+    api_client.force_login(type(officer).objects.get(pk=officer.pk))
+    resp = api_client.call("put", f"{BASE}/settings", {"category_id": "", "default_role_ids": [], "file_keep_days": 60})
+    assert resp.status_code == 200 and resp.json()["file_keep_days"] == 60 and resp.json()["file_storage_mb"] == 5000
+    tasks.archive_pending()
+    assert TicketAttachment.objects.get().state == "saved"
+    assert api_client.call("put", f"{BASE}/settings", {"category_id": "", "default_role_ids": [], "file_keep_days": 30}).status_code == 200
+    tasks.archive_pending()
+    a = TicketAttachment.objects.get()
+    assert a.state == "expired" and a.content is None and a.size == 0 and a.name == "fit.png"
+    assert api_client.call("get", f"{BASE}/attachments/{a.pk}").status_code == 404
+    assert api_client.call("put", f"{BASE}/settings", {"category_id": "", "default_role_ids": [], "file_keep_days": -1}).status_code == 400

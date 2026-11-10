@@ -70,7 +70,7 @@ export function TranscriptPage() {
 
 function AttachmentRow({ a }: { a: Attachment }) {
   if (a.state !== "saved") {
-    return <p className="mt-1 text-xs text-muted">{a.name}: not kept ({a.state === "too_big" ? "too large" : "no longer on Discord"})</p>;
+    return <p className="mt-1 text-xs text-muted">{a.name}: not kept ({a.state === "too_big" ? "too large, or no space left for files" : a.state === "expired" ? "deleted after the keeping time" : "no longer on Discord"})</p>;
   }
   const url = `${BASE}/attachments/${a.id}`;
   if (a.image) {

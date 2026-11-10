@@ -17,7 +17,8 @@ port = 6502
 secret =
 ; The Murmur.ice file that came with your Mumble server. Leave empty to look in the usual places.
 slice =
-; Every this many seconds the authenticator checks the server is still there and says hello to the site.
+; Every this many seconds the authenticator checks the server is still there, attaches to it again (a restarted
+; Mumble server forgets its authenticator) and asks the site who of the people connected has to go.
 watchdog = 30
 
 [murmur]
@@ -27,6 +28,8 @@ servers =
 [user]
 ; Fetch character portraits from EVE's image server and use them as Mumble avatars.
 avatars = true
+; Disconnect people who lose access while connected (members who lost it, guests whose link ended or was withdrawn).
+kick = true
 
 [log]
 ; debug, info, warning or error.
