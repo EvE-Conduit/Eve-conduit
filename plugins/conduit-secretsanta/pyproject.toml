@@ -1,6 +1,6 @@
 [project]
 name = "conduit-secretsanta"
-version = "1.0.0"
+version = "1.0.1"
 description = "Secret Santa: members sign up with the character that should get the gift, a draw pairs everyone up, and each sees only who they give to."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"
