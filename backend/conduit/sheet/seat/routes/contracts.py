@@ -33,21 +33,23 @@ def contracts(ctx, params, cid):
     ids = _contract_ids(ctx)
     if ctx.synced:  # Conduit's copy of these is newer
         ids -= set(Contract.objects.filter(character_id=cid).values_list("contract_id", flat=True))
-    out = []
-    for r in ctx.store.rows_in("contract_details", "contract_id", sorted(ids)):
-        out.append(drop_none({
-            "contract_id": int(r["contract_id"]), "type": r["type"], "status": r["status"],
-            "title": r["title"] or "", "availability": r["availability"],
-            "for_corporation": bool(int(r["for_corporation"] or 0)),
-            "issuer_id": int(r["issuer_id"]), "issuer_corporation_id": int(r["issuer_corporation_id"]),
-            "assignee_id": int(r["assignee_id"]), "acceptor_id": int(r["acceptor_id"]),
-            "price": _num(r["price"]), "reward": _num(r["reward"]), "collateral": _num(r["collateral"]),
-            "buyout": _num(r["buyout"]), "volume": _num(r["volume"]), "days_to_complete": _int(r["days_to_complete"]),
-            "start_location_id": _int(r["start_location_id"]), "end_location_id": _int(r["end_location_id"]),
-            "date_issued": esi_dt(r["date_issued"]), "date_expired": esi_dt(r["date_expired"]),
-            "date_accepted": esi_dt(r["date_accepted"]), "date_completed": esi_dt(r["date_completed"]),
-        }))
-    return out
+    return [contract_json(r) for r in ctx.store.rows_in("contract_details", "contract_id", sorted(ids))]
+
+
+def contract_json(r) -> dict:
+    """A SeAT contract_details row as ESI sends a contract (character and corporation lists alike)."""
+    return drop_none({
+        "contract_id": int(r["contract_id"]), "type": r["type"], "status": r["status"],
+        "title": r["title"] or "", "availability": r["availability"],
+        "for_corporation": bool(int(r["for_corporation"] or 0)),
+        "issuer_id": int(r["issuer_id"]), "issuer_corporation_id": int(r["issuer_corporation_id"]),
+        "assignee_id": int(r["assignee_id"]), "acceptor_id": int(r["acceptor_id"]),
+        "price": _num(r["price"]), "reward": _num(r["reward"]), "collateral": _num(r["collateral"]),
+        "buyout": _num(r["buyout"]), "volume": _num(r["volume"]), "days_to_complete": _int(r["days_to_complete"]),
+        "start_location_id": _int(r["start_location_id"]), "end_location_id": _int(r["end_location_id"]),
+        "date_issued": esi_dt(r["date_issued"]), "date_expired": esi_dt(r["date_expired"]),
+        "date_accepted": esi_dt(r["date_accepted"]), "date_completed": esi_dt(r["date_completed"]),
+    })
 
 
 @route("/characters/{cid}/contracts/{contract_id}/items")

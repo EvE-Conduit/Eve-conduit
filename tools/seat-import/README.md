@@ -5,8 +5,9 @@ with a dump of SeAT's database. You pick the dump, tick the users to bring over 
 
 1. **Import** brings their accounts: users, characters, SSO tokens and squads, and when each user joined SeAT
    and last signed in there.
-2. **Import character data** brings everything SeAT kept for their characters: wallet history, mail,
-   killmails, contracts, skills, assets and the rest. See [3. Character data](#3-character-data).
+2. **Import character data** brings everything SeAT kept for their characters (wallet history, mail,
+   killmails, contracts, skills, assets and the rest) and for their corporations (wallets, contracts, industry,
+   market, mining and killmails). See [3. Character data](#3-character-data).
 
 It talks to Conduit through its API, so the PC only needs to reach Conduit's address.
 
@@ -131,13 +132,32 @@ It goes through every character that is both in the dump and in Conduit:
 - Sections filled from SeAT say so on the character sheet ("From SeAT, data as of ..."), so nobody mistakes an
   old copy for live data.
 
+### Corporations
+
+After the characters, every corporation in the dump that still has members in Conduit gets the history SeAT kept
+for it. When you import only some users, that's only their corporations.
+
+- **Wallets:** every division's journal and market transactions, and the balances (only while Conduit hasn't
+  synced that corporation's wallets from EVE yet).
+- **Contracts, industry jobs and killmails** (kills and losses the corporation was on, either side).
+- **Market orders:** SeAT's past orders come over closed. Open orders stay as Conduit has them.
+- **Mining:** what each member mined from the corporation's moon drills, per day. Extractions that are scheduled
+  now come from EVE, not SeAT.
+
+As for characters, entries are matched by EVE's ids, so nothing is doubled and nothing Conduit already has is
+changed. A section filled from SeAT says so on the corporation page. Current state (members, structures, assets,
+starbases) isn't imported, as the corporation's next sync from EVE gives the current copy. SeAT kept nothing
+per corporation for killmails, so a corporation's killmails are the ones SeAT saw with it on them.
+
 Nothing is sent to EVE while it runs, apart from looking up names SeAT didn't have, once at the end. Conduit
 works from a temporary copy of the tables it needs, so allow free disk space on the Conduit server of about the
 dump's size (on Docker it lives in the `seat_import` volume; elsewhere in the system temp folder, or set
 `CONDUIT_SEAT_IMPORT_DIR`). Running it again is safe: it adds only what's missing.
 
-The server command's options: `--section wallet` (repeatable) to import only some sections, `--character <id>`
-to try one character first, `--report summary.json` to keep the results.
+The server command's options: `--section wallet` (repeatable) to import only some sections (corporation ones are
+`corp.wallets`, `corp.contracts`, `corp.industry`, `corp.market`, `corp.mining` and `corp.killmails`),
+`--character <id>` to try one character first (and only that character's corporation), `--report summary.json`
+to keep the results.
 
 Delete the dump on every machine when you're done.
 

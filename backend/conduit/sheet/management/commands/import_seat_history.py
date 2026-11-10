@@ -7,13 +7,14 @@ from conduit.sheet.seat.dump import DumpError
 
 
 class Command(BaseCommand):
-    help = ("Bring every character's sheet data (wallet history, mail, killmails, skills, assets...) over from a dump "
-            "of SeAT's database. Import the accounts first with the SeAT import program; safe to run again.")
+    help = ("Bring every character's sheet data (wallet history, mail, killmails, skills, assets...) and their "
+            "corporations' history (wallets, contracts, industry, market, mining, killmails) over from a dump of "
+            "SeAT's database. Import the accounts first with the SeAT import program; safe to run again.")
 
     def add_arguments(self, parser):
         parser.add_argument("dump", help="SQL dump of SeAT's database (mariadb-dump, phpMyAdmin, HeidiSQL...)")
-        parser.add_argument("--section", action="append", help="Only this section, e.g. wallet (repeatable)")
-        parser.add_argument("--character", type=int, action="append", help="Only this character id (repeatable)")
+        parser.add_argument("--section", action="append", help="Only this section, e.g. wallet or corp.wallets (repeatable)")
+        parser.add_argument("--character", type=int, action="append", help="Only this character id, and its corporation (repeatable)")
         parser.add_argument("--staging", help="Where to keep the working copy (default: a temporary file)")
         parser.add_argument("--keep-staging", action="store_true", help="Don't delete the working copy afterwards")
         parser.add_argument("--no-names", action="store_true", help="Don't look up missing names with EVE afterwards")

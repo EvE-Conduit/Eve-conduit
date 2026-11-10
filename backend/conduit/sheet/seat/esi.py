@@ -55,9 +55,10 @@ def unavailable() -> EsiBackoff:
 
 @dataclass
 class Context:
-    """What a route knows while answering for one character and section."""
+    """What a route knows while answering for one character (or corporation) and section."""
 
     store: Staging
+    #: None while importing a corporation section.
     character: object
     section: str
     #: The section has synced from EVE before, so Conduit's own data is newer: routes return only what's missing.
@@ -65,6 +66,8 @@ class Context:
     names: set = field(default_factory=set)
     #: Scratch space for routes that build something once per character and section (e.g. the mail list).
     cache: dict = field(default_factory=dict)
+    #: The corporation being imported, for corporation sections.
+    corporation: object = None
 
     @property
     def cid(self) -> int:

@@ -312,10 +312,10 @@ CREATE TABLE `squad_moderator` (
   PRIMARY KEY (`squad_id`,`user_id`)
 ) ENGINE=InnoDB;
 INSERT INTO `squad_moderator` VALUES (1,2);
-CREATE TABLE `corporation_wallet_journals` (
+CREATE TABLE `failed_jobs` (
   `id` bigint(20) NOT NULL
 ) ENGINE=InnoDB;
-INSERT INTO `corporation_wallet_journals` VALUES (this is not parsed at all;
+INSERT INTO `failed_jobs` VALUES (this is not parsed at all;
 """
 
 
