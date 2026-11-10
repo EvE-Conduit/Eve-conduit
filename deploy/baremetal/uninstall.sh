@@ -56,10 +56,12 @@ DATABASE_URL=""
 [[ -f "$ENV_FILE" ]] && DATABASE_URL=$(sed -n 's/^DATABASE_URL=//p' "$ENV_FILE" | tail -1)
 DB_KIND="" DB_NAME="" DB_USER=""
 if [[ -n "$DATABASE_URL" ]] && command -v python3 >/dev/null; then
-  read -r DB_KIND DB_NAME DB_USER < <(python3 - "$DATABASE_URL" <<'PY'
-import sys
+  # The URL holds the database password: handed over in the environment, not as an argument every local user
+  # could read from the process list. -I: don't import modules from the folder this was started in.
+  read -r DB_KIND DB_NAME DB_USER < <(CONDUIT_UNINSTALL_DB_URL="$DATABASE_URL" python3 -I - <<'PY'
+import os
 from urllib.parse import unquote, urlparse
-u = urlparse(sys.argv[1])
+u = urlparse(os.environ["CONDUIT_UNINSTALL_DB_URL"])
 kind = "postgres" if u.scheme.startswith("postgres") else "mysql" if u.scheme.startswith("mysql") else ""
 print(kind, u.path.lstrip("/") or "-", unquote(u.username or "") or "-")
 PY

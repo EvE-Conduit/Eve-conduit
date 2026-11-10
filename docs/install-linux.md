@@ -32,7 +32,7 @@ Where things live:
 | `/etc/conduit/conduit.env` | configuration and secrets |
 | `/etc/conduit/plugins.txt` | plugins installed from the server |
 | `/var/www/conduit/web`, `/var/www/conduit/static` | the front end and static files, served by nginx |
-| `/var/log/conduit` | `web.log`, `worker.log`, `beat.log` |
+| `/var/log/conduit` | `web.log`, `worker.log`, `beat.log`, `updater.log` (owned by root; the `conduit` group may read) |
 | `/var/lib/conduit` | scheduler state and downloaded updates |
 | `/var/backups/conduit` | backups made by `conduit backup` |
 
@@ -174,7 +174,9 @@ Plugins add pages and features (recruitment, SRP, fleets, Discord, timers and so
   want and install them. The install's updater (the same one that installs EvE Conduit updates) does the
   work within seconds, takes a backup first and puts things back if anything fails. Plugins from other git
   repositories can be installed there too once you set `CONDUIT_PLUGIN_URLS=true` in `conduit.env`
-  (git must be installed on the server).
+  (git must be installed on the server). Leave that off unless everyone who may manage plugins on the website
+  is trusted with the server itself: installing a plugin builds it as root, so with this setting a website
+  administrator can run any code as root.
 - **From the server:** `sudo conduit plugin install <package>`, where the package is a PyPI name, a git
   URL or a path. It is added to `/etc/conduit/plugins.txt` and installed into the virtualenv.
 
@@ -345,7 +347,8 @@ systemctl enable --now redis                    # RHEL 10: valkey
 useradd --system --home-dir /opt/conduit --shell /usr/sbin/nologin conduit
 install -d -o root    -g conduit -m 0755 /opt/conduit /opt/conduit/releases
 install -d -o root    -g conduit -m 0750 /etc/conduit
-install -d -o conduit -g conduit -m 0755 /var/log/conduit /var/www/conduit/static
+install -d -o root    -g conduit -m 0750 /var/log/conduit
+install -d -o conduit -g conduit -m 0755 /var/www/conduit/static
 install -d -o conduit -g conduit -m 0750 /var/lib/conduit /var/lib/conduit/updates
 install -d -o root    -g root    -m 0755 /var/www/conduit /var/www/conduit/web /var/www/conduit/acme
 ```
@@ -481,9 +484,11 @@ systemctl enable --now cron     # RHEL family: crond
 conduit setup-updater           # the systemd path unit that starts within seconds; cron is the backup
 ```
 
-The updater runs as root but trusts nothing in `/var/lib/conduit/updates` or `/var/log/conduit`, which the
-service user owns: it never follows a symlink there, checks the release's signature again in a root-only folder,
-and refuses a version older than the running one. Refused requests are noted in `/var/log/conduit/updater.log`.
+The updater runs as root but trusts nothing in `/var/lib/conduit/updates`, which the service user owns: it never
+follows a symlink there, checks the release's signature again in a root-only folder, and refuses a version older
+than the running one. Refused requests are noted in `/var/log/conduit/updater.log`. The log folder belongs to
+root (Supervisor writes the service logs there as root); installs made with an older release, where it belonged
+to the service user, are corrected by the updater itself.
 
 ### 10. Register the EVE application
 

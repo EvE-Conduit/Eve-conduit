@@ -106,10 +106,22 @@ function Invoke-RestoreHelper([string[]]$Arguments, [string]$What) {
     return $out
 }
 
+function Test-UpdatesDirPlain([string]$Log = '') {
+    <#
+      Whether the updates folder (and data\ above it) are real folders. The services can write to data\, and the
+      updater must never read, write or delete through a junction they put there. Notes a refusal in $Log.
+    #>
+    $linked = Get-ConduitLinkedFolder -Root $Root -Path (Get-ConduitUpdatesDir -Root $Root)
+    if (-not $linked) { return $true }
+    if ($Log) { Add-Content -LiteralPath $Log -Value "$(Get-Date -Format o) refusing to work in the updates folder: $linked is a link, not a folder" }
+    return $false
+}
+
 function Update-BackupIndex {
     <# The website can't read the backups folder (Administrators only), so the list it shows is kept in the updates folder. #>
     $updates = Get-ConduitUpdatesDir -Root $Root
     if (-not (Test-Path -LiteralPath $updates) -or -not (Test-Path -LiteralPath $p.Backups)) { return }
+    if (-not (Test-UpdatesDirPlain)) { Write-Warning 'The updates folder is a link; not writing the list of backups there.'; return }
     try { Invoke-RestoreHelper @('index', $p.Backups, $updates) 'Listing the backups for the website' | Out-Null }
     catch { Write-Warning "$_" }
 }
@@ -180,7 +192,8 @@ function Invoke-RestoreStep([string]$Folder, [string]$Name, [string]$RequestedBy
     catch { Write-Warning "Some stored EVE logins couldn't be re-encrypted; those members sign in again. ($_)" }
     $after = @('manage', 'after_restore', $Name)
     # Windows PowerShell drops empty arguments, so only pass a name that's there.
-    if ($RequestedBy) { $after += @('--requested-by', $RequestedBy) }
+    # As one argument: a name starting with "-" would otherwise be taken for an option.
+    if ($RequestedBy) { $after += "--requested-by=$RequestedBy" }
     Invoke-ConduitPython -Root $Root -Arguments $after
 }
 
@@ -347,11 +360,15 @@ function Invoke-ApplyUpdate {
     $request = Join-Path $updates 'install-request.json'
     if (-not (Test-Path -LiteralPath $request)) { return }
     $result = Join-Path $updates 'install-result.json'
-    $log = Join-Path $p.Logs 'updater.log'
-    $json = Get-Content -LiteralPath $request -Raw
+    $log = Get-ConduitUpdaterLog -Root $Root
+    if (-not (Test-UpdatesDirPlain $log)) { return }
+    # A link in place of the request isn't read; Remove-Item deletes the link itself, never what it points at.
+    $linked = Test-ConduitReparsePoint $request
+    $json = if ($linked) { '' } else { Get-Content -LiteralPath $request -Raw }
     Remove-Item -LiteralPath $request -Force   # one attempt per request, even if this fails
+    if ($linked) { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) rejected request: install-request.json was a link"; return }
     try { $req = Get-ConduitUpdateRequest -Json $json }
-    catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) rejected request: $_"; return }
+    catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) rejected request: $(Format-ConduitLogText "$_")"; return }
     # A signed release is still an old release: never go backwards.
     try { Assert-ConduitUpgradeVersion -Root $Root -Version $req.Version }
     catch {
@@ -364,6 +381,7 @@ function Invoke-ApplyUpdate {
     try {
         Write-ConduitUpdateResult -Path $result -Version $req.Version -Status running -Message "Installing $($req.Version)"
         foreach ($name in @($req.File, 'SHA256SUMS', 'SHA256SUMS.sig')) {
+            if (Test-ConduitReparsePoint (Join-Path $updates $name)) { throw "$name in the updates folder is a link, not a file" }
             Copy-Item -LiteralPath (Join-Path $updates $name) -Destination $work -ErrorAction Stop
         }
         $python = Join-Path $p.Venv 'Scripts\python.exe'
@@ -376,7 +394,7 @@ function Invoke-ApplyUpdate {
     }
     catch {
         Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) failed: $_"
-        Write-ConduitUpdateResult -Path $result -Version $req.Version -Status failed -Message "$($_.Exception.Message) (details in logs\updater.log)"
+        Write-ConduitUpdateResult -Path $result -Version $req.Version -Status failed -Message "$($_.Exception.Message) (details in updater\updater.log)"
         Restart-All
     }
     finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
@@ -390,9 +408,10 @@ function Invoke-ApplyBackupRequest {
     Assert-Admin
     $updates = Get-ConduitUpdatesDir -Root $Root
     if (-not (Test-Path -LiteralPath (Join-Path $updates 'backup-request.json'))) { return }
-    $log = Join-Path $p.Logs 'updater.log'
+    $log = Get-ConduitUpdaterLog -Root $Root
+    if (-not (Test-UpdatesDirPlain $log)) { return }
     try { $line = @(Invoke-RestoreHelper @('request', $updates, $p.Backups) 'rejected a backup request')[-1] }
-    catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) $_"; return }
+    catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) $(Format-ConduitLogText "$_")"; return }
     $action, $id, $name, $by = "$line".Split("`t")
     if ($name -eq '-') { $name = '' }
     if ($by -eq '-') { $by = '' }
@@ -411,7 +430,7 @@ function Invoke-ApplyBackupRequest {
         }
         catch {
             Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) backup failed: $_"
-            Write-BackupResult 'failed' 'The backup failed (details in logs\updater.log).'
+            Write-BackupResult 'failed' 'The backup failed (details in updater\updater.log).'
         }
     }
     else {
@@ -424,7 +443,7 @@ function Invoke-ApplyBackupRequest {
         catch {
             Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) restore failed: $_"
             Set-ConduitProgress -Root $Root -Clear
-            Write-BackupResult 'failed' "Restoring $name failed; the database is as it was before (details in logs\updater.log)."
+            Write-BackupResult 'failed' "Restoring $name failed; the database is as it was before (details in updater\updater.log)."
         }
     }
     Update-BackupIndex
@@ -438,11 +457,17 @@ function Invoke-WatchUpdates {
     #>
     Assert-Admin
     $updates = Get-ConduitUpdatesDir -Root $Root
+    # Installs made before the updates folder had its own permissions get them here (the watcher starts again
+    # after every update and at least every 12 hours).
+    try { Protect-ConduitUpdatesDir -Root $Root }
+    catch { Add-Content -LiteralPath (Get-ConduitUpdaterLog -Root $Root) -Value "$(Get-Date -Format o) couldn't set the permissions of the updates folder: $_" }
+    # Noted once per watcher when the folder is a link; nothing is done there until that is put right.
+    Test-UpdatesDirPlain (Get-ConduitUpdaterLog -Root $Root) | Out-Null
     # Backups made by hand or by a scheduled task show up on the website within two minutes.
     Update-BackupIndex
     $until = (Get-Date).AddHours(12)
     while ((Get-Date) -lt $until) {
-        if (Test-ConduitUpdateRequest -UpdatesDir $updates) {
+        if ((Test-UpdatesDirPlain) -and (Test-ConduitUpdateRequest -UpdatesDir $updates)) {
             Invoke-ApplyUpdate
             Invoke-ApplyPluginRequest
             Invoke-ApplyBackupRequest
@@ -461,12 +486,13 @@ function Invoke-ApplyPluginRequest {
     Assert-Admin
     $updates = Get-ConduitUpdatesDir -Root $Root
     if (-not (Test-Path -LiteralPath (Join-Path $updates 'plugins-request.json'))) { return }
-    $log = Join-Path $p.Logs 'updater.log'
+    $log = Get-ConduitUpdaterLog -Root $Root
+    if (-not (Test-UpdatesDirPlain $log)) { return }
     $python = Join-Path $p.Venv 'Scripts\python.exe'
     $helper = @('-I', '-m', 'conduit.plugins.installer')
     $plan = @(Invoke-NativeCommand -FilePath $python -ArgumentList ($helper + @('prepare', $updates, $p.PluginsSite, $p.PluginSerial, '--env-file', $p.EnvFile)))
     if ($LASTEXITCODE -ne 0) {
-        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) refused a plugin request: $($plan -join ' ')"
+        Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) refused a plugin request: $(Format-ConduitLogText ($plan -join ' '))"
         return
     }
     $id = ''
@@ -534,7 +560,7 @@ function Invoke-ApplyPluginRequest {
         catch { Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) putting the previous plugins back failed too: $_" }
         Restart-All
         Set-ConduitProgress -Root $Root -Clear
-        Write-PluginResult 'failed' "That didn't work, so the previous plugins were put back (details in logs\updater.log)."
+        Write-PluginResult 'failed' "That didn't work, so the previous plugins were put back (details in updater\updater.log)."
     }
 }
 

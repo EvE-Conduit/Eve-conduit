@@ -179,7 +179,9 @@ Plugins add pages and features (recruitment, SRP, fleets, Discord, timers and so
   want and install them. The install's updater (the same one that installs EvE Conduit updates) does the
   work within seconds, takes a backup first and puts things back if anything fails. Plugins from other git
   repositories can be installed there too once you set `CONDUIT_PLUGIN_URLS=true` in `conduit.env`
-  (git must be installed on the machine).
+  (git must be installed on the machine). Leave that off unless everyone who may manage plugins on the website
+  is trusted with the machine itself: installing a plugin builds it as SYSTEM, so with this setting a website
+  administrator can run any code as SYSTEM.
 - **From the machine:** `conduit plugin install <package>` in an Administrator terminal, where the package
   is a PyPI name, a git URL or a path.
 
@@ -218,7 +220,7 @@ by a scheduled task or the tray) and does the work when an administrator asks.
 
 If any step fails, the database is put back from the backup made in step 2 and the services start again.
 Everything since the backup was made is lost, sessions included, so members may have to sign in again.
-What happened is in `logs\updater.log` when the website asked for it.
+What happened is in `updater\updater.log` when the website asked for it (installs updated from an earlier release: older entries are in `logs\updater.log`).
 
 **Restoring on a new machine:** install the same version (or newer), copy the backup into the `backups`
 folder and run `conduit restore <file>`. Don't copy the backup's `conduit.env` over the new one: it has the

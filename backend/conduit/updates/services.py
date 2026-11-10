@@ -297,9 +297,11 @@ def sync_install_result(state: UpdateState) -> UpdateState:
     if result.get("version") == state.install_version and status in ("running", "succeeded", "failed"):
         if status == "running":
             state.install_state = UpdateState.Install.RUNNING
-        elif status == "succeeded" or __version__ == state.install_version:
+        elif status == "succeeded":
             _finish(state, True, result.get("message") or "")
         else:
+            # The updater said it failed: believe it, even when the new version is the one running (an upgrade that
+            # broke after the switch and couldn't be undone). The admin has to know.
             _finish(state, False, result.get("message") or "The upgrade failed; the previous version was put back.")
         state.save()
     elif __version__ == state.install_version:  # the result file was lost, but the new version is running

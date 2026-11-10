@@ -45,7 +45,10 @@ services:
   caddy:
     build: ./frontend
     image: conduit-frontend
-    env_file: .env
+    # Only what the Caddyfile reads, taken from .env. Not env_file: this is the container facing the internet, and
+    # it has no use for the site's keys and the database password.
+    environment:
+      CONDUIT_DOMAIN: ${CONDUIT_DOMAIN:-}
     ports:
       - "80:80"
       - "443:443"

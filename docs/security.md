@@ -76,8 +76,14 @@ to re-encrypt everything with it. Then the old key can be removed from `CONDUIT_
 - **Installing plugins from the website** goes through the same privileged updater as releases; the site itself
   can't change its code. Catalog plugins come from a catalog signed with the release key and are pinned to a
   commit; the updater checks the signature again and refuses a catalog older than one it already used. Plugins
-  from other git URLs are only accepted when the server's own config file says `CONDUIT_PLUGIN_URLS=true`, because
-  a plugin runs with the site's access to the database and members' tokens. Plugins installed on the server
+  from other git URLs are only accepted when the server's own config file says `CONDUIT_PLUGIN_URLS=true`. That
+  setting hands the server to whoever may manage plugins on the website (`site.manage_plugins`): a plugin runs
+  with the site's access to the database and members' tokens, and on Linux and Windows the updater builds and
+  installs it with pip as root or SYSTEM, so its build script, and the build scripts of whatever it depends on,
+  run with full rights over the machine (on Docker: as the container's user). Catalog plugins are built the same
+  way; what protects them is the signed catalog pinning each one to a commit. Turn `CONDUIT_PLUGIN_URLS` on only
+  if every website administrator with that permission is trusted like a server administrator. Plugins installed
+  on the server
   (`plugins.txt`, the Docker image) can't be removed or changed from the website. A plugin git URL's
   `#subdirectory=` must be a relative path inside the repository and its `@ref` may not start with `-`.
   Every pip run that installs plugins passes a constraints file pinning `conduit` to the installed version
@@ -93,11 +99,30 @@ to re-encrypt everything with it. Then the old key can be removed from `CONDUIT_
   limitation: the catalog's anti-rollback marker (`catalog-serial`) lives on the same volume, so a compromised web
   container could replay an older *signed* catalog (older plugin versions, never unsigned code).
 - **The privileged updater never follows symlinks.** On Linux, `conduit apply-update` runs as root but exchanges
-  files with the site through folders the service user owns (`/var/lib/conduit/updates`, `/var/log/conduit`).
-  Every read and write there goes through `conduit.updates.safeio`: files are opened without following links, in
-  a folder opened without following links, accepted only as plain singly-linked files, and replaced by rename. A
-  planted link makes the updater refuse that request and note it in `updater.log`. On Windows the updater folder
-  is protected by ACLs instead.
+  files with the site through a folder the service user owns (`/var/lib/conduit/updates`). Every read and write
+  there goes through `conduit.updates.safeio`: files are opened without following links, in a folder opened
+  without following links, accepted only as plain singly-linked files, and replaced by rename. A planted link
+  makes the updater refuse that request and note it in `updater.log`.
+- **The Linux log folder belongs to root.** `/var/log/conduit` is `root:conduit`, mode 0750. Supervisor runs as
+  root and opens `web.log`, `worker.log` and `beat.log` there by name each time it starts a service; were the
+  folder the service user's (as on installs made with earlier releases), a link planted under one of those names would
+  have root write the service's output to any file. Nothing running as the service user writes there. The updater
+  puts the ownership right on older installs (within two minutes of the update) and removes links left in the
+  folder.
+- **Windows: the updater and the folders the services can write.** The services run as Local Service and can
+  write to `data\` and `logs\`; the updater runs as SYSTEM. The updates folder (`data\updates`) has its own
+  permissions: the services may add, change and delete files in it but can't delete, rename or re-permission the
+  folder or create folders in it, so they can't swap it for a junction. The updater also refuses to work when the
+  folder, `data\` above it or a request file is a link, keeps its own log in `updater\` (writable by
+  administrators only) and doesn't copy text from a refused request into it. The link check and the use that
+  follows are separate steps, so the folder's permissions are the real barrier. Known limitation: during an
+  update the management commands (`migrate`, `collectstatic`) still run as SYSTEM and write static files into
+  `data\static`, which the services can write.
+- **Windows: the install folder is locked down before anything is put in it.** The installer refuses an existing
+  folder made by another account, and replaces the folder's permissions (Administrators and SYSTEM in full,
+  Local Service read-only, nothing inherited from the drive) right after creating it, before any download or
+  password is written. Upgrades replace the folder's permissions the same way, which also removes entries
+  another account added to it.
 - **Releases never go backwards.** Administration → Updates refuses to request a version older than the running
   one, and the Linux and Windows updaters check again before copying anything (the same version is allowed, as a
   reinstall). `conduit rollback` is the way back to the previous release.

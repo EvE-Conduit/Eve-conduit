@@ -99,28 +99,45 @@ pip_constraints() {
 install_python() {
   # Backend plus every plugin in plugins.txt (paths are relative to the release) and plugins-site.txt.
   # Runs as root: the venv is root-owned so the service can't modify its own code.
+  # python -I everywhere root runs pip: without it Python would import modules from the folder the command was
+  # started in (sudo conduit ... from /tmp), ahead of its own.
   local release="$1" extras="" constraints
   require_root
   load_env
   [[ "${DATABASE_URL:-}" == mysql* ]] && extras="[mysql]"
-  (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade "./backend$extras")
+  (cd "$release" && "$VENV/bin/python" -I -m pip install --quiet --upgrade "./backend$extras")
   constraints=$(pip_constraints)   # after the backend: it pins the version just installed
   if [[ -s "$PLUGINS_FILE" ]]; then
-    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -c "$constraints" -r "$PLUGINS_FILE")
+    (cd "$release" && "$VENV/bin/python" -I -m pip install --quiet --upgrade -c "$constraints" -r "$PLUGINS_FILE")
   fi
   if grep -qv '^\s*\(#\|$\)' "$PLUGINS_SITE_FILE" 2>/dev/null; then
-    (cd "$release" && "$VENV/bin/python" -m pip install --quiet --upgrade -c "$constraints" -r "$PLUGINS_SITE_FILE")
+    (cd "$release" && "$VENV/bin/python" -I -m pip install --quiet --upgrade -c "$constraints" -r "$PLUGINS_SITE_FILE")
   fi
 }
 
-# Root writes into two folders the service user owns: the updates folder (results, progress) and the log folder. A
-# compromised site could plant a symlink there for root to follow, so every such read and write goes through
-# conduit.updates.safeio, which opens nothing through a symlink and replaces files by rename.
+# Root writes into the updates folder (results, progress), which the service user owns. A compromised site could
+# plant a symlink there for root to follow, so every such read and write goes through conduit.updates.safeio, which
+# opens nothing through a symlink and replaces files by rename. The updater log is written the same way.
 safeio() { "$VENV/bin/python" -I -m conduit.updates.safeio "$@"; }
 UPDATER_LOG="$CONDUIT_LOG/updater.log"
 log_line() { safeio append "$UPDATER_LOG" "$(date -Is) $*"; }
 # Run a command with its output appended to the updater log; returns the command's own exit status.
 log_run() { "$@" 2>&1 | safeio append "$UPDATER_LOG"; return "${PIPESTATUS[0]}"; }
+
+# The log folder belongs to root (the service user's group may read it). Supervisor, running as root, opens
+# web.log, worker.log and beat.log there by name every time it starts a service; in a folder the service user could
+# write, a link planted under one of those names would have root append the service's output to any file. Nothing
+# running as the service user writes there. Earlier installs had the folder owned by the service user:
+# this puts that right (the updater runs it every two minutes, upgrades too) and removes links left in it.
+secure_log_dir() {
+  [[ "${CONDUIT_TESTING:-}" == 1 ]] && return 0
+  [[ -d "$CONDUIT_LOG" && ! -L "$CONDUIT_LOG" ]] || return 0
+  if [[ "$(stat -c '%U:%G:%a' "$CONDUIT_LOG" 2>/dev/null)" != "root:$CONDUIT_USER:750" ]]; then
+    chown root:"$CONDUIT_USER" "$CONDUIT_LOG" && chmod 0750 "$CONDUIT_LOG" || return 0
+  fi
+  # Only once the folder is root's: before that, the service user could put a link back.
+  find "$CONDUIT_LOG" -mindepth 1 -maxdepth 1 -type l -delete 2>/dev/null || true
+}
 
 # How far an update has got, for Administration -> Updates / Plugins and the banner members see:
 # <updates>/progress.json, removed when the update is over. "progress <release|plugins|restore> <version|-> <step>"
@@ -172,6 +189,7 @@ cmd_upgrade() {
   local tarball="${1:-}"
   require_root
   [[ -f "$tarball" ]] || die "usage: conduit upgrade <eve-conduit-X.Y.Z.tar.gz>"
+  secure_log_dir
   local version
   version=$(tar -xzOf "$tarball" --wildcards '*/VERSION' | head -1)
   [[ -n "$version" ]] || die "not an EvE Conduit release (no VERSION file)"
@@ -199,16 +217,51 @@ cmd_upgrade() {
   previous=$(readlink -f "$APP" || true)
   ln -sfn "$target" "$APP"
   [[ -n "$previous" ]] && ln -sfn "$previous" "$CONDUIT_HOME/previous"
-  progress release "$version" migrate
-  finish_deploy
-  publish_web "$target"
-  install_admin_script "$target"
+  # From here the new release is the linked one. If the rest fails (a migration, usually), put the release that
+  # was running back instead of leaving the site on new code with a half-updated database.
+  if ! "$SELF" _finish-upgrade "$target" "$version"; then
+    echo "Finishing the upgrade to $version failed. Putting the previous release back..." >&2
+    put_release_back "$previous" || true
+    progress clear
+    if [[ -n "$previous" && "$(readlink -f "$APP" || true)" == "$previous" ]]; then
+      die "the upgrade to $version failed; the release that was running is back ($previous). Database changes the new version already made are NOT undone: if the site misbehaves, restore the backup made just before ($LAST_BACKUP)."
+    fi
+    die "the upgrade to $version failed and the previous release could not be put back (details above); try: conduit rollback"
+  fi
   # The release's own admin script knows its web server settings (this one may be older).
   [[ "${CONDUIT_TESTING:-}" == 1 ]] || "$CONDUIT_BIN" web-headers || true
   progress release "$version" restart
   supervisor restart "$SUPERVISOR_GROUP:*"
   progress clear
   echo "EvE Conduit $version is running. 'conduit rollback' returns to the previous release."
+}
+
+# Internal (cmd_upgrade): what remains once the new release is linked. Its own process, so a failing step stops it
+# and cmd_upgrade notices (see SELF).
+cmd_finish_upgrade() {  # release dir, version
+  require_root
+  load_env
+  progress release "$2" migrate
+  finish_deploy
+  publish_web "$1"
+  install_admin_script "$1"
+}
+
+# Back to the release that was running before a failed upgrade: link, packages, static files, front end, admin
+# script, restart. Every step is tried even if one fails (callers run this where set -e does nothing).
+put_release_back() {  # release dir
+  local old="$1"
+  if [[ -z "$old" || ! -d "$old" ]]; then
+    echo "The previous release folder (${old:-unknown}) is gone; the new release stays linked." >&2
+    return 1
+  fi
+  ln -sfn "$old" "$APP"
+  install_python "$old" || echo "Warning: reinstalling the packages of $old failed." >&2
+  manage collectstatic --noinput -v0 || echo "Warning: collectstatic for $old failed." >&2
+  # In a subshell: publish_web ends the script when the release has no web/ folder.
+  (publish_web "$old") || echo "Warning: publishing the front end of $old failed." >&2
+  install_admin_script "$old" || true
+  supervisor restart "$SUPERVISOR_GROUP:*" || echo "Warning: restarting the services failed." >&2
 }
 
 cmd_rollback() {
@@ -247,11 +300,14 @@ cmd_backup() {
   dir=$(mktemp -d)
   mkdir -p "$CONDUIT_BACKUPS"
   chmod 700 "$CONDUIT_BACKUPS"
-  "$VENV/bin/python" - "$DATABASE_URL" "$dir" <<'PY'
+  # DATABASE_URL holds the password: it is read from the environment (load_env exported it), never passed as an
+  # argument, where every local user could read it from the process list. -I: see install_python.
+  "$VENV/bin/python" -I - "$dir" <<'PY'
 import os, subprocess, sys
 from urllib.parse import unquote, urlparse
-url, out = urlparse(sys.argv[1]), sys.argv[2]
+url, out = urlparse(os.environ["DATABASE_URL"]), sys.argv[1]
 env = dict(os.environ)
+env.pop("DATABASE_URL", None)
 if url.scheme.startswith("postgres"):
     env["PGPASSWORD"] = unquote(url.password or "")
     cmd = ["pg_dump", "-h", url.hostname or "localhost", "-p", str(url.port or 5432), "-U", unquote(url.username or ""), "-Fc", "-f", f"{out}/database.dump", url.path.lstrip("/")]
@@ -288,7 +344,7 @@ restore_steps() {  # unpacked backup folder, backup name, requested by
     [[ "$added" == 0 ]] || echo "Added $added of the backup's EVE login keys to CONDUIT_TOKEN_KEY_PREVIOUS in $ENV_FILE."
   fi
   manage rotate_token_key || echo "Warning: some stored EVE logins couldn't be re-encrypted; those members sign in again." >&2
-  manage after_restore "$2" --requested-by "$3" || return 1
+  manage after_restore "$2" "--requested-by=$3" || return 1
 }
 
 cmd_restore() {  # backup file or name, [who asked on the website]
@@ -357,7 +413,9 @@ for mid, e in sorted(registry.discover().items()):
 cmd_apply_update() {
   require_root
   load_env
-  local lock=${CONDUIT_UPDATE_LOCK:-/run/lock/conduit-update.lock}
+  # In /run, which only root can write. Not /run/lock: on Debian and Ubuntu anyone can create files there, and a
+  # file or link planted under this name would stop the updater (or have root truncate what the link points at).
+  local lock=${CONDUIT_UPDATE_LOCK:-/run/conduit-update.lock}
   exec 9>"$lock"
   if [[ -n "${INVOCATION_ID:-}" ]]; then
     # Started by systemd: wait for a run already in progress. Returning straight away while the request file is
@@ -366,6 +424,7 @@ cmd_apply_update() {
   else
     flock -n 9 || return 0   # cron: a run is already in progress
   fi
+  secure_log_dir
   # Installs from before the watcher existed get it on the first run of this (newer) script.
   install_update_watcher
   apply_release_request
@@ -465,15 +524,28 @@ print(v if ok else "")' 2>/dev/null || true)
     write_result failed "The release failed its signature check: $check"; rm -rf "$work"; return 0
   fi
   log_line "installing $version: $check"
+  # The release running now: what a failed upgrade must leave linked.
+  local before
+  before=$(readlink -f "$APP" || true)
   if log_run "$SELF" upgrade "$work/$file"; then
     progress clear
     write_result succeeded "EvE Conduit $version is running."
   else
     log_line "upgrade to $version failed; putting the running release back"
-    log_run install_python "$(readlink -f "$APP")" || true
-    log_run supervisor restart "$SUPERVISOR_GROUP:*" || true
+    if [[ -n "$before" && "$(readlink -f "$APP" || true)" != "$before" ]]; then
+      # The upgrade stopped after linking the new release and couldn't undo that itself.
+      log_run put_release_back "$before" || true
+    else
+      # It failed before the new release was linked (or put the old one back): make sure the old packages are in.
+      log_run install_python "$before" || true
+      log_run supervisor restart "$SUPERVISOR_GROUP:*" || true
+    fi
     progress clear
-    write_result failed "The upgrade to $version failed and the previous version was put back (details in $UPDATER_LOG)."
+    if [[ -n "$before" && "$(readlink -f "$APP" || true)" == "$before" ]]; then
+      write_result failed "The upgrade to $version failed and the previous version was put back (details in $UPDATER_LOG). Database changes the new version already made are not undone: if something is off, restore the backup made just before the upgrade (Administration -> Backups)."
+    else
+      write_result failed "The upgrade to $version failed and the previous version could NOT be put back (details in $UPDATER_LOG). On the server, run: sudo conduit rollback"
+    fi
   fi
   rm -rf "$work"
 }
@@ -527,7 +599,7 @@ apply_plugin_request() {
     mv "$PLUGINS_SITE_FILE.bak" "$PLUGINS_SITE_FILE"
     local added
     added=$(comm -13 <(echo "$before") <("${helper[@]}" dists | sort))
-    for pkg in $added; do log_run "$VENV/bin/python" -m pip uninstall --quiet --yes "$pkg" || true; done
+    for pkg in $added; do log_run "$VENV/bin/python" -I -m pip uninstall --quiet --yes "$pkg" || true; done
     log_run install_python "$(readlink -f "$APP")" || true
     log_run finish_deploy || true
     log_run supervisor restart "$SUPERVISOR_GROUP:*" || true
@@ -582,12 +654,12 @@ cmd_apply_plugins() {
   cmd_backup
   local step
   for step in "$@"; do
-    if [[ "$step" == uninstall=* ]]; then "$VENV/bin/python" -m pip uninstall --quiet --yes "${step#uninstall=}"; fi
+    if [[ "$step" == uninstall=* ]]; then "$VENV/bin/python" -I -m pip uninstall --quiet --yes "${step#uninstall=}"; fi
   done
   progress plugins - install
   install_python "$(readlink -f "$APP")"
   for step in "$@"; do
-    if [[ "$step" == reinstall=* ]]; then "$VENV/bin/python" -m pip install --quiet --force-reinstall --no-deps -c "$(pip_constraints)" "${step#reinstall=}"; fi
+    if [[ "$step" == reinstall=* ]]; then "$VENV/bin/python" -I -m pip install --quiet --force-reinstall --no-deps -c "$(pip_constraints)" "${step#reinstall=}"; fi
   done
   progress plugins - migrate
   finish_deploy
@@ -702,6 +774,7 @@ case "${1:-}" in
   web-headers) cmd_web_headers ;;
   ip-cert) cmd_ip_cert ;;
   _apply-plugins) shift; cmd_apply_plugins "$@" ;;
+  _finish-upgrade) shift; cmd_finish_upgrade "$@" ;;
   plugin) shift; cmd_plugin "$@" ;;
   uninstall) shift; cmd_uninstall "$@" ;;
   run) shift; cmd_run "$@" ;;

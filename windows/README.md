@@ -92,7 +92,8 @@ one doesn't match. Downloads and caches stay inside the install folder (`tmp`, `
 6. Copies the release to `releases\X.Y.Z`, points the `app` junction at it, writes `config\conduit.env`
    with fresh secrets and your ports, generates `config\Caddyfile`, and installs EvE Conduit, waitress and
    the plugins.
-7. Locks down permissions: code and config are writable only by Administrators and SYSTEM. The
+7. Locks down permissions (the install folder itself right after it is created, before anything is downloaded;
+   the rest here): code and config are writable only by Administrators and SYSTEM. The
    services run as **Local Service**, which can read the code and config and write only to `data` and `logs`.
 8. Registers the services (`conduit-postgres` or `conduit-mariadb`, `conduit-garnet`, `conduit-web`,
    `conduit-worker`, `conduit-beat` and `conduit-caddy`), creates the EvE Conduit database, runs the migrations
