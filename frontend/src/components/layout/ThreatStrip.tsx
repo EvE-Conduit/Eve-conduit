@@ -8,7 +8,8 @@ const DISMISS_KEY = "conduit:threats-dismissed";
 
 function readDismissed(): number[] {
   try {
-    return JSON.parse(sessionStorage.getItem(DISMISS_KEY) ?? "[]");
+    const ids: unknown = JSON.parse(sessionStorage.getItem(DISMISS_KEY) ?? "[]");
+    return Array.isArray(ids) ? ids.filter((id): id is number => typeof id === "number") : [];
   } catch {
     return [];
   }

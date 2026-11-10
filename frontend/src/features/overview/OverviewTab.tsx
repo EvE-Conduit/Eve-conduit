@@ -3,6 +3,7 @@ import { type ReactNode, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { LoadError } from "@/components/ui/feedback";
 import { StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -35,15 +36,23 @@ interface Overview {
   roles?: string[];
 }
 
+/** "3 years", "5 months", "12 days": how long ago the character was born. */
+function age(birthday: string) {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(birthday).getTime()) / 86_400_000));
+  const [n, unit] = days >= 365 ? [Math.max(1, Math.floor(days / 365.25)), "year"] : days >= 30 ? [Math.max(1, Math.floor(days / 30.44)), "month"] : [days, "day"];
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
 function has(header: CharacterHeader, key: string) {
   return header.sections.find((s) => s.key === key)?.available ?? false;
 }
 
 export function OverviewTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<Overview>(header.id, "overview");
+  const { data, isLoading, error, refetch } = useSection<Overview>(header.id, "overview");
   const skills = useSection<{ total_sp: number; synced: boolean }>(header.id, "skills", has(header, "skills"));
   const wallet = useSection<{ balance: number; synced: boolean }>(header.id, "wallet", has(header, "wallet"));
 
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-96 rounded-xl" />;
 
   const fatigued = data.jump_fatigue_expires && new Date(data.jump_fatigue_expires) > new Date();
@@ -59,7 +68,7 @@ export function OverviewTab({ header }: { header: CharacterHeader }) {
           mono
           icon={<ShieldAlert />}
         />
-        <StatCard label="Age" value={data.birthday ? timeAgo(data.birthday).replace(" ago", "") : "—"} hint={data.birthday ? `born ${date(data.birthday)}` : undefined} icon={<Cake />} />
+        <StatCard label="Age" value={data.birthday ? age(data.birthday) : "—"} hint={data.birthday ? `born ${date(data.birthday)}` : undefined} icon={<Cake />} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -112,7 +112,7 @@ export function AreaChart({
         {!compact &&
           [0, Math.floor(last / 2), last].map((i) => (
             <text key={i} x={geo.x(i)} y={height - 6} textAnchor={i === 0 ? "start" : i === last ? "end" : "middle"} className="fill-muted text-[11px]">
-              {new Date(data[i]!.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+              {new Date(data[i]!.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
             </text>
           ))}
         <path d={geo.area} fill={`url(#${gradientId})`} />
@@ -132,7 +132,7 @@ export function AreaChart({
           className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-lg border border-border-strong bg-surface-raised px-2.5 py-1.5 text-xs shadow-e3"
           style={{ left: `clamp(60px, ${tooltipLeft}%, calc(100% - 60px))` }}
         >
-          <div className="text-muted">{new Date(data[h]!.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</div>
+          <div className="text-muted">{new Date(data[h]!.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</div>
           <div className="font-mono font-semibold tabular-nums text-text">{format(data[h]!.value)}</div>
         </div>
       )}

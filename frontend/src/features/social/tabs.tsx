@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import { LoadError } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -200,7 +201,8 @@ interface EventRow {
 const RESPONSE_COLOR: Record<string, string> = { accepted: "var(--success)", tentative: "var(--warning)", declined: "var(--danger)", not_responded: "var(--subtle)" };
 
 export function CalendarTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<{ upcoming: EventRow[]; past: EventRow[] }>(header.id, "calendar");
+  const { data, isLoading, error, refetch } = useSection<{ upcoming: EventRow[]; past: EventRow[] }>(header.id, "calendar");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-60 rounded-xl" />;
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -266,8 +268,9 @@ interface ContactRow {
 }
 
 export function ContactsTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<ContactRow[]>(header.id, "contacts");
+  const { data, isLoading, error, refetch } = useSection<ContactRow[]>(header.id, "contacts");
   const [q, setQ] = useState("");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-60 rounded-xl" />;
   const rows = data.filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase()));
   const count = (f: (c: ContactRow) => boolean) => data.filter(f).length;
@@ -319,7 +322,8 @@ interface StandingRow {
 }
 
 export function StandingsTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<{ factions: StandingRow[]; corporations: StandingRow[]; agents: StandingRow[] }>(header.id, "standings");
+  const { data, isLoading, error, refetch } = useSection<{ factions: StandingRow[]; corporations: StandingRow[]; agents: StandingRow[] }>(header.id, "standings");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-60 rounded-xl" />;
   const column = (title: string, rows: StandingRow[], round = false) => (
     <Card>
@@ -349,7 +353,8 @@ export function StandingsTab({ header }: { header: CharacterHeader }) {
 }
 
 export function LoyaltyTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<{ total: number; corporations: { id: number; name: string; logo: string; points: number }[] }>(header.id, "loyalty");
+  const { data, isLoading, error, refetch } = useSection<{ total: number; corporations: { id: number; name: string; logo: string; points: number }[] }>(header.id, "loyalty");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-60 rounded-xl" />;
   if (!data.corporations.length) return <Card><EmptyState icon={<Star />} title="No loyalty points" /></Card>;
   const max = Math.max(...data.corporations.map((c) => c.points));
@@ -398,9 +403,10 @@ interface FitDetail {
 }
 
 export function FittingsTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<FitRow[]>(header.id, "fittings");
+  const { data, isLoading, error, refetch } = useSection<FitRow[]>(header.id, "fittings");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<FitRow | null>(null);
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-60 rounded-xl" />;
   if (!data.length) return <Card><EmptyState icon={<Shield />} title="No saved fittings" /></Card>;
   const needle = q.trim().toLowerCase();
@@ -568,11 +574,12 @@ interface Interaction {
 }
 
 export function IntelTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<{
+  const { data, isLoading, error, refetch } = useSection<{
     interactions: Interaction[];
     registered_counterparties: number;
     account_characters: { id: number; name: string; portrait: string; corporation: { name: string } | null }[];
   }>(header.id, "intel");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-72 rounded-xl" />;
   const max = Math.max(1, ...data.interactions.map((i) => i.total));
   const sources: [keyof Interaction, string][] = [["journal", "Wallet"], ["market", "Market"], ["mail", "Mail"], ["contracts", "Contracts"]];

@@ -93,7 +93,7 @@ async function start() {
   if (bootstrap.user) applyPreferences(bootstrap.user.preferences);
   queryClient.setQueryData(BOOTSTRAP_KEY, bootstrap);
   const plugins = await loadPlugins(bootstrap.plugins);
-  await applyPluginStyles(plugins).catch((err) => console.error("Could not build plugin styles", err));
+  await applyPluginStyles(plugins, bootstrap.site.version).catch((err) => console.error("Could not build plugin styles", err));
 
   const router = createBrowserRouter([
     { path: "/login", element: <Login /> },

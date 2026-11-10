@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Segmented } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { useRowKeys } from "@/lib/rowKeys";
 import type { CharacterBrief, StateBrief } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -54,8 +55,12 @@ export function RuleSetEditor({
   const byKey = useMemo(() => Object.fromEntries(types.map((t) => [t.key, t])), [types]);
   const rules = value.rules ?? [];
   const match = value.match ?? "all";
+  const rows = useRowKeys(rules.length);
   const set = (next: Rule[], m = match) => onChange(next.length ? { match: m, rules: next } : {});
-  const categories = Object.groupBy(types, (t) => t.category);
+  const categories = types.reduce<Record<string, RuleTypeSpec[]>>((out, t) => {
+    (out[t.category] ??= []).push(t);
+    return out;
+  }, {});
 
   return (
     <div className="space-y-3">
@@ -80,13 +85,16 @@ export function RuleSetEditor({
       ) : (
         <ol className="space-y-2">
           {rules.map((rule, i) => (
-            <li key={i}>
+            <li key={rows.keys[i]}>
               {i > 0 && <div className="mb-2 pl-4 text-[11px] font-semibold uppercase tracking-wide text-subtle">{match === "any" ? "or" : "and"}</div>}
               <RuleRow
                 rule={rule}
                 spec={byKey[rule.type]}
                 onChange={(r) => set(rules.map((x, j) => (j === i ? r : x)))}
-                onRemove={() => set(rules.filter((_, j) => j !== i))}
+                onRemove={() => {
+                  rows.remove(i);
+                  set(rules.filter((_, j) => j !== i));
+                }}
               />
             </li>
           ))}
@@ -104,7 +112,7 @@ export function RuleSetEditor({
             <div key={cat}>
               {ci > 0 && <DropdownSeparator />}
               <DropdownLabel>{cat}</DropdownLabel>
-              {list?.map((t) => (
+              {list.map((t) => (
                 <DropdownItem key={t.key} onSelect={() => set([...rules, { type: t.key, params: defaultParams(t) }])}>
                   <div className="min-w-0">
                     <div>{t.label}</div>

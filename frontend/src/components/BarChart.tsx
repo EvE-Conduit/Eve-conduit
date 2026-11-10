@@ -27,17 +27,17 @@ export function BarChart({
   format: (n: number) => string;
   label: string;
   className?: string;
-  /** What one bar stands for; hourly bars label the axis with times. */
+  /** What one bar stands for; hourly bars label the axis with times. Dates and times are EVE time (UTC). */
   unit?: "day" | "hour";
 }) {
   const axisLabel = (iso: string) =>
     unit === "hour"
-      ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-      : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
+      : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
   const tipLabel = (iso: string) =>
     unit === "hour"
-      ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
-      : new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+      ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }) + " ET"
+      : new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);

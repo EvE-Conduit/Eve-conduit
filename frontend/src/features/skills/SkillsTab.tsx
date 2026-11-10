@@ -2,6 +2,7 @@ import { Brain, ChevronDown, GraduationCap, ListOrdered, Search } from "lucide-r
 import { useMemo, useState } from "react";
 
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { LoadError } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -68,11 +69,12 @@ export function LevelPips({ level, trained, training }: { level: number; trained
 }
 
 export function SkillsTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<SkillsData>(header.id, "skills");
+  const { data, isLoading, error, refetch } = useSection<SkillsData>(header.id, "skills");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const training = useMemo(() => new Map(data?.queue.map((e) => [e.skill_id, e.level]) ?? []), [data]);
 
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-96 rounded-xl" />;
   if (!data.synced) return <Card><EmptyState icon={<Brain />} title="No skill data yet" /></Card>;
 

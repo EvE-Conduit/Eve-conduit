@@ -17,6 +17,7 @@ import { usePluginLandingSections } from "@/features/landing/PluginSections";
 import { api } from "@/lib/api";
 import { useBootstrap } from "@/lib/bootstrap";
 import { iconFor, ICON_NAMES } from "@/lib/icons";
+import { useRowKeys } from "@/lib/rowKeys";
 import { LANDING_KEY, landingQuery, PLACEHOLDERS, type LandingContent, type LandingResponse } from "@/lib/landing";
 import { cn } from "@/lib/utils";
 
@@ -290,9 +291,11 @@ function ListCard<T>({
   onChange: (items: T[]) => void;
   render: (item: T, update: (patch: Partial<T>) => void) => ReactNode;
 }) {
+  const rows = useRowKeys(items.length);
   const move = (i: number, d: -1 | 1) => {
     const next = [...items];
     [next[i], next[i + d]] = [next[i + d]!, next[i]!];
+    rows.swap(i, i + d);
     onChange(next);
   };
   return (
@@ -311,7 +314,7 @@ function ListCard<T>({
         {header}
         {!items.length && <p className="text-sm text-subtle">None yet. This part of the page is hidden until you add one.</p>}
         {items.map((item, i) => (
-          <div key={i} className="flex gap-3 border border-border p-4">
+          <div key={rows.keys[i]} className="flex gap-3 border border-border p-4">
             <div className="min-w-0 flex-1">{render(item, (patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it))))}</div>
             <div className="flex shrink-0 flex-col gap-1">
               <Button size="icon-xs" variant="ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
@@ -320,7 +323,7 @@ function ListCard<T>({
               <Button size="icon-xs" variant="ghost" aria-label="Move down" disabled={i === items.length - 1} onClick={() => move(i, 1)}>
                 <ArrowDown />
               </Button>
-              <Button size="icon-xs" variant="ghost" aria-label="Remove" className="hover:text-danger-fg" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+              <Button size="icon-xs" variant="ghost" aria-label="Remove" className="hover:text-danger-fg" onClick={() => { rows.remove(i); onChange(items.filter((_, j) => j !== i)); }}>
                 <Trash2 />
               </Button>
             </div>

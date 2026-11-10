@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, ChevronLeft, ChevronRight, LogIn, Search, Shield, Users } from "lucide-react";
-import { useDeferredValue, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
@@ -58,12 +58,17 @@ export function AdminMembers() {
   const states = useQuery({ queryKey: ["admin", "states"], queryFn: () => api.get<(StateBrief & { user_count: number })[]>("/api/admin/states") });
   const params = new URLSearchParams({ q: query, limit: String(PAGE), offset: String(page * PAGE) });
   if (state) params.set("state", String(state));
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isPlaceholderData } = useQuery({
     queryKey: ["admin", "members", query, state, page],
     queryFn: () => api.get<{ items: Member[]; count: number }>(`/api/admin/members?${params}`),
     placeholderData: keepPreviousData,
   });
   const pages = Math.max(1, Math.ceil((data?.count ?? 0) / PAGE));
+  // Fewer members than before (accounts merged): step back to a page that exists.
+  const beyond = !!data && !isPlaceholderData && page >= pages;
+  useEffect(() => {
+    if (beyond) setPage(pages - 1);
+  }, [beyond, pages]);
 
   return (
     <>
@@ -83,7 +88,13 @@ export function AdminMembers() {
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <FilterChip active={state === null} onClick={() => setState(null)}>
+          <FilterChip
+            active={state === null}
+            onClick={() => {
+              setState(null);
+              setPage(0);
+            }}
+          >
             All
           </FilterChip>
           {states.data?.map((s) => (
@@ -160,7 +171,7 @@ export function AdminMembers() {
                     <td className="px-5 py-3 text-right text-muted">{timeAgo(m.last_login)}</td>
                     {(canImpersonate || canMove) && (
                       <td className="whitespace-nowrap px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        {canMove && (!m.is_admin || me?.is_admin) && (
+                        {canMove && me?.is_admin && (
                           <Tooltip content="Move characters to another account">
                             <Button size="icon" variant="ghost" aria-label={`Move ${m.name}'s characters to another account`} onClick={() => setMoving(m)}>
                               <ArrowRightLeft />

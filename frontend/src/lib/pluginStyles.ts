@@ -24,7 +24,8 @@ function inject(css: string) {
   document.head.appendChild(style);
 }
 
-export async function applyPluginStyles(plugins: LoadedPlugin[]) {
+/** `version`: the site's version, so a release with a changed theme doesn't get the stylesheet cached for the old one. */
+export async function applyPluginStyles(plugins: LoadedPlugin[], version = "") {
   const wanted = plugins.flatMap((m) => m.classes ?? []);
   if (!wanted.length) return;
 
@@ -33,7 +34,7 @@ export async function applyPluginStyles(plugins: LoadedPlugin[]) {
   if (wanted.every((c) => host.has(c))) return;
 
   const all = [...new Set([...hostClasses, ...wanted])].sort();
-  const key = CACHE_PREFIX + hash(all.join(" "));
+  const key = CACHE_PREFIX + hash(`${version} ${all.join(" ")}`);
   try {
     const cached = localStorage.getItem(key);
     if (cached) return inject(cached);
