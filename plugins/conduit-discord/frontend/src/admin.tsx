@@ -9,7 +9,8 @@ import { type ReactNode, useState } from "react";
 import { Link } from "react-router";
 
 import { ArrowLeft, Check, Copy, DiscordLogo, ExternalLink, Plus, Refresh, Trash, Unlink } from "./icons";
-import { type Admin, BASE, type Check as CheckResult, type LinkedCharacter, type LinkedMember, type Mapping } from "./types";
+import { channelLabel } from "./guests";
+import { type Admin, BASE, type Check as CheckResult, type GuestChannel, type LinkedCharacter, type LinkedMember, type Mapping } from "./types";
 
 const KEY = ["discord", "admin"];
 
@@ -375,19 +376,34 @@ function GuestsTab({ data }: { data: Admin }) {
     retry: false,
   });
   const [form, setForm] = useState({ enabled: s.guest_enabled, role_id: s.guest_role_id, max_hours: String(s.guest_max_hours) });
+  const [channels, setChannels] = useState<string[]>(s.guest_channels.map((c) => c.id));
+  const [seen, setSeen] = useState<string[]>([]);
+  const offered = useQuery({ queryKey: ["discord", "channels"], queryFn: () => api.get<GuestChannel[]>(`${BASE}/admin/channels`), staleTime: 60_000, retry: false });
   const roles = check?.roles ?? [];
   const save = useMutation({
     mutationFn: () => api.put<Admin>(`${BASE}/admin/guests`, {
       enabled: form.enabled, role_id: form.role_id, max_hours: Number(form.max_hours) || 0,
       role_name: roles.find((r) => r.id === form.role_id)?.name ?? s.guest_role_name,
+      channels,
     }),
     onSuccess: (d) => {
       qc.setQueryData(KEY, d);
       qc.invalidateQueries({ queryKey: ["discord"] });
-      toast.success(form.enabled ? "Saved" : "Saved; guests still on the server are being removed");
+      setSeen(d.guest_channels_seen ?? []);
+      if (d.guest_channels_seen?.length) toast.warning("Saved, but guests can still see some channels; see below");
+      else if (d.guest_channels_hiding) toast.success("Saved; the other channels are being hidden from guests, which takes a minute on a large server");
+      else toast.success(form.enabled ? "Saved" : "Saved; guests still on the server are being removed");
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const toggle = (id: string) => setChannels((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  // Grouped under their category, in Discord's order.
+  const groups: { category: string; channels: GuestChannel[] }[] = [];
+  for (const c of offered.data ?? []) {
+    const last = groups[groups.length - 1];
+    if (last && last.category === (c.category ?? "")) last.channels.push(c);
+    else groups.push({ category: c.category ?? "", channels: [c] });
+  }
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
   return (
@@ -426,6 +442,45 @@ function GuestsTab({ data }: { data: Admin }) {
               <Input type="number" min={1} max={data.guest_hours_ceiling} value={form.max_hours} onChange={(e) => set({ max_hours: e.target.value })} className="max-w-32" />
             </Field>
           </div>
+          <Field
+            label="Channels guests may be let into"
+            hint={channels.length
+              ? "The bot hides every other channel from the guest role, also ones made later. Whoever makes a link picks which of these it opens."
+              : "None chosen: guests see whatever the guest role sees on Discord. Choose some and guests see only the channels their link opens."}
+          >
+            {offered.error ? (
+              <Alert tone="warning" title="Couldn't load the server's channels">{(offered.error as Error).message}</Alert>
+            ) : offered.isLoading ? (
+              <Skeleton className="h-24" />
+            ) : (
+              <div className="max-h-72 space-y-3 overflow-y-auto border border-border p-3">
+                {groups.map((g, i) => (
+                  <div key={`${g.category}-${i}`}>
+                    {g.category && <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{g.category}</div>}
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.channels.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          aria-pressed={channels.includes(c.id)}
+                          onClick={() => toggle(c.id)}
+                          className={cn("border px-2.5 py-1 text-xs", channels.includes(c.id) ? "border-accent bg-accent-soft text-accent-ink" : "border-border text-muted hover:border-border-strong")}
+                        >
+                          {channelLabel(c)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Field>
+          {seen.length > 0 && (
+            <Alert tone="warning" title="Guests can still see channels they shouldn't">
+              The bot wasn't allowed to hide {seen.slice(0, 8).join(", ")}{seen.length > 8 ? "…" : ""}. Give its role <b>Manage Permissions</b> in those channels
+              (or hide them from the guest role by hand) and save again. Nobody is let in through a link until this is sorted.
+            </Alert>
+          )}
         </CardBody>
         <CardFooter className="justify-between">
           <Link to="/p/discord/guests" className="text-sm text-accent-ink underline-offset-4 hover:underline">See the links and their guests</Link>
@@ -437,6 +492,7 @@ function GuestsTab({ data }: { data: Admin }) {
         <CardBody className="space-y-3 text-sm text-muted">
           <p>Give <b>Can hand out temporary access to the Discord server</b> to the people who may make links (Administration → Access), for example fleet commanders, diplomats and recruiters.</p>
           <p>Guests are removed within a couple of minutes of their link running out or being withdrawn, and when its maker loses that permission.</p>
+          <p>With channels chosen, a guest sees only the ones their link opens. Members and other roles aren't affected.</p>
           <p>Someone who was already on the server can't come in as a guest, so nobody is ever removed who was there before.</p>
           <p>A guest who links their Discord account as a member here keeps their place and only loses the guest role.</p>
         </CardBody>

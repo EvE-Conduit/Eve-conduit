@@ -117,6 +117,26 @@ are removed again.
 
 **Check connection** warns when the guest role was deleted or sits above the bot's role.
 
+### Choosing which channels guests see
+
+On **Server setup → Temporary access**, pick the channels under **Channels guests may be let into** and save.
+
+- The bot hides every other channel from the guest role, by denying it **View Channel** there. It keeps doing so
+  for channels made later, checked every two minutes while guests are on the server.
+- Whoever makes a link picks which of the chosen channels it opens (all of them unless they say otherwise). Each
+  guest is allowed into exactly those, personally, and that access is taken away again when they leave.
+- A private channel can be chosen too: guests of a link that opens it get in although `@everyone` can't.
+- Members and other roles are not affected. Only the guest role and the guests themselves get channel settings.
+
+If the bot isn't allowed to hide a channel, saving lists it and **Check connection** reports it. Give the bot's
+role **Manage Permissions** in that channel, or hide it from the guest role by hand, and save again. **Nobody is
+let in through a link while a channel can't be hidden**: guests are told the server isn't ready.
+
+On a server with many channels the first save can take a minute; it carries on in the background.
+
+With no channels chosen, the plugin changes nothing about channels: guests see what the guest role sees on Discord.
+Choosing none later stops the hiding of new channels, but leaves the settings already made on Discord in place.
+
 ### What happens to guests
 
 | Situation | What happens |
@@ -127,6 +147,7 @@ are removed again.
 | The link's maker loses `discord.create_guest_links` | The link stops working and its guests are removed |
 | Temporary access is switched off | Every link stops working and all guests are removed |
 | Discord can't be reached | The guest stays listed with the reason, and removing is tried again every two minutes |
+| A channel can't be hidden from guests, or the link's channels can't be opened | Nobody is added; a guest who was already added is taken off again |
 | The link has been used by as many people as it allows | It closes to newcomers; the guests it let in stay until it runs out |
 
 Three rules keep links from doing harm:

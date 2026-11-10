@@ -31,6 +31,10 @@ class DiscordSettings(models.Model):
     guest_role_name = models.CharField(max_length=100, blank=True)
     #: The longest a link may last.
     guest_max_hours = models.PositiveIntegerField(default=72)
+    #: The channels guests may be let into, as [{"id", "name", "kind"}]. While any are chosen the bot hides every
+    #: other channel from the guest role, and each link opens some of these to its guests. Empty: guests see
+    #: whatever the guest role sees on Discord.
+    guest_channels = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name_plural = "Discord settings"
@@ -108,6 +112,8 @@ class GuestLink(models.Model):
     #: The role the guests get (the guest role when the link was made).
     role_id = models.CharField(max_length=32)
     role_name = models.CharField(max_length=100, blank=True)
+    #: The channels this link opens to its guests, as [{"id", "name", "kind"}]; empty when channels aren't limited.
+    channels = models.JSONField(default=list, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
