@@ -536,7 +536,7 @@ const OUTCOMES: Record<EsiOutcome, { label: string; color: string }> = {
 function hourly(timeline: EsiSummary["timeline"], hours: number) {
   const byHour = new Map(timeline.map((t) => [new Date(t.hour).getTime(), t.calls]));
   const now = new Date();
-  now.setMinutes(0, 0, 0);
+  now.setUTCMinutes(0, 0, 0); // the server counts per UTC hour
   return Array.from({ length: hours }, (_, i) => {
     const at = now.getTime() - (hours - 1 - i) * 3_600_000;
     return { date: new Date(at).toISOString(), value: byHour.get(at) ?? 0 };

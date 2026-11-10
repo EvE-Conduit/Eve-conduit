@@ -8,6 +8,7 @@ import { AreaChart } from "@/components/AreaChart";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { LoadError } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,7 +64,8 @@ const PAGE = 50;
 
 /** Wallet for one character (`base` = /api/characters/<id>) or all of mine (`base` = /api/me). */
 export function WalletView({ base, multiCharacter = false }: { base: string; multiCharacter?: boolean }) {
-  const { data, isLoading } = useQuery({ queryKey: [base, "wallet"], queryFn: () => api.get<WalletSummary>(`${base}/wallet`) });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: [base, "wallet"], queryFn: () => api.get<WalletSummary>(`${base}/wallet`) });
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-96 rounded-xl" />;
   if (!data.synced) return <Card><EmptyState icon={<Wallet />} title="No wallet data yet" description="It appears after the first sync." /></Card>;
 

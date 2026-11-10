@@ -1,8 +1,9 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { LoadError } from "@/components/ui/feedback";
 import { EmptyState } from "@/components/ui/page";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
@@ -110,15 +111,25 @@ export function PagedTable<T>({
   empty?: { icon: ReactNode; title: string; description?: string };
   onRowClick?: (row: T) => void;
 }) {
-  const [page, setPage] = useState(0);
-  const { data, isLoading } = useQuery({
+  // The page belongs to one list: another search or filter starts again at the first page.
+  const source = `${url}?${params}`;
+  const [at, setAt] = useState({ source, page: 0 });
+  const page = at.source === source ? at.page : 0;
+  const setPage = (p: number) => setAt({ source, page: p });
+  const { data, isLoading, isPlaceholderData, error, refetch } = useQuery({
     queryKey: [url, params, page],
     queryFn: () => api.get<{ items: T[]; count: number }>(`${url}?limit=${PAGE}&offset=${page * PAGE}${params ? `&${params}` : ""}`),
     placeholderData: keepPreviousData,
   });
-  if (isLoading) return <SkeletonRows />;
   const count = data?.count ?? 0;
   const pages = Math.max(1, Math.ceil(count / PAGE));
+  // The list got shorter (rows deleted, a sync) and this page no longer exists: show the last one.
+  const beyond = !!data && !isPlaceholderData && page >= pages;
+  useEffect(() => {
+    if (beyond) setAt({ source, page: pages - 1 });
+  }, [beyond, source, pages]);
+  if (isLoading) return <SkeletonRows />;
+  if (error && (!data || isPlaceholderData)) return <LoadError error={error} onRetry={refetch} className="m-card" />;
   return (
     <>
       <DataTable rows={data?.items ?? []} {...table} />

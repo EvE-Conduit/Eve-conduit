@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Bell, CheckCheck, Eye, EyeOff, Settings2, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,18 @@ export function Notifications() {
   const actions = useNotificationActions();
   const count = data?.count ?? 0;
   const pages = Math.max(1, Math.ceil(count / PAGE));
+  // A link to ?unread=1 (the alert bar's "Respond") also works when this page is already open.
+  const location = useLocation();
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("unread")) {
+      setFilter("unread");
+      setPage(0);
+    }
+  }, [location.key, location.search]);
+  // Deleting or reading the last rows of the last page: step back to a page that exists.
+  useEffect(() => {
+    if (data && page > 0 && page >= pages) setPage(pages - 1);
+  }, [data, page, pages]);
 
   return (
     <>

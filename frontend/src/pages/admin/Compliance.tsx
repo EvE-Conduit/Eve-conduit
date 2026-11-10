@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronRight, KeyRound, RefreshCw, ShieldAlert, UserX, Users, XCircle } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Alert, Progress, Spinner } from "@/components/ui/feedback";
+import { Alert, LoadError, Progress, Spinner } from "@/components/ui/feedback";
 import { SearchInput, Select } from "@/components/ui/input";
 import { EmptyState, PageHeader, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -84,7 +84,7 @@ export function AdminCompliance() {
   const params = new URLSearchParams({ q, status, limit: String(PAGE), offset: String(offset) });
   if (state) params.set("state", state);
   if (corporation) params.set("corporation", corporation);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isPlaceholderData } = useQuery({
     queryKey: ["admin", "compliance", params.toString()],
     queryFn: () => api.get<ComplianceOverview>(`/api/admin/compliance?${params}`),
     placeholderData: keepPreviousData,
@@ -100,6 +100,11 @@ export function AdminCompliance() {
     onError: (e) => toast.error(e.message),
   });
   const s = data?.summary;
+  // Fewer members than before (a new check, another filter result): step back to a page that exists.
+  const total = data && !isPlaceholderData ? data.count : null;
+  useEffect(() => {
+    if (total !== null && offset > 0 && offset >= total) setOffset(Math.max(0, Math.ceil(total / PAGE) - 1) * PAGE);
+  }, [total, offset]);
   const reset = (fn: () => void) => {
     fn();
     setOffset(0);
@@ -312,13 +317,14 @@ function MembersTable({ rows }: { rows: ComplianceRow[] }) {
 }
 
 function UserDetail({ userId }: { userId: number }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "compliance", "user", userId],
     queryFn: () =>
       api.get<{ compliant: boolean; problems: string[]; account_problems?: string[]; warnings: string[]; characters: CharacterCompliance[] }>(
         `/api/admin/compliance/users/${userId}`,
       ),
   });
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Spinner label="Checking characters…" />;
   return (
     <div className="space-y-3">

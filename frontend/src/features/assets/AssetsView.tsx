@@ -3,6 +3,7 @@ import { ChevronRight, Package, Search } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 
 import { Card } from "@/components/ui/card";
+import { LoadError } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,6 +57,7 @@ export function AssetsView({ base, multiCharacter = false }: { base: string; mul
   });
 
   if (locations.isLoading) return <Skeleton className="h-96 rounded-xl" />;
+  if (locations.error && !locations.data) return <LoadError error={locations.error} onRetry={locations.refetch} />;
   const rows = locations.data ?? [];
   if (!rows.length) return <Card><EmptyState icon={<Package />} title="No assets yet" description="Assets appear after the first sync." /></Card>;
   const total = rows.reduce((s, r) => s + r.value, 0);
@@ -76,7 +78,7 @@ export function AssetsView({ base, multiCharacter = false }: { base: string; mul
       </div>
 
       {query.length >= 2 ? (
-        <SearchResults data={search.data} loading={search.isLoading} multiCharacter={multiCharacter} />
+        search.error && !search.data ? <LoadError error={search.error} onRetry={search.refetch} /> : <SearchResults data={search.data} loading={search.isLoading} multiCharacter={multiCharacter} />
       ) : (
         <Card className="overflow-hidden">
           <ul className="divide-y divide-border">
@@ -92,7 +94,7 @@ export function AssetsView({ base, multiCharacter = false }: { base: string; mul
 
 function LocationItem({ row, base, multiCharacter }: { row: LocationRow; base: string; multiCharacter: boolean }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: [base, "assets", "location", row.location.id],
     queryFn: () => api.get<Item[]>(`${base}/assets/locations/${row.location.id}`),
     enabled: open,
@@ -109,6 +111,8 @@ function LocationItem({ row, base, multiCharacter }: { row: LocationRow; base: s
         <div className="border-t border-border bg-bg/40 py-1">
           {isLoading ? (
             <div className="space-y-1.5 px-5 py-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-8" />)}</div>
+          ) : error && !data ? (
+            <LoadError error={error} onRetry={refetch} className="mx-5 my-2" />
           ) : (
             data?.map((item) => <ItemRow key={item.item_id} item={item} depth={0} multiCharacter={multiCharacter} />)
           )}

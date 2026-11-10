@@ -1,7 +1,9 @@
-import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+
+import { Button } from "./button";
 
 const TONE = {
   info: { box: "border-info/30 bg-info-soft", icon: "text-info-fg", Icon: Info },
@@ -44,6 +46,26 @@ export function Alert({
   );
 }
 export { Alert as Callout };
+
+/** In place of content that couldn't be loaded: what went wrong, and a way to try again. */
+export function LoadError({ error, onRetry, className }: { error?: unknown; onRetry?: () => unknown; className?: string }) {
+  return (
+    <Alert
+      tone="danger"
+      title="Couldn't load this"
+      className={className}
+      action={
+        onRetry && (
+          <Button size="sm" onClick={() => onRetry()}>
+            <RefreshCw /> Try again
+          </Button>
+        )
+      }
+    >
+      {error instanceof Error && error.message ? error.message : "Something went wrong. Try again in a moment."}
+    </Alert>
+  );
+}
 
 export function Spinner({ className, label }: { className?: string; label?: string }) {
   return (

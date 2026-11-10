@@ -7,6 +7,7 @@ import { DataTable, PagedTable, SegmentTabs, type Column } from "@/components/Da
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import { LoadError } from "@/components/ui/feedback";
 import { Input, SearchInput } from "@/components/ui/input";
 import { EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -129,7 +130,8 @@ function JobRow({ job }: { job: Job }) {
 }
 
 export function IndustryTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<{ active: Job[]; ready: Job[]; total_jobs: number }>(header.id, "industry");
+  const { data, isLoading, error, refetch } = useSection<{ active: Job[]; ready: Job[]; total_jobs: number }>(header.id, "industry");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-72 rounded-xl" />;
   const columns: Column<Job>[] = [
     { header: "Job", cell: (j) => <TypeCell type={j.product ?? j.blueprint} sub={j.activity} /> },
@@ -174,7 +176,8 @@ interface Agent {
 }
 
 export function ResearchTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<{ agents: Agent[]; points_per_day: number }>(header.id, "research");
+  const { data, isLoading, error, refetch } = useSection<{ agents: Agent[]; points_per_day: number }>(header.id, "research");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-60 rounded-xl" />;
   if (!data.agents.length) return <Card><EmptyState icon={<FlaskConical />} title="No research agents" description="This character has no R&D agreements." /></Card>;
   return (
@@ -222,7 +225,8 @@ interface MiningData {
 }
 
 export function MiningTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<MiningData>(header.id, "mining");
+  const { data, isLoading, error, refetch } = useSection<MiningData>(header.id, "mining");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-72 rounded-xl" />;
   if (!data.ores.length) return <Card><EmptyState icon={<Pickaxe />} title="Nothing mined in the last 30 days" /></Card>;
   return (
@@ -288,7 +292,8 @@ interface Colony {
 }
 
 export function PlanetsTab({ header }: { header: CharacterHeader }) {
-  const { data, isLoading } = useSection<Colony[]>(header.id, "planets");
+  const { data, isLoading, error, refetch } = useSection<Colony[]>(header.id, "planets");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-72 rounded-xl" />;
   if (!data.length) return <Card><EmptyState icon={<Globe2 />} title="No colonies" description="This character has no planetary industry set up." /></Card>;
   const expired = data.filter((c) => c.any_expired).length;
@@ -402,7 +407,8 @@ const orderColumns: Column<Order>[] = [
 
 export function MarketTab({ header }: { header: CharacterHeader }) {
   const [view, setView] = useState<"sell" | "buy" | "history">("sell");
-  const { data, isLoading } = useSection<{ sell: Order[]; buy: Order[]; sell_value: number; buy_value: number; escrow: number }>(header.id, "market");
+  const { data, isLoading, error, refetch } = useSection<{ sell: Order[]; buy: Order[]; sell_value: number; buy_value: number; escrow: number }>(header.id, "market");
+  if (error && !data) return <LoadError error={error} onRetry={refetch} />;
   if (isLoading || !data) return <Skeleton className="h-72 rounded-xl" />;
   return (
     <div className="space-y-6">

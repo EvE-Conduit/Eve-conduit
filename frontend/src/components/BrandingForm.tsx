@@ -1,9 +1,9 @@
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { BrandMark } from "@/components/layout/Brand";
 import { Field, Input } from "@/components/ui/input";
-import { applyAccent } from "@/lib/bootstrap";
+import { applyAccent, restoreAccent } from "@/lib/bootstrap";
 import { cn } from "@/lib/utils";
 
 export interface BrandingValues {
@@ -13,11 +13,14 @@ export interface BrandingValues {
   logo_url: string;
 }
 
-const PRESETS = ["#22d3ee", "var(--info)", "#818cf8", "#a78bfa", "#f472b6", "var(--danger)", "#fb923c", "var(--warning)", "#a3e635", "var(--success)"];
+// Hex only: the server saves "#rrggbb" and nothing else.
+const PRESETS = ["#22d3ee", "#38bdf8", "#818cf8", "#a78bfa", "#f472b6", "#f43f5e", "#fb923c", "#fbbf24", "#a3e635", "#34d399"];
 
 /** Name, tagline, accent and logo, with a live preview that recolours the whole site. */
 export function BrandingForm({ value, onChange }: { value: BrandingValues; onChange: (v: BrandingValues) => void }) {
   const [custom, setCustom] = useState(!PRESETS.includes(value.accent));
+  // The preview recolours the whole site: leaving without saving puts the saved accent back.
+  useEffect(() => restoreAccent, []);
   const set = (patch: Partial<BrandingValues>) => {
     const next = { ...value, ...patch };
     if (patch.accent) applyAccent(patch.accent);

@@ -51,8 +51,16 @@ export function useRefreshBootstrap() {
 
 /** Apply per-install branding: accent colour (with readable text on top) and title. */
 export function applyBranding(site: Pick<Bootstrap["site"], "accent" | "name">) {
+  savedAccent = site.accent;
   applyAccent(site.accent);
   document.title = site.name;
+}
+
+let savedAccent = "";
+
+/** Back to the saved accent, after a preview (the branding form) that wasn't saved. */
+export function restoreAccent() {
+  applyAccent(savedAccent);
 }
 
 /**

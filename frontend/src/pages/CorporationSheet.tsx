@@ -64,7 +64,10 @@ export function CorporationSheet() {
 
   const sections = header.sections.filter((s) => s.key in TABS);
   const requested = params.get("tab") ?? "overview";
-  const current = sections.find((s) => s.key === requested && s.allowed) ?? sections[0]!;
+  const current = sections.find((s) => s.key === requested && s.allowed) ?? sections[0];
+  if (!current) {
+    return <EmptyState icon={<ShieldAlert />} title="Nothing to show for this corporation" action={<Link to="/corporations"><Button>Back to corporations</Button></Link>} />;
+  }
   const problems = sections.filter((s) => s.result === "error" || s.result === "no_character");
 
   return (

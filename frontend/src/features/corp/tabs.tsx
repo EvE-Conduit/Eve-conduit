@@ -12,7 +12,7 @@ import { DataTable, PagedTable, SegmentTabs, type Column } from "@/components/Da
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Meter, Progress, StatusDot } from "@/components/ui/feedback";
+import { LoadError, Meter, Progress, StatusDot } from "@/components/ui/feedback";
 import { SearchInput, Select } from "@/components/ui/input";
 import { DescriptionList, EmptyState, StatCard } from "@/components/ui/page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -90,8 +90,8 @@ function PersonCell({ id, name, portrait, sub }: { id: number; name: string; por
 // --- Overview ----------------------------------------------------------------------------
 
 export function OverviewTab({ header }: TabProps) {
-  const { data } = useCorpSection<CorpOverview>(header.id, "overview");
-  if (!data) return <Loading />;
+  const { data, error, refetch } = useCorpSection<CorpOverview>(header.id, "overview");
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   const known = data.known_members ?? data.member_count ?? 0;
   const coverage = known ? data.registered / known : 0;
   return (
@@ -171,7 +171,7 @@ export function OverviewTab({ header }: TabProps) {
 // --- Members -----------------------------------------------------------------------------
 
 export function MembersTab({ header }: TabProps) {
-  const { data } = useCorpSection<{ items: CorpMember[]; count: number; registered: number; online: number }>(header.id, "members");
+  const { data, error, refetch } = useCorpSection<{ items: CorpMember[]; count: number; registered: number; online: number }>(header.id, "members");
   const [filter, setFilter] = useState<"" | "online" | "unregistered" | "registered">("");
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim().toLowerCase());
@@ -184,7 +184,7 @@ export function MembersTab({ header }: TabProps) {
       ),
     [data, filter, query],
   );
-  if (!data) return <Loading />;
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   const columns: Column<CorpMember>[] = [
     {
       header: "Member",
@@ -276,8 +276,8 @@ const STATE_TONE: Record<string, "success" | "warning" | "danger" | "info" | "ne
 };
 
 export function StructuresTab({ header }: TabProps) {
-  const { data } = useCorpSection<CorpStructure[]>(header.id, "structures");
-  if (!data) return <Loading />;
+  const { data, error, refetch } = useCorpSection<CorpStructure[]>(header.id, "structures");
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   if (!data.length) return <Card><EmptyState icon={<Building2 />} title="No structures" description="This corporation doesn't own any Upwell structures." /></Card>;
   const low = data.filter((s) => s.fuel_hours != null && s.fuel_hours < 72).length;
   const reinforced = data.filter((s) => s.state.endsWith("_reinforce")).length;
@@ -347,14 +347,14 @@ function StructureCard({ s }: { s: CorpStructure }) {
 // --- Wallets -----------------------------------------------------------------------------
 
 export function WalletsTab({ header }: TabProps) {
-  const { data } = useCorpSection<CorpWallets>(header.id, "wallets");
+  const { data, error, refetch } = useCorpSection<CorpWallets>(header.id, "wallets");
   const [division, setDivision] = useState<number | null>(null);
   const [view, setView] = useState<"journal" | "transactions">("journal");
-  if (!data) return <Loading />;
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   if (!data.synced) return <Card><EmptyState icon={<Wallet />} title="No wallet data yet" description="It appears after the first sync by an Accountant." /></Card>;
   const selected = data.divisions.find((d) => d.division === division);
   const series = selected?.series ?? data.series;
-  const first = series[0]?.balance ?? 0;
+  const first = series[0]?.balance ?? selected?.balance ?? data.balance;
   const change = (selected?.balance ?? data.balance) - first;
   const max = Math.max(1, ...data.divisions.map((d) => d.balance));
   return (
@@ -445,10 +445,10 @@ interface AssetNode {
 }
 
 export function AssetsTab({ header }: TabProps) {
-  const { data } = useCorpSection<{ total_value: number; item_count: number; locations: { location: Place; item_count: number; value: number }[] }>(header.id, "assets");
+  const { data, error, refetch } = useCorpSection<{ total_value: number; item_count: number; locations: { location: Place; item_count: number; value: number }[] }>(header.id, "assets");
   const [open, setOpen] = useState<number | null>(null);
   const [q, setQ] = useState("");
-  if (!data) return <Loading />;
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   const locations = data.locations.filter((l) => !q || l.location.name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="space-y-6">
@@ -482,8 +482,8 @@ export function AssetsTab({ header }: TabProps) {
 }
 
 function AssetTree({ corporationId, locationId }: { corporationId: number; locationId: number }) {
-  const { data } = useQuery({ queryKey: ["corporation", corporationId, "assets", locationId], queryFn: () => api.get<AssetNode[]>(`${corpBase(corporationId)}/assets/${locationId}`) });
-  if (!data) return <div className="px-card pb-3"><Skeleton className="h-24" /></div>;
+  const { data, error, refetch } = useQuery({ queryKey: ["corporation", corporationId, "assets", locationId], queryFn: () => api.get<AssetNode[]>(`${corpBase(corporationId)}/assets/${locationId}`) });
+  if (!data) return <div className="px-card pb-3">{error ? <LoadError error={error} onRetry={refetch} /> : <Skeleton className="h-24" />}</div>;
   return <div className="border-t border-border bg-surface-2/60 py-1">{data.map((n) => <AssetRow key={n.item_id} node={n} depth={0} />)}</div>;
 }
 
@@ -680,8 +680,8 @@ interface CorpMining {
 }
 
 export function MiningTab({ header }: TabProps) {
-  const { data } = useCorpSection<CorpMining>(header.id, "mining");
-  if (!data) return <Loading />;
+  const { data, error, refetch } = useCorpSection<CorpMining>(header.id, "mining");
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   const maxOre = Math.max(1, ...data.ores.map((o) => o.value));
   return (
     <div className="space-y-6">
@@ -755,8 +755,8 @@ export function MiningTab({ header }: TabProps) {
 // --- Starbases ---------------------------------------------------------------------------
 
 export function StarbasesTab({ header }: TabProps) {
-  const { data } = useCorpSection<{ id: number; type: EveType; system: SystemRef | null; moon: string | null; state: string; onlined_since: string | null; reinforced_until: string | null; unanchor_at: string | null }[]>(header.id, "starbases");
-  if (!data) return <Loading />;
+  const { data, error, refetch } = useCorpSection<{ id: number; type: EveType; system: SystemRef | null; moon: string | null; state: string; onlined_since: string | null; reinforced_until: string | null; unanchor_at: string | null }[]>(header.id, "starbases");
+  if (!data) return error ? <LoadError error={error} onRetry={refetch} /> : <Loading />;
   return (
     <Card>
       <CardHeader title="Control towers" description="Starbases (POS) the corporation has anchored" />
