@@ -120,6 +120,7 @@ def admin_out() -> dict:
             "guest_role_id": s.guest_role_id,
             "guest_role_name": s.guest_role_name,
             "guest_max_hours": s.guest_max_hours,
+            "guest_channels": s.guest_channels,
         },
         "redirect_uri": services.redirect_uri(),
         "guest_redirect_uri": guests.redirect_uri(),
@@ -297,6 +298,17 @@ class GuestSettingsIn(Schema):
     role_id: str = ""
     role_name: str = ""
     max_hours: int = 72
+    #: The channels guests may be let into. None leaves them as they are; [] stops limiting channels.
+    channels: list[str] | None = None
+
+
+@router.get("/admin/channels")
+@require_perm("discord.manage_discord")
+def channels(request):
+    """The server's channels, for choosing where guests may go."""
+    if not DiscordSettings.load().configured:
+        raise HttpError(400, "Finish the setup first")
+    return _run(guests.available_channels)
 
 
 @router.put("/admin/guests")
@@ -317,9 +329,25 @@ def put_guest_settings(request, payload: GuestSettingsIn):
     record("discord.guest_settings", f"switched temporary Discord access {'on' if s.guest_enabled else 'off'}"
            if was_on != s.guest_enabled else "changed the temporary Discord access settings",
            request=request, target_type="plugin", details={"plugin": "discord", "role": s.guest_role_name, "max_hours": s.guest_max_hours})
+    if payload.channels is not None:
+        ids = [_snowflake(c, "channel id") for c in payload.channels if c.strip()]
+        if len(ids) > 50:
+            raise HttpError(400, "Choose at most 50 channels")
+        _run(guests.set_channels, s, ids)
+    # Hide every other channel from the guest role now (also after a change of role). A server with many channels
+    # can take more calls than Discord allows in one go: the background job then finishes it.
+    seen: list[str] = []
+    hiding = False
+    if s.guest_channels and s.guest_role_id:
+        try:
+            seen = guests.hide_other_channels(s)
+        except discord_api.DiscordError:
+            hiding = True
+            tasks.hide_guest_channels.delay()
     if was_on and not s.guest_enabled:
         tasks.end_guest_stays.delay()  # switched off: the guests still on the server go
-    return admin_out()
+    # Channels guests can still see although they shouldn't; nobody is let in while there are any.
+    return {**admin_out(), "guest_channels_seen": seen, "guest_channels_hiding": hiding}
 
 
 @router.get("/guests")
@@ -333,12 +361,14 @@ class GuestLinkIn(Schema):
     label: str
     hours: float
     max_uses: int = 0
+    #: Which of the channels offered this link opens; left out, all of them.
+    channels: list[str] | None = None
 
 
 @router.post("/guests")
 @require_perm(guests.CREATE_PERM)
 def create_guest_link(request, payload: GuestLinkIn):
-    link = _run(guests.create_link, request.user, payload.label, payload.hours, payload.max_uses)
+    link = _run(guests.create_link, request.user, payload.label, payload.hours, payload.max_uses, payload.channels)
     record("discord.guest_link", f"made the temporary Discord link \"{link.label}\" ({payload.hours:g} h)", request=request,
            target_type="plugin", details={"plugin": "discord", "link_id": link.pk, "max_uses": link.max_uses})
     return guests.link_out(link)

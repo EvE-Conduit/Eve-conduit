@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import { ArrowLeft, Ban, Clock, Copy, LinkIcon, Plus, Users } from "./icons";
-import { BASE, type GuestLink, type GuestLinkStatus, type GuestOverview, type GuestUser } from "./types";
+import { BASE, type GuestChannel, type GuestLink, type GuestLinkStatus, type GuestOverview, type GuestUser } from "./types";
 
 const KEY = ["discord", "guests"];
 const PRESETS = [1, 2, 4, 8, 12, 24, 48, 72, 168, 336, 720];
@@ -22,6 +22,9 @@ export function untilText(iso: string): string {
   if (h < 48) return `${h} h ${min % 60 ? `${min % 60} min ` : ""}left`;
   return `${Math.round(h / 24)} days left`;
 }
+
+/** "#diplo" for text channels, the plain name for voice ones, as Discord shows them. */
+export const channelLabel = (c: GuestChannel) => (c.kind === "voice" || c.kind === "stage" ? `🔊 ${c.name}` : `#${c.name}`);
 
 function copy(text: string, done: string) {
   navigator.clipboard.writeText(text).then(() => toast.success(done), () => toast.error("Couldn't copy; select the text instead"));
@@ -166,6 +169,11 @@ function LinkCard({ link, showOwner, onRevoke }: { link: GuestLink; showOwner: b
       <CardBody className="space-y-3">
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
           Guests get <Badge tone="accent">@{link.role}</Badge>
+          {link.channels.length > 0 && (
+            <>
+              and see only {link.channels.map((c) => <Badge key={c.id} tone="neutral">{channelLabel(c)}</Badge>)}
+            </>
+          )}
         </div>
         {link.guests.length === 0 ? (
           <p className="text-sm text-subtle">Nobody has used it yet.</p>
@@ -219,11 +227,19 @@ function NewLinkDialog({ open, onOpenChange, overview, onMade }: { open: boolean
   const [label, setLabel] = useState("");
   const [hours, setHours] = useState(String(Math.min(4, overview.max_hours)));
   const [maxUses, setMaxUses] = useState("");
+  // Every channel offered, until some are picked.
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const channels = picked ?? overview.channels.map((c) => c.id);
+  const toggle = (id: string) => setPicked(channels.includes(id) ? channels.filter((x) => x !== id) : [...channels, id]);
   const create = useMutation({
-    mutationFn: () => api.post<GuestLink>(`${BASE}/guests`, { label: label.trim(), hours: Number(hours), max_uses: Number(maxUses) || 0 }),
-    onSuccess: (l) => { onMade(l); setLabel(""); setMaxUses(""); },
+    mutationFn: () => api.post<GuestLink>(`${BASE}/guests`, {
+      label: label.trim(), hours: Number(hours), max_uses: Number(maxUses) || 0,
+      channels: overview.channels.length ? channels : undefined,
+    }),
+    onSuccess: (l) => { onMade(l); setLabel(""); setMaxUses(""); setPicked(null); },
     onError: (e: Error) => toast.error(e.message),
   });
+  const noChannel = overview.channels.length > 0 && channels.length === 0;
   const presets = PRESETS.filter((h) => h <= overview.max_hours);
   if (!presets.includes(overview.max_hours)) presets.push(overview.max_hours);
   return (
@@ -235,7 +251,7 @@ function NewLinkDialog({ open, onOpenChange, overview, onMade }: { open: boolean
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="primary" loading={create.isPending} disabled={!label.trim()} onClick={() => create.mutate()}><LinkIcon /> Make link</Button>
+          <Button variant="primary" loading={create.isPending} disabled={!label.trim() || noChannel} onClick={() => create.mutate()}><LinkIcon /> Make link</Button>
         </>
       }
     >
@@ -255,6 +271,23 @@ function NewLinkDialog({ open, onOpenChange, overview, onMade }: { open: boolean
             <Input type="number" min={0} value={maxUses} onChange={(e) => setMaxUses(e.target.value)} placeholder="no limit" />
           </Field>
         </div>
+        {overview.channels.length > 0 && (
+          <Field label="Channels these guests see" hint={noChannel ? "Choose at least one." : "They see these and nothing else on the server."}>
+            <div className="flex flex-wrap gap-1.5">
+              {overview.channels.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={channels.includes(c.id)}
+                  onClick={() => toggle(c.id)}
+                  className={cn("border px-2.5 py-1 text-xs", channels.includes(c.id) ? "border-accent bg-accent-soft text-accent-ink" : "border-border text-muted hover:border-border-strong")}
+                >
+                  {channelLabel(c)}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
       </div>
     </Dialog>
   );

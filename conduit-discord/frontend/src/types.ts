@@ -52,11 +52,17 @@ export interface Admin {
     guest_role_id: string;
     guest_role_name: string;
     guest_max_hours: number;
+    /** Channels guests may be let into; empty when channels aren't limited. */
+    guest_channels: GuestChannel[];
   };
   redirect_uri: string;
   /** The second redirect the Discord application needs, for guests. */
   guest_redirect_uri: string;
   guest_hours_ceiling: number;
+  /** After saving Temporary access: channels guests can still see although they shouldn't. */
+  guest_channels_seen?: string[];
+  /** After saving: hiding the other channels is still running in the background. */
+  guest_channels_hiding?: boolean;
   invite_url: string | null;
   mappings: Mapping[];
   groups: { id: number; name: string }[];
@@ -97,6 +103,14 @@ export interface LinkedMember extends Account {
   characters?: LinkedCharacter[];
 }
 
+export interface GuestChannel {
+  id: string;
+  name: string;
+  kind: "text" | "voice" | "announcement" | "stage" | "forum";
+  /** Only in the list to choose from. */
+  category?: string;
+}
+
 export type GuestLinkStatus = "active" | "expired" | "revoked" | "used_up" | "creator_lost";
 
 export interface GuestUser {
@@ -124,6 +138,8 @@ export interface GuestLink {
   max_uses: number;
   uses: number;
   role: string;
+  /** The channels it opens; empty when channels aren't limited. */
+  channels: GuestChannel[];
   created_by: { id: number; name: string } | null;
   guests: GuestUser[];
 }
@@ -133,6 +149,8 @@ export interface GuestOverview {
   can_manage: boolean;
   max_hours: number;
   role: string;
+  /** The channels a link can open; empty when channels aren't limited. */
+  channels: GuestChannel[];
   server: string;
   links: GuestLink[];
 }

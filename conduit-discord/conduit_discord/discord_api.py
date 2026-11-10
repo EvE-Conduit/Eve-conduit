@@ -24,6 +24,12 @@ KICK_MEMBERS = 1 << 1
 ADMINISTRATOR = 1 << 3
 MANAGE_NICKNAMES = 1 << 27
 MANAGE_ROLES = 1 << 28
+# Channel permissions set for guests.
+VIEW_CHANNEL = 1 << 10
+CONNECT = 1 << 20
+#: Channel types: a category only groups channels; the rest can be opened to guests.
+CATEGORY = 4
+OPENABLE = {0: "text", 2: "voice", 5: "announcement", 13: "stage", 15: "forum"}
 BOT_PERMISSIONS = CREATE_INSTANT_INVITE | KICK_MEMBERS | MANAGE_NICKNAMES | MANAGE_ROLES
 
 #: Longest wait for a rate limit before giving up on a call.
@@ -169,4 +175,26 @@ def kick(bot_token: str, guild_id: str, user_id: str) -> None:
         call("DELETE", f"/guilds/{guild_id}/members/{user_id}", bot_token=bot_token)
     except DiscordError as exc:
         if exc.status != 404:
+            raise
+
+
+# --- channels and who may see them ----------------------------------------------------------------------------------
+
+
+def channels(bot_token: str, guild_id: str) -> list[dict]:
+    """Every channel and category of the server, with its permission overwrites."""
+    return call("GET", f"/guilds/{guild_id}/channels", bot_token=bot_token)
+
+
+def set_overwrite(bot_token: str, channel_id: str, target_id: str, *, member: bool, allow: int = 0, deny: int = 0) -> None:
+    """What one role (or one member) may and may not do in one channel, on top of the server's own permissions."""
+    call("PUT", f"/channels/{channel_id}/permissions/{target_id}", bot_token=bot_token,
+         json={"type": 1 if member else 0, "allow": str(allow), "deny": str(deny)})
+
+
+def delete_overwrite(bot_token: str, channel_id: str, target_id: str) -> None:
+    try:
+        call("DELETE", f"/channels/{channel_id}/permissions/{target_id}", bot_token=bot_token)
+    except DiscordError as exc:
+        if exc.status != 404:  # the channel or the overwrite is gone already
             raise

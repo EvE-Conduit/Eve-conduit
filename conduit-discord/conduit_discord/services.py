@@ -343,6 +343,18 @@ def server_check(s: DiscordSettings | None = None) -> dict:
             problems.append(f"The guest role {r['name']} is above the bot's own role, so guests can't be given it. Drag the bot's role above it in Server Settings → Roles.")
         elif r["name"] != s.guest_role_name:
             s.guest_role_name = r["name"][:100]
+        if r is not None and s.guest_channels:
+            from . import guests
+
+            try:
+                seen = guests.hide_other_channels(s, change=False)
+            except api.DiscordError as exc:
+                seen = []
+                problems.append(f"Couldn't check which channels guests see: {explain(exc)}")
+            if seen:
+                problems.append("Guests could see channels they shouldn't (" + ", ".join(seen[:8]) + ("…" if len(seen) > 8 else "")
+                                + "). Save Temporary access again to hide them; if they stay listed, the bot needs "
+                                "Manage Permissions in those channels. Nobody is let in until this is sorted.")
     s.guild_name = g.get("name", "")[:100]
     s.save(update_fields=["guild_name", "guest_role_name"])
     # Refresh stored role names, which members see.
