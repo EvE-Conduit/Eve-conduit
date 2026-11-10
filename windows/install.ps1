@@ -281,7 +281,7 @@ Write-Step 'Creating folders'
 New-Item -ItemType Directory -Force -Path $p.Root | Out-Null
 $ownerProblem = Get-InstallRootOwnerProblem $p.Root
 if ($ownerProblem) { throw $ownerProblem }
-Protect-ConduitInstallRoot -Root $p.Root
+Protect-ConduitInstallRoot -Root $p.Root -DuringInstall
 foreach ($dir in @($p.Releases, $p.Bin, $p.Config, $p.Data, $p.Static, $p.Logs, $p.Backups, $p.Services, $p.Cache, $p.Tmp, $p.UpdaterLogs, (Join-Path $p.Data 'caddy'), (Join-Path $p.Data 'updates'))) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }

@@ -675,17 +675,31 @@ function Protect-ConduitInstallRoot {
       has the drive's permissions, which let every user of the machine add and change files. Unlike
       "icacls /grant:r" this also drops entries someone else added to the folder. Throws when it didn't work.
     #>
-    param([Parameter(Mandatory)][string]$Root)
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        # While installing: also let the administrator running the installer in by their own account, not only
+        # as a member of Administrators. PostgreSQL's initdb gives up its administrator rights before it starts,
+        # and what is left of it could then neither load its own files nor write the database folder. The
+        # lock-down at the end of the install (without this switch) takes the entry away again.
+        [switch]$DuringInstall
+    )
+    $allowed = @('S-1-5-32-544', 'S-1-5-18', 'S-1-5-19')
     $acl = New-Object Security.AccessControl.DirectorySecurity
     $acl.SetAccessRuleProtection($true, $false)   # no inherited entries, and don't keep copies of them
     $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-32-544' -Rights FullControl))
     $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-18' -Rights FullControl))
     $acl.AddAccessRule((New-ConduitAccessRule -Sid 'S-1-5-19' -Rights ReadAndExecute))
+    if ($DuringInstall) {
+        $installer = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        if ($allowed -notcontains $installer) {
+            $acl.AddAccessRule((New-ConduitAccessRule -Sid $installer -Rights Modify))
+            $allowed += $installer
+        }
+    }
     Set-Acl -LiteralPath $Root -AclObject $acl
     if (-not (Set-ConduitFolderOwner -Path $Root -AllowCurrentUser)) {
         throw "Couldn't make Administrators the owner of $Root."
     }
-    $allowed = @('S-1-5-32-544', 'S-1-5-18', 'S-1-5-19')
     $rules = @((Get-Acl -LiteralPath $Root).GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
     $others = @($rules | Where-Object { $allowed -notcontains $_.IdentityReference.Value })
     if (-not $rules.Count -or $others.Count) {
