@@ -627,7 +627,7 @@ SECRET_COLUMNS = frozenset({"refresh_token", "access_token", "token"})
 def _pieces(dump_path: str, tables):
     """(table, columns, rows) pieces of the dump's rows for these tables, in file order."""
     columns: dict = {}
-    table, rows, size = None, [], 0
+    table, cols, rows, size = None, [], [], 0
     try:
         for name, row in seat_dump.iter_rows(dump_path, tables, columns):
             if name != table or len(rows) >= PIECE_ROWS or size >= PIECE_BYTES:

@@ -5,6 +5,9 @@ name: SeAT import
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   exe:
     runs-on: windows-latest
