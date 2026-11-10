@@ -375,7 +375,11 @@ function GuestsTab({ data }: { data: Admin }) {
     staleTime: 60_000,
     retry: false,
   });
-  const [form, setForm] = useState({ enabled: s.guest_enabled, role_id: s.guest_role_id, max_hours: String(s.guest_max_hours) });
+  const [form, setForm] = useState({
+    enabled: s.guest_enabled, role_id: s.guest_role_id, temp_role_id: s.guest_temp_role_id, max_hours: String(s.guest_max_hours),
+    end_action: s.guest_end_action, nickname_format: s.guest_nickname_format,
+  });
+  const [after, setAfter] = useState<string[]>([]);
   const [channels, setChannels] = useState<string[]>(s.guest_channels.map((c) => c.id));
   const [seen, setSeen] = useState<string[]>([]);
   const offered = useQuery({ queryKey: ["discord", "channels"], queryFn: () => api.get<GuestChannel[]>(`${BASE}/admin/channels`), staleTime: 60_000, retry: false });
@@ -384,15 +388,18 @@ function GuestsTab({ data }: { data: Admin }) {
     mutationFn: () => api.put<Admin>(`${BASE}/admin/guests`, {
       enabled: form.enabled, role_id: form.role_id, max_hours: Number(form.max_hours) || 0,
       role_name: roles.find((r) => r.id === form.role_id)?.name ?? s.guest_role_name,
-      channels,
+      temp_role_id: form.temp_role_id,
+      temp_role_name: roles.find((r) => r.id === form.temp_role_id)?.name ?? s.guest_temp_role_name,
+      channels, end_action: form.end_action, nickname_format: form.nickname_format,
     }),
     onSuccess: (d) => {
       qc.setQueryData(KEY, d);
       qc.invalidateQueries({ queryKey: ["discord"] });
       setSeen(d.guest_channels_seen ?? []);
+      setAfter(d.guest_after_end_sees ?? []);
       if (d.guest_channels_seen?.length) toast.warning("Saved, but guests can still see some channels; see below");
       else if (d.guest_channels_hiding) toast.success("Saved; the other channels are being hidden from guests, which takes a minute on a large server");
-      else toast.success(form.enabled ? "Saved" : "Saved; guests still on the server are being removed");
+      else toast.success(form.enabled ? "Saved" : "Saved; the guest access still running is being ended");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -411,13 +418,13 @@ function GuestsTab({ data }: { data: Admin }) {
       <Card>
         <CardHeader
           title="Temporary access links"
-          description="People with the permission hand out links. Whoever opens one signs in with Discord, joins the server with the guest role and is removed again when the link runs out."
+          description="People with the permission hand out links. Whoever opens one signs in with Discord and gets two roles: the guest role, which they keep, and the temporary role, which they have until the link runs out."
         />
         <CardBody className="space-y-5">
           <div className="border border-border px-3">
             <SwitchRow
               label="Temporary access links"
-              description="Off: nobody can make links, existing ones stop working and guests still on the server are removed."
+              description="Off: nobody can make links, existing ones stop working and the guest access still running ends."
               checked={form.enabled}
               onCheckedChange={(v) => set({ enabled: v })}
             />
@@ -427,26 +434,50 @@ function GuestsTab({ data }: { data: Admin }) {
           </Field>
           {error && <Alert tone="warning" title="Couldn't load the server's roles">{(error as Error).message}</Alert>}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Role guests get" hint="Make a role for guests on Discord and let it see only the channels guests should. It must be below the bot's role.">
-              <Select value={form.role_id} onChange={(e) => set({ role_id: e.target.value })} disabled={isLoading}>
-                <option value="">{isLoading ? "Loading roles…" : "Choose…"}</option>
-                {form.role_id && !roles.some((r) => r.id === form.role_id) && <option value={form.role_id}>@{s.guest_role_name || form.role_id}</option>}
+            <Field label="Temporary role" hint="Guests have it while their link lasts and lose it when it ends, for example a role called tempaccess. It must be below the bot's role.">
+              <Select value={form.temp_role_id} onChange={(e) => set({ temp_role_id: e.target.value })} disabled={isLoading}>
+                <option value="">{isLoading ? "Loading roles…" : "None (the guest role is taken away instead)"}</option>
+                {form.temp_role_id && !roles.some((r) => r.id === form.temp_role_id) && <option value={form.temp_role_id}>@{s.guest_temp_role_name || form.temp_role_id}</option>}
                 {roles.map((r) => (
-                  <option key={r.id} value={r.id} disabled={!r.assignable}>
+                  <option key={r.id} value={r.id} disabled={!r.assignable || r.id === form.role_id}>
                     @{r.name}{r.assignable ? "" : " (above the bot)"}
                   </option>
                 ))}
               </Select>
             </Field>
+            <Field label="Guest role" hint="Guests get it too and keep it after their link ends, so you can see who has been a guest. It must be below the bot's role.">
+              <Select value={form.role_id} onChange={(e) => set({ role_id: e.target.value })} disabled={isLoading}>
+                <option value="">{isLoading ? "Loading roles…" : "Choose…"}</option>
+                {form.role_id && !roles.some((r) => r.id === form.role_id) && <option value={form.role_id}>@{s.guest_role_name || form.role_id}</option>}
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id} disabled={!r.assignable || r.id === form.temp_role_id}>
+                    @{r.name}{r.assignable ? "" : " (above the bot)"}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Longest a link may last (hours)" hint={`Up to ${data.guest_hours_ceiling} hours (${data.guest_hours_ceiling / 24} days).`}>
               <Input type="number" min={1} max={data.guest_hours_ceiling} value={form.max_hours} onChange={(e) => set({ max_hours: e.target.value })} className="max-w-32" />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="When a link ends" hint="Someone who was on the server before using a link is never removed, whichever you choose.">
+              <Select value={form.end_action} onChange={(e) => set({ end_action: e.target.value as "role" | "kick" })}>
+                <option value="role">{form.temp_role_id ? "Take the temporary role away; they stay, with the guest role" : "Take the guest role away; they stay on the server"}</option>
+                <option value="kick">Remove them from the server</option>
+              </Select>
+            </Field>
+            <Field label="Guests appear as" hint={<>{"{name}"} is their Discord name. Empty leaves their name alone. It is put back when their access ends.</>}>
+              <Input value={form.nickname_format} onChange={(e) => set({ nickname_format: e.target.value })} placeholder="[GUEST] {name}" maxLength={60} className="font-mono" />
             </Field>
           </div>
           <Field
             label="Channels guests may be let into"
             hint={channels.length
-              ? "The bot hides every other channel from the guest role, also ones made later. Whoever makes a link picks which of these it opens."
-              : "None chosen: guests see whatever the guest role sees on Discord. Choose some and guests see only the channels their link opens."}
+              ? "The bot hides every channel from the guest role, also ones made later, so a former guest sees nothing. Whoever makes a link picks which of these it opens."
+              : "None chosen: guests see whatever their roles see on Discord, and afterwards what the guest role sees. Choose some and guests see only the channels their link opens."}
           >
             {offered.error ? (
               <Alert tone="warning" title="Couldn't load the server's channels">{(offered.error as Error).message}</Alert>
@@ -475,10 +506,16 @@ function GuestsTab({ data }: { data: Admin }) {
               </div>
             )}
           </Field>
+          {after.length > 0 && (
+            <Alert tone="warning" title="Former guests will see more than guests do">
+              When a link ends, guests stay on the server without the guest role, and then see what anyone without a role sees:{" "}
+              {after.slice(0, 8).join(", ")}{after.length > 8 ? "…" : ""}. Choose a temporary role above, so they keep the guest role and see nothing; or hide those channels from @everyone on Discord.
+            </Alert>
+          )}
           {seen.length > 0 && (
             <Alert tone="warning" title="Guests can still see channels they shouldn't">
               The bot wasn't allowed to hide {seen.slice(0, 8).join(", ")}{seen.length > 8 ? "…" : ""}. Give its role <b>Manage Permissions</b> in those channels
-              (or hide them from the guest role by hand) and save again. Nobody is let in through a link until this is sorted.
+              (or hide them from the guest and temporary roles by hand) and save again. Nobody is let in through a link until this is sorted.
             </Alert>
           )}
         </CardBody>
@@ -491,10 +528,11 @@ function GuestsTab({ data }: { data: Admin }) {
         <CardHeader title="How guests are handled" />
         <CardBody className="space-y-3 text-sm text-muted">
           <p>Give <b>Can hand out temporary access to the Discord server</b> to the people who may make links (Administration → Access), for example fleet commanders, diplomats and recruiters.</p>
-          <p>Guests are removed within a couple of minutes of their link running out or being withdrawn, and when its maker loses that permission.</p>
+          <p>Guest access ends within a couple of minutes of a link running out, straight away when it is withdrawn, and when its maker loses that permission.</p>
           <p>With channels chosen, a guest sees only the ones their link opens. Members and other roles aren't affected.</p>
-          <p>Someone who was already on the server can't come in as a guest, so nobody is ever removed who was there before.</p>
-          <p>A guest who links their Discord account as a member here keeps their place and only loses the guest role.</p>
+          <p>When a link ends, a guest keeps the guest role and loses the temporary one. A former guest can use a new link later.</p>
+          <p>Someone already on the server can use a link too: they get the roles for the time, and are never removed from the server.</p>
+          <p>A Discord account linked to a member here can't use a link; a guest who becomes a member keeps their place and loses the guest role.</p>
         </CardBody>
       </Card>
     </div>

@@ -56,7 +56,7 @@ Buttons:
 ## Temporary access links
 
 If you have the permission, **Temporary access** in the menu (or the **Temporary access** button on the Discord
-page) lets you bring someone without an account here onto the server for a while.
+page) lets you give someone without an account here guest access to the server for a while.
 
 1. Press **New link**.
 2. Say what it's for (your guests see this), how long it lasts, and optionally how many people may use it.
@@ -68,24 +68,30 @@ What your guest does:
 
 1. They open the link and press **Join with Discord**.
 2. Discord asks them to confirm.
-3. They are on the server with the guest role, and the page tells them when their access ends.
+3. They have guest access on the server (joining it if they weren't on it), and the page tells them when their
+   access ends. They may appear under a guest name such as `[GUEST] Jane`.
 
-When the link runs out, everyone who came in through it is removed from the server, within a couple of minutes.
+When the link runs out, their guest access ends within a couple of minutes: they lose the temporary role and the
+channels the link opened, and keep the guest role that marks them as a guest. Whether they also leave the server is your leadership's choice; the top of the
+**Temporary access** page says which applies. Someone who was on the server before using your link always stays.
 
-On the **Temporary access** page each link shows how long it has left, how many times it was used and who came in
-through it.
+Each link shows how long it has left, how many times it was used and who came in through it.
 
 | Action | What it does |
 |---|---|
 | **Copy link** | Copies the link again |
-| **Withdraw** | The link stops working and its guests are removed from the server now |
-| **Remove** (next to a guest) | Removes that one guest; the link keeps working for others |
+| **Extend** | Adds time to a running link; its guests keep their access. There is a limit on how far ahead a link may run |
+| **Withdraw** | The link stops working and its guests' access ends now |
+| **End access** (next to a guest) | Ends that one guest's access; the link keeps working for others |
+
+The **History** tab lists everyone who came through your links, with when they joined and when their access ended.
+Search it by Discord name or id, or by the link's label.
 
 Good to know:
 
-- Someone who is already on the server can't use a link. They are told so, and nothing changes for them.
-- If you lose the permission to hand out access, your links stop working and their guests are removed.
-- A guest who later becomes a member and links their Discord account here stays on the server.
+- Someone already on the server can use a link too. They get guest access for the time and keep their place.
+- A Discord account linked to a member here can't use a link; members have their own access.
+- If you lose the permission to hand out access, your links stop working and their guests' access ends.
 
 ## Notifications
 

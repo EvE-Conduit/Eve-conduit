@@ -46,6 +46,8 @@ def _out(link: GuestLink, s: DiscordSettings) -> dict:
         "server": s.guild_name,
         "expires_at": link.expires_at.isoformat(),
         "status": guests.status(link),
+        # Whether guests are removed from the server when the link ends, or only lose the guest role.
+        "leaves": s.guest_end_action == "kick",
         "invited_by": link.created_by.display_name if link.created_by else None,
     }
 

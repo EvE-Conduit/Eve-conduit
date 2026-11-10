@@ -242,6 +242,9 @@ def finish_link(request, code: str, state: str) -> DiscordAccount:
         _set_status(acct, explain(exc))
         raise LinkError(f"Linked, but Discord wouldn't add you to the server: {explain(exc)}") from None
     sync_user(user, s)  # already a member: adding changes nothing, so set roles and nickname now
+    from . import guests
+
+    guests.became_member(acct, s)  # a guest until now, or before: that is over
     recheck_compliance(user.pk)
     bus.emit("discord.linked", user_id=user.pk, user=user.display_name, discord=acct.username,
              summary=f"{user.display_name} linked Discord account {acct.username}", level="success")
@@ -343,6 +346,13 @@ def server_check(s: DiscordSettings | None = None) -> dict:
             problems.append(f"The guest role {r['name']} is above the bot's own role, so guests can't be given it. Drag the bot's role above it in Server Settings → Roles.")
         elif r["name"] != s.guest_role_name:
             s.guest_role_name = r["name"][:100]
+        t = by_id.get(s.guest_temp_role_id) if s.guest_temp_role_id else None
+        if s.guest_temp_role_id and t is None:
+            problems.append("The temporary role for guests no longer exists on the server; choose another under Temporary access.")
+        elif t is not None and (t["position"] >= top or t.get("managed")):
+            problems.append(f"The temporary role {t['name']} is above the bot's own role, so guests can't be given it. Drag the bot's role above it in Server Settings → Roles.")
+        elif t is not None and t["name"] != s.guest_temp_role_name:
+            s.guest_temp_role_name = t["name"][:100]
         if r is not None and s.guest_channels:
             from . import guests
 
@@ -351,12 +361,22 @@ def server_check(s: DiscordSettings | None = None) -> dict:
             except api.DiscordError as exc:
                 seen = []
                 problems.append(f"Couldn't check which channels guests see: {explain(exc)}")
+            if s.guest_end_action == "role" and not s.guest_temp_role_id:
+                try:
+                    after = guests.seen_without_roles(s)
+                except api.DiscordError:
+                    after = []
+                if after:
+                    problems.append("When a link ends, guests stay on the server without the guest role and then see what anyone "
+                                    "without a role sees: " + ", ".join(after[:8]) + ("…" if len(after) > 8 else "")
+                                    + ". Choose a temporary role under Temporary access, so they keep the guest role and see nothing; "
+                                    "or hide those channels from @everyone on Discord.")
             if seen:
                 problems.append("Guests could see channels they shouldn't (" + ", ".join(seen[:8]) + ("…" if len(seen) > 8 else "")
                                 + "). Save Temporary access again to hide them; if they stay listed, the bot needs "
                                 "Manage Permissions in those channels. Nobody is let in until this is sorted.")
     s.guild_name = g.get("name", "")[:100]
-    s.save(update_fields=["guild_name", "guest_role_name"])
+    s.save(update_fields=["guild_name", "guest_role_name", "guest_temp_role_name"])
     # Refresh stored role names, which members see.
     for m in RoleMapping.objects.all():
         if m.role_id in by_id and m.role_name != by_id[m.role_id]["name"]:

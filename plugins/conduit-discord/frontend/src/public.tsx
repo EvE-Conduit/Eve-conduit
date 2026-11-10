@@ -54,7 +54,7 @@ export function PublicGuestPage() {
             <Button variant="primary" size="lg" loading={start.isPending || start.isSuccess} onClick={() => start.mutate()}><DiscordLogo /> Join with Discord</Button>
             <p className="text-xs text-subtle">
               <Clock className="mr-1 inline size-3 align-[-2px]" />
-              Your access ends {new Date(data.expires_at).toLocaleString()} ({untilText(data.expires_at)}); you are removed from the server then.
+              Your guest access ends {new Date(data.expires_at).toLocaleString()} ({untilText(data.expires_at)}){data.leaves ? "; you are removed from the server then" : ""}.
               This site learns your Discord name and nothing else.
             </p>
           </CardBody>
@@ -116,7 +116,7 @@ export function PublicGuestCallbackPage() {
             <Button variant="primary"><ExternalLink /> Open Discord</Button>
           </a>
           <Alert tone="info" title={`Access ends ${new Date(joined.expires_at).toLocaleString()}`} icon={<Clock />}>
-            {untilText(joined.expires_at)}. You are removed from the server then.
+            {untilText(joined.expires_at)}. {joined.leaves ? "You are removed from the server then." : "Your access to the channels ends then."}
           </Alert>
         </CardBody>
       </Card>
