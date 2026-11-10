@@ -3,6 +3,30 @@
 Each release's section below becomes its notes on GitHub and in Administration → Updates.
 Versions follow `MAJOR.MINOR.PATCH`.
 
+## 0.5.57
+
+The SeAT import brings more over: members' join dates and last sign-in, and their corporations' history. Two new
+plugins: Secret Santa and Discord Tickets.
+
+### New
+- **SeAT import, join dates and last sign-in:** each account keeps the date the user joined SeAT and when they last
+  signed in there, so group rules on how long someone has been a member and the Inactivity plugin see members' real
+  history, not the day of the move. A join date only ever moves earlier and a last sign-in only later.
+- **SeAT import, corporations:** *Import character data* (and `import_seat_history`) now also brings over what SeAT
+  kept for every corporation that still has members here: every wallet division's journal and transactions,
+  contracts, industry jobs, market orders, moon mining per member per day, and killmails. Nothing is doubled and
+  nothing Conduit already has from EVE is changed. Sections filled from SeAT say so on the corporation page. On the
+  command line they are `--section corp.wallets`, `corp.contracts`, `corp.industry`, `corp.market`, `corp.mining`
+  and `corp.killmails`. Use the 0.5.57 SeAT import program to bring the dates over.
+
+### Plugins
+- **Secret Santa 1.0.0** (new): gift exchanges with sign-up per account, a draw that keeps chosen pairs apart, each
+  member seeing only their own giftee, gifts marked sent and received with an anonymous thank-you, reminders before
+  the deadline and a dashboard widget.
+- **Discord Tickets 1.2.0** (new): reach a member through a private Discord channel, an EVE mail or both, or let
+  people open their own from a panel, with chosen roles, transcripts and an audit trail.
+- Every plugin now has a user guide and an admin guide.
+
 ## 0.5.56
 
 Backups can be made and restored from the website.
