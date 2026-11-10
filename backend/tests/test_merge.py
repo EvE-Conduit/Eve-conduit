@@ -20,7 +20,10 @@ def accounts(db, corp):
     main = make_user(90000001, "Pilot One", corporation=corp)
     second = make_user(90000002, "Pilot Two", corporation=corp)  # signed up on its own instead of as an alt
     Character.objects.create(id=90000003, name="Pilot Three", owner_hash="three", user=second, corporation=corp)
-    officer = give(make_user(90000009, "Officer"), "manage_access")
+    # Only administrators move characters (see can_move_characters).
+    officer = make_user(90000009, "Officer")
+    officer.is_superuser = True
+    officer.save()
     return main, second, officer
 
 
@@ -65,31 +68,30 @@ def test_moving_some_characters_keeps_the_account(accounts, api_client):
     assert second.is_active and second.main_character_id == 90000003  # its main moved, so another took over
 
 
-def test_moves_cant_be_used_to_take_over_accounts(accounts, api_client, admin_user):
-    """Whoever owns a character signs in with it, into the account holding it."""
+def test_moves_cant_be_used_to_take_over_accounts(accounts, api_client):
+    """Whoever owns a character signs in with it, into the account holding it, and whoever holds it reads what is
+    synced for it: only administrators move characters, and never into their own account."""
     main, second, officer = accounts
     url = f"/api/admin/members/{second.pk}/move-characters"
     api_client.force_login(main)  # no permission
     assert api_client.call("post", url, {"target": main.pk, "characters": [90000002]}).status_code == 403
+    # Managing access isn't enough: a spare account of their own would do as the target, and its sheets as the way
+    # to read someone's characters without a snooper entry.
+    manager = give(make_user(90000008, "Access Manager"), "manage_access")
+    spare = make_user(90000007, "Spare")
+    api_client.force_login(manager)
+    for target in (main, spare):
+        resp = api_client.call("post", url, {"target": target.pk, "characters": [90000002]})
+        assert resp.status_code == 403 and "Only administrators" in resp.json()["detail"]
+    assert Character.objects.get(pk=90000002).user_id == second.pk
     api_client.force_login(officer)
-    # Into an administrator's account, or one holding permissions the officer doesn't: no.
-    assert api_client.call("post", url, {"target": admin_user.pk, "characters": [90000002]}).status_code == 403
-    give(main, "manage_plugins")
-    resp = api_client.call("post", url, {"target": main.pk, "characters": [90000002]})
-    assert resp.status_code == 403 and "manage_plugins" in resp.json()["detail"]
-    main.user_permissions.clear()
     # Someone else's characters, or none: no.
     assert api_client.call("post", f"/api/admin/members/{main.pk}/move-characters",
                            {"target": second.pk, "characters": [90000002]}).status_code == 400
     # Into their own account: no, not even for administrators (they could then read the characters unlogged).
     resp = api_client.call("post", url, {"target": officer.pk, "characters": [90000002]})
     assert resp.status_code == 403 and "your own account" in resp.json()["detail"]
-    api_client.force_login(admin_user)
-    assert api_client.call("post", url, {"target": admin_user.pk, "characters": [90000002]}).status_code == 403
-    api_client.force_login(officer)
     assert Character.objects.get(pk=90000002).user_id == second.pk
-    # An administrator may.
-    api_client.force_login(admin_user)
     assert api_client.call("post", url, {"target": main.pk, "characters": [90000002]}).status_code == 200
 
 
@@ -122,21 +124,6 @@ def test_records_stay_unless_asked(accounts, api_client):
                           {"target": main.pk, "characters": [90000002, 90000003]}).json()
     assert out["records"] is None and Notification.objects.get().user_id == second.pk
     # Only a merge moves records: a partial move ignores the option.
-
-
-def test_moves_cant_strip_administrators(accounts, api_client, admin_user):
-    """Moving every character away switches the account off, so it mustn't take power the officer lacks."""
-    main, second, officer = accounts
-    give(second, "manage_plugins")
-    api_client.force_login(officer)
-    resp = api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
-                           {"target": main.pk, "characters": [90000002, 90000003]})
-    assert resp.status_code == 403 and "manage_plugins" in resp.json()["detail"]
-    second.refresh_from_db()
-    assert second.is_active and second.characters.count() == 2
-    api_client.force_login(admin_user)
-    assert api_client.call("post", f"/api/admin/members/{second.pk}/move-characters",
-                           {"target": main.pk, "characters": [90000002, 90000003]}).status_code == 200
 
 
 def test_merging_leaves_who_decided_what_alone(accounts, api_client):

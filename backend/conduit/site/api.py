@@ -456,6 +456,16 @@ class SiteIn(Schema):
     def _logo(cls, v):
         if v and not v.startswith("https://"):
             raise ValueError("logo must be an https:// URL")
+        if len(v) > 200:
+            raise ValueError("logo URL must be at most 200 characters")
+        return v
+
+    @field_validator("tagline")
+    @classmethod
+    def _tagline(cls, v):
+        v = v.strip()
+        if len(v) > 120:
+            raise ValueError("tagline must be at most 120 characters")
         return v
 
 

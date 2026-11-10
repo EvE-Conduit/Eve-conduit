@@ -153,10 +153,12 @@ def validate_ruleset(data) -> dict:
     for raw in data.get("rules") or []:
         if not isinstance(raw, dict):
             raise RuleError("each rule must be an object")
-        rtype = RULE_TYPES.get(raw.get("type"))
+        rtype = RULE_TYPES.get(raw.get("type")) if isinstance(raw.get("type"), str) else None
         if rtype is None:
             raise RuleError(f"unknown rule type {raw.get('type')!r}")
         given = raw.get("params") or {}
+        if not isinstance(given, dict):
+            raise RuleError(f"{rtype.label}: params must be an object")
         params = {p.name: _clean_param(rtype.label, p, given.get(p.name)) for p in rtype.params}
         rules.append({"type": rtype.key, "params": params, "negate": bool(raw.get("negate", False))})
     return {"match": match, "rules": rules} if rules else {}

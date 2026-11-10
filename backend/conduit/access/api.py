@@ -1,5 +1,7 @@
 """Admin endpoints for states, groups, members and looking up EVE entities."""
 
+from contextlib import contextmanager
+
 from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, Q, Value, When
@@ -96,6 +98,40 @@ def _ensure_entities(payload: StateIn):
             raise HttpError(502, f"Could not look up those corporations/alliances: {exc}") from None
 
 
+@contextmanager
+def _keeping_administrators(actor):
+    """Undo the state change made inside and answer 403 if it took administrator permissions from someone that
+    ``actor`` doesn't hold themselves.
+
+    A state edit can do that without touching any permission: move an administrator's corporation out of the only
+    state their admin group allows and the group drops them. Changing or emptying such a group is refused to
+    anyone who doesn't hold what it grants; this closes the same door on the states side. Administrators
+    (superusers) keep everything whatever their state, so their own edits aren't checked.
+    """
+    if actor.is_superuser:
+        yield
+        return
+    held = set(actor.get_all_permissions())
+    before = {}
+    # Only people a state or group gives an administrator permission, not every account on the site.
+    codenames = {name.split(".", 1)[1] for name in ADMIN_PERMISSIONS}
+    holders = User.objects.filter(is_active=True, is_superuser=False).filter(
+        Q(groups__permissions__codename__in=codenames) | Q(state__permissions__codename__in=codenames)).distinct()
+    for user in holders:
+        beyond = (ADMIN_PERMISSIONS & set(user.get_all_permissions())) - held
+        if beyond:
+            before[user.pk] = beyond
+    with transaction.atomic():
+        yield
+        if before:
+            recompute_all_states()  # what the change does to everyone's state and groups, before it is kept
+            for user in User.objects.filter(pk__in=before):
+                lost = sorted(before[user.pk] - set(user.get_all_permissions()))
+                if lost:
+                    raise HttpError(403, f"That would take administrator permissions you don't hold ({', '.join(lost)}) "
+                                         f"from {user.display_name}; an administrator who holds them has to do this")
+
+
 @transaction.atomic
 def _save_state(state: State, payload: StateIn) -> State:
     # Only the permissions being set are checked, so a state that already carries them can be edited to drop them.
@@ -128,7 +164,8 @@ def list_states(request):
 @router.post("/states", response=StateOut)
 @require_perm("site.manage_access")
 def create_state(request, payload: StateIn):
-    state = _save_state(State(), payload)
+    with _keeping_administrators(request.user):
+        state = _save_state(State(), payload)
     record("state.created", f"created state {state.name}", request=request, target=state, details=payload.dict())
     return _state_out(state)
 
@@ -136,7 +173,9 @@ def create_state(request, payload: StateIn):
 @router.put("/states/{state_id}", response=StateOut)
 @require_perm("site.manage_access")
 def update_state(request, state_id: int, payload: StateIn):
-    state = _save_state(get_object_or_404(State, pk=state_id), payload)
+    state = get_object_or_404(State, pk=state_id)
+    with _keeping_administrators(request.user):
+        state = _save_state(state, payload)
     record("state.updated", f"changed state {state.name}", request=request, target=state, details=payload.dict())
     return _state_out(state)
 
@@ -145,8 +184,15 @@ def update_state(request, state_id: int, payload: StateIn):
 @require_perm("site.manage_access")
 def delete_state(request, state_id: int):
     state = get_object_or_404(State, pk=state_id)
-    record("state.deleted", f"deleted state {state.name}", request=request, target=state)
-    state.delete()
+    # A group limited to this state alone would be left with no limit at all, which means open to every state.
+    only_here = [p.group.name for p in GroupProfile.objects.filter(allowed_states=state).select_related("group")
+                 if p.allowed_states.count() == 1]
+    if only_here:
+        raise HttpError(400, f"{state.name} is the only state allowed in {', '.join(sorted(only_here)[:10])}: deleting it "
+                             "would open those groups to everyone. Change or delete them first.")
+    with _keeping_administrators(request.user):
+        record("state.deleted", f"deleted state {state.name}", request=request, target=state)
+        state.delete()
     transaction.on_commit(recompute_all_states)
     return {"ok": True}
 
@@ -655,7 +701,7 @@ def compliance_overview(request, q: str = "", state: int | None = None, corporat
         }
 
     count = users.count()
-    limit = max(1, min(limit, 500))
+    limit, offset = max(1, min(limit, 500)), max(0, offset)
     return {
         "summary": {
             "users": total,

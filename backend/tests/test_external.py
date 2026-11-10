@@ -283,7 +283,7 @@ def test_refused_plugin_calls_are_attributed_to_the_plugin(client):
     from django.test import RequestFactory
 
     middleware = ApiRequestLogMiddleware(lambda request: type("R", (), {"status_code": 404})())
-    middleware(RequestFactory().get("/api/v1/p/foo/x", HTTP_AUTHORIZATION="Bearer evk_x"))
+    middleware(RequestFactory().get("/api/v1/p/foo/x", HTTP_AUTHORIZATION=f"Bearer {secret}"))  # a real key: made-up ones aren't logged
     assert ApiRequest.objects.order_by("-id").first().area == "p.foo"
 
 

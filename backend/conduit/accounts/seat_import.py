@@ -92,6 +92,18 @@ def _sold(here: Character, seat: SeatCharacter) -> bool:
     return bool(here.owner_hash and seat.owner_hash and here.owner_hash != seat.owner_hash)
 
 
+def _same_owner(here: Character, seat: SeatCharacter) -> bool:
+    """Whether the import lists the character with the owner hash this site has for it.
+
+    A hash missing on both sides (a SeAT without owner hashes, and nobody has signed in here since) is no secret
+    anyone had to know. It only counts while the whole account is like that, so a second run finds the accounts the
+    first one made; once one of the account's characters has a known owner, a hashless alt of it proves nothing.
+    """
+    if here.owner_hash != seat.owner_hash:
+        return False
+    return bool(here.owner_hash) or not Character.objects.filter(user_id=here.user_id).exclude(owner_hash="").exists()
+
+
 def _target_user(seat_user: SeatUser, existing: dict[int, Character]) -> User | None:
     """The account this SeAT user lands in: whoever owns their main here, else whoever owns any of their characters.
 
@@ -100,8 +112,7 @@ def _target_user(seat_user: SeatUser, existing: dict[int, Character]) -> User | 
     it here from pulling the seller's main and alts into the buyer's account. A hash missing on one side only
     proves nothing either way.
     """
-    same_owner = {c.id: existing[c.id] for c in seat_user.characters
-                  if c.id in existing and existing[c.id].owner_hash == c.owner_hash}
+    same_owner = {c.id: existing[c.id] for c in seat_user.characters if c.id in existing and _same_owner(existing[c.id], c)}
     main = same_owner.get(seat_user.main_character_id)
     if main is not None:
         return main.user

@@ -1,7 +1,7 @@
 """Administration > API: keys, switching APIs on and off, and the request log."""
 
 import ipaddress
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -78,6 +78,12 @@ class ApiKeyIn(Schema):
         if not v:
             raise ValueError("name can't be empty")
         return v
+
+    @field_validator("expires_at")
+    @classmethod
+    def _expires(cls, v):
+        # A time without a zone is EVE time (UTC), like every other time on the site.
+        return v.replace(tzinfo=dt_timezone.utc) if v is not None and v.tzinfo is None else v
 
     @field_validator("allowed_ips")
     @classmethod

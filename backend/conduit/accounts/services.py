@@ -198,11 +198,16 @@ def can_move_characters(actor: User, source: User, target: User) -> str | None:
     """None if ``actor`` may move characters from ``source`` to ``target``, otherwise why not.
 
     Whoever owns a character can sign in with it, into the account that holds it, so moving a character into an
-    account is like handing out that account: as with signing in as someone, nobody may move characters into an
-    account that has permissions they don't hold themselves, and only administrators touch administrators' accounts.
+    account is like handing out that account, and whoever holds the characters reads everything synced for them:
+    only administrators (superusers) move characters.
     """
     if not actor.has_perm("site.manage_access"):
         return "You don't have permission to move characters between accounts"
+    if not actor.is_superuser:
+        # The rule below (not into your own account) is no protection from someone who can sign in once with a spare
+        # character and use that second account as the target, so moving is left to administrators, who may read
+        # every character anyway.
+        return "Only administrators can move characters between accounts"
     if source.pk == target.pk:
         return "Pick a different account to move them to"
     if target.pk == actor.pk:
@@ -211,21 +216,6 @@ def can_move_characters(actor: User, source: User, target: User) -> str | None:
         return "Ask another administrator to move characters into your own account"
     if not target.is_active:
         return "That account is switched off"
-    if (source.is_superuser or target.is_superuser) and not actor.is_superuser:
-        return "Only administrators can move characters to or from an administrator's account"
-    if not actor.is_superuser:
-        from conduit.access.services import ADMIN_PERMISSIONS
-
-        # Taking characters away (and switching the account off once none are left) mustn't strip someone of
-        # administrator permissions the actor doesn't hold either.
-        lacking = sorted(ADMIN_PERMISSIONS & (set(source.get_all_permissions()) - set(actor.get_all_permissions())))
-        if lacking:
-            return (f"{source.display_name} has administrator permissions you don't ({', '.join(lacking)}), so an "
-                    "administrator who holds them has to move their characters")
-        extra = sorted(set(target.get_all_permissions()) - set(actor.get_all_permissions()))
-        if extra:
-            return (f"{target.display_name} has permissions you don't ({', '.join(extra[:5])}); whoever owns the "
-                    "characters could sign in as them, so an administrator has to do this")
     return None
 
 

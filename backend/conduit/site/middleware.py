@@ -55,7 +55,7 @@ class ImpersonationGuardMiddleware:
     def __call__(self, request):
         from conduit.accounts.models import User
 
-        from .impersonation import SESSION_KEY, blocked
+        from .impersonation import SESSION_KEY, blocked, stop
 
         real_id = request.session.get(SESSION_KEY)
         if real_id:
@@ -65,12 +65,44 @@ class ImpersonationGuardMiddleware:
                 if request.path.startswith("/api/"):
                     return JsonResponse({"detail": message}, status=401)
                 return HttpResponseRedirect("/login")
+            if request.user.is_authenticated and not _still_allowed(real_id, request.user):
+                # They lost the permission, or the other person gained some they don't hold, since it started:
+                # back to their own account rather than staying signed in as someone they may no longer be.
+                stop(request)
+                message = "You may no longer be signed in as that user, so you are back in your own account."
+                if request.path.startswith("/api/"):
+                    return JsonResponse({"detail": message, "impersonation_ended": True}, status=403)
+                return HttpResponseRedirect("/")
             if request.user.is_authenticated and blocked(request):
                 message = "Return to your own account first: this isn't allowed while signed in as someone else"
                 if request.path.startswith("/api/"):
                     return JsonResponse({"detail": message}, status=403)
                 return HttpResponseForbidden(message)
         return self.get_response(request)
+
+
+#: Seconds an "is this still allowed" answer is reused, so it isn't worked out on every request of the session.
+IMPERSONATION_RECHECK = 60
+
+
+def _still_allowed(real_id: int, target) -> bool:
+    """Whether the admin behind an impersonated session may still be signed in as ``target`` (checked when it
+    started; permissions on either side can change during a session that lasts up to a month)."""
+    from django.core.cache import cache
+
+    from conduit.accounts.models import User
+
+    from .impersonation import can_impersonate
+
+    if real_id == target.pk:
+        return True
+    key = f"conduit:impersonation-ok:{real_id}:{target.pk}"
+    allowed = cache.get(key)
+    if allowed is None:
+        real = User.objects.filter(pk=real_id, is_active=True).first()
+        allowed = real is not None and can_impersonate(real, target) is None
+        cache.set(key, allowed, IMPERSONATION_RECHECK)
+    return allowed
 
 
 class NoCacheMiddleware:

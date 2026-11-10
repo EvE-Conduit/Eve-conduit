@@ -62,9 +62,10 @@ def render(kind: str, event: dict, mention: str = "", mention_always: bool = Fal
     title, text, level = describe(event)
     site = settings.SITE_URL
     if kind == "discord":
+        title, text = _discord_plain_links(title), _discord_plain_links(text)
         embed = {
             "title": title[:256],
-            "description": text,
+            "description": text[:1800],
             "color": LEVEL_COLORS.get(level, LEVEL_COLORS["info"]),
             "timestamp": event["at"],
             "footer": {"text": f"EvE Conduit · {event['event']}"},
@@ -78,6 +79,15 @@ def render(kind: str, event: dict, mention: str = "", mention_always: bool = Fal
     # announcement's name), so escape the three characters Slack asks for.
     title, text = _slack_escape(title), _slack_escape(text)
     return {"text": f"*{title}*\n{text}" if text else f"*{title}*"}
+
+
+def _discord_plain_links(value: str) -> str:
+    """Titles and texts carry things people typed (a join request's message, a fleet's form-up, a note on a blueprint
+    request), and Discord would show "[Verify here](https://evil.example)" in them as a link that hides where it
+    goes, under the site's own name. A zero-width space between "]" and "(" leaves the text readable and the address
+    in plain sight. Nothing the site or its plugins write uses such links; bold, lists and the rest stay as they are.
+    """
+    return (value or "").replace("](", "]\u200b(")
 
 
 def _slack_escape(value: str) -> str:
