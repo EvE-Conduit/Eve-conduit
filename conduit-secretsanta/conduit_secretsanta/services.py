@@ -27,6 +27,7 @@ CATEGORY = "p.secretsanta"
 REMIND_BEFORE = timedelta(days=2)
 MAX_WISHLIST = 2000
 MAX_THANKS = 1000
+MAX_BUDGET = 10**15
 
 
 class SantaError(Exception):
@@ -253,6 +254,8 @@ def save_event(event: SantaEvent | None, by, *, name: str, description: str, not
         raise SantaError("The gift deadline has to be after sign-up closes")
     if budget_isk is not None and budget_isk < 0:
         raise SantaError("The budget can't be negative")
+    if budget_isk is not None and budget_isk > MAX_BUDGET:
+        raise SantaError("That budget is too large")
     if event is not None and event.ended_at:
         raise SantaError("This event has ended")
     state_objs = list(State.objects.filter(pk__in=states))
@@ -404,6 +407,7 @@ def remove_participant(event: SantaEvent, participant_id: int, request=None):
     """Take someone out. After a draw, whoever gave to them gets their giftee, and is told once the results are out."""
     from conduit.notify.services import notify
 
+    mend(event)
     with transaction.atomic():
         event = _locked(event.pk)
         if event.ended_at:
@@ -423,13 +427,10 @@ def remove_participant(event: SantaEvent, participant_id: int, request=None):
                 raise SantaError(str(exc)) from None
             p.giftee = None
             p.save(update_fields=["giftee"])
-            giver = Participant.objects.select_related("user").get(pk=giver_id)
-            # A new giftee, so a new gift: what they did for the person leaving no longer counts.
-            giver.giftee_id = giftee_id
-            giver.sent_at = giver.received_at = None
-            giver.sent_note = giver.thanks = ""
-            giver.save(update_fields=["giftee", "sent_at", "received_at", "sent_note", "thanks"])
-            new_giftee = Participant.objects.select_related("character", "user__main_character").get(pk=giftee_id)
+            if giver_id is not None and giftee_id is not None:
+                giver = Participant.objects.select_related("user").get(pk=giver_id)
+                new_giftee = Participant.objects.select_related("character", "user__main_character").get(pk=giftee_id)
+                _give_to(giver, new_giftee)
         name, user = str(p), p.user
         p.delete()
     record("secretsanta.remove", f"took {name} out of the Secret Santa \"{event.name}\"", request=request, target=event)
@@ -440,6 +441,45 @@ def remove_participant(event: SantaEvent, participant_id: int, request=None):
         notify(giver.user, f"Secret Santa: you're now giving to {to['name'] if to else new_giftee.user.display_name}",
                f"Someone left {event.name}, so your giftee changed. Their wish list is on the event page.",
                link=link(event), level="warning", category=CATEGORY, force=True)
+
+
+def _give_to(giver: Participant, giftee: Participant):
+    """A new giftee, so a new gift: what the giver did for the one before no longer counts."""
+    giver.giftee = giftee
+    giver.sent_at = giver.received_at = None
+    giver.sent_note = giver.thanks = ""
+    giver.save(update_fields=["giftee", "sent_at", "received_at", "sent_note", "thanks"])
+
+
+def mend(event: SantaEvent) -> bool:
+    """Close a gap in a stored draw. Someone who vanished without being taken out (their account was deleted) leaves
+    one person giving to nobody and one getting from nobody: those two are joined up, like ``remove_participant``
+    does. Returns whether anything changed. Left alone when the two are kept apart, or it isn't that simple."""
+    from conduit.notify.services import notify
+
+    with transaction.atomic():
+        event = _locked(event.pk)
+        if not event.drawn_at or event.ended_at:
+            return False
+        rows = list(event.participants.select_related("character", "user__main_character"))
+        has_santa = {p.giftee_id for p in rows if p.giftee_id}
+        givers = [p for p in rows if not p.giftee_id]
+        waiting = [p for p in rows if p.pk not in has_santa]
+        if len(givers) != 1 or len(waiting) != 1 or givers[0].pk == waiting[0].pk:
+            return False
+        giver, giftee = givers[0], waiting[0]
+        a, b = sorted((giver.pk, giftee.pk))
+        if event.exclusions.filter(first_id=a, second_id=b).exists():
+            return False
+        _give_to(giver, giftee)
+    record("secretsanta.mend", f"joined up the Secret Santa \"{event.name}\" after someone in it was deleted",
+           target=event)
+    if event.published_at:
+        to = _receiver(giftee)
+        notify(giver.user, f"Secret Santa: you're now giving to {to['name'] if to else giftee.user.display_name}",
+               f"Someone left {event.name}, so your giftee changed. Their wish list is on the event page.",
+               link=link(event), level="warning", category=CATEGORY, force=True)
+    return True
 
 
 def end(event: SantaEvent, request=None) -> SantaEvent:
@@ -564,11 +604,15 @@ def mark_received(event: SantaEvent, user, thanks: str) -> Participant:
 
 
 def remind_due() -> int:
-    """Once per event, from two days before the gift deadline: remind everyone who hasn't marked their gift sent."""
+    """Hourly. Once per event, from two days before the gift deadline: remind everyone who hasn't marked their gift
+    sent. Also closes any gap a deleted account left in a draw."""
     from conduit.notify.services import notify
 
     now = timezone.now()
     sent = 0
+    for event in SantaEvent.objects.filter(drawn_at__isnull=False, ended_at__isnull=True,
+                                           participants__giftee__isnull=True).distinct():
+        mend(event)
     for event in SantaEvent.objects.filter(published_at__isnull=False, ended_at__isnull=True, reminded_at__isnull=True,
                                            gift_deadline__lte=now + REMIND_BEFORE):
         if not SantaEvent.objects.filter(pk=event.pk, reminded_at__isnull=True).update(reminded_at=now):

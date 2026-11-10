@@ -102,12 +102,14 @@ def _pairs(order: list) -> dict:
 
 def repair(pairs: Mapping, removed: Hashable, apart: Iterable[frozenset] = (), names: Mapping | None = None) -> tuple:
     """Take ``removed`` out of a stored draw: whoever gave to them now gives to their giftee. Returns
-    ``(giver, new giftee)``. Raises ``DrawError`` when that would pair someone with themselves or with someone they're
+    ``(giver, new giftee)``; either is None when the chain was already broken at ``removed``. Raises ``DrawError`` when that would pair someone with themselves or with someone they're
     kept apart from."""
     names = names or {}
     name = lambda p: names.get(p, str(p))  # noqa: E731
-    giftee = pairs[removed]
-    giver = next(g for g, r in pairs.items() if r == removed)
+    giftee = pairs.get(removed)
+    giver = next((g for g, r in pairs.items() if r == removed), None)
+    if giver is None or giftee is None:
+        return giver, giftee  # the chain was already broken here; there's nobody to join up
     if giver == giftee:
         raise DrawError("Only two people would be left, who'd just give to each other. End the event instead.")
     if frozenset((giver, giftee)) in {frozenset(p) for p in apart}:
