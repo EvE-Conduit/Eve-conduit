@@ -6,6 +6,7 @@ import logging
 import secrets
 from urllib.parse import urlencode
 
+import httpx
 import jwt
 from django.conf import settings
 from django.contrib.auth import login as django_login
@@ -107,7 +108,8 @@ def callback(request):
     try:
         token_data = exchange_code(code, flow["verifier"])
         info = character_from_claims(verify_access_token(token_data["access_token"]))
-    except (TokenInvalid, jwt.PyJWTError, KeyError) as exc:
+    except (TokenInvalid, jwt.PyJWTError, KeyError, httpx.HTTPError, ValueError) as exc:
+        # httpx/ValueError: EVE SSO didn't answer, or answered with an error page instead of a token.
         log.warning("EVE SSO callback failed: %s", exc)
         return _back(flow, error="sso_failed")
 

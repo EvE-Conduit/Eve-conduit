@@ -17,12 +17,27 @@ def presented_key(request) -> bool:
     return any(request.headers.get(h, "").strip() for h in KEY_HEADERS)
 
 
+def _known_key(request):
+    """The key the request carries when no route checked it (a path that doesn't exist, a switched-off plugin),
+    so those calls are still logged for a real key, revoked or not."""
+    from secrets import compare_digest
+
+    from .models import KEY_PREFIX, ApiKey, hash_secret
+
+    header = request.headers.get("Authorization", "")
+    token = header[7:].strip() if header[:7].lower() == "bearer " else request.headers.get("X-API-Key", "").strip()
+    if not token.startswith(KEY_PREFIX):
+        return None
+    key = ApiKey.objects.filter(prefix=token[: len(KEY_PREFIX) + 8]).first()
+    return key if key is not None and compare_digest(key.secret_hash, hash_secret(token)) else None
+
+
 class ApiRequestLogMiddleware:
     """Records every call to the external API that presents a key, including refused ones.
 
-    Requests without any key header are not stored: there is nothing to attribute them to, and anyone on the
-    internet could otherwise grow the request log without limit by hitting unknown ``/api/v1/`` paths (failed
-    keys are rate-limited per IP, see ``site.ratelimit``).
+    Requests without any key header are not stored, nor are ones with a made-up key that never reached a key
+    check (an unknown path): there is nothing to attribute them to, and anyone on the internet could otherwise
+    grow the request log without limit (failed keys are rate-limited per IP, see ``site.ratelimit``).
     """
 
     def __init__(self, get_response):
@@ -33,7 +48,12 @@ class ApiRequestLogMiddleware:
             return self.get_response(request)
         started = time.monotonic()
         response = self.get_response(request)
-        key = getattr(request, "api_key", None)
+        key = getattr(request, "api_key", None) or _known_key(request)
+        if key is None and response.status_code != 401:
+            # No key we know and not a refused login (those are limited per address): an unknown path or a
+            # switched-off plugin answered before any key was checked. Storing these would let anyone fill the
+            # log by sending a made-up key header to paths that don't exist.
+            return response
         area = getattr(request, "api_area", "")
         if not area and request.path.startswith(PLUGIN_PREFIX):
             area = "p." + request.path[len(PLUGIN_PREFIX):].split("/", 1)[0]

@@ -52,7 +52,8 @@ def members(request, q, limit):
     if not request.user.has_perm("site.view_members"):
         return None
     rows = ranked(
-        User.objects.filter(characters__name__icontains=q).exclude(pk=request.user.pk).distinct().select_related("main_character", "state"),
+        # Switched-off accounts (e.g. merged into another) aren't members any more, as in the member list.
+        User.objects.filter(is_active=True, characters__name__icontains=q).exclude(pk=request.user.pk).distinct().select_related("main_character", "state"),
         "main_character__name",
         q,
     )[:limit]
@@ -78,7 +79,12 @@ def groups(request, q, limit):
     user = request.user
     qs = Group.objects.filter(name__icontains=q)
     if not user.has_perm("site.manage_access"):
-        qs = qs.filter(Q(user=user) | Q(profile__hidden=False)).distinct()
+        # As on the Groups page: their own, plus the listed ones their state may be in. A group for members only
+        # isn't shown to a guest there, so its name mustn't turn up here either.
+        allowed = Q(profile__allowed_states__isnull=True)
+        if user.state_id:
+            allowed |= Q(profile__allowed_states=user.state_id)
+        qs = qs.filter(Q(user=user) | (Q(profile__hidden=False) & allowed)).distinct()
     return {
         "key": "groups",
         "label": "Groups",
