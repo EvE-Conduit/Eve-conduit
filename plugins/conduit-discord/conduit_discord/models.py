@@ -24,6 +24,13 @@ class DiscordSettings(models.Model):
     #: Compliant group rule). Needs EvE Conduit 0.5.20 or newer.
     require_for_compliance = models.BooleanField(default=False)
     last_full_sync = models.DateTimeField(null=True, blank=True)
+    #: Temporary access: people with discord.create_guest_links hand out links that let someone without an account
+    #: here onto the server for a while, with this role.
+    guest_enabled = models.BooleanField(default=False)
+    guest_role_id = models.CharField(max_length=32, blank=True)
+    guest_role_name = models.CharField(max_length=100, blank=True)
+    #: The longest a link may last.
+    guest_max_hours = models.PositiveIntegerField(default=72)
 
     class Meta:
         verbose_name_plural = "Discord settings"
@@ -79,6 +86,58 @@ class DiscordAccount(models.Model):
         permissions = [
             ("access_discord", "Can link a Discord account and join the server"),
             ("manage_discord", "Can set up the Discord server and its roles"),
+            ("create_guest_links", "Can hand out temporary access to the Discord server"),
+        ]
+
+    def __str__(self):
+        return self.username
+
+
+class GuestLink(models.Model):
+    """A link that lets whoever opens it onto the Discord server, with the guest role, until it expires."""
+
+    token = models.CharField(max_length=48, unique=True)
+    #: What it's for, e.g. "Diplo meeting Saturday". Guests see it.
+    label = models.CharField(max_length=100)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    #: The link stops working then, and the guests it let in are removed from the server.
+    expires_at = models.DateTimeField()
+    #: How many people may use it; 0 is no limit.
+    max_uses = models.PositiveIntegerField(default=0)
+    #: The role the guests get (the guest role when the link was made).
+    role_id = models.CharField(max_length=32)
+    role_name = models.CharField(max_length=100, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.label
+
+
+class Guest(models.Model):
+    """Someone a guest link put on the server. Only people who weren't on it already: nobody who was there before
+    is ever removed because a link ran out."""
+
+    link = models.ForeignKey(GuestLink, on_delete=models.CASCADE, related_name="guests")
+    discord_id = models.CharField(max_length=32)
+    username = models.CharField(max_length=100)
+    avatar_url = models.CharField(max_length=300, blank=True)
+    joined_at = models.DateTimeField(auto_now_add=True)
+    #: Set once they were taken off the server again (or found to have left, or to be a member here by now).
+    ended_at = models.DateTimeField(null=True, blank=True)
+    #: Why it ended: expired, revoked (the link was withdrawn), removed (this guest alone), creator_lost, member.
+    ended_reason = models.CharField(max_length=20, blank=True)
+    #: Why the last try to remove them failed; tried again every couple of minutes.
+    error = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["joined_at"]
+        constraints = [
+            # One stay at a time per Discord account.
+            models.UniqueConstraint(fields=["discord_id"], condition=models.Q(ended_at__isnull=True), name="discord_one_stay_per_guest"),
         ]
 
     def __str__(self):

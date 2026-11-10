@@ -33,6 +33,7 @@ let in too (for example to apply).
 |---|---|---|
 | `discord.access_discord` | Link a Discord account, join the server and get mapped roles | Every state that should be on Discord (given by default) |
 | `discord.manage_discord` | Open **Server setup**: settings, role mapping, member list, sync, unlink and kick | Directors / Discord admins |
+| `discord.create_guest_links` | Make temporary access links, see their own links and guests, withdraw them and remove a guest | Fleet commanders, diplomats, recruiters |
 
 Every state gets `discord.access_discord` automatically: existing states when the plugin is installed, and every new
 state when it is created. To keep a state off Discord, remove the permission from it under
@@ -96,6 +97,50 @@ The **Roles** tab is available once setup is complete.
 
 Without mappings, linked members join the server with no roles.
 
+## Temporary access links
+
+Someone without an account here (a diplomat, a guest on a fleet, a recruit) can be let onto the server for a while.
+A person with `discord.create_guest_links` makes a link under **Discord → Temporary access** and sends it to them.
+Whoever opens it signs in with Discord and is added to the server with the guest role. When the link runs out they
+are removed again.
+
+### Switching it on
+
+1. On Discord, make a role for guests (for example `Guest`) and let it see only the channels guests should. Keep it
+   below the bot's role.
+2. In the Discord developer portal, open your application's **OAuth2** page and add the second redirect shown on
+   **Server setup → Temporary access** (`https://<your site>/public/p/discord/guest`). Without it Discord refuses
+   guests with "Invalid OAuth2 redirect_uri".
+3. On **Server setup → Temporary access**, choose the guest role, set the longest a link may last (72 hours by
+   default, 720 at most), switch **Temporary access links** on and save.
+4. Give `discord.create_guest_links` to the people who may hand out links, under **Administration → Access**.
+
+**Check connection** warns when the guest role was deleted or sits above the bot's role.
+
+### What happens to guests
+
+| Situation | What happens |
+|---|---|
+| The link runs out | Its guests are removed from the server within a couple of minutes |
+| The link is withdrawn | Its guests are removed straight away |
+| One guest is removed from the link's list | That guest is removed; the link keeps working for others |
+| The link's maker loses `discord.create_guest_links` | The link stops working and its guests are removed |
+| Temporary access is switched off | Every link stops working and all guests are removed |
+| Discord can't be reached | The guest stays listed with the reason, and removing is tried again every two minutes |
+| The link has been used by as many people as it allows | It closes to newcomers; the guests it let in stay until it runs out |
+
+Three rules keep links from doing harm:
+
+- Someone who is already on the server can't come in as a guest, so nobody who was there before is ever removed
+  because a link ended.
+- A Discord account linked to a member here is refused: members have their own access.
+- A guest who links their Discord account as a member later keeps their place and only loses the guest role.
+
+Guests get the guest role and nothing else: no nickname, no mapped roles. People with only
+`discord.create_guest_links` see their own links; Discord managers see everyone's and can withdraw any.
+
+The site learns a guest's Discord name, id and avatar, and keeps them with the link.
+
 ## Day-to-day operation
 
 - **Header stats:** **Server**, **Linked members** (with the time of the last full sync) and **Sync problems**.
@@ -125,6 +170,9 @@ its roles.
 |---|---|
 | `discord.linked` | A member linked their Discord account and joined the server |
 | `discord.unlinked` | A member's Discord account was unlinked, kicked, or removed after losing access |
+| `discord.guest_link_created` | Someone made a temporary access link |
+| `discord.guest_joined` | A guest joined the server through a temporary link |
+| `discord.guest_removed` | A guest's temporary access ended |
 
 Send them to a channel under **Administration → Integrations**. The plugin has no Discord ping settings of its own.
 
@@ -143,6 +191,9 @@ Audit log entries (**Administration → Logs → Audit**):
 | A manager unlinks or kicks a member | `discord.unlink` (with `kick`) |
 | Settings saved (notes when a new secret or token was set) | `discord.settings` |
 | Role mappings saved | `discord.mappings` |
+| Temporary access switched on or off, or its settings changed | `discord.guest_settings` |
+| Temporary link made / withdrawn | `discord.guest_link`, `discord.guest_link_revoked` |
+| One guest removed by hand | `discord.guest_removed` |
 | **Sync everyone** | `discord.sync` |
 
 ## Background jobs
