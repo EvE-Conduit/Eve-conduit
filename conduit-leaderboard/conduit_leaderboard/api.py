@@ -75,7 +75,8 @@ def medals(request, user: int | None = None):
         target = User.objects.filter(pk=user).first()
         if target is None:
             raise HttpError(404, "No such member")
-    return {"awards": services.awards(target), "hall_of_fame": services.hall_of_fame(), "mine": services.medal_counts(request.user)}
+    return {"awards": services.awards(target, viewer=request.user), "hall_of_fame": services.hall_of_fame(viewer=request.user),
+            "mine": services.medal_counts(request.user)}
 
 
 # --- settings (leaderboard.manage_leaderboard) --------------------------------------------------------------
@@ -139,4 +140,4 @@ def award_month(request, month: str):
     except services.LeaderboardError as exc:
         raise HttpError(400, str(exc)) from None
     record("leaderboard.award", f"awarded the medals for {p.label}", request=request, target_type="plugin", details={"medals": len(made)})
-    return {"awarded": len(made), "awards": services.awards()}
+    return {"awarded": len(made), "awards": services.awards(viewer=request.user)}

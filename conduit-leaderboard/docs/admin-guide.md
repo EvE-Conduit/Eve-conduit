@@ -123,7 +123,8 @@ The boards show members' names, main character portraits and corporations to all
 characters** on, members can also see which characters earned a score, which can reveal alts. Turn it off if alts
 should stay private.
 
-Members can hide themselves. This is stored in their own preferences.
+Members can hide themselves. This is stored in their own preferences. A hidden member is off every board, and
+their earlier medals are off the **Medals** page and the hall of fame for everyone but themselves.
 
 Audit log entries (**Administration → Logs → Audit**):
 

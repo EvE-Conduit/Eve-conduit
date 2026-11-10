@@ -6,8 +6,8 @@ the wallet journal (ISK in and out, and the systems bounties were paid in), the 
 
 The member is never told: nothing is sent to them, and only people with ``tracking.track_members`` see the plugin.
 Starting, stopping, deleting and opening a report go in the audit log, and opening a report in the snooper log for
-each of their characters, like opening their sheet. Nobody can track themselves, and a tracker only reaches members
-whose characters their sheet permissions let them see.
+each of their characters, like opening their sheet. Nobody can track themselves, and a tracker only reaches the
+characters their sheet permissions let them see: the others of the same member are neither polled nor reported.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ LINK = "/p/tracking"
 TIMELINE_LIMIT = 500
 #: How many rows the report's ranked lists (systems, ships, ...) keep.
 TOP = 25
+REASON_MAX = 2000
 
 
 class TrackingError(Exception):
@@ -188,11 +189,12 @@ def start(viewer, target_id: int, days: int, reason: str = "", request=None) -> 
     try:
         with transaction.atomic():
             session = Session.objects.create(target=target, target_name=target.main_character.name, started_by=viewer,
-                                             reason=reason.strip(), days=days, started_at=now, ends_at=now + timedelta(days=days))
+                                             reason=(reason or "").strip()[:REASON_MAX], days=days, started_at=now, ends_at=now + timedelta(days=days))
     except IntegrityError:
         raise TrackingError(f"{target.display_name} is already being tracked; stop that first", 409) from None
+    # Only the characters the tracker may look at: an alt their sheet permissions don't reach isn't followed.
     TrackedCharacter.objects.bulk_create([TrackedCharacter(session=session, character_id=c.pk, name=c.name)
-                                          for c in Character.objects.filter(user=target)])
+                                          for c in tracker.followed(session)])
     record("tracking.started", f"started tracking {target.display_name} for {days} day{'s' if days != 1 else ''}",
            request=request, actor=viewer, target=target, details={"session": session.pk, "days": days, "reason": session.reason})
     return session
@@ -210,7 +212,15 @@ def stop(session: Session, viewer, request=None) -> Session:
     return session
 
 
+def can_delete(session: Session, viewer) -> bool:
+    """Whoever started a tracking deletes it; so may an administrator, and anyone who can see it once the starter's
+    account is gone. Another tracker can't make someone else's report disappear."""
+    return session.started_by_id in (None, viewer.pk) or viewer.is_superuser
+
+
 def delete(session: Session, viewer, request=None) -> None:
+    if not can_delete(session, viewer):
+        raise TrackingError("Only whoever started this tracking, or an administrator, can delete it", 403)
     record("tracking.deleted", f"deleted the activity tracking of {session.target_name} started {session.started_at:%Y-%m-%d}",
            request=request, actor=viewer, target=session.target, details={"session": session.pk})
     session.delete()
@@ -273,11 +283,25 @@ def _ranked(totals: dict, chars: dict, out, limit: int = TOP) -> list[dict]:
 def report(session: Session, request=None) -> dict:
     """Everything the session saw, plus what the member's characters' synced data says about the same period."""
     start, end = session.started_at, session.period_end
+    viewer = getattr(request, "user", None)
     tracked = list(session.characters.all())
     names = {t.character_id: t.name for t in tracked}
-    for c in Character.objects.filter(user_id=session.target_id):
+    for c in tracker.followed(session):
         names.setdefault(c.pk, c.name)
+    if viewer is not None:
+        # Each reader sees only the characters their own sheet permissions reach, whoever started the tracking.
+        # Characters that moved to another account stay (they were tracked while they could be seen), up to when they left.
+        reach = set(others(viewer).filter(pk__in=names).values_list("pk", flat=True))
+        gone = {t.character_id for t in tracked if t.status == TrackedCharacter.Status.GONE}
+        names = {cid: n for cid, n in names.items() if cid in reach or cid in gone}
+        tracked = [t for t in tracked if t.character_id in names]
     ids = set(names)
+    # A character that moved to another account: nothing after the last poll that saw it on this one (its new owner's
+    # wallet, mining and kills aren't the member's), and nothing at all if it was never polled.
+    until = {t.character_id: t.last_polled_at for t in tracked if t.status == TrackedCharacter.Status.GONE}
+
+    def theirs(cid, when) -> bool:
+        return cid not in until or (until[cid] is not None and when <= until[cid])
 
     if request is not None:
         for c in Character.objects.filter(pk__in=ids).select_related("user"):
@@ -285,15 +309,19 @@ def report(session: Session, request=None) -> dict:
         record("tracking.report_viewed", f"opened the activity report on {session.target_name}", request=request,
                target=session.target, details={"session": session.pk})
 
-    stints = list(Stint.objects.filter(session=session).order_by("started_at"))
+    stints = list(Stint.objects.filter(session=session, character_id__in=ids).order_by("started_at"))
     # Wallet: money moved between the member's own characters is neither earned nor spent.
-    journal = list(JournalEntry.objects.filter(character_id__in=ids, date__gte=start, date__lte=end)
-                   .exclude(first_party_id__in=ids, second_party_id__in=ids).exclude(amount__isnull=True)
-                   .values_list("ref_type", "amount", "context_id", "context_id_type", "character_id"))
-    mining = list(MiningEntry.objects.filter(character_id__in=ids, date__gte=start.date(), date__lte=end.date())
-                  .values_list("type_id", "solar_system_id", "quantity"))
-    kms = list(CharacterKillmail.objects.filter(character_id__in=ids, killmail__time__gte=start, killmail__time__lte=end)
-               .select_related("killmail").order_by("-killmail__time"))
+    journal = [row[:5] for row in JournalEntry.objects.filter(character_id__in=ids, date__gte=start, date__lte=end)
+               .exclude(first_party_id__in=ids, second_party_id__in=ids).exclude(amount__isnull=True)
+               .values_list("ref_type", "amount", "context_id", "context_id_type", "character_id", "date") if theirs(row[4], row[5])]
+    # The mining ledger is per EVE day: the day tracking started on is left out (unless it started at 00:00), since
+    # what was mined before the start can't be told apart from what was mined after.
+    first_day = start.date() if start.time() == datetime.min.time() else start.date() + timedelta(days=1)
+    mining = [row[:3] for row in MiningEntry.objects.filter(character_id__in=ids, date__gte=first_day, date__lte=end.date())
+              .values_list("type_id", "solar_system_id", "quantity", "character_id", "date")
+              if row[3] not in until or (until[row[3]] is not None and row[4] <= until[row[3]].date())]
+    kms = [k for k in CharacterKillmail.objects.filter(character_id__in=ids, killmail__time__gte=start, killmail__time__lte=end)
+           .select_related("killmail").order_by("-killmail__time") if theirs(k.character_id, k.killmail.time)]
     system_ids = ({st.solar_system_id for st in stints} | {m[1] for m in mining} | {k.killmail.solar_system_id for k in kms}
                   | {j[2] for j in journal if j[3] == "system_id" and j[2]})
     systems = {s.id: s for s in SolarSystem.objects.filter(pk__in=system_ids).select_related("region")}
@@ -394,6 +422,7 @@ def report(session: Session, request=None) -> dict:
 
     return {
         "session": session_out(session),
+        "can_delete": viewer is not None and can_delete(session, viewer),
         "period": {"start": _iso(start), "end": _iso(end)},
         "totals": {
             "online_seconds": round(online_total),

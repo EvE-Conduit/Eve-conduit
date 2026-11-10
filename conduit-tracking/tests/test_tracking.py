@@ -269,7 +269,10 @@ def test_report(setup, esi, api_client, clock):
     # Before tracking started: not in the report.
     JournalEntry.objects.create(character_id=main, ref_id=4, date=session.started_at - timedelta(days=1), ref_type="bounty_prizes",
                                 amount=Decimal(1))
-    MiningEntry.objects.create(character_id=alt.pk, date=soon.date(), solar_system_id=AMARR, type_id=VELD, quantity=1000)
+    # The mining ledger is per day: the day tracking started on isn't counted (it can't be split at the start time).
+    MiningEntry.objects.create(character_id=alt.pk, date=session.started_at.date(), solar_system_id=AMARR, type_id=VELD, quantity=77)
+    clock.tick(60 * 24)
+    MiningEntry.objects.create(character_id=alt.pk, date=clock.now.date(), solar_system_id=AMARR, type_id=VELD, quantity=1000)
     km = Killmail.objects.create(id=1, hash="h", time=soon, solar_system_id=JITA, victim_character_id=1, victim_ship_type_id=ORCA,
                                  damage_taken=1, attacker_count=1, value=2e9,
                                  data={"attackers": [{"character_id": main, "ship_type_id": RIFTER}]})
@@ -346,3 +349,130 @@ def test_new_members_list_and_tracking_several_at_once(setup, esi, api_client, c
     assert [f["user_id"] for f in r["failed"]] == [hr.pk]
     m = api_client.call("get", f"{BASE}/new-members").json()["members"][0]
     assert m["tracked"] and m["session_id"] == r["started"][0]["id"]
+
+
+def _director_and_split_member(corp):
+    """A director who sees only their own corporation's characters, and a member with an alt in it and a main elsewhere."""
+    from conduit.eve.models import EveCorporation
+
+    other = EveCorporation.objects.create(id=98000002, name="Other Corp", ticker="OTH")
+    director = make_user(90000090, "Dir Dan", corporation=corp)
+    director.user_permissions.add(Permission.objects.get(codename="track_members"),
+                                  Permission.objects.get(content_type__app_label="sheet", codename="view_corporation_characters"))
+    member = make_user(90000091, "Main Elsewhere", corporation=other, scopes=SCOPES)
+    alt = Character.objects.create(id=90000092, name="Alt In Corp", owner_hash="h92", user=member, corporation=corp)
+    Token.objects.create(character=alt, access_token="a", refresh_token="r", expires_at=timezone.now() + timedelta(minutes=20), scopes=SCOPES)
+    return type(director).objects.get(pk=director.pk), member, alt
+
+
+def test_only_characters_the_tracker_may_view_are_polled_and_reported(setup, esi, api_client, clock, corp):
+    director, member, alt = _director_and_split_member(corp)
+    main = member.main_character.pk
+    session = services.start(director, member.pk, 7)
+    assert set(TrackedCharacter.objects.filter(session=session).values_list("character_id", flat=True)) == {alt.pk}
+    esi.state = {main: (JITA, RIFTER, None), alt.pk: (AMARR, ORCA, None)}
+    tracker.poll_all()
+    clock.tick()
+    tracker.poll_all()
+    assert not any(str(main) in c for c in esi.calls)  # the main in another corporation is never asked about
+    assert set(Stint.objects.values_list("character_id", flat=True)) == {alt.pk}
+    JournalEntry.objects.create(character_id=main, ref_id=1, date=clock.now, ref_type="bounty_prizes", amount=Decimal(123))
+    JournalEntry.objects.create(character_id=alt.pk, ref_id=2, date=clock.now, ref_type="bounty_prizes", amount=Decimal(5))
+    api_client.force_login(director)
+    r = api_client.call("get", f"{BASE}/sessions/{session.pk}").json()
+    assert [c["name"] for c in r["characters"]] == ["Alt In Corp"] and r["totals"]["earned"] == 5
+    assert set(SnoopEvent.objects.values_list("character_id", flat=True)) == {alt.pk}
+
+
+def test_a_narrower_reader_sees_only_their_reach_of_someone_elses_tracking(setup, esi, api_client, clock, corp):
+    hr, _, _ = setup
+    director, member, alt = _director_and_split_member(corp)
+    main = member.main_character.pk
+    session = services.start(hr, member.pk, 7)  # HR sees every character, so both are followed
+    esi.state = {main: (JITA, RIFTER, None), alt.pk: (AMARR, ORCA, None)}
+    tracker.poll_all()
+    clock.tick()
+    tracker.poll_all()
+    assert set(Stint.objects.values_list("character_id", flat=True)) == {main, alt.pk}
+    api_client.force_login(director)
+    r = api_client.call("get", f"{BASE}/sessions/{session.pk}").json()
+    assert [c["name"] for c in r["characters"]] == ["Alt In Corp"]
+    assert [s["name"] for s in r["systems"]] == ["Amarr"] and r["timeline_total"] == 1
+
+
+def test_a_character_that_left_the_account_only_counts_until_it_left(setup, esi, api_client, clock):
+    hr, member, alt = setup
+    session = _start(hr, member)
+    esi.state = {alt.pk: (JITA, RIFTER, None)}
+    tracker.poll_all()
+    clock.tick()
+    JournalEntry.objects.create(character_id=alt.pk, ref_id=1, date=clock.now - timedelta(seconds=30), ref_type="bounty_prizes", amount=Decimal(10))
+    tracker.poll_all()
+    alt.user = make_user(90000070, "Someone Else")
+    alt.save()
+    clock.tick()
+    tracker.poll_all()
+    # The new owner's income isn't the tracked member's.
+    JournalEntry.objects.create(character_id=alt.pk, ref_id=2, date=clock.now, ref_type="bounty_prizes", amount=Decimal(999))
+    clock.tick()
+    api_client.force_login(hr)
+    r = api_client.call("get", f"{BASE}/sessions/{session.pk}").json()
+    assert r["totals"]["earned"] == 10
+
+
+def test_finish_expired_closes_a_session_once(setup, esi, clock, monkeypatch):
+    hr, member, alt = setup
+    session = _start(hr, member, days=1)
+    clock.tick(60 * 24 + 1)
+    # Another caller (starting a tracking, the poll) closed it between this one's look and its update.
+    real = Session.objects.filter
+
+    def racing(*args, **kwargs):
+        qs = real(*args, **kwargs)
+        if kwargs.get("pk") == session.pk:
+            Session.objects.all().update(ended_at=session.ends_at)
+        return qs
+
+    monkeypatch.setattr(Session.objects, "filter", racing)
+    assert tracker.finish_expired() == []
+
+
+def test_only_the_starter_or_an_administrator_deletes(setup, esi, api_client, admin_user):
+    hr, member, alt = setup
+    session = _start(hr, member, days=1)
+    other = make_user(90000081, "Other Olga")
+    other.user_permissions.add(Permission.objects.get(codename="track_members"),
+                               Permission.objects.get(content_type__app_label="sheet", codename="view_all_characters"))
+    api_client.force_login(type(other).objects.get(pk=other.pk))
+    assert api_client.call("get", f"{BASE}/sessions/{session.pk}").json()["can_delete"] is False
+    assert api_client.call("delete", f"{BASE}/sessions/{session.pk}").status_code == 403
+    assert Session.objects.filter(pk=session.pk).exists()
+    api_client.force_login(admin_user)
+    assert api_client.call("delete", f"{BASE}/sessions/{session.pk}").status_code == 200
+
+
+def test_reason_is_capped(setup, esi):
+    hr, member, alt = setup
+    assert len(services.start(hr, member.pk, 3, "x" * 5000).reason) == services.REASON_MAX
+
+
+def test_a_round_cut_short_by_esi_resumes_where_it_stopped(setup, esi, clock, monkeypatch):
+    from conduit.esi.exceptions import EsiBackoff
+
+    hr, member, alt = setup
+    second = make_user(90000071, "Second Sid", scopes=SCOPES)
+    s1, s2 = _start(hr, member), _start(hr, second)
+    seen, backoff = [], [True]
+
+    def poll(session, character, client):
+        seen.append(session.pk)
+        if session.pk == s2.pk and backoff:
+            backoff.clear()
+            raise EsiBackoff(30, "slow down")
+
+    monkeypatch.setattr(tracker, "poll", poll)
+    tracker.poll_all()
+    assert seen[-1] == s2.pk
+    seen.clear()
+    tracker.poll_all()
+    assert seen[0] == s2.pk and s1.pk in seen  # the one left out goes first, then the rest

@@ -36,7 +36,7 @@ export function RegistryPage() {
         eyebrow="Capital Registry"
         title="Registry"
         icon={<Radar />}
-        description={`Who can fly and who owns each capital class, from synced skills and assets${options ? `, over the ${num(options.characters)} characters you may view` : ""}. Seeing where someone's hulls are goes in the snooper log.`}
+        description={`Who can fly and who owns each capital class, from synced skills and assets${options ? `, over the ${num(options.characters)} characters you may view` : ""}. What you see of someone else's characters here goes in the snooper log.`}
       />
       <div className="mb-4">
         <FilterBar options={options} value={filters} onChange={setFilters} />

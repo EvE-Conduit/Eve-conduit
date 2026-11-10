@@ -275,3 +275,37 @@ def test_registry_filters(setup, api_client, corp):
     assert pilots(f"group={group.pk}") == 1
     assert pilots(f"state={pilot.state_id}") == 1
     assert pilots(f"corporation={corp.pk + 1}") == 0
+
+
+def test_everything_told_about_someone_goes_in_the_snooper_log(setup, api_client):
+    from conduit.sheet.overview.models import CharacterInfo
+
+    pilot, boss = setup
+    main = pilot.main_character
+    synced(main, **{f"s{CARRIER_SKILL}": 1})  # can fly a carrier, owns none
+    CharacterInfo.objects.create(character=main, solar_system_id=SYSTEM, home_location_id=JITA,
+                                 jump_clones=[{"jump_clone_id": 1, "location_id": KEEPSTAR, "implants": [1]}])
+    api_client.force_login(boss)
+
+    def sections():
+        return set(SnoopEvent.objects.filter(viewer_id=boss.pk, character_id=main.pk).values_list("section", flat=True))
+
+    # The totals name nobody.
+    api_client.call("get", f"{BASE}/registry/summary")
+    assert sections() == set()
+    # The member list says who can fly what.
+    api_client.call("get", f"{BASE}/registry/members")
+    assert sections() == {"skills"}
+    # A member's page says where the character and its clones are, hull or no hull.
+    jump = api_client.call("get", f"{BASE}/registry/members/{pilot.pk}").json()["characters"][0]["jump"]
+    assert jump["location"]["id"] == SYSTEM and jump["clones"][0]["place"]["id"] == KEEPSTAR
+    assert sections() == {"skills", "overview"}
+    asset(main, 1, THANATOS)
+    from django.core.cache import cache
+
+    cache.clear()
+    SnoopEvent.objects.all().delete()
+    api_client.call("get", f"{BASE}/registry/classes/carrier")
+    assert sections() == {"skills", "assets"}
+    # Looking at your own characters is never logged.
+    assert not SnoopEvent.objects.filter(viewer_id=boss.pk, character_id=boss.main_character_id).exists()

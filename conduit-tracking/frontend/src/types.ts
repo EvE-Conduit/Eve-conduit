@@ -72,6 +72,8 @@ type Ranked = { seconds: number; characters: string[] };
 
 export interface Report {
   session: Session;
+  /** Only whoever started it (or an administrator) deletes a tracking. */
+  can_delete: boolean;
   period: { start: string; end: string };
   totals: {
     online_seconds: number;

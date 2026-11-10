@@ -90,9 +90,14 @@ None.
 
 ## Privacy and audit logging
 
-- Opening a class page, the **By location** tab or a member's page records a snooper log entry (type `assets`) for
-  each character shown, the same as opening their assets.
-- The **By class** summary, the **By member** list and the dashboard widget show counts only and are not logged.
+- What the registry tells about someone else's character goes in the snooper log under the character sheet section
+  it came from, the same as opening that tab of their sheet: `assets` for their hulls and where they are parked,
+  `skills` for which capitals they can fly, and `overview` for where the character is, its home station, jump clones
+  and jump fatigue.
+- A class page logs `skills` and `assets` for the characters listed, the **By location** tab `assets`, the
+  **By member** list `skills` and `assets` for the characters it counts, and a member's page `skills` and `overview`
+  for every character on it (and `assets` for those with a hull).
+- The **By class** summary and the dashboard widget show totals only and are not logged.
 - Members' availability answers are not audit logged.
 
 ## Background jobs
