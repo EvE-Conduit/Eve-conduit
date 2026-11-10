@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import uuid
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
@@ -25,6 +27,12 @@ from .models import Application, Comment, Form, RecruitSettings
 
 KINDS = ("text", "long", "yesno", "choice")
 REVIEW_PERM = "recruit.review_applications"
+#: How long someone who withdrew or was rejected waits before applying again. Every application tells all the
+#: recruiters (and may ping Discord), and anyone with an EVE account can apply.
+REAPPLY_AFTER = timedelta(hours=1)
+#: The most messages an applicant can write on their application in ``MESSAGES_PER``: each one notifies recruiters.
+MAX_MESSAGES = 5
+MESSAGES_PER = timedelta(minutes=10)
 
 
 class RecruitError(Exception):
@@ -90,6 +98,37 @@ def _check_admin_groups(groups, by) -> None:
             raise RecruitError(f"{g.name} grants administrator permissions, so only an administrator can use it here", 403)
 
 
+def _profile(group):
+    from conduit.access.models import GroupProfile
+
+    return GroupProfile.objects.filter(group=group).first()
+
+
+def _check_new_groups(groups, by) -> None:
+    """Groups being put on a form. Accepting adds people to them without the core's own "add member" checks, so
+    the form mustn't offer a way round those: a smart group's members come from its rules alone, and whoever puts a
+    group on a form must have a say over who is in it (they manage access, or lead the group)."""
+    manages = by.has_perm("site.manage_access")
+    for g in groups:
+        profile = _profile(g)
+        if profile is not None and profile.auto:
+            raise RecruitError(f"{g.name} is a smart group: its rules decide who is in it, so a form can't add people to it")
+        if not manages and not (profile is not None and profile.is_leader(by)):
+            raise RecruitError(f"Only someone who manages access, or a leader of {g.name}, can put that group on a form", 403)
+
+
+def group_refusal(group, user) -> str:
+    """Why accepting can't add ``user`` to ``group`` right now (the same checks the core's "add member" makes), or ""."""
+    profile = _profile(group)
+    if profile is None:
+        return ""
+    if profile.auto:
+        return "it's a smart group, filled by its rules"
+    if not profile.allows(user):
+        return "their state isn't allowed in this group"
+    return ""
+
+
 def save_form(form: Form | None, data: dict, by, request=None) -> Form:
     name = str(data.get("name", "")).strip()[:100]
     if not name:
@@ -97,6 +136,9 @@ def save_form(form: Form | None, data: dict, by, request=None) -> Form:
     questions = clean_questions(data.get("questions", []))
     groups = list(Group.objects.filter(pk__in=data.get("accept_groups") or []))
     _check_admin_groups(groups, by)
+    # Groups already on the form stay when someone changes its questions; only new ones are checked.
+    have = set(form.accept_groups.values_list("pk", flat=True)) if form is not None and form.pk else set()
+    _check_new_groups([g for g in groups if g.pk not in have], by)
     with transaction.atomic():
         form = form or Form()
         form.name = name
@@ -284,6 +326,11 @@ def apply(user, form: Form, answers, referrer_id: int | None = None) -> Applicat
     get_user_model().objects.select_for_update().filter(pk=user.pk).first()
     if open_application(user):
         raise RecruitError("You already have an application in progress")
+    closed = (Application.objects.filter(user=user, status__in=(Application.Status.WITHDRAWN, Application.Status.REJECTED),
+                                         decided_at__gt=timezone.now() - REAPPLY_AFTER).order_by("-decided_at").first())
+    if closed is not None:
+        minutes = int((closed.decided_at + REAPPLY_AFTER - timezone.now()).total_seconds() // 60) + 1
+        raise RecruitError(f"You can apply again in {minutes} minute{'s' if minutes != 1 else ''}", 429)
     check_discord(user)
     referrer = clean_referrer(user, referrer_id)
     app = Application.objects.create(user=user, form=form, answers=clean_answers(form, answers), referrer=referrer)
@@ -324,6 +371,8 @@ def withdraw(user, app: Application) -> Application:
 
 @transaction.atomic
 def claim(app: Application, by) -> Application:
+    if app.user_id == by.pk:
+        raise RecruitError("You can't review your own application", 403)
     _lock(app)
     if not app.is_open:
         raise RecruitError("This application is closed")
@@ -345,6 +394,10 @@ def comment(app: Application, by, text: str, internal: bool) -> Comment:
         # Each message notifies the recruiters; a closed application is over (apply again instead).
         raise RecruitError("This application is closed")
     internal = internal and is_reviewer and app.user_id != by.pk
+    if app.user_id == by.pk:
+        recent = app.comments.filter(author=by, event="", created_at__gt=timezone.now() - MESSAGES_PER).count()
+        if recent >= MAX_MESSAGES:
+            raise RecruitError("That's a lot of messages; give the recruiters a few minutes to answer", 429)
     c = Comment.objects.create(application=app, author=by, text=text, internal=internal)
     link = f"/p/recruit/applications/{app.pk}"
     if app.user_id == by.pk:
@@ -369,9 +422,14 @@ def decide(app: Application, by, accept: bool, message: str = "", request=None) 
     app.decided_by = by
     app.reviewer = app.reviewer or by
     app.save()
-    added = []
+    added, skipped = [], []
     if accept:
         for group in app.form.accept_groups.all():
+            # The group's own rules hold here too: accepted as a guest, they can't be in a members-only group yet.
+            reason = group_refusal(group, app.user)
+            if reason:
+                skipped.append({"group": group.name, "reason": reason})
+                continue
             try:
                 if access_groups.add_member(app.user, group, "admin", request=request, actor=by, note="accepted recruit"):
                     added.append(group.name)
@@ -379,6 +437,11 @@ def decide(app: Application, by, accept: bool, message: str = "", request=None) 
                 raise RecruitError(f"Couldn't add them to {group.name}: {exc}", 403) from None
     verb = "accepted" if accept else "rejected"
     Comment.objects.create(application=app, author=by, text=message.strip()[:10000] or verb.capitalize(), event=verb)
+    if skipped:
+        Comment.objects.create(application=app, author=by, internal=True, text="Not added to " + "; ".join(
+            f"{x['group']} ({x['reason']})" for x in skipped) + ". Add them under Groups once they may be in it.")
+    #: For the reviewer who decided: the form's groups the applicant wasn't added to, and why.
+    app.groups_skipped = skipped
     title = "Welcome aboard! Your application was accepted" if accept else "Your application was not accepted"
     notify(app.user_id, title, message.strip()[:300] or app.form.name, link="/p/recruit", level="success" if accept else "info",
            category="p.recruit", force=True)
@@ -386,7 +449,7 @@ def decide(app: Application, by, accept: bool, message: str = "", request=None) 
              application_id=app.pk, accepted=accept, by=by.display_name, groups=added, referrer_id=app.referrer_id,
              summary=f"{by.display_name} {verb} {app.user.display_name} ({app.form.name})")
     record(f"recruit.{verb}", f"{verb} {app.user.display_name}'s application", request=request, actor=by, target=app.user,
-           details={"application_id": app.pk, "groups": added})
+           details={"application_id": app.pk, "groups": added, "groups_skipped": [x["group"] for x in skipped]})
     return app
 
 

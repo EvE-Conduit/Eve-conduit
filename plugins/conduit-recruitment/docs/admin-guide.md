@@ -32,7 +32,7 @@ Give them under **Administration** → **Groups**. They are listed with the **HR
 | --- | --- | --- |
 | `recruit.review_applications` | See the queue, open any application, see applicants' characters and open their character sheets while the application is open, write notes and messages, take, accept and reject; get notifications; see the dashboard widget | Recruiters |
 | `recruit.manage_forms` | Create, change, close and delete forms; change **Settings**; set Discord pings | Recruitment lead |
-| `site.manage_access` (core) | Needed to put a group that carries administrator permissions on a form, or to accept an applicant into one | Administrators |
+| `site.manage_access` (core) | Needed to put a group on a form unless you lead that group; always needed for a group that carries administrator permissions, and to accept an applicant into one | Administrators |
 | `discord.access_discord` (Discord plugin) | "Can link a Discord account". Applicants need it to link Discord when **Require Discord** is on. Every state has it unless you took it away. | All states |
 
 Give both recruitment permissions to the people who also set up forms.
@@ -93,9 +93,21 @@ Recruiters work from the **Applications** queue. See the [user guide](user-guide
 2. A recruiter clicks **Take it**; the status becomes **In review**.
 3. Recruiters talk to the applicant with messages, and to each other with internal notes.
 4. A recruiter clicks **Accept** or **Reject**, with an optional message. Accepting adds the applicant to the form's
-   groups.
+   groups, as far as each group's own rules allow (see below).
 
-An applicant can have one open application at a time. They can withdraw it and apply again later. Nobody can decide
+A form's groups follow the same rules as adding a member under **Administration** → **Groups**:
+
+- Only someone with `site.manage_access`, or a leader of the group, can put a group on a form. Groups already on a
+  form stay when a form manager changes something else.
+- A smart group can't be put on a form: its rules decide who is in it.
+- When a group only allows some states and the applicant isn't in one yet (a guest accepted into a members-only
+  group), the application is accepted but they are not added to that group. The recruiter is told, and an internal
+  note on the application says which groups were left out. Add them under **Groups** once their state allows it,
+  or use a group without a state limit on the form.
+
+An applicant can have one open application at a time. After withdrawing or being rejected they can apply again an
+hour later, and they can write up to 5 messages on their application in 10 minutes: every application and message
+notifies recruiters, and anyone with an EVE account can apply. Nobody can decide
 their own application.
 
 The **Recruitment** dashboard widget shows open applications, how many are with you, and how many are new.
@@ -170,6 +182,13 @@ None.
 **"<group> grants administrator permissions, so only an administrator can use it here".**
 The form's group carries administrator permissions. Someone with `site.manage_access` must save the form or accept
 the applicant, or use a different group.
+
+**"Only someone who manages access, or a leader of <group>, can put that group on a form".**
+Ask an administrator to add the group to the form, or to make you a leader of the group.
+
+**"Not added to <group> (their state isn't allowed in this group)".**
+The group only allows some states and the applicant isn't in one of them yet. They were accepted; add them to the
+group once they've joined.
 
 **"Couldn't add them to <group>: ...".**
 Adding the applicant to that group failed, and the decision was not saved. Check the group under **Administration** →

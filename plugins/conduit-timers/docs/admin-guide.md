@@ -50,7 +50,7 @@ On the board press **Settings** (shown only with `timers.manage_timers`). The di
 | **Reminders** | 1 h and 15 min | Minute marks before a timer comes out when reminders go out. Pick from 1 day, 12 h, 6 h, 2 h, 1 h, 30 min, 15 min and 5 min; at most six. With none picked, no reminders are sent. |
 | **From the corporation's structures** | On | Reinforced, anchoring and unanchoring structures on the corporation sheet get a timer. |
 | **From in-game notifications** | On | Members' notifications about structures that lost shields or armor, sovereignty structures and customs offices become timers. |
-| **Discord roles to ping** | none | Roles pre-selected for new timers with **Ping Discord** on. Each timer can change them. Only shown once the Discord plugin is linked to your server. |
+| **Discord roles to ping** | none | Roles pre-selected for new timers with **Ping Discord** on. Each timer can change them. Only shown once the Discord plugin is linked to your server. Once it is, a timer (and this setting) only keeps roles the picker offers. |
 | **Keep timers that came out for** | 14 days | How long timers stay on the **Came out** tab (1 to 90). |
 
 The dialog also shows when notifications were last looked at, and a **Check now** button that runs both automatic
@@ -90,7 +90,8 @@ Limits: a timer can be up to 60 days ahead, and no older than the **Keep timers 
 
 Use the **⋯** menu on a row:
 
-- **Edit** — opens the same form with **Exact time** selected. Changing the time resets the reminders.
+- **Edit** — opens the same form with **Exact time** selected. Changing the time resets the reminders; saving
+  without touching the time keeps it to the second, and no reminder is sent again.
 - **Remove** — takes the timer off the board for everyone. Nobody is told under the bell; webhooks get
   `timers.deleted`, which never pings.
 
@@ -123,6 +124,10 @@ Notifications older than 7 days are ignored. The same notification seen by sever
 read from elsewhere is treated as the same timer when it ends within 10 minutes of one already on the board for that
 structure (or that system, without a structure id). Late-syncing characters are still picked up. Timers you added by
 hand are never moved by the automatic sources.
+
+A timer from a notification is **Ours** when the character that got it is in a corporation or alliance of yours (one
+a members' state lists, or the main character of a member is in). From any other character, such as a member's alt
+in another corporation, it is **Neutral**.
 
 New automatic timers are announced like hand-added ones, with member notifications on.
 

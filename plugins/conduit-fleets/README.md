@@ -35,7 +35,7 @@ Records who flew in each fleet (FATs, also called PAPs) and lets groups require 
 - **Group rule "Fleet attendance (FATs)":** at least N FATs in the last D days (one per fleet, or per FAT round),
   optionally only some fleet types and only fleets with at least a number of pilots. Two characters of one member in
   the same round count once, and
-  FATs someone added by hand for their own characters don't count (so an FC can't hand themselves attendance). Use it for group requirements or smart groups under
+  FATs someone added by hand for their own characters, or registered on the FAT link of a fleet they ran themselves, don't count (so an FC can't hand themselves attendance); they are left out of the attendance list and its CSV too. Use it for group requirements or smart groups under
   Administration → Groups.
 
 Events for webhooks: `fleets.created`, `fleets.ended`. A new fleet can ping Discord as a form-up call: switch it on

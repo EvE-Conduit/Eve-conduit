@@ -422,3 +422,92 @@ def test_discord_roles_need_the_discord_plugin(people, api_client, monkeypatch):
     assert resp.status_code == 200 and resp.json()["default_ping_roles"] == ["2"]
     api_client.force_login(people["pilot"])
     assert api_client.call("get", "/api/p/timers/discord-roles").status_code == 403
+
+
+def test_reminders_only_reach_people_who_may_still_see_the_timer(people, api_client):
+    t = add(api_client, people["manager"], ends_at=(timezone.now() + timedelta(minutes=50)).isoformat())
+    for who in ("pilot", "other"):
+        api_client.force_login(people[who])
+        api_client.call("post", f"/api/p/timers/{t['id']}/going", {"going": True})
+    left = people["other"]
+    left.state = None  # left the alliance after saying they'd come
+    left.save()
+    Notification.objects.all().delete()
+    assert services.remind_due() == 1
+    assert Notification.objects.filter(user=people["pilot"], title__startswith="Timer soon").exists()
+    assert not Notification.objects.filter(user=left).exists()
+
+
+def test_editing_without_touching_the_time_keeps_it(people, api_client, monkeypatch):
+    """The editor shows the time to the minute; saving it back mustn't move the timer or send its reminders again."""
+    from conduit.events import bus
+
+    end = (timezone.now() + timedelta(minutes=50)).replace(second=42, microsecond=123000)
+    t = add(api_client, people["manager"], ends_at=end.isoformat())
+    assert services.remind_due() == 1
+    seen = []
+    monkeypatch.setattr(bus, "emit", lambda name, **payload: seen.append((name, payload)))
+    body = {"name": t["name"], "system": JITA, "notes": "Bring logi", "ends_at": end.replace(second=0, microsecond=0).isoformat()}
+    assert api_client.call("put", f"/api/p/timers/{t['id']}", body).status_code == 200
+    saved = Timer.objects.get(pk=t["id"])
+    assert saved.ends_at == end and saved.reminded == [60] and saved.notes == "Bring logi"
+    assert [p["summary"].endswith("Details changed.") for n, p in seen if n == "timers.updated"] == [True]
+    assert services.remind_due() == 0
+    # Another minute is a move.
+    body["ends_at"] = (end + timedelta(minutes=3)).replace(second=0, microsecond=0).isoformat()
+    api_client.call("put", f"/api/p/timers/{t['id']}", body)
+    assert Timer.objects.get(pk=t["id"]).reminded == []
+
+
+def test_a_notification_from_another_corporation_isnt_ours(people, corp):
+    """A member's alt outside the alliance gets told about its own corporation's structure: that's not our timer."""
+    from conduit.accounts.models import Character
+    from conduit.eve.models import EveCorporation
+
+    elsewhere = EveCorporation.objects.create(id=98000099, name="Somewhere Else", ticker="ELSE")
+    alt = Character.objects.create(id=90000050, name="Out Alt", owner_hash="out", user=people["pilot"], corporation=elsewhere)
+    text = f"solarsystemID: {JITA}\nstructureID: &id001 {{}}\nstructureTypeID: 35832\ntimeLeft: {20 * 3600 * 10_000_000}\n"
+    _notification(alt, "StructureLostShields", text.format(1030000000011), nid=1)
+    _notification(people["other"].main_character, "StructureLostShields", text.format(1030000000012), nid=2)
+    assert services.import_notifications() == 2
+    assert Timer.objects.get(structure_id=1030000000011).side == "neutral"
+    assert Timer.objects.get(structure_id=1030000000012).side == "friendly"
+
+
+def test_ping_roles_are_the_ones_offered(people, api_client, monkeypatch):
+    t = add(api_client, people["manager"], ping=True, ping_roles=["123", "9" * 40])
+    assert t["ping_roles"] == ["123"]
+    monkeypatch.setattr(services, "discord_roles", lambda: {"available": True, "roles": [{"id": "111", "name": "Caps", "color": 0}]})
+    t = add(api_client, people["manager"], name="Other", ping=True, ping_roles=["111", "222"])
+    assert t["ping_roles"] == ["111"]
+    s = api_client.call("put", "/api/p/timers/settings", {"default_ping_roles": ["222", "111"]}).json()
+    assert s["default_ping_roles"] == ["111"]
+
+
+def test_a_notification_saved_late_with_a_lower_row_id_still_counts(people, corp):
+    """Two characters sync at once: the row with the lower id can be saved after the higher one was looked at."""
+    from conduit.sheet.notifications.models import Notification as EveNotification
+
+    def row(pk, structure, nid):
+        when = timezone.now() - timedelta(minutes=5)
+        text = f"solarsystemID: {JITA}\nstructureID: &id001 {structure}\nstructureTypeID: 35832\ntimeLeft: {20 * 3600 * 10_000_000}\n"
+        EveNotification.objects.create(id=pk, character=people["pilot"].main_character, notification_id=nid, type="StructureLostShields",
+                                       sender_id=1000137, sender_type="corporation", timestamp=when, text=text)
+
+    row(500, 1030000000021, 1)
+    assert services.import_notifications() == 1
+    row(499, 1030000000022, 2)
+    assert services.import_notifications() == 1
+    assert services.import_notifications() == 0
+    # Looking back never brings a timer someone took off the board back.
+    Timer.objects.all().delete()
+    assert services.import_notifications() == 0
+
+
+def test_times_with_another_offset_are_told_in_eve_time(people, api_client):
+    from datetime import timezone as tz
+
+    when = (datetime.now(UTC) + timedelta(hours=5)).replace(minute=30, second=0, microsecond=0)
+    add(api_client, people["manager"], ends_at=when.astimezone(tz(timedelta(hours=5))).isoformat())
+    n = Notification.objects.filter(user=people["pilot"], category="p.timers").first()
+    assert f"Comes out {when:%a %d %b %H:%M} ET." in n.body

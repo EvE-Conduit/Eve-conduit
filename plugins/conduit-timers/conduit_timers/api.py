@@ -83,7 +83,7 @@ def put_settings(request, payload: SettingsIn):
         raise HttpError(400, "Keep past timers for 1 to 90 days")
     s = TimerSettings.load()
     s.reminder_minutes, s.import_structures, s.import_notifications, s.keep_days = marks, payload.import_structures, payload.import_notifications, payload.keep_days
-    s.default_ping_roles = services.clean_roles(payload.default_ping_roles)
+    s.default_ping_roles = services.offered_roles(payload.default_ping_roles)
     s.save()
     record("timers.settings", "changed the timer settings", request=request, target_type="plugin", details={"plugin": "timers"})
     return settings_out(s)

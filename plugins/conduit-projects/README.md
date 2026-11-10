@@ -30,7 +30,9 @@ A corp build board: "20 Hurricanes for the deployment", split into items members
   quantity.
 - **Events and webhooks:** `projects.created`, `projects.contribution_delivered` (when a manager confirms a delivery;
   `user_id, user, project_id, project, contribution_id, item, type_id, quantity, points, summary, link`) and
-  `projects.completed`. The Corp Store listens to `projects.contribution_delivered` to pay `points`. A new project
+  `projects.completed`. The Corp Store listens to `projects.contribution_delivered` to pay `points`. Projects
+  for some states or groups only send private `*_restricted` events instead (and a `projects.contribution_delivered`
+  without the project's or item's name, for the store). A new project
   can ping Discord: switch it on under Discord pings on the Deliveries page. It needs a Discord webhook under
   Administration → Integrations; with the Discord plugin linked you also pick roles.
 

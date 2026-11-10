@@ -1,6 +1,6 @@
 [project]
 name = "conduit-blueprints"
-version = "1.0.2"
+version = "1.0.3"
 description = "Blueprint Library: every corporation blueprint and members' shared originals, copy and loan requests, and what still needs research."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

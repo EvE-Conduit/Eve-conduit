@@ -31,6 +31,7 @@ register_rule(
     ),
     description="Counts the member's FATs with any of their characters: one per fleet, or per FAT round when the FC "
                 "started more than one (two characters in the same round count once). "
-                "FATs someone added by hand for their own characters don't count.",
+                "FATs someone added by hand for their own characters, or registered on the FAT link of a fleet they ran "
+                "themselves, don't count.",
     explain=_explain,
 )

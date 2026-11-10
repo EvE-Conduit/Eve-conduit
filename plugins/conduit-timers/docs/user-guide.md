@@ -69,7 +69,8 @@ Timer notifications come under the bell in the **Timers** category (`p.timers`).
 
 If a timer is marked **Everyone is expected**, every member is told when it's added and gets every reminder.
 
-When a timer is moved to a new time, its reminders go out again. Removing a timer doesn't tell anyone.
+When a timer is moved to a new time, its reminders go out again. Removing a timer doesn't tell anyone. Reminders
+only go to people who are still members: someone who said they're going and then left isn't reminded.
 
 Your corporation may also see timers and pings in Discord. Those come from webhooks your admins set up.
 

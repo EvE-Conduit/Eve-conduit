@@ -174,7 +174,13 @@ class MotdIn(Schema):
 @router.post("/{fleet_id}/motd")
 def set_motd(request, fleet_id: int, payload: MotdIn):
     """Add the FAT lines to the in-game fleet's MOTD, or take them out."""
-    services.set_motd(_editable(request, fleet_id), payload.on)
+    fleet = _editable(request, fleet_id)
+    char = fleet.tracking_character
+    if payload.on and char is not None and char.user_id != request.user.pk:
+        # The MOTD is written with that character's login, like tracking: only its owner starts that. A fleet
+        # manager can still take the lines out.
+        raise HttpError(403, f"Only {char.name}'s owner can put the FAT lines in the fleet MOTD")
+    services.set_motd(fleet, payload.on)
     return services.fleet_detail(_fleet(fleet_id), request.user)
 
 

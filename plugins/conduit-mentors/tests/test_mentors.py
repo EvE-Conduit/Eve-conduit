@@ -1,7 +1,10 @@
 """Mentoring: asking, claiming and assigning, goals, the thread, sheet access, graduation and the group rules."""
 
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth.models import Permission
+from django.utils import timezone
 
 from conduit.access import rules
 from conduit.events import bus
@@ -54,6 +57,7 @@ def test_ask_by_name_notifies_and_announces(people, api_client, monkeypatch):
     assert c.call("post", f"{BASE}/request", {}).status_code == 400  # one at a time
     # Asking for anyone tells every active mentor.
     c.call("post", f"{BASE}/m/{m['id']}/withdraw")
+    Mentorship.objects.update(ended_at=timezone.now() - services.ASK_AGAIN_AFTER - timedelta(minutes=1))  # an hour on
     c.call("post", f"{BASE}/request", {"note": "Anyone"})
     assert Notification.objects.filter(user=people["other"], title="New Bro is looking for a mentor").exists()
 
@@ -381,3 +385,66 @@ def test_managers_set_discord_pings(user, api_client):
     resp = api_client.call("put", "/api/pings/mentors.requested", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="mentors.requested").roles == ["123"]
+
+
+def test_a_request_for_one_mentor_isnt_taken_by_another(people, api_client):
+    """Claiming opens the mentee's character sheets: asked by name, only that mentor (or a program manager) takes it."""
+    newbro = people["newbro"]
+    m = services.request_mentor(newbro, mentor_id=people["mentor"].pk)
+    c = login(api_client, people["other"])
+    assert c.call("get", f"{BASE}/m/{m.pk}").json()["can"]["claim"] is False
+    resp = c.call("post", f"{BASE}/m/{m.pk}/claim")
+    assert resp.status_code == 400 and "asked for Mentor Mia" in resp.json()["detail"]
+    assert not can_view(people["other"], newbro.main_character)
+    # A program manager can still hand them to someone else.
+    c = login(api_client, people["manager"])
+    assert c.call("post", f"{BASE}/m/{m.pk}/assign", {"mentor_id": people["other"].pk}).json()["mentor"]["name"] == "Mentor Max"
+    # The named mentor claims as before; and when they stop mentoring, the request is open to the others.
+    m2 = services.request_mentor(people["stranger"], mentor_id=people["mentor"].pk)
+    c = login(api_client, people["mentor"])
+    assert c.call("get", f"{BASE}/m/{m2.pk}").json()["can"]["claim"] is True
+    services.save_profile(people["mentor"], {"active": False})
+    c = login(api_client, people["other"])
+    assert c.call("post", f"{BASE}/m/{m2.pk}/claim").json()["mentor"]["name"] == "Mentor Max"
+
+
+def test_asking_again_right_after_withdrawing_waits(people, api_client):
+    """Every request notifies all the mentors (and may ping Discord)."""
+    from datetime import timedelta
+
+    newbro = people["newbro"]
+    c = login(api_client, newbro)
+    m = c.call("post", f"{BASE}/request", {"note": "hi"}).json()
+    assert c.call("post", f"{BASE}/m/{m['id']}/withdraw").status_code == 200
+    before = Notification.objects.count()
+    again = c.call("post", f"{BASE}/request", {"note": "hi"})
+    assert again.status_code == 429 and "ask again in" in again.json()["detail"] and Notification.objects.count() == before
+    Mentorship.objects.update(ended_at=Mentorship.objects.get().ended_at - services.ASK_AGAIN_AFTER - timedelta(minutes=1))
+    assert c.call("post", f"{BASE}/request", {"note": "hi"}).status_code == 200
+
+
+def test_a_waiting_mentee_cant_flood_the_program_managers(people, api_client):
+    m = services.request_mentor(people["newbro"])
+    c = login(api_client, people["newbro"])
+    for i in range(services.MAX_WAITING_MESSAGES):
+        assert c.call("post", f"{BASE}/m/{m.pk}/messages", {"text": f"anyone? {i}"}).status_code == 200
+    before = Notification.objects.count()
+    assert c.call("post", f"{BASE}/m/{m.pk}/messages", {"text": "anyone?"}).status_code == 429
+    assert Notification.objects.count() == before
+    # With a mentor it's a conversation between the two of them: no limit.
+    services.assign(m, people["mentor"], people["mentor"])
+    assert c.call("post", f"{BASE}/m/{m.pk}/messages", {"text": "hello!"}).status_code == 200
+
+
+def test_program_managers_dont_get_the_alt_list_without_sheet_access(people, api_client):
+    from conduit.accounts.models import Character
+
+    newbro = people["newbro"]
+    Character.objects.create(id=90000021, name="Secret Alt", owner_hash="alt", user=newbro)
+    m = services.assign(services.request_mentor(newbro), people["mentor"], people["mentor"])
+    view = login(api_client, people["manager"]).call("get", f"{BASE}/m/{m.pk}").json()
+    assert [c["name"] for c in view["characters"]] == ["New Bro"]
+    # With the core's sheet permission they see every character, as on the character sheets.
+    boss = give(people["manager"], "view_all_characters")
+    view = login(api_client, boss).call("get", f"{BASE}/m/{m.pk}").json()
+    assert {c["name"] for c in view["characters"]} == {"New Bro", "Secret Alt"}

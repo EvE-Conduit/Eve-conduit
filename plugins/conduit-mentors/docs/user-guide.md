@@ -31,6 +31,8 @@ decide which goals you get later.
 - Click **Open** to see the mentorship page. You can already write there; program managers get your messages until
   a mentor takes you on.
 - To cancel, open the mentorship page and click **Withdraw**. You can only withdraw while you're still waiting.
+  After withdrawing you can ask again an hour later. While you wait for a mentor you can write up to 5 messages in
+  10 minutes; they go to the program managers.
 
 ### Your mentorship
 
@@ -89,7 +91,9 @@ take no new ones, aren't listed to new members, and aren't notified about open r
 3. Click a request to read what they asked for. You see their main character only.
 4. Click **Take them on**.
 
-You can't take someone on while your profile is paused or you're at your **Mentees at most** limit.
+You can't take someone on while your profile is paused or you're at your **Mentees at most** limit. Someone who
+asked for another mentor by name is theirs to take: there is no **Take them on** button for you unless that mentor
+has paused or stopped mentoring. A program manager can assign them to you.
 
 ### Working with a mentee
 

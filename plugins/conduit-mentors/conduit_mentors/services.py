@@ -10,6 +10,8 @@ mentees with certain focus areas only (PvP, Industry...); the others are for eve
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -27,6 +29,13 @@ MENTOR_PERM = "mentors.mentor"
 MANAGE_PERM = "mentors.manage_program"
 RULES_PERM = "site.manage_access"
 CATEGORY = "p.mentors"
+#: How long someone who withdrew their request waits before asking again: every request notifies all the mentors
+#: (and may ping Discord).
+ASK_AGAIN_AFTER = timedelta(hours=1)
+#: The most messages a mentee still waiting for a mentor can write in ``WAITING_MESSAGES_PER``: without a mentor,
+#: each one notifies every program manager.
+MAX_WAITING_MESSAGES = 5
+WAITING_MESSAGES_PER = timedelta(minutes=10)
 
 
 class MentorError(Exception):
@@ -264,6 +273,11 @@ def request_mentor(user, *, focus=None, note: str = "", play_time: str = "", men
     User.objects.select_for_update().filter(pk=user.pk).first()
     if open_mentorship(user):
         raise MentorError("You already have a mentor or are waiting for one")
+    withdrawn = (Mentorship.objects.filter(mentee=user, ended_by=user, status=Mentorship.Status.ENDED,
+                                           ended_at__gt=timezone.now() - ASK_AGAIN_AFTER).order_by("-ended_at").first())
+    if withdrawn is not None:
+        minutes = int((withdrawn.ended_at + ASK_AGAIN_AFTER - timezone.now()).total_seconds() // 60) + 1
+        raise MentorError(f"You just withdrew a request; you can ask again in {minutes} minute{'s' if minutes != 1 else ''}", 429)
     wanted = None
     if mentor_id:
         wanted = User.objects.filter(pk=mentor_id).first()
@@ -315,6 +329,8 @@ def assign(m: Mentorship, mentor, by, request=None, *, claim: bool = False) -> M
         raise MentorError(f"{mentor.display_name} is already the mentor")
     if (claim or not can_manage(by)) and (m.status != Mentorship.Status.WAITING or m.mentor_id):
         raise MentorError("Someone already took this request")
+    if not can_manage(by) and not open_to(m, mentor):
+        raise MentorError(f"{m.mentee.display_name} asked for {m.requested_mentor.display_name}; a program manager can assign someone else")
     if not can_manage(by):
         profile_for(mentor)
         # Lock the mentor's profile so claims sent at the same moment can't all pass the capacity check.
@@ -342,6 +358,14 @@ def assign(m: Mentorship, mentor, by, request=None, *, claim: bool = False) -> M
 
 
 # --- the mentorship ------------------------------------------------------------------------------------------------
+
+
+def open_to(m: Mentorship, mentor) -> bool:
+    """Whether ``mentor`` may take this waiting request by themselves. Taking it opens the mentee's character
+    sheets, so a request for one mentor by name is theirs to take; another mentor needs a program manager to assign
+    them. Once the named mentor no longer takes mentees (paused, or not a mentor any more), it's open to all."""
+    wanted = m.requested_mentor
+    return wanted is None or wanted.pk == mentor.pk or not is_active_mentor(wanted)
 
 
 def role(m: Mentorship, user) -> str | None:
@@ -404,6 +428,10 @@ def message(m: Mentorship, by, text: str, private: bool) -> Message:
     if not m.is_open:
         raise MentorError("This mentorship has ended")
     private = private and r != "mentee"
+    if r == "mentee" and not m.mentor_id:
+        recent = m.messages.filter(author=by, event="", created_at__gt=timezone.now() - WAITING_MESSAGES_PER).count()
+        if recent >= MAX_WAITING_MESSAGES:
+            raise MentorError("That's a lot of messages; a mentor or program manager will get to you", 429)
     msg = Message.objects.create(mentorship=m, author=by, text=text, private=private)
     if r == "mentee":
         target = [m.mentor_id] if m.mentor_id else [u.pk for u in users_with_perm(MANAGE_PERM) if u.pk != by.pk]
@@ -519,7 +547,9 @@ def detail(m: Mentorship, viewer) -> dict:
     if r == "manager" or (r == "mentor" and active):
         # Only the mentor gets in through this plugin; managers need the core sheet permissions.
         out["sheet_access"] = Program.load().sheet_access and active and m.mentor_id == viewer.pk
-        out["characters"] = characters_out(m.mentee)
+        # A program manager sees the main, and the characters whose sheets the core lets them read: running the
+        # program isn't a list of who owns which alt.
+        out["characters"] = characters_out(m.mentee, viewer=None if r == "mentor" else viewer)
     elif r == "candidate" or r == "mentor":
         # Mentors deciding whether to take someone, or whose mentorship is over, see the main character only: not
         # every alt, and not the alts made after it ended.
@@ -528,7 +558,7 @@ def detail(m: Mentorship, viewer) -> dict:
     out["can"] = {
         "message": m.is_open and r in ("mentee", "mentor", "manager"),
         "private_notes": m.is_open and staff,
-        "claim": m.status == Mentorship.Status.WAITING and r in ("candidate", "manager") and is_mentor(viewer),
+        "claim": m.status == Mentorship.Status.WAITING and is_mentor(viewer) and (r == "manager" or (r == "candidate" and open_to(m, viewer))),
         "assign": m.is_open and r == "manager",
         "graduate": active and staff,
         "end": m.is_open and staff,
@@ -539,12 +569,17 @@ def detail(m: Mentorship, viewer) -> dict:
     return out
 
 
-def characters_out(user, main_only: bool = False) -> list[dict]:
+def characters_out(user, main_only: bool = False, viewer=None) -> list[dict]:
+    """The mentee's characters. ``viewer``: only the main and the characters whose sheets that person may read."""
+    from conduit.sheet.access import can_view
+
     chars = Character.objects.filter(user=user).select_related("corporation", "skill_summary").order_by("name")
     if main_only:
         chars = chars.filter(pk=user.main_character_id)
     out = []
     for c in chars:
+        if viewer is not None and c.pk != user.main_character_id and not can_view(viewer, c):
+            continue
         skills = getattr(c, "skill_summary", None)
         out.append({"id": c.pk, "name": c.name, "portrait": portrait_url(c.pk, 64), "main": c.pk == user.main_character_id,
                     "corporation": c.corporation.name if c.corporation else None, "total_sp": skills.total_sp if skills else None})

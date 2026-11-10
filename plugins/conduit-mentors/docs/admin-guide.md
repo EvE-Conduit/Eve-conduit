@@ -95,6 +95,12 @@ As a program manager, on any mentorship page you can:
 - **Assign a mentor** (waiting) or **Hand to another mentor** (active): pick from **Choose…** and click **Assign**.
   This ignores the mentor's limit and pause. The mentee, the new mentor and the previous mentor are told.
 - **Take them on**, if you also have `mentors.mentor`.
+- See the mentee's main character, and the other characters only if the core's character sheet permissions let you
+  read them.
+
+A request for a mentor by name can only be taken by that mentor (taking it opens the mentee's character sheets).
+If that mentor doesn't take it, assign someone else here. Once the named mentor pauses or stops mentoring, any
+mentor can take it.
 - Write messages and private notes, and tick goals.
 - **Graduate** or **End** (with a reason).
 - **Reopen** a graduated or ended mentorship. It goes back to its mentor if they still mentor, otherwise back on the

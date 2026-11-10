@@ -144,7 +144,8 @@ def decide(request, application_id: int, payload: DecideIn):
     if app.user_id == request.user.pk:
         raise HttpError(403, "You can't decide your own application")
     _run(services.decide, app, request.user, payload.accept, payload.message, request=request)
-    return services.application_out(app, request.user, detail=True)
+    # The form's groups the applicant couldn't be added to (the group's own rules refuse them), for the reviewer.
+    return {**services.application_out(app, request.user, detail=True), "groups_skipped": getattr(app, "groups_skipped", [])}
 
 
 # --- forms ---------------------------------------------------------------------------------------------------------

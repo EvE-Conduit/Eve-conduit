@@ -165,6 +165,8 @@ export function ApplicationPage() {
       setDeciding(null);
       setMessage("");
       toast.success(d.status === "accepted" ? `${d.user.name} accepted` : `${d.user.name} rejected`);
+      // A group's own rules can refuse someone (a members-only group and a guest): say so, the note stays on the page.
+      if (d.groups_skipped?.length) toast.warning(`Not added to ${d.groups_skipped.map((g) => `${g.group} (${g.reason})`).join("; ")}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });

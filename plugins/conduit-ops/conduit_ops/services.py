@@ -264,6 +264,8 @@ def save(op: Op | None, by, *, title: str, kind: str, starts_at: datetime, durat
         raise OpError("An op runs from 15 minutes to 24 hours")
     if timezone.is_naive(starts_at):
         starts_at = timezone.make_aware(starts_at, UTC)
+    # Whatever offset it was sent with: what people are told ("19:00 ET") is printed from this.
+    starts_at = starts_at.astimezone(UTC)
     now = timezone.now()
     if starts_at > now + MAX_AHEAD:
         raise OpError(f"An op can't be more than {MAX_AHEAD.days} days away")
@@ -295,7 +297,7 @@ def save(op: Op | None, by, *, title: str, kind: str, starts_at: datetime, durat
     op.formup, op.comms = " ".join(formup.split())[:120], " ".join(comms.split())[:120]
     op.doctrine_id, op.doctrine_name = doctrine_id or None, doctrine_name[:100]
     op.description, op.important = description.strip()[:5000], important
-    op.ping, op.ping_roles = ping, clean_roles(ping_roles)
+    op.ping, op.ping_roles = ping, offered_roles(ping_roles)
     if moved:
         op.reminded = []  # a moved op gets its reminders again
     with transaction.atomic():
@@ -366,7 +368,16 @@ def describe(op: Op) -> str:
 
 
 def _answered(op: Op, answers=(Rsvp.Answer.GOING, Rsvp.Answer.MAYBE)) -> list:
-    return [r.user for r in op.rsvps.filter(answer__in=answers).select_related("user")]
+    """The people who said they'd come and may still see the op. Someone who answered and then left the alliance,
+    or the op's audience (it was limited to a group later), isn't told about it any more."""
+    from conduit.access.services import site_members
+
+    people = [r.user for r in op.rsvps.filter(answer__in=answers).select_related("user")]
+    if not people:
+        return []
+    members = set(site_members().filter(pk__in=[u.pk for u in people]).values_list("pk", flat=True))
+    audience = set(audience_users(op).filter(pk__in=members).values_list("pk", flat=True))
+    return [u for u in people if u.pk in members and (u.pk in audience or u.pk in (op.created_by_id, op.fc_id) or can_manage(u))]
 
 
 def _tell_answered(op: Op, title: str, body: str, level: str = "info") -> None:
@@ -398,7 +409,21 @@ ROLES_CACHE = 600
 
 
 def clean_roles(roles) -> list[str]:
-    return list(dict.fromkeys(str(r) for r in (roles or []) if str(r).isdigit()))[:10]
+    return list(dict.fromkeys(str(r) for r in (roles or []) if str(r).isdigit() and len(str(r)) <= 32))[:10]
+
+
+def offered_roles(roles) -> list[str]:
+    """``roles`` as an op or the settings may keep them: only the roles the editor offers, when the Discord plugin is
+    linked and answers (otherwise there's nothing to check against, and they're kept as picked). Without this a
+    role id typed into the API would ping roles the picker leaves out on purpose (managed ones, @everyone)."""
+    roles = clean_roles(roles)
+    if not roles:
+        return roles
+    known = discord_roles()
+    if not known["available"] or known.get("error"):
+        return roles
+    offered = {r["id"] for r in known["roles"]}
+    return [r for r in roles if r in offered]
 
 
 def discord_roles() -> dict:

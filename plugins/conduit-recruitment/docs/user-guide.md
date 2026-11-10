@@ -59,14 +59,15 @@ While your application is open, recruiters can see your characters and open thei
 1. Click **Withdraw application**.
 2. Confirm with **Withdraw**.
 
-The recruiters are told and the application is closed. You can apply again later.
+The recruiters are told and the application is closed. You can apply again an hour later.
 
 ### The decision
 
 You get a notification either way, with the recruiter's message if they wrote one:
 
 - Accepted: "Welcome aboard! Your application was accepted". You are added to the groups the form gives.
-- Not accepted: "Your application was not accepted". You're welcome to apply again later.
+- Not accepted: "Your application was not accepted". You're welcome to apply again later (an hour
+  after the decision at the earliest).
 
 For 30 days the Recruitment page also shows the decision at the top. Past applications are listed under
 **Earlier applications**.
@@ -134,7 +135,9 @@ Messages notify the applicant. Internal notes notify nobody.
 2. Optionally write **Message to them (optional)**. It is sent with the notification and shown on their application.
 3. Confirm.
 
-Accepting adds the applicant to the form's groups straight away. You can't decide your own application.
+Accepting adds the applicant to the form's groups straight away. A group that doesn't allow their state yet (a
+members-only group, while they're still a guest) is left out: you're told which, and an internal note says so. You
+can't take or decide your own application.
 
 ### Recruiter notifications
 

@@ -22,6 +22,9 @@ class TimerSettings(models.Model):
     #: The highest notification row id already looked at. Rows synced later have higher ids whatever time the game
     #: gave them, so a notification that arrives late isn't skipped.
     notifications_seen_id = models.BigIntegerField(null=True, blank=True)
+    #: Notification row ids already looked at among the latest ones (``services.NOTIFICATION_LOOK_BACK``): rows aren't
+    #: always saved in id order, so each look goes back a little. None until the first look that keeps this list.
+    notifications_handled = models.JSONField(null=True, blank=True)
     #: Discord role ids new timers ping by default (when the Discord plugin is linked to a server).
     default_ping_roles = models.JSONField(default=list, blank=True)
 

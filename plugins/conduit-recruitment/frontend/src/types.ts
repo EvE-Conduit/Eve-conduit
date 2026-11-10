@@ -79,6 +79,8 @@ export interface ApplicationInfo {
   characters?: CharacterSummary[];
   accept_groups?: string[];
   history?: { id: number; status: Status; form: string; created_at: string }[];
+  /** Only in the answer to accepting: the form's groups the applicant couldn't be added to, and why. */
+  groups_skipped?: { group: string; reason: string }[];
 }
 
 /** A member an applicant can name as the one who referred them. */
