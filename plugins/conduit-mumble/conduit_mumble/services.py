@@ -9,6 +9,7 @@ through a temporary link that stops working when the link does.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import secrets
 from datetime import timedelta
@@ -41,6 +42,8 @@ FAILS_LIMIT, FAILS_WINDOW = 10, 600
 TEMP_USER_KEEP, TEMP_LINK_KEEP = timedelta(days=7), timedelta(days=30)
 #: Readable passwords without look-alike characters.
 PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+#: The most people one link can be set to let in (0 is no limit at all).
+MAX_USES = 100_000
 PLACEHOLDERS = ("character", "corp_ticker", "corp", "alliance_ticker", "alliance")
 
 
@@ -191,7 +194,10 @@ def set_password(acct: MumbleUser, password: str | None = None) -> str:
     password = check_new_password(password) if password else generate_password()
     acct.password_hash = make_password(password)
     acct.password_changed_at = timezone.now()
-    acct.save(update_fields=["password_hash", "password_changed_at"])
+    # A new password is what people reach for when the old one leaked: whoever signed in with the old one must not
+    # keep getting in with the certificate that login remembered.
+    acct.cert_hash = ""
+    acct.save(update_fields=["password_hash", "password_changed_at", "cert_hash"])
     return password
 
 
@@ -247,12 +253,18 @@ LOCKED_REASON = "too many failed logins; wait a few minutes"
 LOCKED_REASON_CERT = LOCKED_REASON + " (signing in with your remembered certificate still works)"
 
 
-def _too_many_failures(name: str) -> bool:
-    return (cache.get(f"mumble:fails:{name.lower()}") or 0) >= FAILS_LIMIT
+def _fails_key(row) -> str:
+    """Failed logins are counted per account, not per name as typed: the database finds an account whatever the
+    case (and on some databases the accents) of the name, so every spelling of it has to share one count."""
+    return f"mumble:fails:{'m' if isinstance(row, MumbleUser) else 't'}:{row.pk}"
 
 
-def _failed(name: str) -> dict:
-    key = f"mumble:fails:{name.lower()}"
+def _too_many_failures(row) -> bool:
+    return (cache.get(_fails_key(row)) or 0) >= FAILS_LIMIT
+
+
+def _failed(row) -> dict:
+    key = _fails_key(row)
     cache.add(key, 0, timeout=FAILS_WINDOW)
     try:
         cache.incr(key)
@@ -283,11 +295,11 @@ def authenticate(name: str, password: str = "", certhash: str = "", strong: bool
         by_password = False
         if not by_cert:
             # Passwords stay refused for the lockout window, so they can't be guessed.
-            if _too_many_failures(name):
+            if _too_many_failures(acct):
                 return {"result": "reject", "reason": LOCKED_REASON_CERT if s.allow_cert_auth and acct.cert_hash else LOCKED_REASON}
             by_password = bool(password) and check_password(password, acct.password_hash)
             if not by_password:
-                return _failed(name)
+                return _failed(acct)
         acct.display_name = display_name_for(user, s)
         acct.groups = desired_groups(user)
         acct.last_login_at = timezone.now()
@@ -301,10 +313,10 @@ def authenticate(name: str, password: str = "", certhash: str = "", strong: bool
     if temp is not None:
         if not temp.usable():
             return {"result": "reject", "reason": "temporary access has ended"}
-        if _too_many_failures(name):
+        if _too_many_failures(temp):
             return {"result": "reject", "reason": LOCKED_REASON}
         if not (password and check_password(password, temp.password_hash)):
-            return _failed(name)
+            return _failed(temp)
         temp.last_login_at = timezone.now()
         temp.save(update_fields=["last_login_at"])
         return {"result": "ok", "id": TEMP_ID_OFFSET + temp.pk, "name": temp.display_name, "groups": list(temp.link.groups), "kind": "temp"}
@@ -324,6 +336,54 @@ def user_info(mumble_id: int) -> dict | None:
     main = acct.user.main_character_id
     return {"id": mumble_id, "username": acct.username, "name": acct.display_name, "kind": "member",
             "texture_url": portrait_url(main, 128) if main else None}
+
+
+def _users_with_access(users) -> set[int]:
+    """``has_access`` for many users in a handful of queries (it's asked for everyone on comms every few seconds):
+    the permission comes from the user, one of their groups or their state, and only active accounts count."""
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+
+    from conduit.access.models import State
+
+    if not users:
+        return set()
+    User = get_user_model()
+    ids = [u.pk for u in users]
+    perm = {"permissions__content_type__app_label": "mumble", "permissions__codename": "access_mumble"}
+    direct = set(User.objects.filter(pk__in=ids, user_permissions__content_type__app_label="mumble",
+                                     user_permissions__codename="access_mumble").values_list("pk", flat=True))
+    by_group = set(User.objects.filter(pk__in=ids, groups__in=Group.objects.filter(**perm)).values_list("pk", flat=True))
+    states = set(State.objects.filter(**perm).values_list("pk", flat=True))
+    return {u.pk for u in users if u.is_active and (u.is_superuser or u.pk in direct or u.pk in by_group or u.state_id in states)}
+
+
+def check_sessions(ids: list[int]) -> dict:
+    """Which of the people connected to the Mumble server right now must go. The authenticator asks every few
+    seconds with the Mumble user ids it sees (logins are only checked when someone connects, so without this a member
+    who lost access, or a guest whose link ended, would stay on comms until they left by themselves).
+
+    ``end``: ids to disconnect, each with a reason to show them. ``unknown``: member ids without an account here
+    (deleted, or one of the Mumble server's own registered users: the authenticator only disconnects those it let
+    in itself). Everyone else may stay.
+    """
+    ids = {int(i) for i in ids if int(i) > 0}
+    member_ids = {i for i in ids if i < TEMP_ID_OFFSET}
+    temp_ids = {i - TEMP_ID_OFFSET for i in ids if i >= TEMP_ID_OFFSET}
+    end: dict[int, str] = {}
+    unknown = set(member_ids)
+    accounts = list(MumbleUser.objects.filter(user_id__in=member_ids).select_related("user"))
+    allowed = _users_with_access([a.user for a in accounts])
+    for acct in accounts:
+        unknown.discard(acct.user_id)
+        if acct.user_id not in allowed:
+            end[acct.user_id] = "You no longer have access to this Mumble server"
+    temps = {t.pk: t for t in TempUser.objects.filter(pk__in=temp_ids).select_related("link__created_by")}
+    for pk in temp_ids:
+        temp = temps.get(pk)
+        if temp is None or not temp.usable():
+            end[TEMP_ID_OFFSET + pk] = "Your temporary access has ended"
+    return {"end": [{"id": i, "reason": reason} for i, reason in sorted(end.items())], "unknown": sorted(unknown)}
 
 
 def name_to_id(name: str) -> int | None:
@@ -356,12 +416,12 @@ def create_temp_link(user, label: str, hours: float, max_uses: int = 0, groups: 
     label = " ".join(label.split())[:100]
     if not label:
         raise MumbleError("Say what the link is for")
-    if not hours or hours <= 0:
+    if not hours or not math.isfinite(hours) or hours <= 0:
         raise MumbleError("Pick how long it lasts")
     if hours > s.temp_max_hours:
         raise MumbleError(f"Links may last at most {s.temp_max_hours} hours")
-    if max_uses < 0:
-        raise MumbleError("The number of uses can't be negative")
+    if not 0 <= max_uses <= MAX_USES:
+        raise MumbleError(f"The number of uses is between 0 (no limit) and {MAX_USES}")
     # Only managers decide which groups guests get; everyone else hands out the guest group.
     wanted = [g for g in {sanitize_group(g) for g in (groups or [])} if g]
     if wanted and wanted != [s.temp_group] and not user.has_perm("mumble.manage_mumble"):

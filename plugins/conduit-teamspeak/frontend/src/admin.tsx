@@ -153,7 +153,7 @@ function SetupTab({ data }: { data: Admin }) {
                 <Field label="Query login">
                   <Input value={form.query_user} onChange={(e) => set({ query_user: e.target.value })} placeholder="conduit" className="font-mono" autoComplete="off" />
                 </Field>
-                <Field label="Query password" hint={s.query_password_set ? "Set; leave empty to keep it." : "From the server."}>
+                <Field label="Query password" hint={s.query_password_set ? "Set; leave empty to keep it. Enter it again when the address, port or login changes." : "From the server."}>
                   <Input type="password" value={form.query_password} onChange={(e) => set({ query_password: e.target.value })} className="font-mono" autoComplete="new-password" placeholder={s.query_password_set ? "••••••••" : ""} />
                 </Field>
               </div>

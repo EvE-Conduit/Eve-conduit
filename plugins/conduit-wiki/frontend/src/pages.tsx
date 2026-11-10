@@ -196,7 +196,7 @@ export function Article({ page, canManage, linkBase = HOME, readOnly }: { page: 
       </header>
 
       {page.body.trim() ? (
-        <Markdown text={page.body} linkBase={linkBase} sameSiteImages={linkBase === PUBLIC_HOME} />
+        <Markdown text={page.body} linkBase={linkBase} />
       ) : (
         <p className="text-sm text-subtle">This page is empty{canEdit ? ": edit it to write something." : "."}</p>
       )}

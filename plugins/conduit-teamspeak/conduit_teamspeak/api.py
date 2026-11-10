@@ -178,7 +178,13 @@ def put_settings(request, payload: SettingsIn):
     _run(services.check_format, nickname_format)
     if payload.registered_sgid and s.server_groups and payload.registered_sgid not in {g["sgid"] for g in s.server_groups}:
         raise HttpError(400, "Pick the registered group from the server's groups")
-    s.query_host, s.query_port, s.query_user, s.server_id = query_host, payload.query_port, payload.query_user.strip()[:100], payload.server_id
+    query_user = payload.query_user.strip()[:100]
+    # The stored password is only ever sent to the address and login it was saved for: otherwise anyone who can
+    # open Setup could point the address at a listener of their own and read the password off the next connection.
+    moved = (query_host, payload.query_port, query_user) != (s.query_host, s.query_port, s.query_user)
+    if moved and s.query_password and not payload.query_password:
+        raise HttpError(400, "Enter the query password again: it's needed whenever the query address, port or login changes")
+    s.query_host, s.query_port, s.query_user, s.server_id = query_host, payload.query_port, query_user, payload.server_id
     if payload.query_password:
         s.query_password = payload.query_password
     s.public_host, s.public_port, s.server_name = public_host, payload.public_port, payload.server_name.strip()[:100]

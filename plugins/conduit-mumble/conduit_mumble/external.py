@@ -7,6 +7,7 @@ groups. The password never gets stored on the Mumble server and never leaves thi
 
 from ninja import Router, Schema
 from ninja.errors import HttpError
+from pydantic import Field
 
 from conduit.external.auth import require_scope
 
@@ -50,6 +51,21 @@ def by_name(request, name: str):
     if mumble_id is None:
         raise HttpError(404, "No such Mumble user")
     return {"id": mumble_id}
+
+
+class SessionsIn(Schema):
+    #: The Mumble user ids connected right now.
+    ids: list[int] = Field(default_factory=list, max_length=5000)
+    version: str = ""
+
+
+@router.post("/sessions/check")
+@require_scope("p.mumble:auth")
+def check_sessions(request, payload: SessionsIn):
+    """Who of the people connected right now must be disconnected (``end``, with a reason each), and which member ids
+    have no account here (``unknown``). The authenticator asks every watchdog tick, which also says it's alive."""
+    services._seen(MumbleSettings.load(), payload.version)
+    return services.check_sessions(payload.ids)
 
 
 class PingIn(Schema):

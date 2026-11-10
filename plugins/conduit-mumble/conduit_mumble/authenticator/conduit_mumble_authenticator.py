@@ -28,7 +28,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SLICE_CANDIDATES = (
     "/usr/share/slice/Murmur.ice",
     "/usr/share/mumble-server/Murmur.ice",
@@ -86,6 +86,12 @@ class Site:
         status, body = self.call("GET", "/users/by-name?name=" + urllib.parse.quote(name, safe=""))
         return body["id"] if status == 200 else None
 
+    def check_sessions(self, ids):
+        """Who of the connected ids must go: ``{"end": [{"id", "reason"}], "unknown": [ids]}``, or None when the
+        site can't be asked (nobody is disconnected then)."""
+        status, body = self.call("POST", "/sessions/check", {"ids": sorted(ids), "version": VERSION})
+        return body if status == 200 and isinstance(body, dict) else None
+
     def ping(self):
         status, _ = self.call("POST", "/ping", {"version": VERSION})
         return status == 200
@@ -115,6 +121,49 @@ class Cache:
         return value
 
 
+# --- who has to go ---------------------------------------------------------------------------------------------------
+
+
+def sessions_to_kick(users, answer, let_in):
+    """Which sessions to disconnect, as ``[(session, reason)]``.
+
+    ``users``: ``[(session, user id)]`` as the Mumble server lists them. ``answer``: what the site said about those
+    ids (``Site.check_sessions``); None (the site couldn't be asked) disconnects nobody. ``let_in``: the ids this
+    authenticator let in itself. An id the site doesn't know at all is only disconnected when it's one of those (an
+    account deleted on the site); otherwise it's one of the Mumble server's own registered users and stays.
+    """
+    if not answer:
+        return []
+    reasons = {int(row["id"]): row.get("reason") or "Your access has ended" for row in answer.get("end", [])}
+    for uid in answer.get("unknown", []):
+        if int(uid) in let_in:
+            reasons.setdefault(int(uid), "Your Mumble account no longer exists")
+    return [(session, reasons[uid]) for session, uid in users if uid in reasons]
+
+
+def checked_ids(users):
+    """The ids worth asking the site about: registered users, without SuperUser (0) and the unregistered (-1)."""
+    return {uid for _session, uid in users if uid > 0}
+
+
+def end_sessions(server, site, let_in):
+    """Disconnect everyone on one virtual server who may not be there any more. Returns how many."""
+    users = [(u.session, u.userid) for u in server.getUsers().values()]
+    ids = checked_ids(users)
+    if not ids:
+        return 0
+    kicked = 0
+    for session, reason in sessions_to_kick(users, site.check_sessions(ids), let_in):
+        try:
+            server.kickUser(session, reason)
+        except Exception as exc:  # noqa: BLE001  (they left in the meantime; the next check sees who's still there)
+            log.debug("couldn't disconnect session %s: %s", session, exc.__class__.__name__)
+            continue
+        kicked += 1
+        log.info("disconnected session %s: %s", session, reason)
+    return kicked
+
+
 # --- Ice ---------------------------------------------------------------------------------------------------------------
 
 
@@ -131,8 +180,9 @@ def load_murmur(slice_path):
     return Ice, sys.modules["Murmur"]
 
 
-def make_authenticator(Murmur, site, avatars):
+def make_authenticator(Murmur, site, avatars, let_in=None):
     cache = Cache()
+    let_in = set() if let_in is None else let_in
 
     class Authenticator(Murmur.ServerUpdatingAuthenticator):
         def __init__(self, server):
@@ -152,6 +202,7 @@ def make_authenticator(Murmur, site, avatars):
             if result == "ok":
                 log.info("%s signed in as %s (%s) with groups %s", name, answer["name"], answer.get("kind", ""), ", ".join(answer.get("groups", [])) or "-")
                 cache.put(("name", answer["id"]), answer["name"])
+                let_in.add(int(answer["id"]))
                 return (int(answer["id"]), answer["name"], list(answer.get("groups", [])))
             if result == "fallthrough":
                 return (-2, None, None)
@@ -219,13 +270,17 @@ def make_authenticator(Murmur, site, avatars):
 
 
 def attach(Murmur, adapter, server, Authenticator, attached):
+    """Tell a virtual server to ask this authenticator. Done again on every check: a Mumble server that restarted
+    between two checks has forgotten its authenticator and would let people in from its own database, and telling
+    it twice does no harm."""
     sid = server.id()
-    if sid in attached:
-        return
-    prx = Murmur.ServerUpdatingAuthenticatorPrx.uncheckedCast(adapter.addWithUUID(Authenticator(server)))
+    prx = attached.get(sid)
+    if prx is None:
+        prx = Murmur.ServerUpdatingAuthenticatorPrx.uncheckedCast(adapter.addWithUUID(Authenticator(server)))
     server.setAuthenticator(prx)
-    attached[sid] = prx
-    log.info("attached to virtual server %s", sid)
+    if sid not in attached:
+        attached[sid] = prx
+        log.info("attached to virtual server %s", sid)
 
 
 def main():
@@ -259,7 +314,11 @@ def main():
     wanted = {int(s) for s in cfg.get("murmur", "servers", fallback="").replace(" ", "").split(",") if s}
     avatars = cfg.getboolean("user", "avatars", fallback=True)
     watchdog = cfg.getint("ice", "watchdog", fallback=30)
-    Authenticator = make_authenticator(Murmur, site, avatars)
+    kick = cfg.getboolean("user", "kick", fallback=True)
+    # The ids this process let in, so someone whose account was deleted on the site can be told apart from the
+    # Mumble server's own registered users.
+    let_in = set()
+    Authenticator = make_authenticator(Murmur, site, avatars, let_in)
 
     adapter = ice.createObjectAdapterWithEndpoints("Callback.Client", "tcp -h %s" % host)
     adapter.activate()
@@ -274,6 +333,8 @@ def main():
                 for server in servers:
                     if not wanted or server.id() in wanted:
                         attach(Murmur, adapter, server, Authenticator, attached)
+                        if kick:
+                            end_sessions(server, site, let_in)
                 # Servers that went away (restarted) need attaching again when they come back.
                 running = {s.id() for s in servers}
                 for sid in [s for s in attached if s not in running]:

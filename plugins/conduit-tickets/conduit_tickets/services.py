@@ -18,7 +18,7 @@ from __future__ import annotations
 import html
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -29,6 +29,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from conduit.audit.services import record
+from conduit.db import upsert
 from conduit.eve.models import portrait_url
 from conduit.notify.services import notify
 from conduit.sheet.access import viewable_characters
@@ -51,6 +52,12 @@ PAGE_SIZE = 100
 #: Largest attached file kept, and most kept per ticket. They live in the database and so in every backup.
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_TICKET_BYTES = 200 * 1024 * 1024
+#: Most kept over all the tickets one person opened from panels: anyone who has linked Discord can open those, close
+#: them and open the next, so without this one person could fill the database. Staff tickets only have the limits above
+#: and the total from Settings.
+MAX_OPENER_BYTES = 500 * 1024 * 1024
+#: Bounds for the two file settings.
+MAX_STORAGE_MB, MAX_KEEP_DAYS = 1_000_000, 3650
 #: Where Discord keeps attached files. Nothing is fetched from anywhere else, whatever a message says.
 CDN_HOSTS = {"cdn.discordapp.com", "media.discordapp.net"}
 #: Shown in the browser. Not SVG, which can run scripts. Everything else downloads as plain bytes.
@@ -448,6 +455,12 @@ def archive_in_background(ticket_id: int) -> None:
             log.warning("Couldn't finish closing ticket %s: %s", ticket.pk, exc)
             ticket.archive_error = str(_explain(exc))[:300]
             ticket.save(update_fields=["archive_error"])
+        except Exception as exc:
+            # Something in this one channel the code didn't expect. Say so on the ticket and carry on: the task that
+            # tries every unfinished ticket again must still get to the others.
+            log.exception("Saving the transcript of ticket %s failed", ticket.pk)
+            ticket.archive_error = f"Saving the transcript failed ({exc.__class__.__name__}); it's tried again every 15 minutes. The site's log has the details."[:300]
+            ticket.save(update_fields=["archive_error"])
 
 
 def _remove_channel(api, s, ticket: Ticket) -> None:
@@ -493,6 +506,15 @@ def archive(ticket: Ticket) -> None:
     ticket.save(update_fields=["archive_state", "archive_error"])
 
 
+def _readable_time(match: re.Match) -> str:
+    """A ``<t:...>`` time tag as EVE time. Anyone can type one with any number in it, so a time no calendar holds
+    stays as it was typed instead of stopping the whole transcript."""
+    try:
+        return _eve_time(datetime.fromtimestamp(int(match[1]), UTC))
+    except (ValueError, OverflowError, OSError):
+        return match[0]
+
+
 def _store_messages(ticket: Ticket, page: list[dict]) -> bool:
     """Save a page of messages. True if Discord hid the text of any of them."""
     from conduit_discord.models import DiscordAccount
@@ -510,7 +532,7 @@ def _store_messages(ticket: Ticket, page: list[dict]) -> bool:
             content = content.replace(f"<@{u['id']}>", f"@{label}").replace(f"<@!{u['id']}>", f"@{label}")
         for r in ticket.roles:
             content = content.replace(f"<@&{r['id']}>", f"@{r['name']}")
-        content = re.sub(r"<t:(\d+)(?::\w)?>", lambda t: _eve_time(datetime.fromtimestamp(int(t[1]), UTC)), content)
+        content = re.sub(r"<t:(\d+)(?::\w)?>", _readable_time, content)
         embeds = [{"title": e.get("title", ""), "description": e.get("description", "")} for e in m.get("embeds", [])
                   if e.get("title") or e.get("description")]
         if not (content or m.get("attachments") or m.get("embeds") or m.get("sticker_items") or m.get("poll") or author.get("bot")):
@@ -521,8 +543,8 @@ def _store_messages(ticket: Ticket, page: list[dict]) -> bool:
             content=content, embeds=embeds, sent_at=parse_datetime(m["timestamp"]),
             edited_at=parse_datetime(m["edited_timestamp"]) if m.get("edited_timestamp") else None,
         ))
-    TicketMessage.objects.bulk_create(rows, update_conflicts=True, unique_fields=["ticket", "message_id"],
-                                      update_fields=["author_name", "is_bot", "content", "embeds", "edited_at"])
+    # The core's upsert, which also works on MariaDB (it refuses the conflict columns spelled out).
+    upsert(TicketMessage, rows, unique_fields=["ticket", "message_id"], update_fields=["author_name", "is_bot", "content", "embeds", "edited_at"])
     pks = dict(ticket.messages.filter(message_id__in=[m["id"] for m in wanted]).values_list("message_id", "pk"))
     for m in wanted:
         for a in m.get("attachments", []):
@@ -534,14 +556,32 @@ def _store_attachment(ticket: Ticket, message_pk: int, a: dict) -> None:
     """Copy one file. Raises DiscordError if it's worth trying again, which keeps the channel until it's done."""
     if TicketAttachment.objects.filter(message_id=message_pk, attachment_id=a["id"]).exists():
         return
-    used = TicketAttachment.objects.filter(message__ticket=ticket).aggregate(total=Sum("size"))["total"] or 0
-    room = min(MAX_FILE_BYTES, MAX_TICKET_BYTES - used)
+    room = min(MAX_FILE_BYTES, MAX_TICKET_BYTES - _stored(message__ticket=ticket))
+    if ticket.panel_label and ticket.target_id:
+        room = min(room, MAX_OPENER_BYTES - _stored(message__ticket__target_id=ticket.target_id, message__ticket__panel_label__gt=""))
+    if cap := TicketSettings.load().file_storage_mb:
+        room = min(room, cap * 1024 * 1024 - _stored())
     state, content = TicketAttachment.TOO_BIG, None
     if a.get("size", 0) <= room:
         state, content = _download(a.get("url") or "", room)
     TicketAttachment.objects.create(message_id=message_pk, attachment_id=a["id"], name=(a.get("filename") or "file")[:255],
                                     content_type=(a.get("content_type") or "")[:100], state=state, content=content,
                                     size=len(content) if content is not None else 0)
+
+
+def _stored(**where) -> int:
+    """Bytes of attached files kept, over everything or what ``where`` narrows it to."""
+    return TicketAttachment.objects.filter(**where).aggregate(total=Sum("size"))["total"] or 0
+
+
+def expire_files() -> int:
+    """Delete attached files whose ticket closed longer ago than Settings says to keep them. The message and the
+    file's name stay in the transcript. Does nothing unless a keeping time is set."""
+    days = TicketSettings.load().file_keep_days
+    if not days:
+        return 0
+    old = TicketAttachment.objects.filter(state=TicketAttachment.SAVED, message__ticket__closed_at__lt=timezone.now() - timedelta(days=days))
+    return old.update(state=TicketAttachment.EXPIRED, content=None, size=0)
 
 
 def _download(url: str, limit: int) -> tuple[str, bytes | None]:
@@ -573,8 +613,20 @@ def serve_type(a: TicketAttachment) -> tuple[str, bool]:
     return (kind, True) if kind in INLINE_TYPES else ("application/octet-stream", False)
 
 
-def messages_qs(ticket: Ticket):
-    return ticket.messages.prefetch_related(Prefetch("files", queryset=TicketAttachment.objects.defer("content")))
+def messages_qs(ticket: Ticket, viewer=None):
+    """The transcript. Whoever opened a ticket from a panel is taken out of the channel when it closes, and staff may
+    carry on talking there until the channel is removed: what was said after that isn't shown to them (``viewer``
+    without the staff permission). Staff see everything."""
+    qs = ticket.messages.prefetch_related(Prefetch("files", queryset=TicketAttachment.objects.defer("content")))
+    if viewer is not None and not viewer.has_perm(OPEN_PERM) and ticket.closed_at is not None:
+        qs = qs.filter(sent_at__lte=ticket.closed_at)
+    return qs
+
+
+def can_read_file(a: TicketAttachment, viewer) -> bool:
+    """A file is readable by whoever may read its message."""
+    ticket = a.message.ticket
+    return can_read(ticket, viewer) and messages_qs(ticket, viewer).filter(pk=a.message_id).exists()
 
 
 def message_out(m: TicketMessage) -> dict:
@@ -656,7 +708,11 @@ def roles_out() -> dict:
 def settings_out() -> dict:
     """The settings, the server's roles to pick from, and anything that will stop tickets working."""
     settings = TicketSettings.load()
-    out = {"category_id": settings.category_id, "default_role_ids": settings.default_role_ids, "roles": [], "invite_url": None, "problems": []}
+    out = {"category_id": settings.category_id, "default_role_ids": settings.default_role_ids, "roles": [], "invite_url": None, "problems": [],
+           "file_storage_mb": settings.file_storage_mb, "file_keep_days": settings.file_keep_days,
+           "files_stored_mb": round(_stored() / 1024 / 1024, 1)}
+    if settings.file_storage_mb and _stored() >= settings.file_storage_mb * 1024 * 1024:
+        out["problems"].append("The space for attached files is used up, so new files are only listed by name. Raise it below, or set a keeping time.")
     try:
         api, s = _discord()
     except TicketError as exc:
@@ -689,8 +745,14 @@ def settings_out() -> dict:
     return out
 
 
-def save_settings(category_id: str, role_ids: list[str], viewer, request=None) -> TicketSettings:
+def save_settings(category_id: str, role_ids: list[str], viewer, request=None, file_storage_mb: int | None = None,
+                  file_keep_days: int | None = None) -> TicketSettings:
+    """The two file settings are left as they are when not given."""
     category_id = category_id.strip()
+    if file_storage_mb is not None and not 0 <= file_storage_mb <= MAX_STORAGE_MB:
+        raise TicketError(f"The space for files is 0 (no limit) to {MAX_STORAGE_MB} MB")
+    if file_keep_days is not None and not 0 <= file_keep_days <= MAX_KEEP_DAYS:
+        raise TicketError(f"Files are kept 0 (for good) to {MAX_KEEP_DAYS} days")
     if category_id and not category_id.isdigit():
         raise TicketError("Ids are numbers: with Developer Mode on, right-click the category and Copy Channel ID")
     api, s = _discord()
@@ -711,7 +773,12 @@ def save_settings(category_id: str, role_ids: list[str], viewer, request=None) -
         raise _explain(exc) from None
     settings = TicketSettings.load()
     settings.category_id, settings.default_role_ids = category_id, list(dict.fromkeys(role_ids))
+    if file_storage_mb is not None:
+        settings.file_storage_mb = file_storage_mb
+    if file_keep_days is not None:
+        settings.file_keep_days = file_keep_days
     settings.save()
     record("tickets.settings", "changed the Discord ticket settings", request=request, actor=viewer,
-           details={"category": category_id, "default_roles": settings.default_role_ids})
+           details={"category": category_id, "default_roles": settings.default_role_ids, "file_storage_mb": settings.file_storage_mb,
+                    "file_keep_days": settings.file_keep_days})
     return settings

@@ -488,3 +488,169 @@ def test_new_member_states_may_use_mumble(setup, db, django_capture_on_commit_ca
         guests = State.objects.create(name="Everyone", priority=-5, public=True)
     assert st.permissions.filter(codename="access_mumble").exists()
     assert not guests.permissions.filter(codename="access_mumble").exists()
+
+
+# --- regressions --------------------------------------------------------------------------------------------------------
+
+
+def test_failed_logins_are_counted_per_account_not_per_spelling(setup, api_client, client, authenticator):
+    """The lockout follows the account the database found, so another spelling of the name (case, or accents on
+    databases that ignore them) doesn't start a fresh count."""
+    pilot, _ = setup
+    password = create(api_client, pilot)["password"]
+    acct = MumbleUser.objects.get(user=pilot)
+    for name in ("Pilot_One", "pilot_one", "PILOT_ONE"):
+        assert login(client, authenticator, name, "wrong") == {"result": "reject"}
+    assert cache.get(services._fails_key(acct)) == 3
+    assert not [k for k in getattr(cache, "_cache", {}) if "mumble:fails:pilot" in k]
+    cache.set(services._fails_key(acct), services.FAILS_LIMIT, 60)
+    assert login(client, authenticator, "pIlOt_OnE", password)["reason"] == services.LOCKED_REASON
+
+
+def test_a_new_password_forgets_the_remembered_certificate(setup, manager, api_client, client, authenticator):
+    pilot, _ = setup
+    password = create(api_client, pilot)["password"]
+    cert = "ab" * 20
+    assert login(client, authenticator, "Pilot_One", password, cert)["result"] == "ok"
+    assert login(client, authenticator, "Pilot_One", "", cert)["result"] == "ok"
+    api_client.force_login(pilot)
+    new = api_client.call("post", "/api/p/mumble/account/password", {"password": ""}).json()
+    assert not new["account"]["certificate_remembered"]
+    assert login(client, authenticator, "Pilot_One", "", cert)["result"] == "reject"
+    # A manager's reset does the same.
+    assert login(client, authenticator, "Pilot_One", new["password"], cert)["result"] == "ok"
+    api_client.force_login(manager)
+    assert api_client.call("post", f"/api/p/mumble/admin/members/{pilot.pk}/password").status_code == 200
+    assert MumbleUser.objects.get(user=pilot).cert_hash == ""
+
+
+def test_site_says_who_has_to_leave_the_server(setup, host, api_client, client, authenticator):
+    """What the authenticator asks every few seconds: members who lost access and guests whose access ended go;
+    ids the site has no account for are only reported, never ended."""
+    pilot, _ = setup
+    create(api_client, pilot)
+    link = make_link(api_client, host).json()
+    token = link["url"].rsplit("/", 1)[1]
+    client.post(f"/api/public/p/mumble/temp/{token}", {"name": "Jane Doe"}, content_type="application/json")
+    client.post(f"/api/public/p/mumble/temp/{token}", {"name": "John Roe"}, content_type="application/json")
+    jane, john = (services.TEMP_ID_OFFSET + TempUser.objects.get(username=n).pk for n in ("Jane_Doe", "John_Roe"))
+
+    def check(ids):
+        resp = authenticator(client, "post", "/sessions/check", {"ids": ids, "version": "1.1.0"})
+        assert resp.status_code == 200, resp.content
+        return resp.json()
+
+    everyone = [0, -1, pilot.pk, 424242, jane, john]
+    assert check(everyone) == {"end": [], "unknown": [424242]}
+    assert MumbleSettings.load().authenticator_version == "1.1.0"
+    # The bulk check agrees with has_access for every way the permission can be held.
+    assert services._users_with_access([pilot, host]) == {u.pk for u in (pilot, host) if services.has_access(u)} == {pilot.pk}
+
+    # One guest is cut off, the member loses the permission.
+    api_client.force_login(host)
+    temp_id = john - services.TEMP_ID_OFFSET
+    assert api_client.call("delete", f"/api/p/mumble/temp/users/{temp_id}").status_code == 200
+    pilot.user_permissions.clear()
+    answer = check(everyone)
+    assert [row["id"] for row in answer["end"]] == [pilot.pk, john] and all(row["reason"] for row in answer["end"])
+    # The link is withdrawn: the other guest goes too. A guest login that no longer exists counts as ended.
+    assert api_client.call("delete", f"/api/p/mumble/temp/{link['id']}").status_code == 200
+    assert [row["id"] for row in check([jane, services.TEMP_ID_OFFSET + 999])["end"]] == [jane, services.TEMP_ID_OFFSET + 999]
+    # A switched-off account, and the permission through a group.
+    group = Group.objects.create(name="Voice")
+    group.permissions.add(Permission.objects.get(codename="access_mumble"))
+    pilot.groups.add(group)
+    assert check([pilot.pk])["end"] == []
+    pilot.is_active = False
+    pilot.save()
+    assert [row["id"] for row in check([pilot.pk])["end"]] == [pilot.pk]
+    assert client.post("/api/v1/p/mumble/sessions/check", {"ids": [1]}, content_type="application/json").status_code == 401
+
+
+def _authenticator_script():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(services.__file__).parent / "authenticator" / "conduit_mumble_authenticator.py"
+    spec = importlib.util.spec_from_file_location("conduit_mumble_authenticator_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_authenticator_decides_whom_to_disconnect():
+    """The authenticator's side, without a Mumble server: who of the listed sessions goes for a given answer."""
+    script = _authenticator_script()
+    users = [(1, 7), (2, 8), (3, -1), (4, 0), (5, 9), (6, 7)]
+    assert script.checked_ids(users) == {7, 8, 9}
+    answer = {"end": [{"id": 7, "reason": "no access"}], "unknown": [8, 9]}
+    # 8 was let in by this authenticator (its account was deleted since); 9 is one of the server's own users.
+    assert script.sessions_to_kick(users, answer, {8}) == [(1, "no access"), (2, "Your Mumble account no longer exists"), (6, "no access")]
+    assert script.sessions_to_kick(users, None, {7, 8}) == []  # the site couldn't be asked: nobody goes
+    assert script.sessions_to_kick(users, {"end": [], "unknown": []}, {7}) == []
+
+    class User:
+        def __init__(self, session, userid):
+            self.session, self.userid = session, userid
+
+    class Server:
+        kicked = []
+
+        def getUsers(self):
+            return {s: User(s, u) for s, u in users}
+
+        def kickUser(self, session, reason):
+            if session == 6:
+                raise RuntimeError("left already")
+            self.kicked.append((session, reason))
+
+    class Site:
+        asked = None
+
+        def check_sessions(self, ids):
+            Site.asked = set(ids)
+            return answer
+
+    assert script.end_sessions(Server(), Site(), {8}) == 2
+    assert Site.asked == {7, 8, 9} and Server.kicked == [(1, "no access"), (2, "Your Mumble account no longer exists")]
+
+
+def test_authenticator_attaches_again_on_every_check():
+    """A Mumble server restarted between two checks has forgotten its authenticator: it's told again each time, with
+    the same object."""
+    script = _authenticator_script()
+
+    class Server:
+        told = []
+
+        def id(self):
+            return 1
+
+        def setAuthenticator(self, prx):
+            self.told.append(prx)
+
+    class Adapter:
+        added = 0
+
+        def addWithUUID(self, servant):
+            Adapter.added += 1
+            return f"proxy-{Adapter.added}"
+
+    class Murmur:
+        class ServerUpdatingAuthenticatorPrx:
+            @staticmethod
+            def uncheckedCast(obj):
+                return obj
+
+    attached, server = {}, Server()
+    for _ in range(3):
+        script.attach(Murmur, Adapter(), server, lambda s: object(), attached)
+    assert Server.told == ["proxy-1"] * 3 and Adapter.added == 1 and attached == {1: "proxy-1"}
+
+
+def test_temp_link_numbers_must_make_sense(host, api_client):
+    # JSON lets NaN through as a number; it used to reach timedelta and fail with a server error.
+    for hours in (float("nan"), float("inf")):
+        with pytest.raises(services.MumbleError):
+            services.create_temp_link(host, "x", hours)
+    assert make_link(api_client, host, max_uses=10**12).status_code == 400

@@ -23,7 +23,7 @@ from a panel of buttons in a Discord channel. Needs the
   complete: if saving fails, the channel stays and it's tried again every 15 minutes, with the reason on the ticket.
 - **Transcripts:** closing saves every message of the channel on the ticket's page here, within a minute or two for all
   but very long channels. Everyone with `tickets.open_tickets` can read them, and each read goes in the audit log. A
-  member a ticket was opened with can't; someone who opened their own from a panel can, under **My tickets**. Attached files are copied too, up to 25 MB each and 200 MB per ticket; a file over that is only listed
+  member a ticket was opened with can't; someone who opened their own from a panel can, under **My tickets**. Attached files are copied too, up to 25 MB each and 200 MB per ticket (and a total and a keeping time under Settings); a file over that is only listed
   by name and is lost with the channel. Files live in the database, so they're in every backup. Plain images (PNG, JPEG,
   GIF, WebP) show in the transcript; anything else downloads. A channel deleted by hand on Discord
   before the ticket closes has no transcript. Mail tickets show the mail that was sent, but not replies in the game.

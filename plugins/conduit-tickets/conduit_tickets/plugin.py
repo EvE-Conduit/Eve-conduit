@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class TicketsPlugin(Plugin):
     id = "tickets"
     name = "Discord Tickets"
-    version = "1.2.0"
+    version = "1.2.1"
     description = "Reach a member you pick through a private Discord channel, an EVE mail or both, or let people open their own from a panel with buttons."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-tickets"

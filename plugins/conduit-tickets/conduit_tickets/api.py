@@ -101,7 +101,7 @@ def read(request, ticket_id: int):
 @router.get("/tickets/{ticket_id}/messages")
 def messages(request, ticket_id: int, limit: int = 200, offset: int = 0):
     """The transcript, oldest first."""
-    return page(services.messages_qs(_readable(request, _ticket(ticket_id))), services.message_out, limit, offset)
+    return page(services.messages_qs(_readable(request, _ticket(ticket_id)), request.user), services.message_out, limit, offset)
 
 
 @router.get("/attachments/{attachment_id}")
@@ -109,7 +109,8 @@ def attachment(request, attachment_id: int):
     """A saved file. Anyone can attach anything, so it can't run as a page of this site: only plain images are shown,
     the rest download, and the sandbox stops scripts in whatever does get opened."""
     a = get_object_or_404(TicketAttachment.objects.select_related("message__ticket"), pk=attachment_id, state=TicketAttachment.SAVED)
-    _readable(request, a.message.ticket)
+    if not services.can_read_file(a, request.user):
+        raise HttpError(403, "You can't read this ticket")
     kind, inline = services.serve_type(a)
     resp = HttpResponse(bytes(a.content), content_type=kind)
     resp["Content-Disposition"] = content_disposition_header(not inline, a.name)
@@ -128,12 +129,17 @@ def get_settings(request):
 class SettingsIn(Schema):
     category_id: str = ""
     default_role_ids: list[str] = []
+    #: Megabytes of attached files kept over all tickets (0: no limit) and days they're kept after a ticket closes
+    #: (0: for good). Left out, they stay as they are.
+    file_storage_mb: int | None = None
+    file_keep_days: int | None = None
 
 
 @router.put("/settings")
 @require_perm(MANAGE_PERM)
 def put_settings(request, payload: SettingsIn):
-    _run(services.save_settings, payload.category_id, payload.default_role_ids, request.user, request=request)
+    _run(services.save_settings, payload.category_id, payload.default_role_ids, request.user, request=request,
+         file_storage_mb=payload.file_storage_mb, file_keep_days=payload.file_keep_days)
     return services.settings_out()
 
 
