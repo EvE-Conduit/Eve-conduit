@@ -170,7 +170,13 @@ class EsiClient:
             raise
         headers = {}
         if character is not None:
-            headers["Authorization"] = f"Bearer {get_access_token(character)}"
+            try:
+                headers["Authorization"] = f"Bearer {get_access_token(character)}"
+            except httpx.HTTPError as exc:
+                # EVE's login server didn't answer the token refresh: an ESI failure like any other to callers,
+                # which only expect this module's exceptions.
+                record_call(**call, outcome="network", started=started, error=f"token refresh: {exc}")
+                raise EsiError(0, f"EVE SSO request failed: {exc}") from exc
         if cached and cached.get("etag"):
             headers["If-None-Match"] = cached["etag"]
 
@@ -188,6 +194,10 @@ class EsiClient:
 
         if resp.status_code == 304 and cached:
             data = cached["data"]
+            # A 304 need not repeat the page count. Keep the one we know, or the next read of this list would
+            # stop at page 1 and the sync would delete everything on the other pages.
+            if "x-pages" not in resp_headers and "x-pages" in cached["headers"]:
+                resp_headers["x-pages"] = cached["headers"]["x-pages"]
             record_call(**call, outcome="not_modified", started=started, status=304, headers=resp_headers)
         elif resp.is_success:
             data = resp.json() if resp.content else None

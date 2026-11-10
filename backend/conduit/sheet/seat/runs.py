@@ -37,6 +37,11 @@ def run_dir() -> Path:
 
     path = Path(settings.CONDUIT_SEAT_IMPORT_DIR or Path(tempfile.gettempdir()) / "conduit-seat-history")
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not settings.CONDUIT_SEAT_IMPORT_DIR and hasattr(os, "geteuid") and path.stat().st_uid != os.geteuid():
+        # The shared temp folder is writable by every local user. A folder someone else made there first is
+        # theirs to rename files in, so nothing is uploaded into it. (A configured folder is the operator's choice.)
+        raise RunError(f"{path} belongs to another user. Remove it, or set CONDUIT_SEAT_IMPORT_DIR to a folder "
+                       "only EvE Conduit can write to.")
     try:
         os.chmod(path, 0o700)
     except OSError:  # a volume owned by someone else: leave its mode to them
@@ -70,8 +75,15 @@ def wanted_tables() -> list[str]:
 
 
 def create() -> str:
+    try:
+        folder = run_dir()
+    except RunError as exc:
+        # The route that starts an upload has no answer of its own for this; tell the import program why.
+        from ninja.errors import HttpError
+
+        raise HttpError(503, str(exc)) from None
     # Uploads abandoned part way are cleared out after a week.
-    for old in run_dir().glob("*.sqlite3"):
+    for old in folder.glob("*.sqlite3"):
         try:
             if time.time() - old.stat().st_mtime > STATE_TTL:
                 old.unlink()

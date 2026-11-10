@@ -100,12 +100,21 @@ def load(dump_path: str, staging_path: str, imports: list[routes.SectionImport],
 
 
 def preload_names(store: Staging) -> int:
-    rows = store.rows("universe_names")
-    EveName.objects.bulk_create(
-        [EveName(id=r["entity_id"], name=r["name"][:200], category=r["category"] or "") for r in rows if r["entity_id"]],
-        ignore_conflicts=True, batch_size=2000,
-    )
-    return len(rows)
+    # A couple of thousand at a time: a big SeAT knows millions of names, too many to hold at once.
+    count, batch = 0, []
+
+    def flush():
+        EveName.objects.bulk_create(batch, ignore_conflicts=True, batch_size=2000)
+        batch.clear()
+
+    for r in store.iter_rows("universe_names"):
+        count += 1
+        if r["entity_id"]:
+            batch.append(EveName(id=r["entity_id"], name=(r["name"] or "")[:200], category=r["category"] or ""))
+        if len(batch) >= 2000:
+            flush()
+    flush()
+    return count
 
 
 def _granted(token, *scopes) -> bool:
@@ -301,6 +310,11 @@ def run(dump_path: str, *, sections=None, character_ids=None, staging_path: str 
     if own_staging:
         fd, staging_path = tempfile.mkstemp(prefix="seat-history-", suffix=".sqlite3")
         os.close(fd)
+    else:
+        # The working copy holds members' mail and wallets: only this user may read it, whatever the umask
+        # (SQLite would create it readable by everyone on most systems).
+        os.close(os.open(staging_path, os.O_WRONLY | os.O_CREAT, 0o600))
+        os.chmod(staging_path, 0o600)
     store = None
     try:
         store = load(dump_path, staging_path, imports, say)

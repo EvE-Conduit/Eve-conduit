@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import random
 from collections import defaultdict
 from datetime import timedelta
 
 from celery import shared_task
+from django.core.cache import cache
 from django.utils import timezone
 
 from conduit import sync_queue
@@ -20,6 +22,17 @@ from .models import CorpSyncStatus
 log = logging.getLogger(__name__)
 MAX_BACKOFF = timedelta(hours=6)
 REFUSED = {401, 403}
+#: Seconds a retry after an ESI pause is spread over, so the whole queue doesn't come back in the same second.
+RETRY_SPREAD = 60
+#: Seconds before the same corporation can be refreshed by hand again.
+REFRESH_COOLDOWN = 60
+# Every refusal counts against the app's ESI error limit. Stop after a few in one run, and don't ask again as a
+# member ESI just refused for a while (their roles or corporation here are out of date).
+MAX_REFUSALS = 3
+REFUSED_FOR = 6 * 3600
+REFUSED_KEY = "corp:sync-refused:{corporation}:{section}:{character}"
+#: NPC corporations have ids below this. Nobody holds roles in them and ESI refuses their corporation routes.
+PLAYER_CORPORATION_MIN = 2_000_000
 
 
 def tracked_corporations():
@@ -34,6 +47,8 @@ def candidates(corporation_id: int, section: registry.CorpSection, preferred_id:
     The character that worked last time comes first."""
     from conduit.accounts.models import Character
 
+    if corporation_id < PLAYER_CORPORATION_MIN:
+        return []
     out = []
     for c in Character.objects.filter(corporation_id=corporation_id, token__valid=True).select_related("token", "info"):
         if not c.token.has_scopes(*section.scopes):
@@ -87,11 +102,19 @@ def sync_section(self, corporation_id: int, section_key: str) -> str:
     status.last_attempt = timezone.now()
     run = section.sync_function()
     people = candidates(corporation_id, section, status.character_id)
+    keys = {c.pk: REFUSED_KEY.format(corporation=corporation_id, section=section_key, character=c.pk) for c in people}
+    recently = cache.get_many(list(keys.values()))
 
-    used, refused, public = None, [], False
+    used, refused, public, asked = None, [], False, 0
     try:
         with esi_source(f"corp:{section_key}"):
             for character in people:
+                if keys[character.pk] in recently:
+                    refused.append(f"{character.name} (ESI refused earlier)")
+                    continue
+                if asked >= MAX_REFUSALS:
+                    refused.append("others not asked this time")
+                    break
                 try:
                     run(corporation, character, esi())
                 except TokenInvalid:
@@ -99,6 +122,8 @@ def sync_section(self, corporation_id: int, section_key: str) -> str:
                     continue
                 except EsiError as exc:
                     if exc.status in REFUSED:
+                        asked += 1
+                        cache.set(keys[character.pk], 1, REFUSED_FOR)
                         refused.append(f"{character.name} (ESI {exc.status})")
                         continue
                     raise
@@ -109,7 +134,7 @@ def sync_section(self, corporation_id: int, section_key: str) -> str:
                 public = True
     except EsiBackoff as exc:
         status.save(update_fields=["last_attempt"])
-        raise self.retry(countdown=exc.retry_after + 5) from exc
+        raise self.retry(countdown=exc.retry_after + 5 + random.uniform(0, RETRY_SPREAD)) from exc
     except EsiError as exc:
         log.warning("Corporation sync %s for %s failed: %s", section_key, corporation, exc)
         return _finish(status, CorpSyncStatus.Result.ERROR, str(exc)[:300], failed=True, interval=section.interval)

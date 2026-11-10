@@ -3,10 +3,9 @@
 Attendee lists (``character_calendar_attendees``) have no place in Conduit and are not imported.
 """
 
-from conduit.esi.exceptions import EsiError
 from conduit.sheet.calendar.models import CalendarEvent
 
-from ..esi import drop_none, esi_dt, missing, route
+from ..esi import drop_none, esi_dt, left_for_live_sync, route
 from . import HISTORY, section
 
 section(
@@ -36,11 +35,13 @@ def events(ctx, params, cid):
 @route("/characters/{cid}/calendar/{event_id}")
 def details(ctx, params, cid, event_id):
     if ctx.synced and event_id in ctx.cache.get("known_events", ()):
-        raise EsiError(503, "left for a live sync")  # an event EVE gave; its details come from EVE
+        raise left_for_live_sync("an event EVE gave; its details come from EVE")
     d = ctx.store.one("character_calendar_event_details", event_id=event_id)
     e = ctx.store.one("character_calendar_events", character_id=cid, event_id=event_id)
     if d is None:
-        raise missing()
+        # SeAT kept the event without its details. Left unfetched: a live sync asks EVE, and gives up on its own
+        # if EVE no longer has the event.
+        raise left_for_live_sync("event details not in the SeAT dump")
     return drop_none({
         "event_id": event_id, "date": esi_dt(e["event_date"]) if e else None, "title": e["title"] if e else None,
         "importance": int(e["importance"] or 0) if e else None, "response": e["event_response"] if e else None,

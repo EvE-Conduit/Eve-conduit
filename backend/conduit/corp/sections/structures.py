@@ -19,9 +19,12 @@ def sync(corporation, character, esi):
     alerts = []
     with transaction.atomic():
         Structure.objects.filter(corporation=corporation).exclude(structure_id__in=[r["structure_id"] for r in rows]).delete()
-        old = {s.structure_id: s for s in Structure.objects.filter(corporation=corporation)}
+        # By structure id, whoever owned it before: a structure transferred here may still be on its previous
+        # owner's list (that corporation hasn't synced since, or no longer can), and ids are unique.
+        old = {s.structure_id: s for s in Structure.objects.filter(structure_id__in=[r["structure_id"] for r in rows])}
         for r in rows:
-            s = old.get(r["structure_id"]) or Structure(corporation=corporation, structure_id=r["structure_id"])
+            s = old.get(r["structure_id"]) or Structure(structure_id=r["structure_id"])
+            s.corporation = corporation
             previous_state = s.state if s.pk else None
             s.name = (r.get("name") or "")[:200]
             s.type_id = r["type_id"]

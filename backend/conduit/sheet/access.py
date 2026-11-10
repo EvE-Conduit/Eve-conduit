@@ -11,18 +11,35 @@ from conduit.accounts.models import Character
 log = logging.getLogger(__name__)
 
 
-def can_view(user, character: Character) -> bool:
+#: NPC corporations have ids below this. Thousands of unrelated players sit in each, so sharing one with the
+#: viewer's main says nothing about who they may look at.
+PLAYER_CORPORATION_MIN = 2_000_000
+
+
+def _own_corporation(main) -> int | None:
+    """The player corporation of the viewer's main, for "characters of their corporation"."""
+    return main.corporation_id if main.corporation_id and main.corporation_id >= PLAYER_CORPORATION_MIN else None
+
+
+def in_reach(user, character: Character) -> bool:
+    """The user's own permissions let them see the character (plugin grants aside)."""
     if not user.is_authenticated:
         return False
-    if character.user_id == user.pk or user.has_perm("sheet.view_all_characters"):
+    if (user.pk is not None and character.user_id == user.pk) or user.has_perm("sheet.view_all_characters"):
         return True
     main = user.main_character
     if main is not None:
         if user.has_perm("sheet.view_alliance_characters") and main.alliance_id and character.alliance_id == main.alliance_id:
             return True
-        if user.has_perm("sheet.view_corporation_characters") and main.corporation_id and character.corporation_id == main.corporation_id:
+        if user.has_perm("sheet.view_corporation_characters") and _own_corporation(main) and character.corporation_id == main.corporation_id:
             return True
-    return plugin_grants(user, character)
+    return False
+
+
+def can_view(user, character: Character) -> bool:
+    if not user.is_authenticated:
+        return False
+    return in_reach(user, character) or plugin_grants(user, character)
 
 
 def viewable_characters(user):
@@ -36,7 +53,7 @@ def viewable_characters(user):
     if main is not None:
         if user.has_perm("sheet.view_alliance_characters") and main.alliance_id:
             rule |= Q(alliance_id=main.alliance_id)
-        if user.has_perm("sheet.view_corporation_characters") and main.corporation_id:
+        if user.has_perm("sheet.view_corporation_characters") and _own_corporation(main):
             rule |= Q(corporation_id=main.corporation_id)
     return qs.filter(rule)
 

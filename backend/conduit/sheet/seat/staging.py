@@ -55,6 +55,9 @@ class Staging:
              progress: Callable[[str, int], None] | None = None) -> dict[str, int]:
         """Copy the wanted tables' rows out of the dump. Returns rows loaded per table."""
         wanted = set(tables)
+        # Tables already in the file (a working copy kept from an earlier run) are replaced, not added to:
+        # loading the dump on top would hold every row twice.
+        stale = set(self.columns)
         dump_columns: dict[str, list[str]] = {}
         pending: dict[str, list[tuple]] = {}
         counts: dict[str, int] = {}
@@ -66,7 +69,8 @@ class Staging:
                 self.db.executemany(f"INSERT INTO {_q(name)} VALUES ({', '.join('?' * len(cols))})", rows)
 
         for name, row in iter_rows(dump_path, wanted, dump_columns):
-            if name not in self.columns:
+            if name not in self.columns or name in stale:
+                stale.discard(name)
                 cols = public_columns(row)
                 self.db.execute(f"DROP TABLE IF EXISTS {_q(name)}")
                 self.db.execute(f"CREATE TABLE {_q(name)} ({', '.join(_q(c) for c in cols)})")
@@ -113,14 +117,19 @@ class Staging:
 
     def rows(self, table: str, order: str = "", **where) -> list[dict]:
         """Rows of ``table`` matching every ``column=value``; [] if the dump didn't have the table."""
+        return list(self.iter_rows(table, order, **where))
+
+    def iter_rows(self, table: str, order: str = "", **where):
+        """Like ``rows``, one row at a time: for the tables that run to millions of rows (wallet journals)."""
         if table not in self.columns:
-            return []
+            return
         sql = f"SELECT * FROM {_q(table)}"
         if where:
             sql += " WHERE " + " AND ".join(f"{_q(k)} = ?" for k in where)
         if order:
             sql += f" ORDER BY {order}"
-        return [Row(r) for r in self.db.execute(sql, tuple(where.values()))]
+        for r in self.db.execute(sql, tuple(where.values())):
+            yield Row(r)
 
     def one(self, table: str, **where) -> dict | None:
         found = self.rows(table, **where)
@@ -138,11 +147,15 @@ class Staging:
             out += [Row(r) for r in self.db.execute(sql, chunk)]
         return out
 
-    def distinct(self, table: str, column: str) -> set:
-        """Every non-empty value of ``column`` in ``table``; empty if the dump didn't have either."""
+    def distinct(self, table: str, column: str, **where) -> set:
+        """Every non-empty value of ``column`` in ``table`` (among the rows matching ``where``); empty if the dump
+        didn't have either."""
         if table not in self.columns or column not in self.columns[table]:
             return set()
-        return {r[0] for r in self.db.execute(f"SELECT DISTINCT {_q(column)} FROM {_q(table)}") if r[0] not in (None, "")}
+        sql = f"SELECT DISTINCT {_q(column)} FROM {_q(table)}"
+        if where:
+            sql += " WHERE " + " AND ".join(f"{_q(k)} = ?" for k in where)
+        return {r[0] for r in self.db.execute(sql, tuple(where.values())) if r[0] not in (None, "")}
 
     def latest(self, table: str, column: str, **where):
         """The largest ``column`` among the rows matching ``where`` (SeAT's dates sort as text), or None."""

@@ -7,12 +7,15 @@ from conduit.sheet.api import router, viewable_character
 from conduit.sheet.util import type_out, types_by_id
 
 from .models import CharacterKillmail
+from .totals import killmail_totals
 
 
 @router.get("/{character_id}/killmails", response=list[dict])
 @paginate
 def killmails(request, character_id: int, kind: str = ""):
-    qs = CharacterKillmail.objects.filter(character=viewable_character(request, character_id)).select_related("killmail").order_by("-killmail__time")
+    # The list shows a few columns; the stored killmail JSON (attackers, items) is big and not needed here.
+    qs = (CharacterKillmail.objects.filter(character=viewable_character(request, character_id))
+          .select_related("killmail").defer("killmail__data").order_by("-killmail__time"))
     if kind == "kills":
         qs = qs.filter(is_loss=False)
     elif kind == "losses":
@@ -45,10 +48,7 @@ def killmails(request, character_id: int, kind: str = ""):
 
 @router.get("/{character_id}/killmails/summary")
 def killmail_summary(request, character_id: int):
-    links = list(CharacterKillmail.objects.filter(character=viewable_character(request, character_id)).select_related("killmail"))
-    kills = [link.killmail.value for link in links if not link.is_loss]
-    losses = [link.killmail.value for link in links if link.is_loss]
-    return {"kills": len(kills), "losses": len(losses), "isk_destroyed": sum(kills), "isk_lost": sum(losses)}
+    return killmail_totals(CharacterKillmail.objects.filter(character=viewable_character(request, character_id)))
 
 
 def zkill_out(kind: str, entity_id: int) -> dict:
