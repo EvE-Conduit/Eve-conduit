@@ -46,7 +46,8 @@ you get it automatically. Otherwise use the FAT link again.
 
 - One FAT per fleet, or per FAT round.
 - Two of your characters in the same round count once.
-- FATs you added by hand for your own characters don't count.
+- FATs you added by hand for your own characters, or registered on the FAT link of a fleet you ran yourself, don't
+  count.
 - A group can count only some fleet types, or only fleets with a minimum number of pilots.
 
 ## For FCs: running a fleet
@@ -66,7 +67,8 @@ Characters → Add character.
 3. Fill in:
    - **Name**, for example "Sunday CTA: Keepstar defense".
    - **Type**: CTA, Stratop, Roam, Home defense, Mining, any type your managers added, or **None**.
-   - **Track the in-game fleet with**: pick your fleet boss character, or **Don't track; use the FAT link**.
+   - **Track the in-game fleet with**: pick your fleet boss character, or **Don't track; use the FAT link**. An
+     in-game fleet can be tracked by one fleet at a time: end the other one, or stop its tracking, first.
    - **FATs in the fleet MOTD**: on by default when tracking.
    - **FAT link stays open**: **Until the fleet ends**, **15 minutes**, **30 minutes**, **1 hour** or **2 hours**.
    - **Notes**: doctrine, comms, staging. Pilots see them on the FAT link page.

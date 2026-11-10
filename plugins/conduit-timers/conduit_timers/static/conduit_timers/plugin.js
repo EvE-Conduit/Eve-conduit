@@ -55,7 +55,7 @@ function U(e) {
 }
 //#endregion
 //#region src/roles.tsx
-function W(e = !0) {
+function ne(e = !0) {
 	return M({
 		queryKey: ["timers", "discord-roles"],
 		queryFn: () => C.get(`${V}/discord-roles`),
@@ -63,7 +63,7 @@ function W(e = !0) {
 		staleTime: 6e5
 	});
 }
-function ne(e) {
+function W(e) {
 	return e ? `#${e.toString(16).padStart(6, "0")}` : void 0;
 }
 function re({ roles: e, value: t, onChange: n }) {
@@ -87,7 +87,7 @@ function re({ roles: e, value: t, onChange: n }) {
 				children: [
 					/* @__PURE__ */ z("span", {
 						className: "size-2 rounded-full border border-border-strong",
-						style: { background: ne(e.color) }
+						style: { background: W(e.color) }
 					}),
 					"@",
 					e.name
@@ -159,7 +159,7 @@ function ce({ timer: e, onClose: n }) {
 		queryKey: ["timers", "settings"],
 		queryFn: () => C.get(`${V}/settings`),
 		staleTime: 6e5
-	}), s = W(), [c, l] = L({
+	}), s = ne(), [c, l] = L({
 		name: e?.name ?? "",
 		structure_type: e?.structure_type ?? "",
 		system: e ? {
@@ -177,11 +177,13 @@ function ce({ timer: e, onClose: n }) {
 		structure_id: e?.structure_id ?? null,
 		ping: e?.ping ?? !1,
 		ping_roles: e?.ping_roles ?? null
-	}), u = c.ping_roles ?? o?.default_ping_roles ?? [], [p, g] = L(e ? "exact" : "left"), [_, y] = L(""), [b, S] = L(K(e?.ends_at)), [w, E] = L(Date.now()), D = (e) => l((t) => ({
+	}), u = c.ping_roles ?? o?.default_ping_roles ?? [], [p, g] = L(e ? "exact" : "left"), [_, y] = L(""), [b, S] = L(K(e?.ends_at)), [w, E] = L(!1), D = (e) => {
+		S(e), E(!0);
+	}, [O, k] = L(Date.now()), P = (e) => l((t) => ({
 		...t,
 		...e
-	})), O = (e) => {
-		D({
+	})), F = (e) => {
+		P({
 			name: e.name,
 			structure_type: e.structure_type,
 			structure_id: e.structure_id,
@@ -189,8 +191,8 @@ function ce({ timer: e, onClose: n }) {
 			...e.owner ? { owner: e.owner } : {},
 			...e.ours ? { side: "friendly" } : {},
 			...e.kind ? { kind: e.kind } : {}
-		}), e.ends_at && (g("exact"), S(K(e.ends_at)));
-	}, k = p === "left" ? oe(_) : null, P = p === "left" ? k == null ? null : new Date(w + k * 1e3).toISOString() : se(b), F = !!c.name.trim() && !!c.system && !!P, I = j({
+		}), e.ends_at && (g("exact"), D(K(e.ends_at)));
+	}, I = p === "left" ? oe(_) : null, te = p === "left" ? I == null ? null : new Date(O + I * 1e3).toISOString() : se(b), H = e && !w && !(p === "left" && _.trim()) ? e.ends_at : te, U = !!c.name.trim() && !!c.system && !!H, W = j({
 		mutationFn: () => {
 			let t = {
 				name: c.name,
@@ -199,7 +201,7 @@ function ce({ timer: e, onClose: n }) {
 				kind: c.kind,
 				side: c.side,
 				owner: c.owner,
-				ends_at: P,
+				ends_at: H,
 				notes: c.notes,
 				important: c.important,
 				notify: c.notify,
@@ -222,9 +224,9 @@ function ce({ timer: e, onClose: n }) {
 		footer: /* @__PURE__ */ B(R, { children: [
 			/* @__PURE__ */ z("span", {
 				className: "mr-auto self-center text-xs text-muted",
-				children: P ? /* @__PURE__ */ B(R, { children: ["Comes out ", /* @__PURE__ */ z("span", {
+				children: H ? /* @__PURE__ */ B(R, { children: ["Comes out ", /* @__PURE__ */ z("span", {
 					className: "text-text",
-					children: T(P)
+					children: T(H)
 				})] }) : p === "left" ? "Type the time left as the game shows it." : "Pick the exact time."
 			}),
 			/* @__PURE__ */ z(t, {
@@ -234,9 +236,9 @@ function ce({ timer: e, onClose: n }) {
 			}),
 			/* @__PURE__ */ z(t, {
 				variant: "primary",
-				disabled: !F,
-				loading: I.isPending,
-				onClick: () => I.mutate(),
+				disabled: !U,
+				loading: W.isPending,
+				onClick: () => W.mutate(),
 				children: e ? "Save" : "Add timer"
 			})
 		] }),
@@ -248,18 +250,18 @@ function ce({ timer: e, onClose: n }) {
 					children: [/* @__PURE__ */ z(ue, {
 						value: c.name,
 						picked: c.structure_id,
-						onChange: (e) => D({
+						onChange: (e) => P({
 							name: e,
 							structure_id: null
 						}),
-						onPick: O
+						onPick: F
 					}), /* @__PURE__ */ B(d, {
 						label: "Type",
 						children: [/* @__PURE__ */ z(f, {
 							list: "timers-structure-types",
 							value: c.structure_type,
 							maxLength: 60,
-							onChange: (e) => D({ structure_type: e.target.value }),
+							onChange: (e) => P({ structure_type: e.target.value }),
 							placeholder: "Fortizar"
 						}), /* @__PURE__ */ z("datalist", {
 							id: "timers-structure-types",
@@ -271,14 +273,14 @@ function ce({ timer: e, onClose: n }) {
 					className: "grid gap-4 sm:grid-cols-2",
 					children: [/* @__PURE__ */ z(le, {
 						value: c.system,
-						onChange: (e) => D({ system: e })
+						onChange: (e) => P({ system: e })
 					}), /* @__PURE__ */ z(d, {
 						label: "Owner",
 						hint: "Corporation or alliance.",
 						children: /* @__PURE__ */ z(f, {
 							value: c.owner,
 							maxLength: 120,
-							onChange: (e) => D({ owner: e.target.value }),
+							onChange: (e) => P({ owner: e.target.value }),
 							placeholder: "Goonswarm Federation"
 						})
 					})]
@@ -289,7 +291,7 @@ function ce({ timer: e, onClose: n }) {
 						label: "Timer",
 						children: /* @__PURE__ */ z(h, {
 							value: c.kind,
-							onChange: (e) => D({ kind: e.target.value }),
+							onChange: (e) => P({ kind: e.target.value }),
 							options: ee.map((e) => ({
 								value: e.value,
 								label: e.label
@@ -300,7 +302,7 @@ function ce({ timer: e, onClose: n }) {
 						children: "Whose"
 					}), /* @__PURE__ */ z(m, {
 						value: c.side,
-						onChange: (e) => D({ side: e }),
+						onChange: (e) => P({ side: e }),
 						size: "sm",
 						className: "w-full",
 						options: [
@@ -342,11 +344,11 @@ function ce({ timer: e, onClose: n }) {
 				}), p === "left" ? /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(f, {
 					value: _,
 					onChange: (e) => {
-						y(e.target.value), E(Date.now());
+						y(e.target.value), k(Date.now());
 					},
 					placeholder: "1d 4h 23m",
 					className: "font-mono",
-					"aria-invalid": !!_ && k == null
+					"aria-invalid": !!_ && I == null
 				}), /* @__PURE__ */ B("p", {
 					className: "mt-1.5 text-xs text-muted",
 					children: [
@@ -375,12 +377,12 @@ function ce({ timer: e, onClose: n }) {
 				})] }) : /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(f, {
 					type: "datetime-local",
 					value: b,
-					onChange: (e) => S(e.target.value)
+					onChange: (e) => D(e.target.value)
 				}), /* @__PURE__ */ B("p", {
 					className: "mt-1.5 text-xs text-muted",
 					children: [
 						"In your own time zone",
-						P ? /* @__PURE__ */ B(R, { children: ["; that's ", T(P)] }) : null,
+						H ? /* @__PURE__ */ B(R, { children: ["; that's ", T(H)] }) : null,
 						"."
 					]
 				})] })] }),
@@ -391,7 +393,7 @@ function ce({ timer: e, onClose: n }) {
 						rows: 3,
 						value: c.notes,
 						maxLength: 5e3,
-						onChange: (e) => D({ notes: e.target.value }),
+						onChange: (e) => P({ notes: e.target.value }),
 						placeholder: "Form up 30 minutes before on Mumble. Doctrine: Ferox fleet."
 					})
 				}),
@@ -402,7 +404,7 @@ function ce({ timer: e, onClose: n }) {
 							label: "Everyone is expected",
 							description: "Members are told now and reminded before it comes out, even if they muted timers.",
 							checked: c.important,
-							onCheckedChange: (t) => D({
+							onCheckedChange: (t) => P({
 								important: t,
 								...t && !e ? { ping: !0 } : {}
 							})
@@ -411,7 +413,7 @@ function ce({ timer: e, onClose: n }) {
 							label: "Ping Discord",
 							description: s.data?.available ? "Discord webhooks that ping mention their own setting and the roles below when it's added, moved and reminded." : "Discord webhooks that ping (Administration → Integrations) mention their setting when it's added, moved and reminded.",
 							checked: c.ping,
-							onCheckedChange: (e) => D({ ping: e })
+							onCheckedChange: (e) => P({ ping: e })
 						}),
 						c.ping && s.data?.available && /* @__PURE__ */ B("div", {
 							className: "py-3",
@@ -424,7 +426,7 @@ function ce({ timer: e, onClose: n }) {
 							}) : /* @__PURE__ */ z(re, {
 								roles: s.data.roles,
 								value: u,
-								onChange: (e) => D({ ping_roles: e })
+								onChange: (e) => P({ ping_roles: e })
 							})]
 						}),
 						!e && /* @__PURE__ */ z(v, {
@@ -432,7 +434,7 @@ function ce({ timer: e, onClose: n }) {
 							description: "Under the bell. Webhooks such as Discord hear about it either way.",
 							checked: c.notify || c.important,
 							disabled: c.important,
-							onCheckedChange: (e) => D({ notify: e })
+							onCheckedChange: (e) => P({ notify: e })
 						})
 					]
 				})
@@ -660,20 +662,20 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 			r: "8"
 		})
 	]
-}), Z = (e) => /* @__PURE__ */ B(Y, {
+}), de = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [/* @__PURE__ */ z("path", { d: "M5 12h14" }), /* @__PURE__ */ z("path", { d: "M12 5v14" })]
-}), de = (e) => /* @__PURE__ */ z(Y, {
+}), fe = (e) => /* @__PURE__ */ z(Y, {
 	...e,
 	children: /* @__PURE__ */ z("path", { d: "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" })
-}), fe = (e) => /* @__PURE__ */ B(Y, {
+}), pe = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M3 6h18" }),
 		/* @__PURE__ */ z("path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" }),
 		/* @__PURE__ */ z("path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" })
 	]
-}), pe = (e) => /* @__PURE__ */ B(Y, {
+}), me = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("circle", {
@@ -692,17 +694,17 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 			r: "1"
 		})
 	]
-}), me = (e) => /* @__PURE__ */ z(Y, {
+}), he = (e) => /* @__PURE__ */ z(Y, {
 	...e,
 	children: /* @__PURE__ */ z("path", { d: "M20 6 9 17l-5-5" })
-}), he = (e) => /* @__PURE__ */ B(Y, {
+}), ge = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [/* @__PURE__ */ z("path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }), /* @__PURE__ */ z("circle", {
 		cx: "12",
 		cy: "12",
 		r: "3"
 	})]
-}), ge = (e) => /* @__PURE__ */ B(Y, {
+}), _e = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" }),
@@ -714,10 +716,10 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 		/* @__PURE__ */ z("path", { d: "M22 21v-2a4 4 0 0 0-3-3.87" }),
 		/* @__PURE__ */ z("path", { d: "M16 3.13a4 4 0 0 1 0 7.75" })
 	]
-}), _e = (e) => /* @__PURE__ */ z(Y, {
+}), ve = (e) => /* @__PURE__ */ z(Y, {
 	...e,
 	children: /* @__PURE__ */ z("path", { d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" })
-}), ve = (e) => /* @__PURE__ */ B(Y, {
+}), ye = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "m14.5 17.5 3 3" }),
@@ -730,7 +732,7 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 		/* @__PURE__ */ z("path", { d: "M3 3v4" }),
 		/* @__PURE__ */ z("path", { d: "m9.5 9.5 11 11" })
 	]
-}), ye = (e) => /* @__PURE__ */ B(Y, {
+}), be = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" }),
@@ -738,7 +740,7 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 		/* @__PURE__ */ z("path", { d: "M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" }),
 		/* @__PURE__ */ z("path", { d: "M16 16h5v5" })
 	]
-}), be = (e) => /* @__PURE__ */ B(Y, {
+}), xe = (e) => /* @__PURE__ */ B(Y, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M13 7 9 3 5 7l4 4" }),
@@ -747,7 +749,7 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 		/* @__PURE__ */ z("path", { d: "m16 8 3-3" }),
 		/* @__PURE__ */ z("path", { d: "M9 21a6 6 0 0 0-6-6" })
 	]
-}), xe = [
+}), Se = [
 	{
 		minutes: 1440,
 		label: "1 day"
@@ -781,11 +783,11 @@ var X = (e) => /* @__PURE__ */ B(Y, {
 		label: "5 min"
 	}
 ];
-function Se({ onClose: e }) {
+function Ce({ onClose: e }) {
 	let n = N(), { data: r } = M({
 		queryKey: ["timers", "settings"],
 		queryFn: () => C.get(`${V}/settings`)
-	}), a = W(), [o, s] = L(null), c = o ?? r ?? null, l = (e) => c && s({
+	}), a = ne(), [o, s] = L(null), c = o ?? r ?? null, l = (e) => c && s({
 		...c,
 		...e
 	}), u = j({
@@ -833,7 +835,7 @@ function Se({ onClose: e }) {
 					}),
 					/* @__PURE__ */ z("div", {
 						className: "flex flex-wrap gap-1.5",
-						children: xe.map((e) => {
+						children: Se.map((e) => {
 							let t = c.reminder_minutes.includes(e.minutes);
 							return /* @__PURE__ */ z("button", {
 								type: "button",
@@ -874,7 +876,7 @@ function Se({ onClose: e }) {
 						size: "xs",
 						loading: p.isPending,
 						onClick: () => p.mutate(),
-						children: [/* @__PURE__ */ z(ye, {}), " Check now"]
+						children: [/* @__PURE__ */ z(be, {}), " Check now"]
 					})]
 				}),
 				/* @__PURE__ */ B("div", { children: [
@@ -920,7 +922,7 @@ function Se({ onClose: e }) {
 }
 //#endregion
 //#region src/now.ts
-function Ce(e = 1e3) {
+function Z(e = 1e3) {
 	let [t, n] = L(() => Date.now());
 	return F(() => {
 		let t = setInterval(() => n(Date.now()), e);
@@ -1019,7 +1021,7 @@ function Oe({ t }) {
 	});
 }
 function ke() {
-	let e = N(), { data: i, isLoading: a } = we(), o = Ce(), [s, c] = L(null), [l, d] = L(null), [f, m] = L(!1), h = () => e.invalidateQueries({ queryKey: ["timers"] });
+	let e = N(), { data: i, isLoading: a } = we(), o = Z(), [s, c] = L(null), [l, d] = L(null), [f, m] = L(!1), h = () => e.invalidateQueries({ queryKey: ["timers"] });
 	F(() => {
 		i && window.location.hash.startsWith("#t") && document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
 	}, [i]);
@@ -1062,11 +1064,11 @@ function ke() {
 				children: [/* @__PURE__ */ B(t, {
 					variant: "ghost",
 					onClick: () => m(!0),
-					children: [/* @__PURE__ */ z(he, {}), " Settings"]
+					children: [/* @__PURE__ */ z(ge, {}), " Settings"]
 				}), /* @__PURE__ */ B(t, {
 					variant: "primary",
 					onClick: () => c("new"),
-					children: [/* @__PURE__ */ z(Z, {}), " Add timer"]
+					children: [/* @__PURE__ */ z(de, {}), " Add timer"]
 				})]
 			}) : void 0
 		}),
@@ -1100,19 +1102,19 @@ function ke() {
 					}),
 					/* @__PURE__ */ z(_, {
 						label: "Coming out today",
-						icon: /* @__PURE__ */ z(be, {}),
+						icon: /* @__PURE__ */ z(xe, {}),
 						value: D,
 						hint: D ? "by EVE time" : "a quiet day"
 					}),
 					/* @__PURE__ */ z(_, {
 						label: "Upcoming",
-						icon: /* @__PURE__ */ z(_e, {}),
+						icon: /* @__PURE__ */ z(ve, {}),
 						value: S.length,
 						hint: `${T} ours · ${E} hostile`
 					}),
 					/* @__PURE__ */ z(_, {
 						label: "I'm going to",
-						icon: /* @__PURE__ */ z(ge, {}),
+						icon: /* @__PURE__ */ z(_e, {}),
 						value: O,
 						tone: O ? "success" : void 0,
 						hint: O ? "you'll be reminded" : "press Going on a timer"
@@ -1126,7 +1128,7 @@ function ke() {
 					value: "upcoming",
 					label: "Upcoming",
 					count: S.length,
-					icon: /* @__PURE__ */ z(ve, {})
+					icon: /* @__PURE__ */ z(ye, {})
 				}, {
 					value: "past",
 					label: "Came out",
@@ -1141,7 +1143,7 @@ function ke() {
 						action: i.can_manage ? /* @__PURE__ */ B(t, {
 							variant: "primary",
 							onClick: () => c("new"),
-							children: [/* @__PURE__ */ z(Z, {}), " Add timer"]
+							children: [/* @__PURE__ */ z(de, {}), " Add timer"]
 						}) : void 0
 					}) }) : /* @__PURE__ */ z("div", {
 						className: "space-y-6",
@@ -1190,14 +1192,14 @@ function ke() {
 			timer: s === "new" ? null : s,
 			onClose: () => c(null)
 		}),
-		f && /* @__PURE__ */ z(Se, { onClose: () => m(!1) }),
+		f && /* @__PURE__ */ z(Ce, { onClose: () => m(!1) }),
 		/* @__PURE__ */ z(r, {
 			open: !!l,
 			onOpenChange: (e) => !e && d(null),
 			danger: !0,
 			title: `Remove "${l?.name}"?`,
 			description: "It disappears from the board for everyone. People who said they're going aren't told.",
-			confirmLabel: /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(fe, {}), " Remove"] }),
+			confirmLabel: /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(pe, {}), " Remove"] }),
 			onConfirm: () => l && x.mutateAsync(l.id)
 		})
 	] });
@@ -1254,7 +1256,7 @@ function Ae({ t: e, now: n, canManage: r, onGoing: i, onEdit: u, onDelete: d }) 
 								children: /* @__PURE__ */ B("span", {
 									className: "inline-flex items-center gap-1 text-xs text-muted",
 									children: [
-										/* @__PURE__ */ z(ge, { className: "size-3.5" }),
+										/* @__PURE__ */ z(_e, { className: "size-3.5" }),
 										" ",
 										e.going_count
 									]
@@ -1265,7 +1267,7 @@ function Ae({ t: e, now: n, canManage: r, onGoing: i, onEdit: u, onDelete: d }) 
 								size: "xs",
 								onClick: i,
 								"aria-pressed": e.going,
-								children: e.going ? /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(me, {}), " Going"] }) : "Going?"
+								children: e.going ? /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(he, {}), " Going"] }) : "Going?"
 							}),
 							r && /* @__PURE__ */ B(s, { children: [/* @__PURE__ */ z(l, {
 								asChild: !0,
@@ -1273,20 +1275,20 @@ function Ae({ t: e, now: n, canManage: r, onGoing: i, onEdit: u, onDelete: d }) 
 									variant: "ghost",
 									size: "icon-xs",
 									"aria-label": `Options for ${e.name}`,
-									children: /* @__PURE__ */ z(pe, {})
+									children: /* @__PURE__ */ z(me, {})
 								})
 							}), /* @__PURE__ */ B(a, {
 								align: "end",
 								children: [
 									/* @__PURE__ */ B(o, {
 										onSelect: u,
-										children: [/* @__PURE__ */ z(de, {}), " Edit"]
+										children: [/* @__PURE__ */ z(fe, {}), " Edit"]
 									}),
 									/* @__PURE__ */ z(c, {}),
 									/* @__PURE__ */ B(o, {
 										danger: !0,
 										onSelect: d,
-										children: [/* @__PURE__ */ z(fe, {}), " Remove"]
+										children: [/* @__PURE__ */ z(pe, {}), " Remove"]
 									})
 								]
 							})] })
@@ -1363,7 +1365,7 @@ function je() {
 		queryKey: ["timers", "widget"],
 		queryFn: () => C.get(V),
 		refetchInterval: 12e4
-	}), r = Ce();
+	}), r = Z();
 	if (n) return /* @__PURE__ */ z(g, { className: "h-24" });
 	if (!t) return null;
 	let i = t.upcoming.filter((e) => new Date(e.ends_at).getTime() > r - 36e5).slice(0, 4);
@@ -1431,4 +1433,4 @@ var Me = E({
 //#endregion
 export { Me as default };
 
-export const classes = ["!data","!o","!t","@conduit/sdk","@tanstack/react-query","a","about","absolute","accent","access","action","actions","add","added","after","ago","align","all","alt","an","anchor_vulnerable","anchoring","and","animate-pulse","are","aren","aria-autocomplete","aria-expanded","aria-hidden","aria-invalid","aria-label","aria-pressed","aria-selected","armor","armor_reinforce","armor_vulnerable","as","at","autoComplete","autoFocus","available","background","badge","be","been","before","below","bg-accent-soft","bg-bg","bg-bg/40","bg-border","bg-border-strong","bg-danger","bg-success","bg-surface","block","board","body","border","border-accent/60","border-border","border-border-strong","border-t","box","browser","but","button","by","came","can","canManage","can_manage","center","change","characters","checked","children","chosen","className","clock","close","cn","color","colour","coloured","come","comes","coming","component","confirmLabel","const","content","corporation","count","counting","counts","created_by","current","currentColor","customs","cx","cy","d","danger","data","datetime-local","day","days","debounced","default","defaultValue","default_ping_roles","del","deleted","deleting","deploy_vulnerable","description","diff","disabled","disappears","discord","discord-roles","divide-border","divide-y","doesn","dot","drift","drop","editing","either","else","elsewhere","en-GB","enabled","end","endsAt","ends_at","entered","error","eslint-disable-line","even","every","everyone","everything","exact","expected","export","extraction","eyebrow","few","fill","fills","fitting_invulnerable","five","flex","flex-1","flex-wrap","font-medium","font-mono","font-normal","font-semibold","footer","for","form","found","friendly","from","fuel_expires","function","game","gap-1","gap-1.5","gap-2","gap-2.5","gap-3","gap-4","gap-x-3","gap-x-4","gap-y-1","gap-y-2","get","ghost","go","going","going_count","going_names","grid","grouped","h","h-24","h-64","h-8","h-px","has","hear","here","hint","hits","hostile","hour","hover:bg-hover","hover:border-border-strong","hover:text-text","how","hud-label","hull","hull_reinforce","hull_vulnerable","icon","icon-xs","icons","id","ids","if","import","importNow","import_notifications","import_structures","important","in","in-game","info","inline","inline-flex","input","inset-y-0","interface","intervalMs","is","isLoading","iso","it","items","items-baseline","items-center","its","justify-between","justify-end","keep_days","key","kind","known","knows","label","last","lastIndex","lazy","left","left-0","length","let","lg","lg:grid-cols-4","link","linked","list","listbox","live","ll","loading","local","long","longer","looked","lost","m","m14.5","m16","m17","m21","m6.5","m8","m9.5","manual","marked","matched","matches","max","max-h-60","max-h-72","maxLength","mb-1.5","mb-2","md","members","mention","mentions","min","min-w-0","minute","minutes","ml-2","ml-auto","mode","mono","month","moon","more","mousedown","moved","mr-auto","ms","mt-1","mt-1.5","mutationFn","muted","myCount","n","name","neutral","new","next","no","none","normal-case","not","notes","nothing","notification","notifications","notifications_seen_until","notify","now","null","number","numeric","of","off","offer","offered","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDelete","onDown","onEdit","onError","onFocus","onGoing","onKeyDown","onMouseDown","onOpenChange","onPick","onSelect","onSuccess","once","one","ones","onlining_vulnerable","only","opacity-80","open","option","options","or","order","other","our","ours","out","overflow-auto","overflow-hidden","own","owner","pad","past","patch","path","people","per","pick","pickStructure","picked","picking","pills","ping","pingRoles","ping_roles","pings","pl-5","place-items-center","placeholder","plugin","portrait","pos","post","press","primary","pt-2","put","px-2","px-3","px-card","py-0.5","py-1","py-2","py-3","qc","queryFn","queryKey","quiet","re","react","react-hooks/exhaustive-deps","react-router","read","reading","ready","recently","ref","refetchInterval","refresh","region","reinforced","relative","remind","reminded","reminder_minutes","reminders","removed","required","rest","results","return","right","right-0","role","roles","rotate-45","round","rounded-full","routes","row","rows","run","s","said","save","saved","scroll","scroll-mt-24","sec","secondary","seconds","security","self-center","server","set","setDebounced","setDeleting","setEditing","setExact","setForm","setLeft","setMode","setNow","setOpen","setQ","setSettingsOpen","setTypedAt","setting","settings","shadow-e2","sheet","shield_vulnerable","shields","short","show","shown","shows","shrink-0","side","simply","site","size","size-1.5","size-2","size-3.5","size-4","size-7","size-8","sm","sm:block","sm:grid-cols-2","sm:grid-cols-[150px_minmax(0,1.4fr)_minmax(0,1fr)_auto]","sm:grid-cols-[1fr_200px]","sm:items-center","so","solar","someone","source","sov","sovereignty","space-y-4","space-y-5","space-y-6","src","staleTime","state","status","stay","string","stripe","stroke","strokeLinecap","strokeLinejoin","strokeWidth","structure","structure_id","structure_type","structures","style","success","such","system","systems","t","tabular-nums","taken","target","text","text-2xl","text-[13px]","text-danger-fg","text-left","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-xs","than","that","the","their","then","there","these","they","through","time","timeLeftText","timeZone","timer","timers","timers-structure-types","title","to","toLocalInput","toast","today","toggle","told","tone","top-full","total","tracking-normal","tracking-wider","transition-colors","true","truncate","type","type_id","types","typing","u","unanchored","unanchoring","undefined","under","unit","unknown","unless","until","up","upcoming","updated","updated_at","uppercase","use","useDiscordRoles","useNow","useQuery","useQueryClient","useRef","useState","used","using","v","value","variant","viewBox","void","vulnerable","w-0.5","w-1","w-24","w-28","w-full","warning","was","way","webhook","webhooks","weekday","were","what","when","where","which","while","whitespace-pre-wrap","who","whose","widget","widgets","will","with","without","written","x","xs","yet","you","your","z-20","zone"];
+export const classes = ["!data","!o","!t","!timeTouched","@conduit/sdk","@tanstack/react-query","a","about","absolute","accent","access","action","actions","add","added","after","ago","align","all","alt","an","anchor_vulnerable","anchoring","and","animate-pulse","are","aren","aria-autocomplete","aria-expanded","aria-hidden","aria-invalid","aria-label","aria-pressed","aria-selected","armor","armor_reinforce","armor_vulnerable","as","at","autoComplete","autoFocus","available","background","badge","be","been","before","below","bg-accent-soft","bg-bg","bg-bg/40","bg-border","bg-border-strong","bg-danger","bg-success","bg-surface","block","board","body","border","border-accent/60","border-border","border-border-strong","border-t","box","browser","but","button","by","came","can","canManage","can_manage","center","change","characters","checked","children","chosen","className","clock","close","cn","color","colour","coloured","come","comes","coming","component","confirmLabel","const","content","corporation","count","counting","counts","created_by","current","currentColor","customs","cx","cy","d","danger","data","datetime-local","day","days","debounced","default","defaultValue","default_ping_roles","del","deleted","deleting","deploy_vulnerable","description","diff","disabled","disappears","discord","discord-roles","divide-border","divide-y","doesn","dot","drift","drop","edit","editing","either","else","elsewhere","en-GB","enabled","end","endsAt","ends_at","entered","error","eslint-disable-line","even","every","everyone","everything","exact","expected","export","extraction","eyebrow","few","field","fill","fills","fitting_invulnerable","five","fixing","flex","flex-1","flex-wrap","font-medium","font-mono","font-normal","font-semibold","footer","for","form","found","friendly","from","fuel_expires","function","game","gap-1","gap-1.5","gap-2","gap-2.5","gap-3","gap-4","gap-x-3","gap-x-4","gap-y-1","gap-y-2","get","ghost","go","going","going_count","going_names","grid","grouped","h","h-24","h-64","h-8","h-px","has","hear","here","hint","hits","hostile","hour","hover:bg-hover","hover:border-border-strong","hover:text-text","how","hud-label","hull","hull_reinforce","hull_vulnerable","icon","icon-xs","icons","id","ids","if","import","importNow","import_notifications","import_structures","important","in","in-game","info","inline","inline-flex","input","inset-y-0","interface","intervalMs","is","isLoading","iso","it","items","items-baseline","items-center","its","justify-between","justify-end","keep_days","key","kind","known","knows","label","last","lastIndex","lazy","left","left-0","length","let","lg","lg:grid-cols-4","link","linked","list","listbox","live","ll","loading","local","long","longer","looked","lost","m","m14.5","m16","m17","m21","m6.5","m8","m9.5","manual","marked","matched","matches","max","max-h-60","max-h-72","maxLength","mb-1.5","mb-2","md","members","mention","mentions","min","min-w-0","minute","minutes","ml-2","ml-auto","mode","mono","month","moon","more","mousedown","move","moved","mr-auto","ms","mt-1","mt-1.5","mutationFn","muted","myCount","n","name","neutral","new","next","no","none","normal-case","not","notes","nothing","notification","notifications","notifications_seen_until","notify","now","null","number","numeric","of","off","offer","offered","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onDelete","onDown","onEdit","onError","onFocus","onGoing","onKeyDown","onMouseDown","onOpenChange","onPick","onSelect","onSuccess","once","one","ones","onlining_vulnerable","only","opacity-80","open","option","options","or","order","other","our","ours","out","overflow-auto","overflow-hidden","own","owner","pad","past","patch","path","people","per","pick","pickStructure","picked","picking","pills","ping","pingRoles","ping_roles","pings","pl-5","place-items-center","placeholder","plugin","portrait","pos","post","press","primary","pt-2","put","px-2","px-3","px-card","py-0.5","py-1","py-2","py-3","qc","queryFn","queryKey","quiet","re","react","react-hooks/exhaustive-deps","react-router","read","reading","ready","recently","ref","refetchInterval","refresh","region","reinforced","relative","remind","reminded","reminder_minutes","reminders","removed","required","rest","results","return","right","right-0","role","roles","rotate-45","round","rounded-full","routes","row","rows","run","s","said","save","saved","saves","scroll","scroll-mt-24","sec","secondary","seconds","security","self-center","send","server","set","setDebounced","setDeleting","setEditing","setExact","setExactValue","setForm","setLeft","setMode","setNow","setOpen","setQ","setSettingsOpen","setTimeTouched","setTypedAt","setting","settings","shadow-e2","sheet","shield_vulnerable","shields","short","show","shown","shows","shrink-0","side","simply","site","size","size-1.5","size-2","size-3.5","size-4","size-7","size-8","sm","sm:block","sm:grid-cols-2","sm:grid-cols-[150px_minmax(0,1.4fr)_minmax(0,1fr)_auto]","sm:grid-cols-[1fr_200px]","sm:items-center","so","solar","someone","source","sov","sovereignty","space-y-4","space-y-5","space-y-6","src","staleTime","state","status","stay","string","stripe","stroke","strokeLinecap","strokeLinejoin","strokeWidth","structure","structure_id","structure_type","structures","style","success","such","system","systems","t","tabular-nums","taken","target","text","text-2xl","text-[13px]","text-danger-fg","text-left","text-muted","text-sm","text-subtle","text-success-fg","text-text","text-warning-fg","text-xs","than","that","the","their","then","there","these","they","through","time","timeLeftText","timeZone","timer","timers","timers-structure-types","title","to","toLocalInput","toast","today","toggle","told","tone","top-full","total","tracking-normal","tracking-wider","transition-colors","true","truncate","type","type_id","typedEndsAt","types","typing","typo","u","unanchored","unanchoring","undefined","under","unit","unknown","unless","until","up","upcoming","updated","updated_at","uppercase","use","useDiscordRoles","useNow","useQuery","useQueryClient","useRef","useState","used","using","v","value","variant","viewBox","void","vulnerable","w-0.5","w-1","w-24","w-28","w-full","warning","was","way","webhook","webhooks","weekday","were","what","when","where","which","while","whitespace-pre-wrap","who","whose","widget","widgets","will","with","without","written","x","xs","yet","you","your","z-20","zone"];

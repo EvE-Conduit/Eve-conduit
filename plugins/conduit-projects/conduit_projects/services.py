@@ -32,6 +32,9 @@ MAX_QUANTITY = 2_000_000_000
 #: Store's own limit for one award (``conduit_store.services.MAX_POINTS``); the store isn't imported, it's optional.
 MAX_POINTS = 1_000_000
 MAX_PASTE_LINES = 500
+#: A pasted list is read with regular expressions, which get slow on one very long line; these are far above any
+#: real list. Longer lines aren't read (they come back as not recognised).
+MAX_PASTE_TEXT, MAX_PASTE_LINE = 100_000, 200
 #: Manufacturing and reactions: the activities that make an item.
 MAKING = (1, 9, 11)
 
@@ -84,6 +87,16 @@ def audience_users(project: Project):
     return users
 
 
+def restricted(project: Project) -> bool:
+    return project.states.exists() or project.groups.exists()
+
+
+def _event(name: str, project: Project) -> str:
+    """Webhooks often post where anyone can read, so a project for some states or groups only goes out as its own
+    private ``*_restricted`` event (as the Ops calendar does): only a webhook that picks it gets it."""
+    return f"{name}_restricted" if restricted(project) else name
+
+
 # --- projects -------------------------------------------------------------------------------------------------------
 
 
@@ -123,7 +136,7 @@ def save_project(project: Project | None, data: dict, by, request=None) -> Proje
     record("projects.saved", f"{'started' if created else 'changed'} industry project {project.name}", request=request,
            actor=by, target_type="plugin", details={"project_id": project.pk})
     if created:
-        bus.emit("projects.created", project_id=project.pk, project=project.name, by=by.display_name, link=_link(project),
+        bus.emit(_event("projects.created", project), project_id=project.pk, project=project.name, by=by.display_name, link=_link(project),
                  title=f"New project: {project.name}", summary=project.location or project.description[:200], level="info")
         if data.get("notify", True):
             notify([u for u in audience_users(project) if u.pk != by.pk], f"New industry project: {project.name}",
@@ -139,7 +152,7 @@ def _complete(project: Project, by=None, request=None) -> None:
                        .values_list("user_id", flat=True))
     notify(list(contributors), f"{project.name} is done", "Thanks for building for it.", link=_link(project),
            level="success", category="p.projects")
-    bus.emit("projects.completed", project_id=project.pk, project=project.name, contributors=len(contributors),
+    bus.emit(_event("projects.completed", project), project_id=project.pk, project=project.name, contributors=len(contributors),
              link=_link(project), title=f"Project done: {project.name}",
              summary=f"{len(contributors)} contributor{'s' if len(contributors) != 1 else ''}", level="success")
     record("projects.completed", f"closed industry project {project.name} as done", request=request, actor=by,
@@ -303,7 +316,7 @@ def _number(text: str) -> int | None:
     text = text.strip()
     if _SEPARATED.match(text):
         text = re.sub(r"\D", "", text)
-    return int(text) if text.isdigit() else None
+    return int(text) if text.isdigit() and len(text) <= 18 else None
 
 
 def parse_paste(text: str) -> list[tuple[str, int]]:
@@ -311,6 +324,9 @@ def parse_paste(text: str) -> list[tuple[str, int]]:
     for raw in (text or "").splitlines()[:MAX_PASTE_LINES]:
         line = raw.strip().rstrip("*").strip()
         if not line:
+            continue
+        if len(raw) > MAX_PASTE_LINE:
+            out.append((line[:MAX_PASTE_LINE], 1))  # no item has a name this long: it's listed as not recognised
             continue
         if "\t" in raw:
             cells = [c.strip() for c in raw.split("\t")]
@@ -335,6 +351,8 @@ def add_from_paste(project: Project, text: str, points_per_unit=0, isk_per_unit=
     from conduit.sde.models import ItemType
 
     _require_open(project)
+    if len(text or "") > MAX_PASTE_TEXT:
+        raise ProjectError("That list is too long; paste it in parts")
     lines = parse_paste(text)
     if not lines:
         raise ProjectError("Paste a list of items first")
@@ -415,14 +433,24 @@ def _own_open(c: Contribution, user) -> None:
         raise ProjectError("This delivery is confirmed already")
 
 
+def _locked(c: Contribution) -> Contribution:
+    """The contribution as it is now, with its row locked: the copy a request loaded may be out of date (a manager
+    confirmed it meanwhile, the member clicked twice). Call inside a transaction."""
+    return Contribution.objects.select_for_update().select_related("item__project", "user").get(pk=c.pk)
+
+
+@transaction.atomic
 def release(c: Contribution, user) -> None:
+    c = _locked(c)
     _own_open(c, user)
     if c.status != Contribution.Status.CLAIMED:
         raise ProjectError("You've marked this delivered; ask a manager to send it back first")
     c.delete()
 
 
+@transaction.atomic
 def deliver(c: Contribution, user, note: str = "") -> Contribution:
+    c = _locked(c)
     _own_open(c, user)
     _require_open(c.item.project)
     if c.status == Contribution.Status.DELIVERED:
@@ -462,18 +490,27 @@ def confirm(c: Contribution, by, request=None) -> Contribution:
     what = f"{c.quantity:,} × {c.item.name}"
     notify(c.user_id, f"Delivery confirmed: {what}", f"{project.name}" + (f" · {points:,} points" if points else ""),
            link=_link(project), level="success", category="p.projects")
-    bus.emit("projects.contribution_delivered", user_id=c.user_id, user=c.user.display_name, project_id=project.pk,
-             project=project.name, contribution_id=c.pk, item=c.item.name, type_id=c.item.type_id, quantity=c.quantity,
-             points=points, link=_link(project), title=f"{c.user.display_name} delivered {what}",
-             summary=f"{project.name}" + (f" · {points:,} points" if points else ""), level="success")
+    payload = dict(user_id=c.user_id, user=c.user.display_name, project_id=project.pk,
+                   project=project.name, contribution_id=c.pk, item=c.item.name, type_id=c.item.type_id, quantity=c.quantity,
+                   points=points, link=_link(project), title=f"{c.user.display_name} delivered {what}",
+                   summary=f"{project.name}" + (f" · {points:,} points" if points else ""), level="success")
+    if restricted(project):
+        bus.emit("projects.contribution_delivered_restricted", **payload)
+        # The Corp Store pays from the public event, so it still goes out, but without what the project is or needs:
+        # who delivered, the points, and the ids the store books it under.
+        payload |= dict(project="", item="", type_id=None, quantity=None, title=f"{c.user.display_name} delivered to an industry project",
+                        summary=f"{points:,} points" if points else "")
+    bus.emit("projects.contribution_delivered", **payload)
     record("projects.confirmed", f"confirmed {c.user.display_name}'s delivery of {what}", request=request, actor=by,
            target=c.user, details={"project_id": project.pk, "contribution_id": c.pk, "points": points})
     _check_complete(project)
     return c
 
 
+@transaction.atomic
 def reject(c: Contribution, by, note: str = "", request=None) -> Contribution:
     """Send a delivery back: it's a claim again, with the manager's reason."""
+    c = _locked(c)
     if c.status != Contribution.Status.DELIVERED:
         raise ProjectError("Only a delivery waiting for a manager can be sent back")
     c.status = Contribution.Status.CLAIMED

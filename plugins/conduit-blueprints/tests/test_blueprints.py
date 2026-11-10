@@ -442,3 +442,21 @@ def test_managers_switch_on_discord_pings(setup, api_client):
     resp = api_client.call("put", "/api/pings/blueprints.loan_overdue", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="blueprints.loan_overdue").roles == ["123"]
+
+
+def test_a_stale_copy_cant_undo_a_delivery_or_a_return(stocked):
+    """A borrower cancelling just as the manager hands the blueprint over, each holding a copy loaded earlier: the
+    loan mustn't end up cancelled, or it would drop off the list of loans and never come due."""
+    manager, pilot, outsider = stocked
+    loan = services.create_request(pilot, {"type_id": HURRICANE_BP, "kind": "loan", "loan_days": 3})
+    stale = Request.objects.get(pk=loan.pk)
+    services.deliver(Request.objects.get(pk=loan.pk), manager)
+    with pytest.raises(services.LibraryError, match="delivered"):
+        services.cancel(stale, pilot)
+    assert Request.objects.get(pk=loan.pk).on_loan
+    # A new due date for a loan that came back meanwhile is refused too.
+    stale = Request.objects.get(pk=loan.pk)
+    services.mark_returned(Request.objects.get(pk=loan.pk), manager)
+    with pytest.raises(services.LibraryError, match="out on loan"):
+        services.extend(stale, manager, (timezone.now() + timedelta(days=5)).isoformat())
+    assert Request.objects.get(pk=loan.pk).status == Request.Status.RETURNED

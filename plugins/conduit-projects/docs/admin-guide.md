@@ -55,7 +55,7 @@ When a project starts, everyone it is for (except you) gets a notification, and 
 Click **Add items** on an open project. Choose **One item** or **Paste a list**.
 
 - **One item**: search by name (2+ letters), pick it, enter **How many**.
-- **Paste a list**: paste the materials list from the in-game Industry window, an inventory, or lines like
+- **Paste a list** (up to 100,000 characters; lines over 200 characters are not read): paste the materials list from the in-game Industry window, an inventory, or lines like
   `Tritanium x 1000`, `1000 x Tritanium`, `1000 Tritanium` or `Tritanium 1000`. Up to 500 lines are read. Lines
   without a number count as 1. Names that aren't recognised are listed in a warning ("Not recognised: ...").
 
@@ -113,6 +113,13 @@ writes to the audit log. When every item has all it needs confirmed, the project
 | `projects.completed` | A project gets everything it needs, or is closed as done. | `project_id`, `project`, `contributors`, `link` |
 
 Each event also carries `title`, `summary` and `level` for webhook messages.
+
+**Projects for some states or groups only.** Webhooks often post where anyone can read, so such a project sends
+`projects.created_restricted`, `projects.contribution_delivered_restricted` and `projects.completed_restricted`
+instead. They carry the same payload, are private (a webhook set to every event leaves them out; pick them by name
+for a leadership channel) and don't ping. Because the Corp Store pays from `projects.contribution_delivered`, that
+event is still sent for a restricted project, but without `project`, `item`, `type_id` and `quantity`: only who
+delivered, the points and the ids.
 
 - Send events to Discord or elsewhere under **Administration → Integrations**.
 - To ping on new projects, open **Deliveries** and switch on the alert under **Discord pings**. This section only

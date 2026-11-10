@@ -237,3 +237,52 @@ def test_doctrine_link(people, api_client):
     assert op["doctrine"] == {"id": shield.pk, "name": "Shield Ferox", "link": f"/p/doctrines/{shield.pk}"}
     assert api_client.call("post", "/api/p/ops", {"title": "X", "starts_at": op["starts_at"], "doctrine_id": 9999}).status_code == 400
     assert Op.objects.count() == 2
+
+
+def test_reminders_and_notices_only_reach_people_still_invited(people, api_client):
+    """Someone who answered and then left the alliance, or the op's audience, hears no more about it."""
+    officers = Group.objects.create(name="Officers")
+    people["other"].groups.add(officers)
+    soon = (timezone.now() + timedelta(minutes=10)).isoformat()
+    op = post(api_client, people["fc"], starts_at=soon, notify=False)
+    for who in ("pilot", "other", "fc2"):
+        api_client.force_login(people[who])
+        assert api_client.call("post", f"/api/p/ops/{op['id']}/rsvp", {"answer": "going"}).status_code == 200
+    # One leaves the alliance; then the op is narrowed to a group only one of the others is in.
+    left = people["fc2"]
+    left.state = None
+    left.save()
+    Op.objects.get(pk=op["id"]).groups.set([officers])
+    Notification.objects.all().delete()
+    assert services.remind_due() == 1
+    assert Notification.objects.filter(user=people["other"], title="Op soon: Sunday roam").exists()
+    assert not Notification.objects.filter(user__in=[people["pilot"], left]).exists()
+    api_client.force_login(people["fc"])
+    api_client.call("post", f"/api/p/ops/{op['id']}/cancel")
+    assert Notification.objects.filter(user=people["other"], title="Cancelled: Sunday roam").exists()
+    assert not Notification.objects.filter(user__in=[people["pilot"], left]).exists()
+
+
+def test_ping_roles_are_the_ones_offered(people, api_client, monkeypatch):
+    """A role id typed into the API pings nobody the editor doesn't offer; without Discord linked, ids are only shaped."""
+    op = post(api_client, people["fc"], ping=True, ping_roles=["123", "9" * 40], notify=False)
+    assert op["ping_roles"] == ["123"]
+    monkeypatch.setattr(services, "discord_roles", lambda: {"available": True, "roles": [{"id": "111", "name": "Fleet", "color": 0}]})
+    op = post(api_client, people["fc"], ping=True, ping_roles=["111", "222"], notify=False)
+    assert op["ping_roles"] == ["111"]
+    api_client.force_login(people["director"])
+    s = api_client.call("put", "/api/p/ops/settings", {"default_ping_roles": ["222", "111"]}).json()
+    assert s["default_ping_roles"] == ["111"]
+    # Discord can't be reached: nothing to check against, so what was picked is kept.
+    monkeypatch.setattr(services, "discord_roles", lambda: {"available": True, "roles": [], "error": "down"})
+    assert post(api_client, people["fc"], ping=True, ping_roles=["222"], notify=False)["ping_roles"] == ["222"]
+
+
+def test_times_with_another_offset_are_told_in_eve_time(people, api_client):
+    from datetime import timezone as tz
+
+    when = (datetime.now(UTC) + timedelta(hours=5)).replace(minute=30, second=0, microsecond=0)
+    local = when.astimezone(tz(timedelta(hours=5)))
+    post(api_client, people["fc"], starts_at=local.isoformat())
+    n = Notification.objects.get(user=people["pilot"], category="p.ops")
+    assert f"Forms up {when:%a %d %b %H:%M} ET." in n.body

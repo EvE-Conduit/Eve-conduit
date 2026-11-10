@@ -1,9 +1,13 @@
 """Recruitment: applying, the review queue, notes and messages, sheet access and accepting into groups."""
 
+from datetime import timedelta
+
 import pytest
 from django.core.cache import cache
 from django.contrib.auth.models import Group, Permission
+from django.utils import timezone
 
+from conduit.access.models import GroupProfile
 from conduit.accounts.models import Character
 from conduit.events import bus
 from conduit.notify.models import Notification
@@ -29,6 +33,8 @@ def setup(db):
     form.accept_groups.add(members)
     recruiter = make_user(90000050, "Recruiter Rae")
     recruiter.user_permissions.add(*Permission.objects.filter(content_type__app_label="recruit"))
+    # Putting a group on a form needs a say over who is in it: the recruiter leads Members.
+    GroupProfile.objects.get_or_create(group=members)[0].leaders.add(recruiter)
     applicant = make_user(90000060, "Hopeful Pilot", member=False)  # applicants are guests; Recruitment is open to them
     return form, recruiter, applicant, members
 
@@ -140,7 +146,79 @@ def test_withdraw_and_reapply(setup, api_client):
     assert api_client.call("post", f"/api/p/recruit/applications/{app['id']}/withdraw").json()["status"] == "withdrawn"
     me = api_client.call("get", "/api/p/recruit/me").json()
     assert me["current"] is None and me["past"][0]["status"] == "withdrawn"
+    # Not straight away: every application tells the recruiters (and may ping Discord).
+    again = api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()})
+    assert again.status_code == 429 and "apply again in" in again.json()["detail"]
+    Application.objects.update(decided_at=timezone.now() - services.REAPPLY_AFTER - timedelta(minutes=1))
     assert api_client.call("post", "/api/p/recruit/applications", {"form_id": form.pk, "answers": answers()}).status_code == 200
+
+
+def test_rejected_applicants_wait_before_applying_again(setup, api_client):
+    form, recruiter, applicant, _ = setup
+    app = services.apply(applicant, form, answers())
+    services.decide(app, recruiter, False)
+    with pytest.raises(services.RecruitError, match="apply again in"):
+        services.apply(applicant, form, answers())
+    assert Notification.objects.filter(user=recruiter, title__startswith="New application").count() == 1
+
+
+def test_applicants_cant_flood_the_recruiters_with_messages(setup, api_client):
+    form, recruiter, applicant, _ = setup
+    app = services.apply(applicant, form, answers())
+    api_client.force_login(applicant)
+    for i in range(services.MAX_MESSAGES):
+        assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/comments", {"text": f"hello {i}"}).status_code == 200
+    before = Notification.objects.count()
+    resp = api_client.call("post", f"/api/p/recruit/applications/{app.pk}/comments", {"text": "one more"})
+    assert resp.status_code == 429 and Notification.objects.count() == before
+    # Recruiters aren't held back, and a while later the applicant can write again.
+    api_client.force_login(recruiter)
+    assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/comments", {"text": "noted"}).status_code == 200
+    app.comments.update(created_at=timezone.now() - services.MESSAGES_PER - timedelta(minutes=1))
+    api_client.force_login(applicant)
+    assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/comments", {"text": "thanks"}).status_code == 200
+
+
+def test_form_groups_follow_the_groups_own_rules(setup, api_client):
+    """Accepting mustn't get anyone into a group the core's own "add member" would refuse them."""
+    from conduit.access.models import State
+
+    form, recruiter, applicant, members = setup
+    capitals = Group.objects.create(name="Capital pilots")
+    smart = Group.objects.create(name="Smart")
+    GroupProfile.objects.create(group=smart, auto=True).leaders.add(recruiter)
+    api_client.force_login(recruiter)
+    body = {"name": "Sneaky", "questions": QUESTIONS, "accept_groups": [members.pk, capitals.pk]}
+    # Not a group the form manager has a say over.
+    resp = api_client.call("put", f"/api/p/recruit/forms/{form.pk}", body)
+    assert resp.status_code == 403 and "Capital pilots" in resp.json()["detail"]
+    # A smart group's members come from its rules, whoever asks.
+    resp = api_client.call("put", f"/api/p/recruit/forms/{form.pk}", {**body, "accept_groups": [smart.pk]})
+    assert resp.status_code == 400 and "smart group" in resp.json()["detail"]
+    # Groups someone else put on the form stay when a form manager changes something else.
+    profile = GroupProfile.objects.create(group=capitals)
+    profile.allowed_states.add(State.objects.get(name="Test Member"))
+    form.accept_groups.add(capitals)
+    assert api_client.call("put", f"/api/p/recruit/forms/{form.pk}", {**body, "name": "Renamed"}).status_code == 200
+    # Accepting a guest: Members takes them, Capital pilots only takes members, so that one is left out and said so.
+    app = services.apply(applicant, form, answers())
+    out = api_client.call("post", f"/api/p/recruit/applications/{app.pk}/decide", {"accept": True}).json()
+    assert out["status"] == "accepted"
+    assert set(applicant.groups.values_list("name", flat=True)) == {"Members"}
+    assert out["groups_skipped"] == [{"group": "Capital pilots", "reason": "their state isn't allowed in this group"}]
+    note = [c for c in out["comments"] if c["internal"] and "Capital pilots" in c["text"]]
+    assert note
+    api_client.force_login(applicant)
+    mine = api_client.call("get", f"/api/p/recruit/applications/{app.pk}").json()
+    assert "groups_skipped" not in mine and not [c for c in mine["comments"] if "Capital pilots" in c["text"]]
+
+
+def test_recruiters_dont_claim_their_own_application(setup, api_client):
+    form, recruiter, _, _ = setup
+    app = services.apply(recruiter, form, answers())
+    api_client.force_login(recruiter)
+    assert api_client.call("post", f"/api/p/recruit/applications/{app.pk}/claim").status_code == 403
+    assert Application.objects.get(pk=app.pk).reviewer is None
 
 
 def test_forms_are_checked(setup, api_client):

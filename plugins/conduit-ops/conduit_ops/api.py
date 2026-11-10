@@ -93,7 +93,7 @@ def put_settings(request, payload: SettingsIn):
         raise HttpError(400, "Keep past ops for 1 to 90 days")
     s = OpsSettings.load()
     s.reminder_minutes, s.keep_days = marks, payload.keep_days
-    s.default_ping_roles = services.clean_roles(payload.default_ping_roles)
+    s.default_ping_roles = services.offered_roles(payload.default_ping_roles)
     s.save()
     record("ops.settings", "changed the ops calendar settings", request=request, target_type="plugin", details={"plugin": "ops"})
     return settings_out(s)

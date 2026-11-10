@@ -59,6 +59,8 @@ MAX_AHEAD = timedelta(days=60)
 SAME_TIMER = timedelta(minutes=10)
 #: Notifications older than this are history, not timers.
 NOTIFICATION_AGE = timedelta(days=7)
+#: How many notification row ids each look goes back over, for rows saved late (see ``import_notifications``).
+NOTIFICATION_LOOK_BACK = 1000
 #: Notification types that carry a timer, and what kind of timer they are.
 NOTIFICATION_KINDS = {
     "StructureLostShields": Timer.Kind.ARMOR,
@@ -181,6 +183,21 @@ def audience(t: Timer) -> list:
     from conduit.corp.access import can_view_section
 
     people = list(site_members())
+    if t.corporation_id:
+        corp = _structures_corp(t.corporation_id)
+        people = [u for u in people if can_view_section(u, corp, "structures")]
+    return people
+
+
+def still_invited(t: Timer, users) -> list:
+    """Of ``users`` (the people who said they're going), those who may still see the timer: someone who has left
+    the alliance since isn't reminded of it."""
+    from conduit.access.services import site_members
+    from conduit.corp.access import can_view_section
+
+    users = list(users)
+    members = set(site_members().filter(pk__in=[u.pk for u in users]).values_list("pk", flat=True))
+    people = [u for u in users if u.pk in members]
     if t.corporation_id:
         corp = _structures_corp(t.corporation_id)
         people = [u for u in people if can_view_section(u, corp, "structures")]
@@ -318,6 +335,12 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
         raise TimerError("Unknown side")
     if timezone.is_naive(ends_at):
         ends_at = timezone.make_aware(ends_at, UTC)
+    # Whatever offset it was sent with: what people are told ("19:00 ET") is printed from this.
+    ends_at = ends_at.astimezone(UTC)
+    if t is not None and not ends_at.second and not ends_at.microsecond and ends_at == t.ends_at.replace(second=0, microsecond=0):
+        # The editor shows the time to the minute. Sent back like that, it wasn't changed: keep the seconds, or
+        # every edit would move the timer and send its reminders again.
+        ends_at = t.ends_at
     now = timezone.now()
     if ends_at > now + MAX_AHEAD:
         raise TimerError(f"A timer can't be more than {MAX_AHEAD.days} days away")
@@ -339,7 +362,7 @@ def save(t: Timer | None, by, *, name: str, system: int, kind: str, side: str, e
     t.structure_type = " ".join(structure_type.split())[:60]
     t.type_id = type_id_for(t.structure_type)
     t.owner, t.notes, t.important = " ".join(owner.split())[:120], notes.strip()[:5000], important
-    t.ping, t.ping_roles = ping, clean_roles(ping_roles)
+    t.ping, t.ping_roles = ping, offered_roles(ping_roles)
     # Picked from our own structures: remember which, so the automatic import sees it's already on the board.
     if structure_id:
         t.structure_id = structure_id
@@ -407,7 +430,21 @@ ROLES_CACHE = 600
 
 
 def clean_roles(roles) -> list[str]:
-    return list(dict.fromkeys(str(r) for r in (roles or []) if str(r).isdigit()))[:10]
+    return list(dict.fromkeys(str(r) for r in (roles or []) if str(r).isdigit() and len(str(r)) <= 32))[:10]
+
+
+def offered_roles(roles) -> list[str]:
+    """``roles`` as a timer or the settings may keep them: only the roles the editor offers, when the Discord plugin
+    is linked and answers (otherwise there's nothing to check against, and they're kept as picked). Without this a
+    role id typed into the API would ping roles the picker leaves out on purpose (managed ones, @everyone)."""
+    roles = clean_roles(roles)
+    if not roles:
+        return roles
+    known = discord_roles()
+    if not known["available"] or known.get("error"):
+        return roles
+    offered = {r["id"] for r in known["roles"]}
+    return [r for r in roles if r in offered]
 
 
 def discord_roles() -> dict:
@@ -462,7 +499,7 @@ def remind_due() -> int:
             continue
         minutes = max(1, int((t.ends_at - now).total_seconds() // 60))
         body = f"{describe(t)} Comes out in {_minutes(minutes)}, at {t.ends_at:%H:%M} ET."
-        people = audience(t) if t.important else list(t.going.all())
+        people = audience(t) if t.important else still_invited(t, t.going.all())
         if people:
             send(people, f"Timer soon: {title(t)}", body, link=LINK, level=NOTIFY_LEVEL.get(t.side, "info"), category="p.timers",
                  force=t.important, data={"timer_id": t.pk})
@@ -558,6 +595,24 @@ def filetime(ticks: int) -> datetime:
     return _FILETIME_EPOCH + timedelta(microseconds=ticks // 10)
 
 
+def notification_side(character) -> str:
+    """Whose structure a character's notification is about. The game sends these to the owner's own people, so it's
+    ours when the character is in a corporation or alliance of ours: one a members' state lists, or the main
+    character of a member is in. From anyone else (a member's alt elsewhere, a guest's character) it's neutral:
+    their structure isn't ours to defend."""
+    from conduit.access.models import State
+    from conduit.access.services import site_members
+
+    corp_id, alliance_id = character.corporation_id, character.alliance_id
+    states = State.objects.filter(public=False)
+    mains = site_members().filter(main_character__isnull=False)
+    if corp_id and (states.filter(member_corporations=corp_id).exists() or mains.filter(main_character__corporation_id=corp_id).exists()):
+        return Timer.Side.FRIENDLY
+    if alliance_id and (states.filter(member_alliances=alliance_id).exists() or mains.filter(main_character__alliance_id=alliance_id).exists()):
+        return Timer.Side.FRIENDLY
+    return Timer.Side.NEUTRAL
+
+
 def timer_from_notification(n) -> dict | None:
     """What timer a notification describes, or None when it has no time in it."""
     kind = NOTIFICATION_KINDS.get(n.type)
@@ -572,12 +627,14 @@ def timer_from_notification(n) -> dict | None:
         if "decloakTime" not in f:
             return None
         name, type_id = SOV_STRUCTURES.get(f.get("campaignEventType", 0), ("Sovereignty structure", None))
-        return {"name": name, "type_id": type_id, "system_id": system_id, "kind": kind, "ends_at": filetime(f["decloakTime"]), "owner": owner}
+        return {"name": name, "type_id": type_id, "system_id": system_id, "kind": kind, "ends_at": filetime(f["decloakTime"]), "owner": owner,
+                "side": notification_side(n.character)}
     if n.type == "OrbitalReinforced":
         if "reinforceExitTime" not in f:
             return None
         return {"name": "Customs Office", "type_id": f.get("typeID") or 2233, "system_id": system_id, "kind": Timer.Kind.OTHER,
-                "ends_at": filetime(f["reinforceExitTime"]), "owner": owner, "structure_id": f.get("planetID")}
+                "ends_at": filetime(f["reinforceExitTime"]), "owner": owner, "structure_id": f.get("planetID"),
+                "side": notification_side(n.character)}
     if "timeLeft" not in f:
         return None
     structure_id = f.get("structureID")
@@ -587,7 +644,8 @@ def timer_from_notification(n) -> dict | None:
 
         name = Location.objects.filter(pk=structure_id).values_list("name", flat=True).first() or ""
     return {"name": name, "type_id": f.get("structureTypeID"), "system_id": system_id, "kind": kind,
-            "ends_at": n.timestamp + timedelta(microseconds=f["timeLeft"] // 10), "owner": owner, "structure_id": structure_id}
+            "ends_at": n.timestamp + timedelta(microseconds=f["timeLeft"] // 10), "owner": owner, "structure_id": structure_id,
+            "side": notification_side(n.character)}
 
 
 def import_notifications() -> int:
@@ -595,7 +653,12 @@ def import_notifications() -> int:
 
     The cursor is the notification row id, not its in-game time: a character whose notifications sync late (a new
     login, a token that was broken for a day) brings rows with older times than ones already looked at, and they
-    must still count."""
+    must still count.
+
+    Row ids aren't saved in order either: when two characters sync at the same moment, the row with the lower id
+    can be saved just after the one with the higher id was looked at. So each look also goes back
+    ``NOTIFICATION_LOOK_BACK`` ids and takes the rows it hasn't handled yet (``notifications_handled`` remembers
+    which it has, so a timer someone took off the board isn't added again)."""
     from django.db.models import Max
 
     from conduit.sheet.notifications.models import Notification
@@ -604,15 +667,23 @@ def import_notifications() -> int:
     now = timezone.now()
     window = now - NOTIFICATION_AGE
     top = Notification.objects.aggregate(top=Max("pk"))["top"] or 0
-    rows = Notification.objects.filter(type__in=NOTIFICATION_KINDS, timestamp__gt=window, pk__lte=top)
+    kinds = Notification.objects.filter(type__in=NOTIFICATION_KINDS, pk__lte=top)
+    rows = kinds.filter(timestamp__gt=window)
+    handled = set(s.notifications_handled or [])
     if s.notifications_seen_id is not None:
-        rows = rows.filter(pk__gt=s.notifications_seen_id)
+        if s.notifications_handled is None:
+            # The first look since this list exists: everything up to the cursor was looked at already.
+            handled = set(kinds.filter(pk__gt=s.notifications_seen_id - NOTIFICATION_LOOK_BACK, pk__lte=s.notifications_seen_id)
+                          .values_list("pk", flat=True))
+        rows = rows.filter(pk__gt=s.notifications_seen_id - NOTIFICATION_LOOK_BACK).exclude(pk__in=handled)
     else:  # the first look since the cursor became the row id: carry on from the old time cutoff
         rows = rows.filter(timestamp__gt=max(s.notifications_seen_until or window, window))
+        handled = set(kinds.filter(pk__gt=top - NOTIFICATION_LOOK_BACK).values_list("pk", flat=True))
     rows = rows.select_related("character__corporation").order_by("pk")
     added, latest = 0, s.notifications_seen_until or window
     for n in rows:
         latest = max(latest, n.timestamp)
+        handled.add(n.pk)
         try:
             spec = timer_from_notification(n)
         except (ValueError, OverflowError):
@@ -620,7 +691,9 @@ def import_notifications() -> int:
             continue
         if spec and _add(source=Timer.Source.NOTIFICATION, **spec):
             added += 1
-    TimerSettings.objects.filter(pk=s.pk).update(notifications_seen_until=latest, notifications_seen_id=max(top, s.notifications_seen_id or 0))
+    seen_id = max(top, s.notifications_seen_id or 0)
+    TimerSettings.objects.filter(pk=s.pk).update(notifications_seen_until=latest, notifications_seen_id=seen_id,
+                                                 notifications_handled=sorted(pk for pk in handled if pk > seen_id - NOTIFICATION_LOOK_BACK))
     return added
 
 

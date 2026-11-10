@@ -14,7 +14,9 @@ switch on a Discord form-up ping. A group rule turns attendance into group requi
 | Corporation roles | None. The FC's character must be fleet boss in game to track. |
 
 Enabling the plugin adds both scopes to the scopes the site asks for. FCs must log in with their FC characters again
-before they can track. Tracking always uses one of the FC's own characters, managers included.
+before they can track. Tracking always uses one of the FC's own characters, managers included, and an in-game fleet is tracked by one fleet
+at a time. A fleet manager can take the FAT lines out of another FC's fleet MOTD, but only the owner of the tracking
+character can switch them on.
 
 ## Install and switch it on
 
@@ -70,7 +72,8 @@ How it counts:
 
 - one FAT per fleet, or per FAT round when the FC started more than one;
 - two characters of one member in the same round count once;
-- FATs someone added by hand for their own characters don't count;
+- FATs someone added by hand for their own characters, or registered on the FAT link of a fleet they ran themselves,
+  don't count (the attendance list and its CSV leave them out too);
 - FATs belong to whoever owns the character now.
 
 ## Webhook events and Discord pings
