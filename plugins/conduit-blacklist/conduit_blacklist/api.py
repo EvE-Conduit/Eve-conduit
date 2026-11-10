@@ -30,8 +30,8 @@ def _entries():
     return Entry.objects.select_related("added_by", "added_by__main_character").prefetch_related("matches")
 
 
-def _detail(entry_id: int) -> dict:
-    return services.entry_out(get_object_or_404(_entries(), pk=entry_id), detail=True)
+def _detail(request, entry_id: int) -> dict:
+    return services.entry_out(get_object_or_404(_entries(), pk=entry_id), detail=True, viewer=request.user)
 
 
 # --- entries -----------------------------------------------------------------------------------------------------
@@ -51,13 +51,13 @@ def entries(request, q: str = "", kind: str = "", severity: str = "", status: st
         qs = qs.active()
     elif status == "expired":
         qs = qs.filter(expires_at__lte=timezone.now())
-    return {"items": [services.entry_out(e) for e in qs[:1000]], "can_manage": request.user.has_perm(MANAGE_PERM)}
+    return {"items": [services.entry_out(e, viewer=request.user) for e in qs[:1000]], "can_manage": request.user.has_perm(MANAGE_PERM)}
 
 
 @router.get("/entries/{entry_id}")
 @require_perm(VIEW_PERM)
 def entry(request, entry_id: int):
-    return {**_detail(entry_id), "can_manage": request.user.has_perm(MANAGE_PERM)}
+    return {**_detail(request, entry_id), "can_manage": request.user.has_perm(MANAGE_PERM)}
 
 
 class EntryIn(Schema):
@@ -72,14 +72,14 @@ class EntryIn(Schema):
 @require_perm(MANAGE_PERM)
 def create_entry(request, payload: EntryIn):
     e = _run(services.save_entry, None, payload.dict(), request.user, request=request)
-    return _detail(e.pk)
+    return _detail(request, e.pk)
 
 
 @router.put("/entries/{entry_id}")
 @require_perm(MANAGE_PERM)
 def update_entry(request, entry_id: int, payload: EntryIn):
     e = _run(services.save_entry, get_object_or_404(Entry, pk=entry_id), payload.dict(), request.user, request=request)
-    return _detail(e.pk)
+    return _detail(request, e.pk)
 
 
 @router.delete("/entries/{entry_id}")
@@ -96,8 +96,8 @@ class NoteIn(Schema):
 @router.post("/entries/{entry_id}/notes")
 @require_perm(VIEW_PERM)
 def add_note(request, entry_id: int, payload: NoteIn):
-    _run(services.add_note, get_object_or_404(Entry, pk=entry_id), request.user, payload.text)
-    return _detail(entry_id)
+    _run(services.add_note, get_object_or_404(Entry, pk=entry_id), request.user, payload.text, request=request)
+    return _detail(request, entry_id)
 
 
 @router.get("/lookup")
@@ -111,28 +111,30 @@ def lookup(request, q: str):
 @require_perm(VIEW_PERM)
 def check(request, q: str):
     """Is someone blacklisted, directly or through their corporation or alliance?"""
-    return _run(services.check_name, q)
+    return _run(services.check_name, q, request.user)
 
 
 # --- matches ------------------------------------------------------------------------------------------------------
 
 
-def _matches():
-    return Match.objects.select_related("entry", "user", "user__main_character", "resolved_by", "resolved_by__main_character")
+def _matches(request):
+    """Every match but the viewer's own: nobody sees or deals with a warning about themselves."""
+    return (Match.objects.exclude(services.own_matches(request.user))
+            .select_related("entry", "user", "user__main_character", "resolved_by", "resolved_by__main_character"))
 
 
 @router.get("/matches")
 @require_perm(VIEW_PERM)
 def matches(request, status: str = "open"):
-    qs = _matches()
+    qs = _matches(request)
     if status == "open":
         qs = qs.filter(resolved_at__isnull=True)
     elif status == "resolved":
         qs = qs.filter(resolved_at__isnull=False)
     return {
         "items": [services.match_out(m) for m in qs[:500]],
-        "counts": {"open": Match.objects.filter(resolved_at__isnull=True).count(),
-                   "resolved": Match.objects.filter(resolved_at__isnull=False).count()},
+        "counts": {"open": _matches(request).filter(resolved_at__isnull=True).count(),
+                   "resolved": _matches(request).filter(resolved_at__isnull=False).count()},
     }
 
 
@@ -143,7 +145,7 @@ class ResolveIn(Schema):
 @router.post("/matches/{match_id}")
 @require_perm(VIEW_PERM)
 def resolve_match(request, match_id: int, payload: ResolveIn):
-    m = services.resolve_match(get_object_or_404(_matches(), pk=match_id), request.user, payload.resolved)
+    m = _run(services.resolve_match, get_object_or_404(_matches(request), pk=match_id), request.user, payload.resolved, request=request)
     return services.match_out(m)
 
 
@@ -151,7 +153,7 @@ def resolve_match(request, match_id: int, payload: ResolveIn):
 @require_perm(VIEW_PERM)
 def summary(request):
     """For the dashboard widget."""
-    open_ = _matches().filter(resolved_at__isnull=True)
+    open_ = _matches(request).filter(resolved_at__isnull=True)
     return {
         "entries": Entry.objects.active().count(),
         "open_matches": open_.count(),

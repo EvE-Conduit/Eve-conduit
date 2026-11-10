@@ -17,6 +17,8 @@ Characters, corporations and alliances you don't want, with notes, and a warning
   [Recruitment](../conduit-recruitment) and every hour; a new entry looks through registered members straight away.
   Each match is reported once, by notification to everyone with `blacklist.view_blacklist` (Banned ones get
   through even when the category is muted), and listed under *Warnings* until someone marks it as dealt with.
+  Nobody is warned about, sees or deals with a warning on their own account; dealing with one, reopening it and
+  adding a note are in the audit log.
   Applying brings up that applicant's warnings that haven't been dealt with again, so give recruiters the view permission.
 - **Check a name:** look up someone who hasn't registered, with their current corporation and alliance.
 - **Search:** Ctrl+K finds entries, for people with the view permission.

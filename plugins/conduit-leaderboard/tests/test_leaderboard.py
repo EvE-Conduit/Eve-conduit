@@ -213,3 +213,25 @@ def test_members_only(pilots, api_client, corp):
     api_client.force_login(guest)
     assert api_client.call("get", "/api/p/leaderboard/overview").status_code in (403, 404)
     assert guest.pk not in {u.pk for u in services.competitors()}
+
+
+def test_hiding_yourself_hides_your_medals_too(pilots, last_month, api_client):
+    from conduit_leaderboard.models import Award
+
+    shy = make_user(90000310, "Shy Sue")
+    proud = make_user(90000311, "Proud Pat")
+    Award.objects.create(month=last_month, category="kills", rank=1, user=shy, score=5)
+    Award.objects.create(month=last_month, category="kills", rank=2, user=proud, score=3)
+    services.set_hidden(shy, True)
+    api_client.force_login(proud)
+    r = api_client.call("get", f"/api/p/leaderboard/medals").json()
+    assert [a["name"] for a in r["awards"]] == ["Proud Pat"] and [h["name"] for h in r["hall_of_fame"]] == ["Proud Pat"]
+    assert api_client.call("get", f"/api/p/leaderboard/medals?user={shy.pk}").json()["awards"] == []
+    # She still sees her own, and everyone does again once she's back.
+    api_client.force_login(shy)
+    r = api_client.call("get", f"/api/p/leaderboard/medals").json()
+    assert {a["name"] for a in r["awards"]} == {"Shy Sue", "Proud Pat"} and r["mine"]["gold"] == 1
+    assert {h["name"] for h in r["hall_of_fame"]} == {"Shy Sue", "Proud Pat"}
+    services.set_hidden(shy, False)
+    api_client.force_login(proud)
+    assert len(api_client.call("get", f"/api/p/leaderboard/medals").json()["awards"]) == 2

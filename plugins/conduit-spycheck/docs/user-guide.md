@@ -6,7 +6,7 @@ Spy Check scans every member character's synced data once a day for dealings wit
 
 - You need the `spycheck.view_findings` permission to see Spy Check. People with `spycheck.manage_spycheck` see it too, plus the **Settings** tab and **Scan now**.
 - You only see findings on characters your character sheet permissions reach: all characters, your alliance's or your corporation's, as in Member Audit.
-- You never see, hear about or review findings on your own characters.
+- You never see, hear about or review findings on your own characters. The counts you see leave them out too, and a watch list entry for one of your own characters is not shown to you.
 
 ## Where to find it
 
@@ -72,7 +72,7 @@ Opening evidence is recorded in the snooper log, like opening that tab of the ch
 
 - **New**: not reviewed yet, or brought back by newer evidence.
 - **Acknowledged**: seen and noted. It stays acknowledged. If more records turn up later, it shows **Newer evidence**.
-- **Dismissed**: judged harmless, with a note. It stays dismissed unless newer evidence turns up than what was there when it was dismissed: a later journal line, mail, contract, trade or stint. For contacts, which have no date, the contact coming back after it was gone, or its standing going up. It then returns as **New** with **Reopened: newer evidence**.
+- **Dismissed**: judged harmless, with a note. It stays dismissed unless newer evidence turns up than what was there when it was dismissed: a later journal line, mail, contract (issued or accepted later), trade or stint. For contacts, which have no date, the contact coming back after it was gone, or its standing going up. It then returns as **New** with **Reopened: newer evidence**.
 - **No longer found**: the last scan did not find this any more. The entity may have left the watch list, or the data aged out.
 
 ## The Members tab

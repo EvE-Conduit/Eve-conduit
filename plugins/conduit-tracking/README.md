@@ -40,7 +40,9 @@ characters, like opening their character sheet; both are for administrators only
 
 **Permissions:** `tracking.track_members` starts, stops and deletes trackings and reads the reports. Like Member
 Audit, it only reaches members whose characters the tracker's character sheet permissions reach: all, their
-alliance's or their corporation's. Nobody can track themselves or see a tracking of themselves. Give it to your HR
+alliance's or their corporation's. Only those characters are followed and shown: an alt of the member that the
+tracker's (or a later reader's) sheet permissions don't reach is neither polled nor in the report. Only whoever
+started a tracking, or an administrator, can delete it. Nobody can track themselves or see a tracking of themselves. Give it to your HR
 or counter-intelligence group under Administration → Groups.
 
 **ESI:** `esi-location.read_location.v1`, `esi-location.read_online.v1` and `esi-location.read_ship_type.v1`, which

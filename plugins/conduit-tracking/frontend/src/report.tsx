@@ -93,7 +93,7 @@ function Actions({ report }: { report: Report }) {
   return (
     <div className="flex gap-2">
       {s.running && <Button variant="outline" onClick={() => setConfirm("stop")}><Square /> Stop</Button>}
-      <Button variant="outline" onClick={() => setConfirm("delete")}><Trash /> Delete</Button>
+      {report.can_delete && <Button variant="outline" onClick={() => setConfirm("delete")}><Trash /> Delete</Button>}
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(o) => !o && setConfirm(null)}

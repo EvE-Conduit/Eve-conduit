@@ -1,8 +1,9 @@
 """Mounted at /api/p/capitals/. Only reachable while the plugin is enabled, and only by members.
 
 Every member sees their own characters and marks their own hulls available or not. The registry needs
-capitals.view_registry and only covers the characters the core sheet permissions let the viewer read; seeing someone
-else's hulls (where they're parked) goes in the snooper log like opening their assets.
+capitals.view_registry and only covers the characters the core sheet permissions let the viewer read; what it tells about
+someone else's character goes in the snooper log like opening that tab of their sheet: ``assets`` for their hulls,
+``skills`` for what they can fly, ``overview`` for where they are, their clones and jump fatigue.
 """
 
 from ninja import Router, Schema
@@ -35,8 +36,10 @@ def _registry(request, corporation: int | None, state: int | None, group: int | 
 
 
 def _snoop(request, reg: Registry):
-    for c in reg.shown.values():
-        record_snoop(request, c, "assets")
+    """Everything an answer told about someone else's character goes in the snooper log, under the sheet section it
+    came from (their own characters are skipped there)."""
+    for cid, section in sorted(reg.shown):
+        record_snoop(request, reg.by_id[cid], section)
 
 
 # --- every member ------------------------------------------------------------------------------------------------
@@ -93,7 +96,10 @@ def locations(request, cls: str = "", corporation: int | None = None, state: int
 
 @router.get("/registry/members")
 def members(request, corporation: int | None = None, state: int | None = None, group: int | None = None):
-    return services.by_member(_registry(request, corporation, state, group))
+    reg = _registry(request, corporation, state, group)
+    out = services.by_member(reg)
+    _snoop(request, reg)
+    return out
 
 
 @router.get("/registry/members/{user_id}")

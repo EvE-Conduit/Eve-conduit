@@ -88,7 +88,7 @@ def member(request, user_id: int):
 @router.get("/watch")
 def watch(request):
     _view(request)
-    return {**services.watch_list(), "can_manage": request.user.has_perm(MANAGE_PERM)}
+    return {**services.watch_list(request.user), "can_manage": request.user.has_perm(MANAGE_PERM)}
 
 
 # --- managers ------------------------------------------------------------------------------------------------------
@@ -97,7 +97,7 @@ def watch(request):
 @router.get("/entities")
 @require_perm(MANAGE_PERM)
 def entities(request, q: str = ""):
-    return services.find_entities(q)
+    return services.find_entities(q, request.user)
 
 
 class WatchIn(Schema):
@@ -115,7 +115,7 @@ def add_watch(request, payload: WatchIn):
 @router.delete("/watch/{entry_id}")
 @require_perm(MANAGE_PERM)
 def remove_watch(request, entry_id: int):
-    services.remove_watch(get_object_or_404(WatchEntry, pk=entry_id), request.user, request=request)
+    _run(services.remove_watch, get_object_or_404(WatchEntry, pk=entry_id), request.user, request=request)
     return {"ok": True}
 
 
@@ -144,4 +144,6 @@ def put_settings(request, payload: SettingsIn):
 def scan(request):
     """Scan everyone now. What's new is sent in the usual digest, as the daily scan would. 409 while a scan runs."""
     flagged = _run(services.scan)
-    return {**services.summary(request.user), "flagged": len(flagged)}
+    # How many of them the manager may see: findings on themselves, or out of their reach, aren't counted for them.
+    seen = services.visible(request.user).filter(pk__in=[f.pk for f in flagged]).count()
+    return {**services.summary(request.user), "flagged": seen}

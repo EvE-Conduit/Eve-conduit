@@ -37,16 +37,42 @@ MAX_GAP = timedelta(minutes=5)
 #: Held while a round of polls runs, so a slow round and the next one don't overlap.
 LOCK = "tracking:poll"
 LOCK_SECONDS = 300
+#: The session a round cut short by ESI stopped at; the next round starts there.
+CURSOR = "tracking:poll_from"
 
 
 def finish_expired() -> list[Session]:
-    """Close sessions whose time is up. Returns them, so whoever started them can be told."""
+    """Close sessions whose time is up. Returns the ones this call closed, so whoever started them can be told."""
     now = timezone.now()
-    done = list(Session.objects.filter(ended_at__isnull=True, ends_at__lte=now).select_related("started_by"))
+    done = []
+    for s in Session.objects.filter(ended_at__isnull=True, ends_at__lte=now).select_related("started_by"):
+        # Starting a tracking and the poll both call this: only the one whose update lands closes it (and tells them).
+        if Session.objects.filter(pk=s.pk, ended_at__isnull=True).update(ended_at=F("ends_at")):
+            s.ended_at = s.ends_at
+            done.append(s)
     if done:
-        Session.objects.filter(pk__in=[s.pk for s in done]).update(ended_at=F("ends_at"))
         TrackedCharacter.objects.filter(session__in=done).update(current_stint=None)
     return done
+
+
+def followed(session: Session):
+    """The member's characters this session follows: only those whoever started it may look at through their own
+    character sheet permissions (an alt in a corporation they can't see isn't theirs to track). A session whose
+    starter's account is gone follows nobody new."""
+    from conduit.sheet.access import viewable_characters
+
+    if session.started_by is None:
+        return Character.objects.none()
+    return viewable_characters(session.started_by).filter(user_id=session.target_id)
+
+
+def _rotated(sessions: list[Session]) -> list[Session]:
+    """Start the round where the last one was cut short by ESI, so the same sessions aren't always the ones left out."""
+    resume = cache.get(CURSOR)
+    for i, s in enumerate(sessions):
+        if resume is not None and s.pk >= resume:
+            return sessions[i:] + sessions[:i]
+    return sessions
 
 
 def poll_all() -> int:
@@ -59,18 +85,24 @@ def poll_all() -> int:
         client = esi()
         polled = 0
         with esi_source("plugin:tracking"):
-            for session in Session.objects.running():
-                for character in Character.objects.filter(user_id=session.target_id).select_related("token"):
+            for session in _rotated(list(Session.objects.running().select_related("started_by").order_by("pk"))):
+                mine = Character.objects.filter(user_id=session.target_id)
+                reach = followed(session)
+                for character in reach.select_related("token"):
                     try:
                         poll(session, character, client)
                     except EsiBackoff:
-                        return polled  # ESI asked us to slow down: the rest wait for the next round
+                        cache.set(CURSOR, session.pk, 3600)  # ESI asked us to slow down: the next round starts here
+                        return polled
                     polled += 1
                 # Characters moved to another account since the last round stop being followed.
-                TrackedCharacter.objects.filter(session=session).exclude(
-                    character_id__in=Character.objects.filter(user_id=session.target_id).values("pk")
-                ).exclude(status=TrackedCharacter.Status.GONE).update(status=TrackedCharacter.Status.GONE, status_detail="",
-                                                                       online=None, current_stint=None)
+                TrackedCharacter.objects.filter(session=session).exclude(character_id__in=mine.values("pk")).exclude(
+                    status=TrackedCharacter.Status.GONE).update(status=TrackedCharacter.Status.GONE, status_detail="",
+                                                                 online=None, current_stint=None)
+                # Still theirs, but no longer where the tracker may look (it changed corporation): not followed either.
+                TrackedCharacter.objects.filter(session=session, character_id__in=mine.values("pk")).exclude(
+                    character_id__in=reach.values("pk")).update(online=None, current_stint=None)
+            cache.delete(CURSOR)
         return polled
     finally:
         cache.delete(LOCK)

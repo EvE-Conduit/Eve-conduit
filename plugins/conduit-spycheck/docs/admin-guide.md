@@ -29,7 +29,7 @@ Spy Check looks through every member character's synced data once a day for deal
 Both are listed in the HR tier of the permission picker. Notes:
 
 - Reviewers only see findings (and are told about new ones) for characters their character sheet permissions reach: all, their alliance's or their corporation's.
-- Nobody sees, hears about or reviews findings on their own characters. A member's page only opens for someone who may see at least one of that member's characters.
+- Nobody sees, hears about or reviews findings on their own characters. The counts follow the same rule: the number of new findings next to each watch list entry, the number of watched entities, and "N new findings" after **Scan now** only count what that person may see. A watch list entry for one of someone's own characters is not shown to them, and they can't add or remove it; another manager has to. A member's page only opens for someone who may see at least one of that member's characters.
 - The **Spy Check** menu entry, the dashboard widget and the notification all go by `spycheck.view_findings`, so give managers both permissions.
 
 ## Setup
@@ -74,7 +74,7 @@ The **Discord pings** section at the bottom of the Settings tab appears once a D
 
 - The daily scan runs on its own. Press **Scan now** in the page header to scan straight away, for example after adding to the watch list. It shows "N new findings" or "Scanned: nothing new".
 - Only one scan runs at a time. **Scan now** while a scan is running says "A scan is already running: try again when it's done". The daily scan is skipped if **Scan now** is already running.
-- Each scan updates the numbers on existing findings, adds new ones, reopens dismissed findings with newer evidence, and marks findings it no longer finds as **No longer found**.
+- Each scan updates the numbers on existing findings, adds new ones, reopens dismissed findings with newer evidence (a contract counts from when it was accepted, not only when it was issued), and marks findings it no longer finds as **No longer found**.
 - Reviewers work through the **Findings** tab. See the user guide.
 
 ## Notifications and webhook events

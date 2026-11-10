@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -12,7 +12,7 @@ from django.utils import timezone
 from conduit.accounts.models import Character
 from conduit.audit.services import record
 from conduit.events import bus
-from conduit.notify.services import notify_permission
+from conduit.notify.services import notify, users_with_perm
 
 from .models import Entry, Match, Note
 
@@ -37,7 +37,23 @@ def image_of(kind: str, eve_id: int) -> str:
     return f"https://images.evetech.net/{path}/{eve_id}/{suffix}?size=64"
 
 
-def entry_out(e: Entry, detail: bool = False) -> dict:
+def own_matches(viewer):
+    """Matches on the viewer's own account or characters: nobody sees, is warned about or deals with their own."""
+    return Q(user=viewer) | Q(character_id__in=Character.objects.filter(user=viewer).values("pk"))
+
+
+def is_own(match: Match, viewer) -> bool:
+    return match.user_id == viewer.pk or Character.objects.filter(pk=match.character_id, user=viewer).exists()
+
+
+def entry_out(e: Entry, detail: bool = False, viewer=None) -> dict:
+    """``viewer``: whoever is looking; matches on themselves are left out of the count and the list."""
+    matches = list(e.matches.all())
+    if viewer is not None:
+        # Looked up once per request, not per entry: the list shows up to a thousand of them.
+        if not hasattr(viewer, "_blacklist_own_characters"):
+            viewer._blacklist_own_characters = set(Character.objects.filter(user=viewer).values_list("pk", flat=True))
+        matches = [m for m in matches if m.user_id != viewer.pk and m.character_id not in viewer._blacklist_own_characters]
     out = {
         "id": e.pk,
         "kind": e.kind,
@@ -51,11 +67,12 @@ def entry_out(e: Entry, detail: bool = False) -> dict:
         "added_by": e.added_by.display_name if e.added_by else None,
         "created_at": e.created_at,
         "updated_at": e.updated_at,
-        "open_matches": sum(1 for m in e.matches.all() if m.resolved_at is None),
+        "open_matches": sum(1 for m in matches if m.resolved_at is None),
     }
     if detail:
         out["notes"] = [note_out(n) for n in e.notes.select_related("author", "author__main_character")]
-        out["matches"] = [match_out(m) for m in e.matches.select_related("user", "user__main_character", "resolved_by")]
+        shown = e.matches.select_related("user", "user__main_character", "resolved_by")
+        out["matches"] = [match_out(m) for m in (shown.exclude(own_matches(viewer)) if viewer is not None else shown)]
     return out
 
 
@@ -128,6 +145,8 @@ def save_entry(entry: Entry | None, data: dict, by, request=None) -> Entry:
     if data.get("severity") not in Entry.Severity.values:
         raise BlacklistError("Pick watch or banned")
     expires_at: datetime | None = data.get("expires_at")
+    if expires_at is not None and timezone.is_naive(expires_at):
+        expires_at = timezone.make_aware(expires_at, dt_timezone.utc)  # a time sent without a zone is EVE time (UTC)
     if expires_at is not None and expires_at <= timezone.now():
         raise BlacklistError("The expiry date has to be in the future")
     new = entry is None
@@ -162,17 +181,25 @@ def delete_entry(entry: Entry, by, request=None) -> None:
     entry.delete()
 
 
-def add_note(entry: Entry, by, text: str) -> Note:
+def add_note(entry: Entry, by, text: str, request=None) -> Note:
     text = text.strip()
     if not text:
         raise BlacklistError("Write something first")
-    return Note.objects.create(entry=entry, author=by, text=text[:5000])
+    note = Note.objects.create(entry=entry, author=by, text=text[:5000])
+    record("blacklist.note_added", f"added a note to the blacklist entry for {entry.name}", request=request, actor=by,
+           target=entry, target_type="plugin", details={"entry_id": entry.pk, "note_id": note.pk})
+    return note
 
 
-def resolve_match(match: Match, by, resolved: bool = True) -> Match:
+def resolve_match(match: Match, by, resolved: bool = True, request=None) -> Match:
+    if is_own(match, by):
+        raise BlacklistError("Not found", 404)  # their own match isn't there for them, like in the lists
     match.resolved_at = timezone.now() if resolved else None
     match.resolved_by = by if resolved else None
     match.save(update_fields=["resolved_at", "resolved_by"])
+    verb = "marked the blacklist warning on {} as dealt with" if resolved else "reopened the blacklist warning on {}"
+    record(f"blacklist.match_{'resolved' if resolved else 'reopened'}", verb.format(match.character_name), request=request,
+           actor=by, target=match.user, details={"match_id": match.pk, "entry_id": match.entry_id, "character_id": match.character_id})
     return match
 
 
@@ -231,8 +258,9 @@ def _warn(m: Match, source: str) -> None:
     }[source]
     title = f"Blacklisted: {m.character_name}"
     body = f"{what} {m.entry.get_severity_display()}: {m.entry.reason or 'no reason given'}"
-    notify_permission(VIEW_PERM, title, body, link=f"/p/blacklist/entries/{m.entry_id}", level="danger",
-                      category="p.blacklist", force=m.entry.severity == Entry.Severity.BANNED)
+    # Everyone who may see the blacklist, except the account it is about.
+    notify([u for u in users_with_perm(VIEW_PERM) if u.pk != m.user_id], title, body, link=f"/p/blacklist/entries/{m.entry_id}",
+           level="danger", category="p.blacklist", force=m.entry.severity == Entry.Severity.BANNED)
     bus.emit("blacklist.match", user_id=m.user_id, user=owner, character_id=m.character_id, character=m.character_name,
              entry_id=m.entry_id, entry=m.entry.name, kind=m.entry.kind, severity=m.entry.severity, source=source,
              title=title, summary=body, level="danger", link=f"/p/blacklist/entries/{m.entry_id}")
@@ -286,7 +314,7 @@ def search(request, q, limit):
     }
 
 
-def check_name(q: str) -> list[dict]:
+def check_name(q: str, viewer=None) -> list[dict]:
     """Is this character, corporation or alliance blacklisted, directly or through its corporation or alliance?
     For checking someone who hasn't registered (yet)."""
     from conduit.esi.client import esi
@@ -310,11 +338,20 @@ def check_name(q: str) -> list[dict]:
             from conduit.eve.models import EveCorporation
 
             corp = EveCorporation.objects.filter(pk=h["eve_id"]).first()
-            if corp and corp.alliance_id:
-                keys.append(("alliance", corp.alliance_id))
+            if corp is not None:
+                alliance_id = corp.alliance_id
+            else:
+                # A corporation nobody here is in: ask ESI which alliance it's in (one call for the one name looked
+                # up), rather than call it clean. If ESI can't say, say so.
+                try:
+                    alliance_id = (esi().get(f"/corporations/{h['eve_id']}").data or {}).get("alliance_id")
+                except (EsiError, EsiBackoff) as exc:
+                    raise BlacklistError(f"ESI lookup failed: {exc}", 502) from None
+            if alliance_id:
+                keys.append(("alliance", alliance_id))
         q_ = Q(pk__in=[])
         for kind, eve_id in keys:
             if eve_id:
                 q_ |= Q(kind=kind, eve_id=eve_id)
-        h["entries"] = [entry_out(e) for e in active.filter(q_).prefetch_related("matches").select_related("added_by", "added_by__main_character")]
+        h["entries"] = [entry_out(e, viewer=viewer) for e in active.filter(q_).prefetch_related("matches").select_related("added_by", "added_by__main_character")]
     return hits

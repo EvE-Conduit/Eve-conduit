@@ -15,7 +15,8 @@ for the top three each month.
   member's characters earned it. Alts count for their main.
 - **Medals** (everyone): the day after a month ends, the top three of every board get a medal and a notification.
   The hall of fame lists who has the most.
-- **Hiding yourself** (everyone): the eye button takes you off every board. You still see your own figures.
+- **Hiding yourself** (everyone): the eye button takes you off every board, and your medals off the Medals page
+  and hall of fame. You still see your own figures and medals.
 - **Settings** (permission `leaderboard.manage_leaderboard`): which boards are shown, which corporations' members
   compete, how many places a board shows, whether characters are shown, and whether medals are handed out. You can
   also award last month's medals right away instead of waiting for the daily job.

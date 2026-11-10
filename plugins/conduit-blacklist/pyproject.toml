@@ -1,6 +1,6 @@
 [project]
 name = "conduit-blacklist"
-version = "1.0.1"
+version = "1.0.2"
 description = "Blacklist: characters, corporations and alliances you don't want, with notes, and a warning when one links a character or applies."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

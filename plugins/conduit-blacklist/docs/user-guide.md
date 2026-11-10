@@ -109,7 +109,7 @@ Removing an entry deletes its notes and warnings with it. The removal is kept in
 3. Each row shows the **Character**, the **Account** it belongs to, what it is **Blacklisted as** (entry name, kind
    and severity), and when and how it was **Found**: **Linked**, **Applied** or **Regular check**.
 4. Look into it. Use the entry's notes to record what you found or decided.
-5. Click **Dealt with** to close the warning. Your name is shown next to it.
+5. Click **Dealt with** to close the warning. Your name is shown next to it, and it goes in the audit log.
 6. To bring a closed warning back, switch to **Dealt with** and click **Reopen**.
 
 When someone applies, any of their open warnings (not yet dealt with) are sent out again, so recruiters see them at
@@ -123,7 +123,8 @@ Use this for someone who hasn't registered on the site.
 2. Type the exact character, corporation or alliance name (at least 3 characters) and click **Check**.
 3. For each result you see **Not blacklisted**, or the entries that cover it. For a character, its current
    corporation and alliance are checked too, shown as "(their corporation)" or "(their alliance)". For a
-   corporation, its alliance is checked too.
+   corporation, its alliance is checked too (asked from EVE when nobody on the site is in that corporation; if EVE
+   can't be reached the check says so instead of "Not blacklisted").
 
 If EVE knows nobody by that exact name, the page says so.
 

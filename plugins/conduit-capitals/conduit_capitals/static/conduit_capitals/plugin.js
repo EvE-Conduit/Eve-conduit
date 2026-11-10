@@ -664,7 +664,7 @@ function me() {
 			eyebrow: "Capital Registry",
 			title: "Registry",
 			icon: /* @__PURE__ */ N(ae, {}),
-			description: `Who can fly and who owns each capital class, from synced skills and assets${a ? `, over the ${w(a.characters)} characters you may view` : ""}. Seeing where someone's hulls are goes in the snooper log.`
+			description: `Who can fly and who owns each capital class, from synced skills and assets${a ? `, over the ${w(a.characters)} characters you may view` : ""}. What you see of someone else's characters here goes in the snooper log.`
 		}),
 		/* @__PURE__ */ N("div", {
 			className: "mb-4",

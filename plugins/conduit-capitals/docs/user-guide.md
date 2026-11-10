@@ -65,8 +65,9 @@ tell." The registry also flags the character, so nobody assumes you fly or own n
 ## Who can see your capitals
 
 Officers with the Capital Registry permission can see your characters' capitals, but only for characters they may
-already view through the character sheet permissions. When they look at where your hulls are, it is recorded in the
-snooper log, the same as opening your assets.
+already view through the character sheet permissions. When they look at what you can fly, where your hulls are, or where your
+characters and jump clones are, it is recorded in the snooper log, the same as opening that tab of your character
+sheet.
 
 ## Notifications
 

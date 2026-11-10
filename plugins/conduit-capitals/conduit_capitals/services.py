@@ -206,8 +206,12 @@ class Registry:
         self.status = data_status(self.chars)
         self._places: dict[int, dict] | None = None
         self._parents: dict[tuple[int, int], tuple[Asset, bool]] | None = None
-        #: Characters whose assets were put in an answer (for the snooper log).
-        self.shown: dict[int, Character] = {}
+        #: What an answer told about whom, as (character id, sheet section), for the snooper log: ``assets`` (their
+        #: hulls), ``skills`` (what they can fly) and ``overview`` (where they are, their clones and fatigue).
+        self.shown: set[tuple[int, str]] = set()
+
+    def note(self, cid: int, *sections: str) -> None:
+        self.shown.update((cid, s) for s in sections)
 
     # skills
 
@@ -242,7 +246,7 @@ class Registry:
         place = self._places.get(a.root_location_id)
         where, words = _where(a, parent, parent_is_ship, place)
         av = self.availability.get((a.character_id, a.type_id))
-        self.shown[a.character_id] = self.by_id[a.character_id]
+        self.note(a.character_id, "assets")
         return {
             "item_id": a.item_id,
             "type_id": a.type_id,
@@ -320,12 +324,14 @@ def _jump(reg: Registry, chars) -> dict[int, dict]:
 
 def characters_out(chars) -> tuple[dict, Registry]:
     """Every capital each character can fly and owns, with their jump readiness. Also returns the registry (for
-    ``shown``)."""
+    ``shown``, the snooper log)."""
     chars = list(chars)
     reg = Registry(chars)
     jump = _jump(reg, chars)
     out = []
     for c in chars:
+        # Skills and where the character is, its clones and fatigue are told about every one of them, hulls or not.
+        reg.note(c.pk, "skills", "overview")
         out.append({
             **reg.character_brief(c),
             "fly": {k.key: reg.flyable(c.pk, k.key) for k in classes.CLASSES},
@@ -401,6 +407,8 @@ def class_pilots(reg: Registry, key: str) -> dict:
         owned = reg.owned(c.pk, key)
         if not fly and not owned:
             continue
+        if fly:
+            reg.note(c.pk, "skills")
         out.append({**reg.character_brief(c), "fly": fly, "owned": [reg.asset_out(a) for a in owned]})
     out.sort(key=lambda r: (-len(r["owned"]), -len(r["fly"]), r["name"].lower()))
     # Characters we can't judge: no skills synced, so they may well fly it.
@@ -437,9 +445,13 @@ def by_member(reg: Registry) -> dict:
         row["characters"] += 1
         row["problems"] += _has_problem(reg.status[c.pk])
         for k in classes.CLASSES:
-            row["classes"][k.key]["fly"] += bool(reg.flyable(c.pk, k.key))
+            fly = bool(reg.flyable(c.pk, k.key))
+            row["classes"][k.key]["fly"] += fly
+            if fly:
+                reg.note(c.pk, "skills")  # the list says who can fly what: that's from their skills
         for a in reg.owned(c.pk):
             row["classes"][reg.hulls[a.type_id].cls]["own"] += a.quantity
+            reg.note(c.pk, "assets")
     out = list(users.values())
     for r in out:
         r["flyable"] = sum(1 for v in r["classes"].values() if v["fly"])

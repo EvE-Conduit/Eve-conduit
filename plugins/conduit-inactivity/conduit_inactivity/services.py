@@ -9,7 +9,7 @@ A member's activity comes from three signals, each switched on or off under Sett
 
 They're active while the latest switched-on signal is within the limit (and never counted from before they joined the
 site), or while an approved leave of absence runs. The daily check stores the result in ``Activity`` and tells people
-with ``inactivity.view_inactivity`` who went quiet since the last time, in one notification.
+with ``inactivity.view_inactivity`` who went quiet and hasn't been told about yet, in one notification.
 """
 
 from __future__ import annotations
@@ -35,6 +35,9 @@ from .models import Activity, InactivitySettings, Leave
 VIEW_PERM = "inactivity.view_inactivity"
 MANAGE_PERM = "inactivity.manage_leave"
 SIGNALS = ("site", "game", "fleets")
+#: "Online now" is believed while the character's overview synced this recently (it syncs at least hourly when all is
+#: well). Older than this, the last login and logout times count instead.
+ONLINE_FRESH = timedelta(hours=3)
 
 
 class InactivityError(Exception):
@@ -80,9 +83,12 @@ def _latest(*values):
 
 
 def _game_signal(user_ids) -> dict[int, datetime]:
-    """Each user's latest EVE login or logout over all their characters (someone online now counts as now)."""
-    from conduit.accounts.models import Character
+    """Each user's latest EVE login or logout over all their characters. Someone online now counts as now, but only
+    while that is fresh: "online" is whatever the last good sync of the character's overview saw, and it stays that
+    way for good once the login stops working or the syncs fail."""
+    from conduit.accounts.models import Character, Token
     from conduit.corp.models import CorporationMember
+    from conduit.sheet.models import SyncStatus
     from conduit.sheet.overview.models import CharacterInfo
 
     owner = dict(Character.objects.filter(user_id__in=user_ids).values_list("pk", "user_id"))
@@ -94,9 +100,12 @@ def _game_signal(user_ids) -> dict[int, datetime]:
             out[uid] = _latest(out.get(uid), when)
 
     now = timezone.now()
+    working = set(Token.objects.filter(character_id__in=owner, valid=True).values_list("character_id", flat=True))
+    fresh = set(SyncStatus.objects.filter(character_id__in=owner, section="overview", last_success__gte=now - ONLINE_FRESH)
+                .values_list("character_id", flat=True))
     for cid, login, logout, online in CharacterInfo.objects.filter(character_id__in=owner).values_list(
             "character_id", "last_login", "last_logout", "online"):
-        bump(cid, now if online else _latest(login, logout))
+        bump(cid, now if online and cid in working and cid in fresh else _latest(login, logout))
     for cid, logon, logoff in CorporationMember.objects.filter(character_id__in=owner).values_list(
             "character_id", "logon_date", "logoff_date"):
         bump(cid, _latest(logon, logoff))
@@ -226,17 +235,19 @@ def decide_leave(leave: Leave, by, approve: bool, note: str = "", request=None) 
 
 
 def _apply(user, signals: dict, s: InactivitySettings, on_leave: bool, now) -> tuple[Activity, bool]:
-    """Store one member's activity. Returns the row and whether they were flagged just now."""
+    """Store one member's activity. Returns the row and whether they're inactive and nobody has been told yet (it's
+    the daily check that tells, see ``scan``)."""
     last = _last_active(user, signals, s)
     inactive = not on_leave and (last is None or last < now - timedelta(days=s.days))
     row = Activity.objects.filter(user=user).first() or Activity(user=user)
-    newly = inactive and row.inactive_since is None
     row.last_site, row.last_game, row.last_fleet = signals["site"], signals["game"], signals["fleets"]
     row.last_active = last
     row.inactive = inactive
     row.inactive_since = (row.inactive_since or now) if inactive else None
+    if not inactive:
+        row.notified_at = None  # active again (or on leave): the next time they go quiet is news again
     row.save()
-    return row, newly
+    return row, inactive and row.notified_at is None
 
 
 def refresh_user(user) -> Activity | None:
@@ -251,7 +262,9 @@ def refresh_user(user) -> Activity | None:
 
 
 def scan(notify_people: bool = True) -> list:
-    """Work everyone out again. Tells HR (and, if switched on, the member) about each member flagged for the first time."""
+    """Work everyone out again. Tells HR (and, if switched on, the member) about each inactive member nobody was told
+    about yet, and returns them. With ``notify_people`` off nothing is sent and they stay untold, so the next daily
+    check still tells: "Check now" and saving the settings never swallow the digest."""
     s = InactivitySettings.load()
     now = timezone.now()
     users = list(checked_users(s).select_related("main_character"))
@@ -265,6 +278,7 @@ def scan(notify_people: bool = True) -> list:
             newly.append(u)
     if newly and notify_people:
         _digest(newly, s)
+        Activity.objects.filter(user__in=[u.pk for u in newly]).update(notified_at=now)
     return newly
 
 
@@ -392,15 +406,23 @@ def member_rows(filter_: str = "all", q: str = "") -> dict:
     return {"items": items, "counts": counts, "checked_at": _iso(checked)}
 
 
+def _cell(value) -> str:
+    """Text for a CSV cell. Spreadsheets run a cell that starts with = + - @ (or a tab or carriage return) as a formula,
+    and corporation names are chosen by players: such text gets a leading apostrophe, which makes it plain text."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
 def members_csv(filter_: str = "all", q: str = "") -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Member", "Corporation", "Last active", "Days inactive", "Inactive", "On leave until",
                 "Signed in to the site", "Played", "Last fleet"])
     for i in member_rows(filter_, q)["items"]:
-        w.writerow([i["name"], i["corporation"] or "", i["last_active"] or "", i["days_inactive"] if i["days_inactive"] is not None else "",
-                    "yes" if i["inactive"] else "no", i["on_leave_until"] or "", i["last_site"] or "", i["last_game"] or "",
-                    i["last_fleet"] or ""])
+        w.writerow([_cell(i["name"]), _cell(i["corporation"]), _cell(i["last_active"]),
+                    i["days_inactive"] if i["days_inactive"] is not None else "",
+                    "yes" if i["inactive"] else "no", _cell(i["on_leave_until"]), _cell(i["last_site"]), _cell(i["last_game"]),
+                    _cell(i["last_fleet"])])
     return buf.getvalue()
 
 

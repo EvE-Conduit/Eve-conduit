@@ -217,3 +217,79 @@ def test_managers_switch_on_discord_pings(setup, api_client):
     resp = api_client.call("put", "/api/pings/blacklist.match", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="blacklist.match").roles == ["123"]
+
+
+def test_nobody_sees_or_deals_with_a_warning_about_themselves(setup, api_client):
+    from conduit.audit.models import AuditEvent
+
+    hr, viewer, _ = setup
+    entry = Entry.objects.create(kind="character", eve_id=SPY_ID, name="Known Spy", reason="Awoxed a Rorqual")
+    Character.objects.create(id=SPY_ID, name="Known Spy", owner_hash="h", user=viewer)  # the viewer's own alt
+    match = services.check_user(viewer.pk, "linked")[0]
+    # HR is warned; the account it's about isn't.
+    assert Notification.objects.filter(user=hr, title="Blacklisted: Known Spy").exists()
+    assert not Notification.objects.filter(user=viewer).exists()
+    api_client.force_login(viewer)
+    assert api_client.call("get", f"{BASE}/matches").json() == {"items": [], "counts": {"open": 0, "resolved": 0}}
+    assert api_client.call("get", f"{BASE}/summary").json()["open_matches"] == 0
+    detail = api_client.call("get", f"{BASE}/entries/{entry.pk}").json()
+    assert detail["open_matches"] == 0 and detail["matches"] == []
+    assert api_client.call("get", f"{BASE}/entries").json()["items"][0]["open_matches"] == 0
+    assert api_client.call("post", f"{BASE}/matches/{match.pk}", {"resolved": True}).status_code == 404
+    with pytest.raises(services.BlacklistError):
+        services.resolve_match(match, viewer)
+    match.refresh_from_db()
+    assert match.resolved_at is None
+    # Someone else deals with it, and reopens it: both are in the audit log, and so is a note.
+    api_client.force_login(hr)
+    assert api_client.call("get", f"{BASE}/matches").json()["counts"]["open"] == 1
+    assert api_client.call("post", f"{BASE}/matches/{match.pk}", {"resolved": True}).status_code == 200
+    assert api_client.call("post", f"{BASE}/matches/{match.pk}", {"resolved": False}).status_code == 200
+    assert api_client.call("post", f"{BASE}/entries/{entry.pk}/notes", {"text": "Talked to them"}).status_code == 200
+    assert set(AuditEvent.objects.filter(action__startswith="blacklist.").values_list("action", flat=True)) >= {
+        "blacklist.match_resolved", "blacklist.match_reopened", "blacklist.note_added"}
+
+
+def test_an_expiry_without_a_time_zone_is_eve_time(setup, api_client):
+    hr, _, _ = setup
+    api_client.force_login(hr)
+    r = add(api_client, "character", SPY_ID, expires_at="2099-01-01T00:00:00")
+    assert r.status_code == 200
+    assert Entry.objects.get().expires_at.isoformat() == "2099-01-01T00:00:00+00:00"
+    assert add(api_client, "corporation", BAD_CORP, expires_at="2001-01-01T00:00:00").status_code == 400
+
+
+def test_checking_a_corporation_nobody_is_in_asks_esi_for_its_alliance(setup, api_client, monkeypatch):
+    from conduit.esi.exceptions import EsiError
+
+    _, viewer, _ = setup
+    Entry.objects.create(kind="alliance", eve_id=BAD_ALLIANCE, name="Hostile Alliance")
+    calls = []
+
+    class FakeEsi:
+        fail = False
+
+        def post(self, path, body):
+            assert path == "/universe/ids"
+            return EsiResponse({"corporations": [{"id": BAD_CORP, "name": "Awoxers Inc"}]}, 200, {})
+
+        def get(self, path, **kwargs):
+            calls.append(path)
+            if self.fail:
+                raise EsiError(502, "bad gateway")
+            return EsiResponse({"name": "Awoxers Inc", "ticker": "AWOX", "alliance_id": BAD_ALLIANCE}, 200, {})
+
+    fake = FakeEsi()
+    monkeypatch.setattr("conduit.esi.client.esi", lambda: fake)
+    api_client.force_login(viewer)
+    assert not EveCorporation.objects.filter(pk=BAD_CORP).exists()
+    hits = api_client.call("get", f"{BASE}/check?q=Awoxers Inc").json()
+    assert [e["name"] for e in hits[0]["entries"]] == ["Hostile Alliance"] and calls == [f"/corporations/{BAD_CORP}"]
+    # ESI can't say: an error, not "clean".
+    fake.fail = True
+    assert api_client.call("get", f"{BASE}/check?q=Awoxers Inc").status_code == 502
+    # A corporation the site knows isn't asked about.
+    calls.clear()
+    fake.fail = False
+    EveCorporation.objects.create(id=BAD_CORP, name="Awoxers Inc", alliance=EveAlliance.objects.create(id=BAD_ALLIANCE, name="Hostile Alliance"))
+    assert api_client.call("get", f"{BASE}/check?q=Awoxers Inc").json()[0]["entries"] and calls == []

@@ -11,6 +11,7 @@ from conduit.corp.models import CorporationMember
 from conduit.events import bus
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
+from conduit.sheet.models import SyncStatus
 from conduit.sheet.overview.models import CharacterInfo
 from conduit_inactivity import services
 from conduit_inactivity.models import Activity, InactivitySettings, Leave
@@ -89,10 +90,26 @@ def test_game_signal_from_sheets_and_corp_tracking(setup, corp):
     info.save()
     services.scan()
     assert status(member).inactive
-    info.online = True  # online now counts as now
+    info.online = True  # online now counts as now, while the overview that says so is fresh and the login works
     info.save()
     services.scan()
+    assert status(member).inactive  # never synced: "online" is not believed
+    sync = SyncStatus.objects.create(character=char, section="overview", result="ok", last_success=timezone.now())
+    services.scan()
     assert not status(member).inactive
+    # Seen online at the last good sync, then the syncs stopped or the login broke: that isn't "online now" any more.
+    sync.last_success = ago(1)
+    sync.save()
+    services.scan()
+    assert status(member).inactive
+    sync.last_success = timezone.now()
+    sync.save()
+    char.token.valid = False
+    char.token.save()
+    services.scan()
+    assert status(member).inactive
+    char.token.valid = True
+    char.token.save()
     info.online = False
     info.save()
     CorporationMember.objects.create(corporation=corp, character_id=char.pk, logon_date=ago(2), logoff_date=ago(1))
@@ -304,3 +321,52 @@ def test_managers_set_discord_pings(user, api_client):
     resp = api_client.call("put", "/api/pings/inactivity.flagged", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="inactivity.flagged").roles == ["123"]
+
+
+def test_check_now_and_saving_settings_dont_swallow_the_digest(setup, api_client):
+    hr, viewer, member = setup
+    login_quietly(api_client, hr)
+    old(hr, last_login=timezone.now())
+    # "Check now" flags the member without telling anyone...
+    assert api_client.call("post", f"{BASE}/scan").json()["inactive"] == 1
+    assert status(member).inactive and status(member).notified_at is None
+    services.save_settings({"days": 30, "use_site": True, "use_game": True, "use_fleets": True, "leave_needs_approval": True,
+                            "max_leave_days": 90, "notify_member": True}, hr)
+    assert not Notification.objects.filter(title__contains="went inactive").exists()
+    # ...so the daily check still does, once, and the member gets their notice too.
+    services.scan()
+    assert Notification.objects.filter(user=viewer, title="1 member went inactive").count() == 1
+    assert Notification.objects.filter(user=member, title="We haven't seen you in a while").count() == 1
+    assert status(member).notified_at is not None
+    services.scan()
+    assert Notification.objects.filter(user=viewer, title__contains="went inactive").count() == 1
+
+
+def test_a_cancelled_leave_doesnt_swallow_the_digest(setup):
+    hr, viewer, member = setup
+    s = InactivitySettings.load()
+    s.leave_needs_approval = False
+    s.save()
+    leave = services.post_leave(member, timezone.localdate(), timezone.localdate() + timedelta(days=5), "away")
+    services.scan()
+    assert not status(member).inactive
+    services.cancel_leave(member, leave)  # flagged on the spot, quietly
+    assert status(member).inactive and status(member).notified_at is None
+    services.scan()
+    assert Notification.objects.filter(user=viewer, title="1 member went inactive").count() == 1
+
+
+def test_csv_cells_cant_be_formulas(setup, corp):
+    hr, viewer, member = setup
+    corp.name = "=HYPERLINK(\"http://evil.example\")"
+    corp.save()
+    member.main_character.corporation = corp
+    member.main_character.save()
+    services.scan(notify_people=False)
+    import csv
+    import io
+
+    rows = list(csv.reader(io.StringIO(services.members_csv())))
+    row = next(r for r in rows if r[0] == "Quiet Quinn")
+    assert row[1] == "'=HYPERLINK(\"http://evil.example\")"
+    assert all(not c.startswith(("=", "+", "-", "@")) for r in rows for c in r)

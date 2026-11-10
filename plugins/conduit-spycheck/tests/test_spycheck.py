@@ -560,3 +560,68 @@ def test_managers_switch_on_discord_pings(api_client):
     resp = api_client.call("put", "/api/pings/spycheck.findings", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="spycheck.findings").roles == ["123"]
+
+
+def test_counts_and_the_watch_list_never_tell_a_reviewer_about_themselves(setup, api_client, corp):
+    hr, viewer, member, _ = setup
+    watch(SPY)
+    journal(member.main_character, 1, 3)
+    journal(viewer.main_character, 2, 3)  # the reviewer dealt with the spy too
+    # Someone put the reviewer's own alt on the watch list.
+    EveName.objects.create(id=90000052, name="Vic Alt", category="character")
+    Character.objects.create(id=90000052, name="Vic Alt", owner_hash="h52", user=viewer)
+    watch(90000052)
+    journal(member.main_character, 3, 3, other=90000052)
+    services.scan()
+    assert Finding.objects.count() == 3
+    api_client.force_login(viewer)
+    w = api_client.call("get", f"{BASE}/watch").json()
+    assert [(i["name"], i["open"]) for i in w["items"]] == [("Known Spy", 1)]  # not their own finding, not their own entry
+    s = api_client.call("get", f"{BASE}/summary").json()
+    assert (s["new"], s["watched"], s["last_scan_new"]) == (2, 1, 2)
+    # A manager can't look for, remove or add a watch on their own character either.
+    viewer.user_permissions.add(Permission.objects.get(codename="manage_spycheck"))
+    api_client.force_login(type(viewer).objects.get(pk=viewer.pk))
+    assert [h["watched"] for h in api_client.call("get", f"{BASE}/entities?q=Vic Alt").json()] == [False]
+    entry = WatchEntry.objects.get(eve_id=90000052)
+    assert api_client.call("delete", f"{BASE}/watch/{entry.pk}").status_code == 404
+    assert api_client.call("post", f"{BASE}/watch", {"eve_id": 90000052}).status_code == 400
+    assert api_client.call("post", f"{BASE}/watch", {"eve_id": viewer.main_character_id}).status_code == 400
+    assert WatchEntry.objects.filter(eve_id=90000052).exists() and not WatchEntry.objects.filter(eve_id=viewer.main_character_id).exists()
+    assert api_client.call("post", f"{BASE}/scan").json()["flagged"] == 0
+    # Everyone else still sees and manages it.
+    api_client.force_login(hr)
+    assert len(api_client.call("get", f"{BASE}/watch").json()["items"]) == 2
+    assert api_client.call("delete", f"{BASE}/watch/{entry.pk}").status_code == 200
+
+
+def test_scan_now_counts_only_what_the_manager_may_see(setup, api_client, corp):
+    hr, _, member, _ = setup
+    # A manager whose sheet permissions reach nobody: the scan finds something, but not for them.
+    blind = make_user(90000055, "Blind Bob")
+    blind.user_permissions.add(*Permission.objects.filter(content_type__app_label="spycheck"))
+    watch(SPY)
+    journal(member.main_character, 1, 3)
+    api_client.force_login(blind)
+    body = api_client.call("post", f"{BASE}/scan").json()
+    assert (body["flagged"], body["last_scan_new"], body["new"]) == (0, 0, 0)
+    assert [(i["name"], i["open"]) for i in api_client.call("get", f"{BASE}/watch").json()["items"]] == [("Known Spy", 0)]
+    api_client.force_login(hr)
+    assert api_client.call("get", f"{BASE}/summary").json()["last_scan_new"] == 1
+
+
+def test_a_dismissed_contract_comes_back_when_it_is_accepted_later(setup):
+    hr, _, member, _ = setup
+    main = member.main_character
+    watch(SPY)
+    contract(main, 1, 20, acceptor_id=SPY)
+    open_one = contract(main, 2, 25)  # put up even earlier, nobody took it yet
+    services.scan()
+    services.decide(found(kind="contract"), hr, "dismissed", "Sold him a hauler, known")
+    assert services.scan() == []
+    # The watched character accepts the old contract today: newer than what was dismissed, though issued long before.
+    open_one.acceptor_id, open_one.date_accepted = SPY, timezone.now()
+    open_one.save()
+    assert [f.kind for f in services.scan()] == ["contract"]
+    f = found(kind="contract")
+    assert f.state == "new" and f.count == 2 and f.first_seen < f.last_seen

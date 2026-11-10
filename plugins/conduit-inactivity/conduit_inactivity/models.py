@@ -71,4 +71,7 @@ class Activity(models.Model):
     inactive = models.BooleanField(default=False, db_index=True)
     #: When they were first flagged; cleared when they're active again (so the next time is told again).
     inactive_since = models.DateTimeField(null=True, blank=True)
+    #: When HR (and, if switched on, the member) was told about this spell of inactivity. Kept apart from
+    #: ``inactive_since``, which "Check now", saving the settings and a leave changing also set, without telling anyone.
+    notified_at = models.DateTimeField(null=True, blank=True)
     checked_at = models.DateTimeField(auto_now=True)

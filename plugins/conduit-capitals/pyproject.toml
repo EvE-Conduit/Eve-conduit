@@ -1,6 +1,6 @@
 [project]
 name = "conduit-capitals"
-version = "1.0.0"
+version = "1.0.1"
 description = "Capital Registry: who can fly and who owns each capital class, where the hulls are parked, jump skills and clones, and members marking hulls available for ops."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

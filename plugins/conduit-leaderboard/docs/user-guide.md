@@ -73,7 +73,8 @@ time.
 3. To come back, press **Show me** on that notice.
 
 While hidden, you do not get medals, because you are not on the boards when they are handed out. Medals you already
-have stay.
+have stay, but only you see them while you are hidden: they are left off the **Medals** page and the hall of fame for
+everyone else, and are back when you press **Show me**.
 
 ## Notifications
 
