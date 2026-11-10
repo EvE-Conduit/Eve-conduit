@@ -16,10 +16,13 @@ from .models import BuybackSettings, ItemPrice, Program
 
 ASTEROID_CATEGORY = 25  # ore, moon ore and ice, raw and compressed
 MODULE_CATEGORY = 7
+BLUEPRINT_CATEGORY = 9  # originals and copies share one type and one name: a paste can't tell them apart
 TECH_I_META = 1
 BLUE_LOOT_GROUP = 880  # Sleeper Components
 RED_LOOT_GROUP = 1995  # Triglavian Data
 MAX_LINES = 1000
+#: Visitors without an account get a shorter paste: every line is work and a stored row someone else pays for.
+PUBLIC_MAX_LINES = 200
 MAX_QUANTITY = 2_000_000_000
 
 D0 = Decimal(0)
@@ -66,11 +69,11 @@ class PastedLine:
     assembled: bool = False
 
 
-def parse(text: str) -> list[PastedLine]:
+def parse(text: str, max_lines: int = MAX_LINES) -> list[PastedLine]:
     """Lines copied from the game: the inventory (list or detail view), contracts, the mining ledger or survey
     scanner (tab-separated, name first), or typed as ``Name x 10``, ``10 x Name``, ``10 Name`` or ``Name 10``."""
     out = []
-    for raw in text.splitlines()[:MAX_LINES]:
+    for raw in text.splitlines()[:max_lines]:
         line = raw.strip().rstrip("*").strip()
         if not line:
             continue
@@ -127,7 +130,9 @@ def _money(value: Decimal) -> Decimal:
 class _Context:
     """Everything valuing a set of types needs, loaded in a few queries."""
 
-    def __init__(self, program: Program, type_ids: set[int], settings: BuybackSettings, hub: market.Hub):
+    def __init__(self, program: Program, type_ids: set[int], settings: BuybackSettings, hub: market.Hub, live: bool = True):
+        """``live``: prices and history that are missing or stale are fetched while the quote waits. Without it only
+        what's stored is used and the rest is fetched in the background (visitors without an account)."""
         self.program = program
         self.types = {t.pk: t for t in ItemType.objects.filter(pk__in=type_ids).select_related("group")}
         compressed_ids = {t.compressed_type_id for t in self.types.values() if t.compressed_type_id}
@@ -141,14 +146,20 @@ class _Context:
         for m in TypeMaterial.objects.filter(type_id__in=refine):
             self.materials[m.type_id].append((m.material_type_id, m.quantity))
         wanted = set(type_ids) | compressed_ids | {mid for mats in self.materials.values() for mid, _ in mats}
-        self.prices: dict[int, ItemPrice] = prices.get(wanted, settings, hub)
+        self.prices: dict[int, ItemPrice] = prices.get(wanted, settings, hub, fetch_now=live)
         self.settings = settings
-        self.history = market.histories([t for t in wanted if t in self.prices], settings, hub)
+        #: Whether the guard can check prices at all (it's on, and the hub's region is known).
+        self.guarding = market.guard_region(settings, hub) is not None
+        self.history = market.histories([t for t in wanted if t in self.prices], settings, hub,
+                                        inline=market.HISTORY_INLINE if live else 0)
         #: What the manipulation guard made of each market price used.
         self.checks: dict[int, market.Check] = {}
 
     def is_ore(self, t: ItemType) -> bool:
         return t.group.category_id == ASTEROID_CATEGORY
+
+    def is_blueprint(self, t: ItemType) -> bool:
+        return t.group.category_id == BLUEPRINT_CATEGORY
 
     def is_t1_module(self, t: ItemType) -> bool:
         return t.group.category_id == MODULE_CATEGORY and t.meta_group_id == TECH_I_META
@@ -160,14 +171,16 @@ class _Context:
     def market(self, type_id: int) -> Decimal:
         price = self.prices.get(type_id)
         current = price.price(self.program.price_type) if price else D0
-        if not self.settings.guard_enabled or type_id not in self.history:
+        if not self.guarding:
             return current
         if type_id not in self.checks:
-            self.checks[type_id] = market.check(current, self.history[type_id], self.settings)
+            # A type without history loaded (more of them than a quote waits for, ESI down) is checked against
+            # nothing, which ``check`` sends to a manager: it is never priced as if it had passed.
+            self.checks[type_id] = market.check(current, self.history.get(type_id), self.settings)
         return self.checks[type_id].price
 
     def guarded(self, type_ids) -> list[market.Check]:
-        """Checks that changed a price, for these types."""
+        """Checks that changed a price or couldn't vouch for it, for these types."""
         return [self.checks[t] for t in type_ids if t in self.checks and self.checks[t].used != "current"]
 
     def refined(self, t: ItemType, rate: Decimal) -> Decimal:
@@ -202,6 +215,10 @@ def _candidates(ctx: _Context, t: ItemType) -> dict[str, Decimal]:
     return {"market": ctx.market(t.pk)}
 
 
+#: What the guard couldn't trust: these lines go on the manual review list.
+UNTRUSTED = ("lower", "unverified")
+
+
 def _guard(ctx: _Context, t: ItemType, method: str) -> dict:
     """What the manipulation guard did to the price the line uses. A price it couldn't trust (far off its average,
     and the item rarely trades) puts the item on the manual review list."""
@@ -210,11 +227,14 @@ def _guard(ctx: _Context, t: ItemType, method: str) -> dict:
         own = ctx.checks.get(type_id)
         if own is None:
             return {}
-        return {"guard": own.out(), **({"watch": True} if own.used == "lower" else {})}
+        return {"guard": own.out(), **({"watch": True} if own.used in UNTRUSTED else {})}
     if method in ("refined", "t1_refined"):
-        changed = ctx.guarded(mid for mid, _ in ctx.materials.get(t.pk, ()))
+        off = ctx.guarded(mid for mid, _ in ctx.materials.get(t.pk, ()))
+        changed = [c for c in off if c.used != "unverified"]
+        watch = {"watch": True} if any(c.used in UNTRUSTED for c in off) else {}
         if changed:
-            return {"guard": {"used": "materials", "materials": len(changed)}, **({"watch": True} if any(c.used == "lower" for c in changed) else {})}
+            return {"guard": {"used": "materials", "materials": len(changed)}, **watch}
+        return watch
     return {}
 
 
@@ -239,7 +259,8 @@ def _line(ctx: _Context, t: ItemType, quantity: int, assembled: bool) -> dict:
         "unit_price": 0.0,
         "value": 0.0,
         "options": {},
-        "watch": ctx.rules.watched(t),
+        # Blueprints are always checked by hand: the paste (and the market) can't tell an original from a copy.
+        "watch": ctx.rules.watched(t) or ctx.is_blueprint(t),
         "guard": None,
     }
     if rule and rule.disallowed:
@@ -257,7 +278,8 @@ def _line(ctx: _Context, t: ItemType, quantity: int, assembled: bool) -> dict:
     options = _candidates(ctx, t)
     method, gross = max(options.items(), key=lambda kv: kv[1])
     line["options"] = {k: float(_money(v)) for k, v in options.items()}
-    line.update(_guard(ctx, t, method))
+    guard = _guard(ctx, t, method)
+    line.update({**guard, "watch": line["watch"] or bool(guard.get("watch"))})
     if gross <= 0:
         return {**line, "method": method, "reason": "No market price"}
 
@@ -285,7 +307,7 @@ def _line(ctx: _Context, t: ItemType, quantity: int, assembled: bool) -> dict:
     }
 
 
-def appraise(program: Program, pasted: list[PastedLine], settings: BuybackSettings | None = None) -> Appraisal:
+def appraise(program: Program, pasted: list[PastedLine], settings: BuybackSettings | None = None, live: bool = True) -> Appraisal:
     s = settings or BuybackSettings.load()
     hub = market.program_hub(program, s)
     out = Appraisal(hub=hub.name)
@@ -308,7 +330,7 @@ def appraise(program: Program, pasted: list[PastedLine], settings: BuybackSettin
             assembled.add(tid)
     if not totals:
         return out
-    ctx = _Context(program, set(totals), s, hub)
+    ctx = _Context(program, set(totals), s, hub, live)
     for tid, qty in totals.items():
         if tid in ctx.types:
             out.lines.append(_line(ctx, ctx.types[tid], qty, tid in assembled))

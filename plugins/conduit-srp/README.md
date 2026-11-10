@@ -27,7 +27,9 @@ Members claim ships they lost on fleet; reviewers check the loss, approve a payo
   claimed, whether the fleet is required, which corporations' losses count, and a text explaining your SRP policy.
 
 Losses come from the character sheet's killmails, so characters need the `esi-killmails.read_killmails.v1` scope.
-Loss values use CCP's average market prices, as on the character sheet.
+Loss values are the hull and what was fitted to it (high, medium and low slots, rigs, subsystems) at CCP's average
+market prices. Cargo, drone and fighter bays and other holds don't count, and neither do blueprint copies, so the
+value can be lower than the character sheet's or zKillboard's total. Only ships can be claimed.
 
 Events for webhooks: `srp.request_created`, `srp.request_decided`, `srp.request_paid`. New requests can ping on
 Discord: switch it on under Discord pings in Settings → General. It needs a Discord webhook under Administration →

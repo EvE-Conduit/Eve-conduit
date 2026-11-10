@@ -9,7 +9,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from .models import Contract, Route, Service
-from .services import FINISHED, price
+from .services import FINISHED, may_use, price
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +54,9 @@ def check(c: Contract, service: Service | None, route: Route | None, now: dateti
     """What's wrong with a contract, worst first."""
     now = now or timezone.now()
     out = []
+    if service and route is not None and not may_use(service, c.issuer_id):
+        # Its rates are for the members the service is kept to; this pilot isn't one of them.
+        out.append(problem("not_entitled", f"Made by a pilot {service.name} doesn't haul for: its rates are for the members it's open to."))
     if service and service.assignee_id and c.assignee_id != service.assignee_id:
         should = "the corporation" if service.is_corporation else (service.owner.name if service.owner else "the character")
         out.append(problem("wrong_assignee", f"Made out to the wrong {'character' if service.is_corporation else 'corporation'}: it should go to {should}."))
@@ -165,12 +168,14 @@ def sync_owner(character_id: int, client=None) -> dict:
         c.date_accepted = _dt(row.get("date_accepted"))
         c.date_completed = _dt(row.get("date_completed"))
         candidates = mine if theirs else by_assignee.get(c.assignee_id) or ([c.service] if c.service_id else services)
+        # Of the services whose routes it runs, the first one its pilot may use: a service kept to some members
+        # mustn't lend its rates to someone else's contract while another service of the owner is open to them. None
+        # of them: the first, and the check says so.
+        matches = [(s, r) for s in candidates if (r := match_route(s, c.start_location_id, c.end_location_id, systems))]
+        match = next((m for m in matches if may_use(m[0], c.issuer_id)), matches[0] if matches else None)
         route = None
-        for s in candidates:
-            route = match_route(s, c.start_location_id, c.end_location_id, systems)
-            if route:
-                c.service = s
-                break
+        if match:
+            c.service, route = match
         if route is None and not c.service_id:
             c.service = candidates[0]
         c.route = route

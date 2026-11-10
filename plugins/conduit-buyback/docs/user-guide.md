@@ -109,7 +109,7 @@ A public program works without an account.
 3. Follow the contract steps as above.
 4. Keep the quote page's address. It shows the contract's state once it is found.
 
-Public quotes belong to nobody, even if you are signed in, so they do not show under **My quotes**. Each visitor can make up to 30 public quotes per 10 minutes.
+Public quotes belong to nobody, even if you are signed in, so they do not show under **My quotes**. Each visitor can make up to 30 public quotes per 10 minutes, of up to 200 lines each; all visitors together share a limit as well. A public quote uses the prices the site already has: an item it has no price for yet shows **No market price** (try again a few minutes later), and an item whose price could not be checked against recent trading is marked for a manager to check by hand.
 
 ## Notifications
 
@@ -121,7 +121,13 @@ Signed-in sellers get a notification (category **Buyback**) when:
 ## FAQ and troubleshooting
 
 **My quote disappeared.**
-Quotes nobody made a contract for are removed after a while (48 hours unless the site changed it). Get a new quote.
+Quotes nobody made a contract for are removed after a while, but not while they are still good: you have the days the contract steps give you. After that, get a new quote.
+
+**My item says "Checked by hand before it's accepted".**
+A manager looks at the contract before accepting it. That happens for items on the program's review list, for blueprints (always: sell originals only, a copy is refused), and for items whose market price could not be checked against recent trading (**unchecked price**).
+
+**"That's more than 200 lines; quote them in parts" on a public program.**
+Public quotes take up to 200 lines. Split the paste, or sign in.
 
 **"This program is closed".**
 It gives no quotes at the moment.
@@ -130,7 +136,7 @@ It gives no quotes at the moment.
 The program is not set up yet. Ask the buyback managers.
 
 **"Too many quotes; wait a few minutes" on a public program.**
-You hit the limit of 30 quotes per 10 minutes.
+You hit the limit of 30 quotes per 10 minutes. "The calculator is busy" means all visitors together hit theirs; try again in a few minutes.
 
 **My contract still shows "No contract yet".**
 Contracts are read every 15 minutes. Check that the description is exactly the tracking number and the contract is made out to the right assignee.

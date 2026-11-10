@@ -8,7 +8,8 @@ from django.utils import timezone
 from conduit.esi.exceptions import EsiBackoff, EsiError, TokenInvalid
 
 from . import contracts, market, prices
-from .models import BuybackSettings, Quote
+from .models import BuybackSettings, Program, Quote
+from .services import MAX_QUOTE_VALID_DAYS
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +41,20 @@ def update_prices() -> int:
     """Hourly: refresh stored prices older than the maximum age."""
     try:
         return prices.refresh_stale()
+    except prices.PriceError as exc:
+        log.warning("%s", exc)
+        return 0
+
+
+@shared_task
+def fetch_prices_later(type_ids: list[int], hub_id: int) -> int:
+    """Prices a quote didn't wait for (visitors without an account), for a market still in use."""
+    s = BuybackSettings.load()
+    hub = next((h for h in market.hubs_in_use(s) if h.id == hub_id), None)
+    if hub is None or s.price_source == BuybackSettings.Source.ESI:
+        return 0
+    try:
+        return prices.fetch(type_ids, s, hub=hub)
     except prices.PriceError as exc:
         log.warning("%s", exc)
         return 0
@@ -90,5 +105,11 @@ def cleanup() -> int:
     hours = BuybackSettings.load().unlinked_purge_hours
     if not hours:
         return 0
-    deleted, _ = Quote.objects.filter(created_at__lt=timezone.now() - timedelta(hours=hours), contracts__isnull=True).delete()
+    now, deleted = timezone.now(), 0
+    for p in Program.objects.only("quote_valid_days", "expiration_days"):
+        # Never while a contract for it may still turn up: the days the quote is good for (no limit: the longest a
+        # program can set), plus the days such a contract stays up before the sync has certainly seen it.
+        keep = timedelta(days=(p.quote_valid_days or MAX_QUOTE_VALID_DAYS) + p.expiration_days)
+        n, _ = Quote.objects.filter(program=p, created_at__lt=now - max(timedelta(hours=hours), keep), contracts__isnull=True).delete()
+        deleted += n
     return deleted

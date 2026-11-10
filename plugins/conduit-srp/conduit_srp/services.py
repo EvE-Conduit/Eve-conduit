@@ -106,6 +106,30 @@ def suggest(ship_type_id: int, value: float, settings: SrpSettings | None = None
 # --- losses a member can claim -----------------------------------------------------------------------------------
 
 
+#: Inventory flags of what is fitted to the ship: high, medium and low slots, rigs and subsystems (see ``SLOTS``).
+FITTED_FLAGS = frozenset([*range(11, 35), *range(92, 100), *range(125, 133)])
+#: A killmail item's ``singleton`` for a blueprint copy.
+BLUEPRINT_COPY = 2
+
+
+def is_ship(type_id: int) -> bool:
+    return ItemType.objects.filter(pk=type_id, group__category_id=SHIP_CATEGORY).exists()
+
+
+def replacement_value(km: Killmail) -> float:
+    """What replacing the loss costs, which is what payouts are a percentage of: the hull and what was fitted to it,
+    at today's average prices. Not the killmail's total: cargo, drone and fighter bays and other holds hold whatever
+    the pilot put there (and whatever dropped may be back in friendly hands), and a blueprint copy would count at its
+    original's price."""
+    victim = (km.data or {}).get("victim", {})
+    fitted = [i for i in victim.get("items", []) if i.get("flag") in FITTED_FLAGS and i.get("singleton") != BLUEPRINT_COPY]
+    prices = prices_by_type({km.victim_ship_type_id, *(i["item_type_id"] for i in fitted)})
+    total = prices.get(km.victim_ship_type_id, 0)
+    for i in fitted:
+        total += prices.get(i["item_type_id"], 0) * ((i.get("quantity_destroyed") or 0) + (i.get("quantity_dropped") or 0))
+    return total
+
+
 def _counts(km: Killmail, settings: SrpSettings) -> bool:
     return not settings.corporations or km.victim_corporation_id in settings.corporations
 
@@ -121,10 +145,13 @@ def claimable(user) -> list[dict]:
     )
     kms = [link.killmail for link in links if link.killmail.victim_character_id == link.character_id
            and link.killmail.time >= link.character.added_at and _counts(link.killmail, settings)]
+    # Ships only: a lost mobile depot or tractor unit is a killmail with the pilot as victim too.
+    ships = set(ItemType.objects.filter(pk__in={k.victim_ship_type_id for k in kms}, group__category_id=SHIP_CATEGORY).values_list("pk", flat=True))
+    kms = [k for k in kms if k.victim_ship_type_id in ships]
     rules = list(ShipRule.objects.all())
     out = killmails_out(kms)
     for row, km in zip(out, kms):
-        row["suggested"] = _float(suggest(km.victim_ship_type_id, km.value, settings, rules))
+        row["suggested"] = _float(suggest(km.victim_ship_type_id, row["value"], settings, rules))
     return out
 
 
@@ -145,7 +172,8 @@ def killmails_out(kms: list[Killmail]) -> list[dict]:
             "character": {"id": k.victim_character_id, "name": names.get(k.victim_character_id, "")},
             "ship": type_out(k.victim_ship_type_id, types),
             "system": {"id": k.solar_system_id, "name": system.name, "security": system.display_security, "region": system.region.name} if system else None,
-            "value": k.value,
+            # The hull and its fitting, not the killmail's total (see ``replacement_value``).
+            "value": replacement_value(k),
             "attackers": k.attacker_count,
             "zkillboard": f"https://zkillboard.com/kill/{k.id}/",
         })
@@ -153,10 +181,12 @@ def killmails_out(kms: list[Killmail]) -> list[dict]:
 
 
 def _value(data: dict) -> float:
-    """Ship plus everything destroyed or dropped, at today's average prices (as the character sheet does)."""
+    """The killmail's total as the character sheet shows it: ship plus everything destroyed or dropped, at today's
+    average prices; blueprint copies aside, which aren't worth their original's price. Payouts don't use this, see
+    ``replacement_value``."""
     victim = data["victim"]
     items = victim.get("items", [])
-    flat = items + [child for i in items for child in i.get("items", [])]
+    flat = [i for i in items + [child for i in items for child in i.get("items", [])] if i.get("singleton") != BLUEPRINT_COPY]
     prices = prices_by_type({victim["ship_type_id"], *(i["item_type_id"] for i in flat)})
     total = prices.get(victim["ship_type_id"], 0)
     for i in flat:
@@ -265,6 +295,8 @@ def submit(user, *, killmail_id: int | None = None, link: str = "", fleet: str =
         if Character.objects.filter(pk=km.victim_character_id, user=user).exists():
             raise SrpError("That loss happened before the character was linked to your account, so it can't be claimed here")
         raise SrpError("That loss isn't one of your characters'")
+    if not is_ship(km.victim_ship_type_id):
+        raise SrpError("Only ships can be claimed, and that loss isn't one")
     if not _counts(km, settings):
         raise SrpError("Losses in that corporation aren't covered")
     if km.time < timezone.now() - timedelta(days=settings.max_age_days):
@@ -272,7 +304,8 @@ def submit(user, *, killmail_id: int | None = None, link: str = "", fleet: str =
     fleet, fc, notes = fleet.strip()[:200], fc.strip()[:100], notes.strip()[:2000]
     if settings.require_fleet and not fleet:
         raise SrpError("Say which fleet you lost it in")
-    suggested = suggest(km.victim_ship_type_id, km.value, settings)
+    value = replacement_value(km)
+    suggested = suggest(km.victim_ship_type_id, value, settings)
     if suggested is None:
         raise SrpError("That ship isn't covered by ship replacement")
     try:
@@ -283,7 +316,7 @@ def submit(user, *, killmail_id: int | None = None, link: str = "", fleet: str =
         raise SrpError("That loss has already been claimed") from None
     ship = ItemType.objects.filter(pk=km.victim_ship_type_id).values_list("name", flat=True).first() or "a ship"
     bus.emit("srp.request_created", user_id=user.pk, user=user.display_name, request_id=req.pk, ship=ship,
-             value=km.value, title="SRP requested", summary=f"{char.name} lost {ship} ({fleet or 'no fleet given'})",
+             value=value, title="SRP requested", summary=f"{char.name} lost {ship} ({fleet or 'no fleet given'})",
              link=f"/p/srp/requests/{req.pk}", level="info")
     notify_permission("srp.review_requests", f"SRP request: {char.name}'s {ship}", f"{suggested:,.0f} ISK suggested",
                       link=f"/p/srp/requests/{req.pk}", category="p.srp")
@@ -488,11 +521,13 @@ def fitting(km: Killmail) -> list[dict]:
     for i in items:
         label = next((lbl for lbl, flags in SLOTS if i.get("flag") in flags), "Other")
         destroyed, dropped = i.get("quantity_destroyed") or 0, i.get("quantity_dropped") or 0
+        copy = i.get("singleton") == BLUEPRINT_COPY
         groups[label].append({
-            **type_out(i["item_type_id"], types, copy=i.get("singleton") == 2),
+            **type_out(i["item_type_id"], types, copy=copy),
             "destroyed": destroyed,
             "dropped": dropped,
-            "value": prices.get(i["item_type_id"], 0) * (destroyed + dropped),
+            # The price is an original's; a copy is worth next to nothing.
+            "value": 0 if copy else prices.get(i["item_type_id"], 0) * (destroyed + dropped),
         })
     return [{"label": label, "items": rows} for label, rows in groups.items() if rows]
 

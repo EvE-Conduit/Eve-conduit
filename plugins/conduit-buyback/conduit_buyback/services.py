@@ -19,6 +19,10 @@ from . import catalog, market, pricing
 from .models import BuybackSettings, Contract, GroupRule, ItemRule, Location, Program, Quote, WatchRule
 
 OPEN = ("outstanding", "in_progress")
+#: The longest a program can say its quotes are good for, in days.
+MAX_QUOTE_VALID_DAYS = 90
+#: The most one quote can be worth: far above any real contract, and well inside what its field stores.
+MAX_QUOTE_VALUE = 10**15
 TRACKING_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
 
@@ -101,11 +105,17 @@ def quote(program: Program, text: str, user=None, public: bool = False) -> dict:
         raise BuybackError("This program is closed", 409)
     if program.owner is None:
         raise BuybackError("This program has no owner to contract to yet", 409)
+    if public and sum(1 for ln in text.splitlines() if ln.strip()) > pricing.PUBLIC_MAX_LINES:
+        raise BuybackError(f"That's more than {pricing.PUBLIC_MAX_LINES} lines; quote them in parts")
     pasted = pricing.parse(text)
     if not pasted:
         raise BuybackError("Paste the items you want to sell, one per line")
     s = BuybackSettings.load()
-    result = pricing.appraise(program, pasted, s)
+    # Visitors without an account never make the server ask ESI or a price site while they wait: stored prices and
+    # history only, the rest is fetched in the background and those lines go to a manager.
+    result = pricing.appraise(program, pasted, s, live=not public)
+    if result.value > MAX_QUOTE_VALUE:
+        raise BuybackError(f"That's worth more than a quote can hold ({MAX_QUOTE_VALUE:,} ISK); check the quantities")
     out = appraisal_out(result)
     blocked = s.reject_disallowed and (result.rejected or result.unknown)
     if blocked:
@@ -282,13 +292,21 @@ def contract_out(c: Contract, names: dict[int, str] | None = None, with_items: b
         "severe": any(p.get("severe") for p in c.problems),
     }
     if with_items:
-        ids = {i[0] for i in (c.items or [])}
-        types = dict(ItemType.objects.filter(pk__in=ids).values_list("pk", "name"))
+        rows = [item_row(i) for i in (c.items or [])]
+        types = dict(ItemType.objects.filter(pk__in={r[0] for r in rows}).values_list("pk", "name"))
         out["items"] = None if c.items is None else [
-            {"type_id": t, "name": types.get(t, f"Type {t}"), "icon": type_icon_url(t, 32), "quantity": q, "included": inc} for t, q, inc in c.items
+            {"type_id": t, "name": types.get(t, f"Type {t}"), "icon": type_icon_url(t, 32), "quantity": q, "included": inc,
+             "copy": copy, "assembled": single} for t, q, inc, copy, single in rows
         ]
         out["location"] = _location_name(c.start_location_id)
     return out
+
+
+def item_row(item: list) -> tuple[int, int, bool, bool, bool]:
+    """A stored contract item as (type, quantity, included, blueprint copy, assembled). Contracts read before 1.2.5
+    have the first three only; nothing is known about the rest, so they read as neither."""
+    type_id, quantity, included, *more = item
+    return type_id, quantity, bool(included), bool(more[0]) if more else False, bool(more[1]) if len(more) > 1 else False
 
 
 def _location_name(location_id: int | None) -> str | None:
@@ -481,8 +499,8 @@ def save_program(user, program: Program | None, data: dict) -> Program:
             raise BuybackError("Percentages go from 0 to 100")
     if not 1 <= int(data.get("expiration_days") or 0) <= 90:
         raise BuybackError("Contracts expire after 1 to 90 days")
-    if not 0 <= int(data.get("quote_valid_days") or 0) <= 90:
-        raise BuybackError("Quotes are good for up to 90 days (0: no limit)")
+    if not 0 <= int(data.get("quote_valid_days") or 0) <= MAX_QUOTE_VALID_DAYS:
+        raise BuybackError(f"Quotes are good for up to {MAX_QUOTE_VALID_DAYS} days (0: no limit)")
     if data.get("wallet_division") not in (None, *range(1, 8)):
         raise BuybackError("Wallet divisions go from 1 to 7")
     prefix = (data.get("tracking_prefix") or "").strip()

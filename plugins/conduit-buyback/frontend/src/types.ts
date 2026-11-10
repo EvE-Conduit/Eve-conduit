@@ -170,7 +170,7 @@ export interface Line {
 
 /** What the manipulation guard made of a line's market price. */
 export type Guard =
-  | { used: "current" | "average" | "lower"; current: number; average: number | null; deviation: number | null; days_traded: number; reliable: boolean }
+  | { used: "current" | "average" | "lower" | "unverified"; current: number; average: number | null; deviation: number | null; days_traded: number; reliable: boolean }
   | { used: "materials"; materials: number };
 
 export interface QuoteSummary {
@@ -212,6 +212,9 @@ export interface ContractItem {
   icon: string;
   quantity: number;
   included: boolean;
+  /** A blueprint copy; the quote priced an original. Unknown (false) for contracts read before 1.2.5. */
+  copy?: boolean;
+  assembled?: boolean;
 }
 
 export interface ContractRow {

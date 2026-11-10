@@ -6,7 +6,8 @@ import pytest
 from django.utils import timezone
 
 from conduit.accounts.models import Character
-from conduit.corp.models import MiningObservation
+from conduit.audit.models import AuditEvent
+from conduit.corp.models import CorpSyncStatus, MiningObservation
 from conduit.eve.models import EveName, MarketPrice
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
@@ -32,6 +33,7 @@ def mined(db, corp, last_month):
     ItemType.objects.create(id=ORE2, group_id=1, name="Sylvite", published=True)
     MarketPrice.objects.create(type_id=ORE, average_price=100.0)
     MarketPrice.objects.create(type_id=ORE2, average_price=50.0)
+    CorpSyncStatus.objects.create(corporation=corp, section="mining", last_success=timezone.now())  # synced since last month ended
     pilot = make_user(90000001, "Pilot One", corporation=corp)
     Character.objects.create(id=90000002, name="Pilot Alt", owner_hash="alt", user=pilot, corporation=corp)
     EveName.objects.create(id=777, name="Stranger", category="character")
@@ -173,3 +175,66 @@ def test_far_off_months_are_refused(mined, api_client):
     api_client.force_login(mined)
     assert api_client.call("get", "/api/p/moons/me?month=9999-12").status_code == 400
     assert api_client.call("get", "/api/p/moons/me?month=2026-13").status_code == 400
+
+
+def test_a_month_waits_for_the_mining_to_sync_past_its_end(mined, last_month, admin_user, monkeypatch):
+    """Bills are fixed at closing: what was mined on the month's last day and arrives with the next sync would be on
+    nobody's bill. So closing waits for that sync, for two days at most."""
+    end = services._at(services.month_end(last_month))
+    CorpSyncStatus.objects.update(last_success=end - timedelta(minutes=20))  # last synced just before midnight
+    monkeypatch.setattr(timezone, "now", lambda: end + timedelta(minutes=5))
+    with pytest.raises(services.LedgerError, match="Test Corp hasn't synced since"):
+        services.close_month(last_month, admin_user)
+    # A corporation that stopped syncing doesn't hold the month up for ever.
+    monkeypatch.setattr(timezone, "now", lambda: end + services.SYNC_GRACE + timedelta(minutes=1))
+    services.close_month(last_month, admin_user)
+    services.reopen_month(last_month)
+    # Synced after the month ended: straight away.
+    CorpSyncStatus.objects.update(last_success=end + timedelta(minutes=3))
+    monkeypatch.setattr(timezone, "now", lambda: end + timedelta(minutes=5))
+    services.close_month(last_month, admin_user)
+    assert Invoice.objects.get().amount == 20_000
+
+
+def test_characters_taken_off_an_account_are_pointed_out(mined, last_month, admin_user):
+    """An alt removed before the month is closed is "unregistered" and on nobody's bill. Whoever closes the month is
+    told which characters that happened to and whose they were; nobody is billed from the audit log."""
+    assert services.ledger(last_month)["removed_characters"] == []
+    Character.objects.filter(pk=90000002).delete()  # the member unlinked their alt...
+    AuditEvent.objects.create(action="character.removed", summary="Pilot One removed character Pilot Alt", actor_type="user",  # ...as the core records it
+                              actor_id=mined.pk, actor_name="Pilot One", target_type="character", details={"character_id": 90000002, "name": "Pilot Alt"})
+    (gone,) = services.ledger(last_month)["removed_characters"]
+    assert (gone["character_id"], gone["value"], gone["previous_owner"], gone["sold"]) == (90000002, 100_000.0, {"id": mined.pk, "name": "Pilot One"}, False)
+    assert services.ledger(last_month, user=mined)["removed_characters"] == []  # not on members' own pages
+    services.close_month(last_month, admin_user)
+    assert Invoice.objects.get().amount == 10_000  # the main only: the warning doesn't bill anyone
+
+
+def test_a_bill_isnt_shown_to_someone_who_cant_see_all_it_covers(mined, corp, last_month, api_client, admin_user):
+    """A bill adds up every corporation's moons. To a viewer who may see only some of them, its total would give away
+    what the member mined in the others."""
+    from django.contrib.auth.models import Permission
+
+    from conduit.eve.models import EveCorporation
+
+    other = EveCorporation.objects.create(id=98000002, name="Other Corp", ticker="OTHER")
+    CorpSyncStatus.objects.create(corporation=other, section="mining", last_success=timezone.now())
+    MiningObservation.objects.create(corporation=other, observer_id=1_000_000_000_002, character_id=90000002, type_id=ORE, quantity=50_000,
+                                     last_updated=last_month + timedelta(days=4))
+    services.close_month(last_month, admin_user)
+    assert Invoice.objects.get(user=mined).amount == 520_000
+
+    officer = make_user(90000050, "Moon Officer", corporation=corp)
+    officer.user_permissions.add(*Permission.objects.filter(codename__in=["view_ledger", "view_own_corporation"]))
+    api_client.force_login(type(officer).objects.get(pk=officer.pk))
+    data = api_client.call("get", f"/api/p/moons/ledger?month={last_month:%Y-%m}").json()
+    pilot = next(m for m in data["members"] if m["user_id"] == mined.pk)
+    assert pilot["value"] == 200_000 and pilot["partial"]
+    assert pilot["invoice"] is None and pilot["tax"] == 20_000  # their own corporation's share, not the 520,000 bill
+    assert data["totals"]["tax"] == 20_000
+    assert "520000" not in api_client.call("get", f"/api/p/moons/ledger.csv?month={last_month:%Y-%m}").content.decode()
+
+    api_client.force_login(ledger_admin(admin_user))
+    data = api_client.call("get", f"/api/p/moons/ledger?month={last_month:%Y-%m}").json()
+    pilot = next(m for m in data["members"] if m["user_id"] == mined.pk)
+    assert pilot["invoice"]["amount"] == 520_000 and not pilot["partial"]

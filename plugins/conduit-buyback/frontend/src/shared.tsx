@@ -147,6 +147,13 @@ function GuardBadge({ guard }: { guard: Guard | null }) {
       </Tooltip>
     );
   }
+  if (guard.used === "unverified") {
+    return (
+      <Tooltip content={`The market says ${isk(guard.current, { full: true })}, but there's no recent trading to check that against (it hasn't traded lately, or its history isn't loaded yet). A manager checks it by hand.`}>
+        <span><Badge tone="warning" className="ml-1.5">unchecked price</Badge></span>
+      </Tooltip>
+    );
+  }
   const off = guard.deviation != null ? `${guard.deviation > 0 ? "+" : ""}${guard.deviation}%` : "";
   const text =
     guard.used === "average"
@@ -419,11 +426,11 @@ function SpecialItems({ program }: { program: Program }) {
 export function Compare({ lines, items }: { lines: Line[]; items: ContractItem[] | null | undefined }) {
   const quoted = new Map<number, Line>();
   for (const l of lines) if (l.accepted) quoted.set(l.type_id, l);
-  const given = new Map<number, { item: ContractItem; quantity: number }>();
+  const given = new Map<number, { item: ContractItem; quantity: number; copy: boolean }>();
   const asked: ContractItem[] = [];
   for (const it of items ?? []) {
     if (!it.included) asked.push(it);
-    else given.set(it.type_id, { item: it, quantity: (given.get(it.type_id)?.quantity ?? 0) + it.quantity });
+    else given.set(it.type_id, { item: it, quantity: (given.get(it.type_id)?.quantity ?? 0) + it.quantity, copy: !!it.copy || !!given.get(it.type_id)?.copy });
   }
   const ids = [...new Set([...quoted.keys(), ...given.keys()])];
   if (items == null) return <p className="p-4 text-sm text-muted">The contract's items haven't been read yet.</p>;
@@ -452,7 +459,7 @@ export function Compare({ lines, items }: { lines: Line[]; items: ContractItem[]
                 <Td numeric>{want ? num(want) : "—"}</Td>
                 <Td numeric>{have ? num(have) : "—"}</Td>
                 <Td>
-                  {have === want ? <Badge tone="success">matches</Badge> : have < want ? <Badge tone="danger">short {num(want - have)}</Badge> : <Badge tone="warning">extra {num(have - want)}</Badge>}
+                  {g?.copy ? <Badge tone="danger">blueprint copy</Badge> : have === want ? <Badge tone="success">matches</Badge> : have < want ? <Badge tone="danger">short {num(want - have)}</Badge> : <Badge tone="warning">extra {num(have - want)}</Badge>}
                 </Td>
               </Tr>
             );

@@ -8,6 +8,7 @@ from django.contrib.auth.models import Permission
 from django.utils import timezone
 
 from conduit.accounts.models import Character
+from conduit.eve.models import MarketPrice
 from conduit.events import bus
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
@@ -39,6 +40,7 @@ def lose(character, ship=RIFTER, value=10_000_000.0, days_ago=1, km_id=None):
         data={"victim": {"ship_type_id": ship, "items": [{"item_type_id": 2048, "flag": 27, "quantity_destroyed": 1, "singleton": 0}]}},
     )
     CharacterKillmail.objects.create(character=character, killmail=km, is_loss=True)
+    MarketPrice.objects.update_or_create(type_id=ship, defaults={"average_price": value})  # the hull; the fitted module has no price
     return km
 
 
@@ -339,3 +341,45 @@ def test_managers_switch_on_discord_pings(api_client):
     resp = api_client.call("put", "/api/pings/srp.request_created", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="srp.request_created").roles == ["123"]
+
+
+def test_payouts_are_for_the_hull_and_fitting_only(pilot):
+    """The killmail's total counts cargo and whatever dropped, and priced a blueprint copy as an original: a cheap
+    hull with a copy in the hold suggested billions. Payouts are a share of the hull and what was fitted."""
+    ItemCategory.objects.create(id=9, name="Blueprint", published=True)
+    ItemGroup.objects.create(id=105, category_id=9, name="Frigate Blueprint", published=True)
+    ItemType.objects.create(id=999, group_id=105, name="Naglfar Blueprint", published=True)
+    for type_id, price in ((RIFTER, 1_000_000), (2048, 500_000), (34, 5), (999, 2_000_000_000), (2488, 300_000)):
+        MarketPrice.objects.update_or_create(type_id=type_id, defaults={"average_price": price})
+    char = pilot.main_character
+    km = lose(char, value=4_003_300_000.0)  # what the character sheet makes of it
+    MarketPrice.objects.filter(type_id=RIFTER).update(average_price=1_000_000)
+    km.data = {"victim": {"ship_type_id": RIFTER, "items": [
+        {"item_type_id": 2048, "flag": 11, "quantity_destroyed": 1, "singleton": 0},  # fitted, destroyed
+        {"item_type_id": 2048, "flag": 12, "quantity_dropped": 1, "singleton": 0},  # fitted, dropped: still lost
+        {"item_type_id": 999, "flag": 5, "quantity_dropped": 1, "singleton": 2},  # a copy in the hold
+        {"item_type_id": 999, "flag": 5, "quantity_destroyed": 1, "singleton": 0},  # even an original there doesn't count
+        {"item_type_id": 34, "flag": 5, "quantity_dropped": 100_000, "singleton": 0},  # cargo
+        {"item_type_id": 2488, "flag": 87, "quantity_destroyed": 5, "singleton": 0},  # drone bay
+    ]}}
+    km.save()
+    assert services.replacement_value(km) == 2_000_000
+    assert services.claimable(pilot)[0]["suggested"] == 2_000_000
+    req = services.submit(pilot, killmail_id=km.pk, fleet="CTA")
+    assert req.suggested == Decimal(2_000_000)
+    detail = services.detail(services.base_queryset().get(pk=req.pk))
+    assert detail["value"] == 2_000_000
+    cargo = next(g for g in detail["fitting"] if g["label"] == "Cargo")["items"]
+    assert [i["value"] for i in cargo] == [0, 2_000_000_000, 500_000]  # the copy is shown at nothing
+    # The link path's total leaves copies out too.
+    assert services._value(km.data) == 1_000_000 + 2 * 500_000 + 2_000_000_000 + 500_000 + 1_500_000
+
+
+def test_only_ships_can_be_claimed(pilot):
+    ItemCategory.objects.create(id=22, name="Deployable", published=True)
+    ItemGroup.objects.create(id=1246, category_id=22, name="Mobile Depot", published=True)
+    ItemType.objects.create(id=33474, group_id=1246, name="Mobile Depot", published=True)
+    km = lose(pilot.main_character, ship=33474)
+    assert services.claimable(pilot) == []
+    with pytest.raises(services.SrpError, match="Only ships"):
+        services.submit(pilot, killmail_id=km.pk, fleet="CTA")

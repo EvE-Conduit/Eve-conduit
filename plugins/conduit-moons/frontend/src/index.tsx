@@ -32,6 +32,18 @@ interface Member {
   quantity: number;
   tax: number;
   invoice: Invoice | null;
+  /** Also mined in corporations the viewer can't see: the bill is hidden, the figures are for the ones they can. */
+  partial?: boolean;
+}
+
+/** A character that mined and was on a member's account, and has been taken off it since the month began. */
+interface Removed {
+  character_id: number;
+  name: string;
+  value: number;
+  removed_at: string;
+  sold: boolean;
+  previous_owner: { id: number; name: string } | null;
 }
 
 interface Ledger {
@@ -46,6 +58,7 @@ interface Ledger {
   members: Member[];
   moons: { observer_id: number; name: string; moon: string; value: number; quantity: number; miners: number }[];
   ores: { type_id: number; name: string; icon: string; price: number; value: number; quantity: number }[];
+  removed_characters?: Removed[];
 }
 
 interface Months {
@@ -165,6 +178,20 @@ function LedgerPage() {
               hint="by characters nobody registered"
             />
           </div>
+
+          {!!data.removed_characters?.length && (
+            <Alert tone="warning" title="Characters that mined were taken off their accounts">
+              Their tax is on nobody's bill{data.closed ? "" : " when this month is closed"}. Settle it with whoever had them:
+              <ul className="mt-1 list-disc pl-5">
+                {data.removed_characters.map((r) => (
+                  <li key={r.character_id}>
+                    <span className="font-medium">{r.name}</span>: mined {isk(r.value)}; {r.sold ? "sold and removed" : "removed"} {date(r.removed_at)}
+                    {r.previous_owner ? <> from <span className="font-medium">{r.previous_owner.name}</span>'s account</> : null}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          )}
 
           <Card>
             <CardHeader title="Mined per day" description={`Value of the ore mined each day in ${data.label}`} />
@@ -304,6 +331,7 @@ function MembersTable({ data, canManage, onPaid }: { data: Ledger; canManage: bo
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium">{m.name}</span>
                         {!m.registered && <Badge tone="warning">not registered</Badge>}
+                        {m.partial && <span title="Also mined in corporations whose mining you can't see; the bill covers those too, so it isn't shown"><Badge tone="info">part only</Badge></span>}
                       </div>
                       <div className="text-xs text-subtle">{m.characters.length} character{m.characters.length === 1 ? "" : "s"}</div>
                     </div>

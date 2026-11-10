@@ -153,13 +153,25 @@ def top_average(orders: list[tuple[Decimal, int]], highest_first: bool) -> Decim
     orders = sorted(orders, key=lambda o: o[0], reverse=highest_first)
     total = sum(v for _, v in orders)
     want = max(Decimal(total) * TOP_SHARE, Decimal(1))
-    taken, value = Decimal(0), Decimal(0)
+    taken, value, used = Decimal(0), Decimal(0), 0
     for price, volume in orders:
         use = min(Decimal(volume), want - taken)
         value += price * use
         taken += use
+        used += 1
         if taken >= want:
             break
+    if used == 1 and len(orders) > 1:
+        # Minimum depth: one order never sets the price alone. As much again is taken from the orders behind it, so a
+        # single propped-up order in a thin book weighs half at most (the guard catches what's left).
+        want, more = taken, Decimal(0)
+        for price, volume in orders[1:]:
+            use = min(Decimal(volume), want - more)
+            value += price * use
+            more += use
+            if more >= want:
+                break
+        taken += more
     return value / taken
 
 
@@ -295,12 +307,18 @@ def fetch_history(type_ids, region_id: int, client=None) -> int:
     return len(rows)
 
 
-def histories(type_ids, s: BuybackSettings, hub: Hub | None = None) -> dict[int, PriceHistory]:
-    """History for the types in the hub's region, fetching up to ``HISTORY_INLINE`` missing or stale ones now and
-    the rest in the background. Empty when the guard is off or the hub's region is unknown."""
-    if not s.guard_enabled:
-        return {}
-    region = hub_region((hub or site_hub(s)).id)
+def guard_region(s: BuybackSettings, hub: Hub | None = None) -> int | None:
+    """The region the guard measures prices against; None when it can't work (switched off, or the hub's region is
+    unknown)."""
+    return hub_region((hub or site_hub(s)).id) if s.guard_enabled else None
+
+
+def histories(type_ids, s: BuybackSettings, hub: Hub | None = None, inline: int = HISTORY_INLINE) -> dict[int, PriceHistory]:
+    """History for the types in the hub's region, fetching up to ``inline`` missing or stale ones now (none for
+    visitors without an account, who mustn't make the server call ESI while they wait) and the rest in the background.
+    Empty when the guard is off or the hub's region is unknown. A type left out has no history loaded yet: its price
+    can't be checked, so the quote sends it to a manager (see ``check``)."""
+    region = guard_region(s, hub)
     if region is None:
         return {}
     ids = {int(t) for t in type_ids}
@@ -308,10 +326,11 @@ def histories(type_ids, s: BuybackSettings, hub: Hub | None = None) -> dict[int,
     have = {h.type_id: h for h in PriceHistory.objects.filter(type_id__in=ids, region_id=region)}
     todo = sorted(t for t in ids if t not in have or have[t].updated_at < stale)
     if todo:
-        now_ids, later = todo[:HISTORY_INLINE], todo[HISTORY_INLINE:]
+        now_ids, later = todo[:inline], todo[inline:]
         try:
-            fetch_history(now_ids, region)
-        except Exception as exc:  # the guard is a safety net: quote without it rather than not at all
+            if now_ids:
+                fetch_history(now_ids, region)
+        except Exception as exc:  # no history: those prices go to a manager unchecked rather than no quote at all
             log.warning("Couldn't read market history: %s", exc)
         else:
             have.update({h.type_id: h for h in PriceHistory.objects.filter(type_id__in=now_ids, region_id=region)})
@@ -328,7 +347,7 @@ class Check:
     average: Decimal | None
     days_traded: int
     reliable: bool
-    #: "current", "average" or "lower" (and checked by hand).
+    #: "current", "average", "lower" (and checked by hand) or "unverified" (nothing to check it against: by hand too).
     used: str
     price: Decimal
 
@@ -358,8 +377,12 @@ def check(current: Decimal, h: PriceHistory | None, s: BuybackSettings) -> Check
     """The price to use: the current one unless it's far off what the item traded for."""
     avg, traded = average(h, s.guard_days)
     reliable = avg is not None and traded >= s.guard_min_days
-    if avg is None or current <= 0:
+    if current <= 0:
         return Check(current, avg, traded, reliable, "current", current)
+    if avg is None:
+        # Never traded lately, or its history isn't loaded yet: exactly the items one order can move. The price
+        # stands, but a manager checks it by hand.
+        return Check(current, None, traded, False, "unverified", current)
     limit = s.guard_threshold / 100
     too_high = current > avg * (1 + limit)
     too_low = s.guard_both_ways and current < avg * (1 - limit)

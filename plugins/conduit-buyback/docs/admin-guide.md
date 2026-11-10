@@ -71,12 +71,19 @@ Every market price, including the minerals refined values use, is compared with 
 
 If the market's region is not known, the page says prices are not checked.
 
+What the guard cannot vouch for goes to manual review (the quote is flagged and its contract says **Has items to check by hand**):
+
+- an item that did not trade at all in those days, or whose history is not loaded yet (a quote fetches up to 60 histories while it waits, the rest in the background). Its price stands, with an **unchecked price** badge;
+- **blueprints**, always: an original and a copy share one name and one market price, so a paste cannot tell them apart. A contract that holds a blueprint copy gets the severe problem **blueprint copy**.
+
+Two more things keep one order from setting a price. The top-5 % average never rests on a single order: as much volume again is taken from the orders behind it. And a **Split** price with nobody buying is half the sell price, not the sell price itself.
+
 **Quotes and tracking card**
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Tracking prefix** | `bb-` | Starts every tracking number. Letters, digits, `-`, `_` or `.`. Programs can have their own. |
-| **Remove quotes nobody contracted after** | 48 hours | Quotes with no contract are deleted after this long. 0 keeps them. Up to 90 days. |
+| **Remove quotes nobody contracted after** | 48 hours | Quotes with no contract are deleted after this long, but never while a contract for them may still arrive: a program's quotes are kept at least for the days they are good for (90 when the program sets no limit) plus the days its contracts stay up. 0 keeps them. Up to 90 days. |
 | **All or nothing** | Off | A paste with any item a program does not buy gets no quote at all. |
 | **Private quotes** | On | Only the seller and the program's managers (and holders of `buyback.view_all_statistics`) can open a quote. Off: any member who may use the program and has the tracking number. |
 
@@ -168,7 +175,7 @@ The closest terms win: an item's own terms beat its category's, and a category's
 
 - **Run programs** lists each program with **Open**, **Problems** and **30 days** figures, and badges for **Closed**, **Public** and **Owner login** (the owner's login cannot read contracts).
 - Open a program for **Open contracts**, **Need a look**, **Bought, 30 days**, the wallet division balance (or **Bought, all time**), the contract list (**Open**, **Problems**, **Accepted**, **Other**, **All**), **Bought per month**, **Top sellers, 90 days** and **Most bought, 90 days**.
-- Click a contract to see its problems and a comparison of quoted items with the contract's items. Then accept or reject it in game.
+- Click a contract to see its problems and a comparison of quoted items with the contract's items. Then accept or reject it in game. A blueprint copy in the contract is marked **blueprint copy** (contracts read before version 1.2.5 do not have that information); assembled items a program does not buy are pointed out too.
 - **Check now** reads the owner's contracts straight away (at most once a minute).
 - **Calculator** opens the seller view.
 

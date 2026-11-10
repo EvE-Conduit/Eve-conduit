@@ -104,13 +104,16 @@ function BuyDialog({ item, balance, onClose }: { item: Item; balance: number; on
   const most = Math.max(1, Math.min(left(item) ?? 1000, Math.floor(balance / item.price) || 1));
   const cost = item.price * qty;
   const buy = useMutation({
-    mutationFn: () => api.post<{ balance: number }>(`${BASE}/orders`, { item_id: item.id, quantity: qty }),
+    mutationFn: () => api.post<{ balance: number }>(`${BASE}/orders`, { item_id: item.id, quantity: qty, expected_price: item.price }),
     onSuccess: () => {
       toast.success("Ordered. An officer will hand it over and you'll get a notification.");
       qc.invalidateQueries({ queryKey: ["store"] });
       onClose();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      qc.invalidateQueries({ queryKey: ["store"] }); // the price or the stock may have changed: show today's
+    },
   });
   return (
     <Dialog

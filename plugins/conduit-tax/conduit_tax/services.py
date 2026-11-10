@@ -23,12 +23,15 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
 from conduit.accounts.models import Character
-from conduit.corp.models import CorpJournalEntry, CorporationInfo
+from conduit.corp.models import CorpJournalEntry, CorporationInfo, CorpSyncStatus
 from conduit.eve.models import EveCorporation, portrait_url
 from conduit.eve.tasks import names_for
 
 from .models import TAX_REF_TYPES, Invoice, LedgerMonth, Payment, Settlement, TaxSettings
 
+#: How long after a month ends closing it waits for wallets that haven't synced past the end. After that a corporation
+#: that stopped syncing (it left, or nobody's login can read its wallets) no longer holds the month up.
+SYNC_GRACE = timedelta(days=2)
 #: Below this, ids are NPC corporations, factions and agents (CONCORD is 1000125), never a player's character.
 NPC_MAX_ID = 3_000_000
 
@@ -103,6 +106,46 @@ def require_all_corporations(viewer, month: date | None = None) -> None:
         names = ", ".join(EveCorporation.objects.filter(pk__in=hidden).order_by("name").values_list("name", flat=True)) or "other corporations"
         raise LedgerError(f"This covers wallets of corporations you can't see on the corporation sheet ({names}); "
                           "someone with access to all of them has to do it")
+
+
+def unsynced_corporations(month: date) -> set[int]:
+    """The month's corporations whose wallets haven't synced since it ended: their last entries may still be missing,
+    and a bill is fixed once the month is closed."""
+    chosen = TaxSettings.load().corporations
+    ids = set(chosen) if chosen else set(in_month(entries(), month).values_list("corporation_id", flat=True).distinct())
+    synced = set(CorpSyncStatus.objects.filter(section="wallets", corporation_id__in=ids, last_success__gte=_at(month_end(month)))
+                 .values_list("corporation_id", flat=True))
+    return ids - synced
+
+
+def removed_characters(month: date, activity: dict[int, float], names: dict[int, str]) -> list[dict]:
+    """Characters taxed in the month that nobody has registered now, but that were on a member's account and taken off
+    it since the month began (removed by the member, or sold): ``activity`` is what the corporation took from each
+    unregistered character. Their tax is on nobody's bill, so whoever closes the month is told.
+
+    This only warns. The audit log names who had the character, but it isn't an ownership history (a sold character
+    leaves the same trace as one taken off to dodge the bill, and old events are cleared away), so nobody is billed
+    from it automatically."""
+    from conduit.accounts.models import User
+    from conduit.audit.models import AuditEvent
+
+    found: dict[int, AuditEvent] = {}
+    for e in AuditEvent.objects.filter(action="character.removed", at__gte=_at(month)).order_by("at"):
+        cid = (e.details or {}).get("character_id")
+        if cid in activity:
+            found[cid] = e  # the latest removal
+    owner_of = {cid: e.details.get("user_id") or e.details.get("impersonating") or (e.actor_id if e.actor_type == AuditEvent.Actor.USER else None)
+                for cid, e in found.items()}
+    users = {u.pk: u for u in User.objects.filter(pk__in={o for o in owner_of.values() if o}).select_related("main_character")}
+    out = []
+    for cid, e in found.items():
+        owner = users.get(owner_of[cid])
+        out.append({
+            "character_id": cid, "name": names.get(cid) or e.details.get("name") or f"Character {cid}", "collected": activity[cid],
+            "removed_at": e.at.isoformat(), "sold": bool(e.details.get("sold")),
+            "previous_owner": {"id": owner.pk, "name": owner.display_name} if owner else None,
+        })
+    return sorted(out, key=lambda r: -r["collected"])
 
 
 def months() -> list[dict]:
@@ -184,13 +227,17 @@ def ledger(month: date, user=None, viewer=None) -> dict:
         per_day[e.date.date().isoformat()] += amount
 
     invoices = {i.user_id: i for i in Invoice.objects.filter(month__month=month)} if closed else {}
+    # A viewer who can't see every corporation's wallets doesn't see the bill of a member taxed in the others either:
+    # its total would say what the member earned there.
+    elsewhere = _taxed_elsewhere(month, viewer) if viewer is not None else set()
     out_members = []
     for m in members.values():
         chars = sorted(m.pop("characters").values(), key=lambda c: -c["collected"])
         for c in chars:
             c["kinds"] = dict(c["kinds"])
         collected = sum(c["collected"] for c in chars)
-        inv = invoices.get(m["user_id"])
+        partial = m["user_id"] in elsewhere
+        inv = None if partial else invoices.get(m["user_id"])
         out_members.append({
             **m,
             "characters": chars,
@@ -198,6 +245,8 @@ def ledger(month: date, user=None, viewer=None) -> dict:
             "earned": sum(c["earned"] for c in chars),
             "tax": float(inv.amount) if inv else float(owed(collected, rate, minimum)) if m["registered"] else 0.0,
             "invoice": invoice_out(inv) if inv else None,
+            #: Also taxed in corporations the viewer can't see: the figures are for the ones they can, the bill is hidden.
+            "partial": partial,
         })
     out_members.sort(key=lambda m: -m["collected"])
 
@@ -210,6 +259,10 @@ def ledger(month: date, user=None, viewer=None) -> dict:
         "closed": closed is not None,
         "closed_at": closed.closed_at.isoformat() if closed else None,
         "can_close": closed is None and month_end(month) <= timezone.now().date(),
+        # For whoever runs the ledger, not on a member's own page.
+        "removed_characters": [] if user is not None else removed_characters(
+            month, {m["characters"][0]["id"]: m["collected"] for m in out_members if not m["registered"]},
+            {m["characters"][0]["id"]: m["name"] for m in out_members if not m["registered"]}),
         "rate": float(rate),
         "minimum": float(minimum),
         "totals": {
@@ -224,6 +277,13 @@ def ledger(month: date, user=None, viewer=None) -> dict:
         "members": out_members,
         "kinds": sorted(({"ref_type": k, "label": TAX_REF_TYPES.get(k, k), "collected": v} for k, v in kinds.items()), key=lambda k: -k["collected"]),
     }
+
+
+def _taxed_elsewhere(month: date, viewer) -> set[int]:
+    """Members taxed in the month in corporations ``viewer`` can't see."""
+    hidden = in_month(entries(), month).exclude(corporation_id__in=visible_corporations(viewer))
+    earners = {earner(e) for e in hidden.only("corporation_id", "first_party_id", "second_party_id")} - {None}
+    return set(Character.objects.filter(pk__in=earners).values_list("user_id", flat=True))
 
 
 def reference(month: date) -> str:
@@ -258,6 +318,13 @@ def close_month(month: date, by) -> LedgerMonth:
         raise LedgerError("A month can be closed once it's over")
     if LedgerMonth.objects.filter(month=month).exists():
         raise LedgerError(f"{label(month)} is already closed")
+    waiting = unsynced_corporations(month)
+    opens = _at(month_end(month)) + SYNC_GRACE
+    if waiting and timezone.now() < opens:
+        # Entries from the month's last hours arrive with the next wallet sync; bills made now would miss them for good.
+        names = ", ".join(EveCorporation.objects.filter(pk__in=waiting).order_by("name").values_list("name", flat=True)) or "some corporations"
+        raise LedgerError(f"The wallets of {names} haven't synced since {label(month)} ended, so its last entries may be missing. "
+                          f"Close it after their next sync (or from {opens:%d %B %H:%M} EVE time, whether they have synced or not).")
     settings = TaxSettings.load()
     closed = LedgerMonth.objects.create(month=month, rate=settings.rate, minimum=settings.minimum, closed_by=by)
     bills = []

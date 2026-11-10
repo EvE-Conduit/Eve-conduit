@@ -230,7 +230,9 @@ class ItemPrice(models.Model):
             return self.sell
         if self.buy and self.sell:
             return (self.buy + self.sell) / 2
-        return self.buy or self.sell
+        # One side missing. Nobody buying: halfway between nothing and the sell orders, not the sell price itself
+        # (one seller's asking price would be the whole quote). Nobody selling: the buy orders, the lower end anyway.
+        return self.buy or self.sell / 2
 
 
 class PriceHistory(models.Model):

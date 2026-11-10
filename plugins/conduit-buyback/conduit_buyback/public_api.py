@@ -17,7 +17,11 @@ from .models import BuybackSettings, Program, Quote
 router = Router(tags=["buyback (public)"])
 #: Quotes per visitor (by IP address) in ``WINDOW`` seconds.
 QUOTE_LIMIT = 30
+#: And from all visitors together: many addresses can't add up to more work and stored quotes than this.
+GLOBAL_LIMIT = 200
 WINDOW = 600
+#: Far more than the lines a public quote takes (``pricing.PUBLIC_MAX_LINES``) could need.
+MAX_PASTE = 40_000
 
 
 def _public(program_id: int) -> Program:
@@ -40,19 +44,23 @@ def program(request, program_id: int):
 
 
 class QuoteIn(Schema):
-    text: str = Field(max_length=200_000)
+    text: str = Field(max_length=MAX_PASTE)
+
+
+def _used(key: str) -> int:
+    cache.add(key, 0, timeout=WINDOW)
+    try:
+        return cache.incr(key)
+    except ValueError:  # expired between add and incr
+        cache.set(key, 1, timeout=WINDOW)
+        return 1
 
 
 def _count(request) -> None:
-    key = f"buyback:public-quotes:{client_ip(request) or 'unknown'}"
-    cache.add(key, 0, timeout=WINDOW)
-    try:
-        used = cache.incr(key)
-    except ValueError:  # expired between add and incr
-        cache.set(key, 1, timeout=WINDOW)
-        used = 1
-    if used > QUOTE_LIMIT:
+    if _used(f"buyback:public-quotes:{client_ip(request) or 'unknown'}") > QUOTE_LIMIT:
         raise HttpError(429, "Too many quotes; wait a few minutes")
+    if _used("buyback:public-quotes:everyone") > GLOBAL_LIMIT:
+        raise HttpError(429, "The calculator is busy; try again in a few minutes")
 
 
 @router.post("/programs/{program_id}/quote")

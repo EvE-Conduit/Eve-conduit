@@ -2,7 +2,11 @@
 
 Ship Replacement handles your ship replacement program. Members claim losses from their synced killmails. Reviewers
 check each loss, approve a payout or reject it with a reason. Payers export the approved payouts, send the ISK and mark
-requests paid. Managers set the payout rules. Loss values use CCP's average market prices, as on the character sheet.
+requests paid. Managers set the payout rules.
+
+Loss values are the hull and what was fitted to it (high, medium and low slots, rigs, subsystems) at CCP's average
+market prices. Cargo, drone and fighter bays and other holds don't count, and neither do blueprint copies, so the
+value can be lower than the character sheet's or zKillboard's total. Only ships can be claimed. The request page still lists the cargo, so reviewers see everything that was on board.
 
 ## Requirements
 

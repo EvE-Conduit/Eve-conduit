@@ -27,14 +27,14 @@ var H = (e) => /* @__PURE__ */ B(V, {
 		/* @__PURE__ */ z("path", { d: "M3 22h18" }),
 		/* @__PURE__ */ z("path", { d: "M6 18v-7" })
 	]
-}), U = (e) => /* @__PURE__ */ B(V, {
+}), ee = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M12 15V3" }),
 		/* @__PURE__ */ z("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
 		/* @__PURE__ */ z("path", { d: "m7 10 5 5 5-5" })
 	]
-}), ee = (e) => /* @__PURE__ */ B(V, {
+}), te = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M20 7h-9" }),
@@ -50,7 +50,7 @@ var H = (e) => /* @__PURE__ */ B(V, {
 			r: "3"
 		})
 	]
-}), W = (e) => /* @__PURE__ */ B(V, {
+}), U = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [/* @__PURE__ */ z("rect", {
 		width: "18",
@@ -60,7 +60,7 @@ var H = (e) => /* @__PURE__ */ B(V, {
 		rx: "2",
 		ry: "2"
 	}), /* @__PURE__ */ z("path", { d: "M7 11V7a5 5 0 0 1 10 0v4" })]
-}), G = (e) => /* @__PURE__ */ B(V, {
+}), W = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [/* @__PURE__ */ z("rect", {
 		width: "18",
@@ -70,10 +70,10 @@ var H = (e) => /* @__PURE__ */ B(V, {
 		rx: "2",
 		ry: "2"
 	}), /* @__PURE__ */ z("path", { d: "M7 11V7a5 5 0 0 1 9.9-1" })]
-}), K = ({ open: e, className: t = "size-4" }) => /* @__PURE__ */ z(V, {
+}), G = ({ open: e, className: t = "size-4" }) => /* @__PURE__ */ z(V, {
 	className: `${t} transition-transform ${e ? "rotate-90" : ""}`,
 	children: /* @__PURE__ */ z("path", { d: "m9 18 6-6-6-6" })
-}), q = (e) => /* @__PURE__ */ B(V, {
+}), K = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("circle", {
@@ -85,14 +85,14 @@ var H = (e) => /* @__PURE__ */ B(V, {
 		/* @__PURE__ */ z("path", { d: "M7 6h1v4" }),
 		/* @__PURE__ */ z("path", { d: "m16.71 13.88.7.71-2.82 2.82" })
 	]
-}), te = (e) => /* @__PURE__ */ B(V, {
+}), ne = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [/* @__PURE__ */ z("path", { d: "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" }), /* @__PURE__ */ z("circle", {
 		cx: "12",
 		cy: "7",
 		r: "4"
 	})]
-}), ne = (e) => /* @__PURE__ */ B(V, {
+}), re = (e) => /* @__PURE__ */ B(V, {
 	...e,
 	children: [
 		/* @__PURE__ */ z("path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }),
@@ -100,15 +100,15 @@ var H = (e) => /* @__PURE__ */ B(V, {
 		/* @__PURE__ */ z("path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }),
 		/* @__PURE__ */ z("path", { d: "M8 16H3v5" })
 	]
-}), J = "/api/p/tax";
-function Y() {
+}), q = "/api/p/tax";
+function J() {
 	return N({
 		queryKey: ["tax", "months"],
-		queryFn: () => E.get(`${J}/months`)
+		queryFn: () => E.get(`${q}/months`)
 	});
 }
-function X({ value: e, onChange: t }) {
-	let { data: n } = Y(), r = (n?.months ?? [{
+function Y({ value: e, onChange: t }) {
+	let { data: n } = J(), r = (n?.months ?? [{
 		month: e,
 		label: e,
 		closed: !1
@@ -124,41 +124,41 @@ function X({ value: e, onChange: t }) {
 		className: "w-56"
 	});
 }
-function Z() {
-	let { data: e } = Y(), [t, n] = I(null);
+function X() {
+	let { data: e } = J(), [t, n] = I(null);
 	return [t ?? e?.current ?? "", n];
 }
-function re() {
-	let e = P(), t = j("tax.manage_ledger"), [n, l] = Z(), [d, f] = I(!1), [m, _] = I(null), C = [
+function Z() {
+	let t = P(), n = j("tax.manage_ledger"), [l, d] = X(), [f, m] = I(!1), [_, C] = I(null), O = [
 		"tax",
 		"ledger",
-		n
-	], { data: D, isLoading: O } = N({
-		queryKey: C,
-		queryFn: () => E.get(`${J}/ledger?month=${n}`),
-		enabled: !!n
-	}), F = (t) => {
-		e.setQueryData(C, t), e.invalidateQueries({ queryKey: ["tax", "months"] });
-	}, V = M({
-		mutationFn: () => E.post(`${J}/months/${n}/close`),
+		l
+	], { data: F, isLoading: V } = N({
+		queryKey: O,
+		queryFn: () => E.get(`${q}/ledger?month=${l}`),
+		enabled: !!l
+	}), G = (e) => {
+		t.setQueryData(O, e), t.invalidateQueries({ queryKey: ["tax", "months"] });
+	}, K = M({
+		mutationFn: () => E.post(`${q}/months/${l}/close`),
 		onSuccess: (e) => {
-			F(e), A.success(`${e.label} closed; members have been told what they owe`);
+			G(e), A.success(`${e.label} closed; members have been told what they owe`);
 		},
 		onError: (e) => A.error(e.message)
-	}), K = M({
-		mutationFn: () => E.post(`${J}/months/${n}/reopen`),
+	}), J = M({
+		mutationFn: () => E.post(`${q}/months/${l}/reopen`),
 		onSuccess: (e) => {
-			F(e), A.success(`${e.label} reopened`);
+			G(e), A.success(`${e.label} reopened`);
 		},
 		onError: (e) => A.error(e.message)
-	}), q = M({
-		mutationFn: ({ id: e, paid: t }) => E.post(`${J}/invoices/${e}`, { paid: t }),
-		onSuccess: () => e.invalidateQueries({ queryKey: C }),
+	}), Z = M({
+		mutationFn: ({ id: e, paid: t }) => E.post(`${q}/invoices/${e}`, { paid: t }),
+		onSuccess: () => t.invalidateQueries({ queryKey: O }),
 		onError: (e) => A.error(e.message)
-	}), Y = M({
-		mutationFn: () => E.post(`${J}/payments/match`),
-		onSuccess: (t) => {
-			e.invalidateQueries({ queryKey: ["tax"] }), A.success(t.found ? `Found payments from ${t.found} member${t.found === 1 ? "" : "s"}` : "No new payments");
+	}), Q = M({
+		mutationFn: () => E.post(`${q}/payments/match`),
+		onSuccess: (e) => {
+			t.invalidateQueries({ queryKey: ["tax"] }), A.success(e.found ? `Found payments from ${e.found} member${e.found === 1 ? "" : "s"}` : "No new payments");
 		},
 		onError: (e) => A.error(e.message)
 	});
@@ -171,39 +171,39 @@ function re() {
 			actions: /* @__PURE__ */ B("div", {
 				className: "flex flex-wrap items-center gap-2",
 				children: [
-					/* @__PURE__ */ z(X, {
-						value: n,
-						onChange: l
+					/* @__PURE__ */ z(Y, {
+						value: l,
+						onChange: d
 					}),
 					/* @__PURE__ */ z(L, {
 						to: "/p/tax/me",
 						children: /* @__PURE__ */ B(i, {
 							variant: "ghost",
-							children: [/* @__PURE__ */ z(te, {}), " Mine"]
+							children: [/* @__PURE__ */ z(ne, {}), " Mine"]
 						})
 					}),
 					/* @__PURE__ */ z("a", {
-						href: `${J}/ledger.csv?month=${n}`,
+						href: `${q}/ledger.csv?month=${l}`,
 						download: !0,
 						children: /* @__PURE__ */ B(i, {
 							variant: "ghost",
-							children: [/* @__PURE__ */ z(U, {}), " CSV"]
+							children: [/* @__PURE__ */ z(ee, {}), " CSV"]
 						})
 					}),
-					t && /* @__PURE__ */ B(i, {
+					n && /* @__PURE__ */ B(i, {
 						variant: "ghost",
-						loading: Y.isPending,
-						onClick: () => Y.mutate(),
-						children: [/* @__PURE__ */ z(ne, {}), " Check payments"]
+						loading: Q.isPending,
+						onClick: () => Q.mutate(),
+						children: [/* @__PURE__ */ z(re, {}), " Check payments"]
 					}),
-					t && /* @__PURE__ */ B(i, {
-						onClick: () => f(!0),
-						children: [/* @__PURE__ */ z(ee, {}), " Settings"]
+					n && /* @__PURE__ */ B(i, {
+						onClick: () => m(!0),
+						children: [/* @__PURE__ */ z(te, {}), " Settings"]
 					})
 				]
 			})
 		}),
-		O || !D ? /* @__PURE__ */ z("div", {
+		V || !F ? /* @__PURE__ */ z("div", {
 			className: "grid gap-4 sm:grid-cols-4",
 			children: [
 				0,
@@ -215,47 +215,79 @@ function re() {
 			className: "space-y-6",
 			children: [
 				/* @__PURE__ */ z(ie, {
-					data: D,
-					canManage: t,
-					onClose: () => _("close"),
-					onReopen: () => _("reopen")
+					data: F,
+					canManage: n,
+					onClose: () => C("close"),
+					onReopen: () => C("reopen")
 				}),
 				/* @__PURE__ */ B("div", {
 					className: "grid gap-4 sm:grid-cols-2 xl:grid-cols-4",
 					children: [
 						/* @__PURE__ */ z(g, {
 							label: "Corporation took",
-							value: k(D.totals.collected),
+							value: k(F.totals.collected),
 							mono: !0,
-							hint: D.totals.earned > 0 ? `of ≈ ${k(D.totals.earned)} earned` : "in-game tax"
+							hint: F.totals.earned > 0 ? `of ≈ ${k(F.totals.earned)} earned` : "in-game tax"
 						}),
 						/* @__PURE__ */ z(g, {
-							label: `Owed · ${D.rate}%`,
-							value: k(D.totals.tax),
+							label: `Owed · ${F.rate}%`,
+							value: k(F.totals.tax),
 							mono: !0,
-							hint: `${D.totals.members} member${D.totals.members === 1 ? "" : "s"}`
+							hint: `${F.totals.members} member${F.totals.members === 1 ? "" : "s"}`
 						}),
 						/* @__PURE__ */ z(g, {
 							label: "Paid",
-							value: D.closed ? k(D.totals.paid) : "—",
+							value: F.closed ? k(F.totals.paid) : "—",
 							mono: !0,
-							tone: D.closed && D.totals.paid >= D.totals.tax ? "success" : void 0,
-							hint: D.closed ? `${Math.round(D.totals.paid / Math.max(D.totals.tax, 1) * 100)}% of what's owed` : "once the month is closed"
+							tone: F.closed && F.totals.paid >= F.totals.tax ? "success" : void 0,
+							hint: F.closed ? `${Math.round(F.totals.paid / Math.max(F.totals.tax, 1) * 100)}% of what's owed` : "once the month is closed"
 						}),
 						/* @__PURE__ */ z(g, {
 							label: "Unregistered characters",
-							value: k(D.totals.unregistered_collected),
+							value: k(F.totals.unregistered_collected),
 							mono: !0,
-							tone: D.totals.unregistered_collected > 0 ? "warning" : void 0,
+							tone: F.totals.unregistered_collected > 0 ? "warning" : void 0,
 							hint: "taxed from characters nobody registered"
+						})
+					]
+				}),
+				!!F.removed_characters?.length && /* @__PURE__ */ B(e, {
+					tone: "warning",
+					title: "Taxed characters were taken off their accounts",
+					children: [
+						"Their tax is on nobody's bill",
+						F.closed ? "" : " when this month is closed",
+						". Settle it with whoever had them:",
+						/* @__PURE__ */ z("ul", {
+							className: "mt-1 list-disc pl-5",
+							children: F.removed_characters.map((e) => /* @__PURE__ */ B("li", { children: [
+								/* @__PURE__ */ z("span", {
+									className: "font-medium",
+									children: e.name
+								}),
+								": ",
+								k(e.collected),
+								" taken by the corporation; ",
+								e.sold ? "sold and removed" : "removed",
+								" ",
+								D(e.removed_at),
+								e.previous_owner ? /* @__PURE__ */ B(R, { children: [
+									" from ",
+									/* @__PURE__ */ z("span", {
+										className: "font-medium",
+										children: e.previous_owner.name
+									}),
+									"'s account"
+								] }) : null
+							] }, e.character_id))
 						})
 					]
 				}),
 				/* @__PURE__ */ B(a, { children: [/* @__PURE__ */ z(s, {
 					title: "Tax per day",
-					description: `What the corporations took each day in ${D.label}`
-				}), /* @__PURE__ */ z(o, { children: D.series.some((e) => e.value > 0) ? /* @__PURE__ */ z(r, {
-					data: D.series,
+					description: `What the corporations took each day in ${F.label}`
+				}), /* @__PURE__ */ z(o, { children: F.series.some((e) => e.value > 0) ? /* @__PURE__ */ z(r, {
+					data: F.series,
 					format: (e) => k(e),
 					label: "Tax"
 				}) : /* @__PURE__ */ z("p", {
@@ -268,31 +300,31 @@ function re() {
 					items: [{
 						value: "members",
 						label: "Members",
-						count: D.members.length
+						count: F.members.length
 					}, {
 						value: "kinds",
 						label: "By kind",
-						count: D.kinds.length
+						count: F.kinds.length
 					}],
 					children: [/* @__PURE__ */ z(y, {
 						value: "members",
 						children: /* @__PURE__ */ z(ae, {
-							data: D,
-							canManage: t,
-							onPaid: (e, t) => q.mutate({
+							data: F,
+							canManage: n,
+							onPaid: (e, t) => Z.mutate({
 								id: e,
 								paid: t
 							})
 						})
 					}), /* @__PURE__ */ z(y, {
 						value: "kinds",
-						children: /* @__PURE__ */ z(a, { children: D.kinds.length === 0 ? /* @__PURE__ */ z(u, {
+						children: /* @__PURE__ */ z(a, { children: F.kinds.length === 0 ? /* @__PURE__ */ z(u, {
 							icon: /* @__PURE__ */ z(H, {}),
 							title: "No tax this month"
 						}) : /* @__PURE__ */ B(b, { children: [/* @__PURE__ */ z(v, { children: /* @__PURE__ */ B("tr", { children: [/* @__PURE__ */ z(w, { children: "Kind" }), /* @__PURE__ */ z(w, {
 							align: "right",
 							children: "Corporation took"
-						})] }) }), /* @__PURE__ */ z("tbody", { children: D.kinds.map((e) => /* @__PURE__ */ B(T, { children: [/* @__PURE__ */ z(S, { children: e.label }), /* @__PURE__ */ z(S, {
+						})] }) }), /* @__PURE__ */ z("tbody", { children: F.kinds.map((e) => /* @__PURE__ */ B(T, { children: [/* @__PURE__ */ z(S, { children: e.label }), /* @__PURE__ */ z(S, {
 							numeric: !0,
 							children: k(e.collected)
 						})] }, e.ref_type)) })] }) })
@@ -300,23 +332,23 @@ function re() {
 				})
 			]
 		}),
-		d && /* @__PURE__ */ z(oe, { onClose: () => f(!1) }),
+		f && /* @__PURE__ */ z(oe, { onClose: () => m(!1) }),
 		/* @__PURE__ */ z(c, {
-			open: m === "close",
-			onOpenChange: (e) => !e && _(null),
-			title: `Close ${D?.label ?? "this month"}?`,
-			description: `The ${D?.rate ?? ""}% rate is fixed as it is now, and each member is told what they owe. You can reopen it while nobody has paid.`,
-			confirmLabel: /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(W, {}), " Close month"] }),
-			onConfirm: () => V.mutateAsync()
+			open: _ === "close",
+			onOpenChange: (e) => !e && C(null),
+			title: `Close ${F?.label ?? "this month"}?`,
+			description: `The ${F?.rate ?? ""}% rate is fixed as it is now, and each member is told what they owe. You can reopen it while nobody has paid.`,
+			confirmLabel: /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(U, {}), " Close month"] }),
+			onConfirm: () => K.mutateAsync()
 		}),
 		/* @__PURE__ */ z(c, {
-			open: m === "reopen",
-			onOpenChange: (e) => !e && _(null),
-			title: `Reopen ${D?.label ?? "this month"}?`,
+			open: _ === "reopen",
+			onOpenChange: (e) => !e && C(null),
+			title: `Reopen ${F?.label ?? "this month"}?`,
 			description: "What members owe for the month is deleted until you close it again.",
 			danger: !0,
-			confirmLabel: /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(G, {}), " Reopen"] }),
-			onConfirm: () => K.mutateAsync()
+			confirmLabel: /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(W, {}), " Reopen"] }),
+			onConfirm: () => J.mutateAsync()
 		})
 	] });
 }
@@ -328,7 +360,7 @@ function ie({ data: t, canManage: n, onClose: r, onReopen: a }) {
 			size: "sm",
 			variant: "ghost",
 			onClick: a,
-			children: [/* @__PURE__ */ z(G, {}), " Reopen"]
+			children: [/* @__PURE__ */ z(W, {}), " Reopen"]
 		}) : void 0,
 		children: [
 			"Closed ",
@@ -344,7 +376,7 @@ function ie({ data: t, canManage: n, onClose: r, onReopen: a }) {
 			size: "sm",
 			variant: "primary",
 			onClick: r,
-			children: [/* @__PURE__ */ z(W, {}), " Close month"]
+			children: [/* @__PURE__ */ z(U, {}), " Close month"]
 		}) : void 0,
 		children: "Closing it fixes the rate and tells members what they owe."
 	}) : /* @__PURE__ */ z(e, {
@@ -387,7 +419,7 @@ function ae({ data: e, canManage: r, onPaid: i }) {
 			/* @__PURE__ */ z(S, { children: /* @__PURE__ */ B("div", {
 				className: "flex items-center gap-3",
 				children: [
-					/* @__PURE__ */ z(K, {
+					/* @__PURE__ */ z(G, {
 						open: o.has(e.key),
 						className: "size-4 text-subtle"
 					}),
@@ -400,13 +432,23 @@ function ae({ data: e, canManage: r, onPaid: i }) {
 						className: "min-w-0",
 						children: [/* @__PURE__ */ B("div", {
 							className: "flex items-center gap-2",
-							children: [/* @__PURE__ */ z("span", {
-								className: "truncate font-medium",
-								children: e.name
-							}), !e.registered && /* @__PURE__ */ z(n, {
-								tone: "warning",
-								children: "not registered"
-							})]
+							children: [
+								/* @__PURE__ */ z("span", {
+									className: "truncate font-medium",
+									children: e.name
+								}),
+								!e.registered && /* @__PURE__ */ z(n, {
+									tone: "warning",
+									children: "not registered"
+								}),
+								e.partial && /* @__PURE__ */ z("span", {
+									title: "Also taxed in corporations whose wallets you can't see; the bill covers those too, so it isn't shown",
+									children: /* @__PURE__ */ z(n, {
+										tone: "info",
+										children: "part only"
+									})
+								})
+							]
 						}), /* @__PURE__ */ B("div", {
 							className: "text-xs text-subtle",
 							children: [
@@ -473,9 +515,9 @@ function ae({ data: e, canManage: r, onPaid: i }) {
 function oe({ onClose: e }) {
 	let t = P(), { data: n } = N({
 		queryKey: ["tax", "settings"],
-		queryFn: () => E.get(`${J}/settings`)
+		queryFn: () => E.get(`${q}/settings`)
 	}), [r, a] = I(null), o = r ?? n ?? null, s = M({
-		mutationFn: (e) => E.put(`${J}/settings`, e),
+		mutationFn: (e) => E.put(`${q}/settings`, e),
 		onSuccess: (n) => {
 			t.setQueryData(["tax", "settings"], n), t.invalidateQueries({ queryKey: ["tax"] }), A.success("Saved"), e();
 		},
@@ -623,12 +665,12 @@ function Q(e) {
 			"me",
 			e
 		],
-		queryFn: () => E.get(`${J}/me?month=${e}`),
+		queryFn: () => E.get(`${q}/me?month=${e}`),
 		enabled: e !== void 0
 	});
 }
 function $() {
-	let t = j("tax.view_ledger"), [r, c] = Z(), { data: l, isLoading: d } = Q(r), f = l?.ledger.members[0], m = l?.invoices.filter((e) => !e.paid) ?? [];
+	let t = j("tax.view_ledger"), [r, c] = X(), { data: l, isLoading: d } = Q(r), f = l?.ledger.members[0], m = l?.invoices.filter((e) => !e.paid) ?? [];
 	return /* @__PURE__ */ B(R, { children: [/* @__PURE__ */ z(p, {
 		eyebrow: "Corp tax",
 		title: "My tax",
@@ -636,7 +678,7 @@ function $() {
 		description: "The tax your corporation took from your characters' bounties, ESS payouts and missions, and what you owe on top.",
 		actions: /* @__PURE__ */ B("div", {
 			className: "flex items-center gap-2",
-			children: [/* @__PURE__ */ z(X, {
+			children: [/* @__PURE__ */ z(Y, {
 				value: r,
 				onChange: c
 			}), t && /* @__PURE__ */ z(L, {
@@ -652,7 +694,7 @@ function $() {
 		children: [
 			l.outstanding > 0 && /* @__PURE__ */ B(e, {
 				tone: "warning",
-				icon: /* @__PURE__ */ z(q, {}),
+				icon: /* @__PURE__ */ z(K, {}),
 				title: `You owe ${k(l.outstanding, { full: !0 })} in corp tax`,
 				children: [l.payment_instructions || "Ask your corporation's leadership how to pay.", l.payment_reason && m.length > 0 && /* @__PURE__ */ B(R, { children: [
 					" Put ",
@@ -739,7 +781,7 @@ function $() {
 	})] });
 }
 function se() {
-	return j("tax.view_ledger") ? /* @__PURE__ */ z(re, {}) : /* @__PURE__ */ z($, {});
+	return j("tax.view_ledger") ? /* @__PURE__ */ z(Z, {}) : /* @__PURE__ */ z($, {});
 }
 function ce() {
 	let { data: e, isLoading: t } = Q("");
@@ -799,4 +841,4 @@ var le = O({
 //#endregion
 export { le as default };
 
-export const classes = ["!data","!o","---","----------------------------------------------------------------------------","-----------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------","-------------------------------------------------------------------------------------------------","@conduit/sdk","@tanstack/react-query","a","accountant","action","actions","align","all","amount","amounts","and","are","aren","aria-label","as","at","available_corporations","available_ref_types","be","been","bg-bg/40","bill","billed","bills","block","boolean","border","border-border","but","by","can","canManage","canView","can_close","character","characters","checked","children","className","close","closed","closed_at","collected","confirmLabel","const","contains","corp","corporation","corporations","count","counts","current","currentColor","cursor-pointer","cx","cy","danger","dashboard","data","date","day","default","deleted","description","director","disabled","divide-border","divide-y","each","earned","else","enabled","estimate","every","export","eyebrow","false","far","few","fill","fixed","fixes","flex","flex-wrap","font-medium","font-mono","font-semibold","footer","for","form","format","found","from","full","function","gap-2","gap-3","gap-4","gap-6","get","ghost","grid","h-16","h-28","h-40","h-48","h-fit","has","have","height","here","hint","how","href","icon","icons","id","if","import","in","in-game","info","inline","inline-flex","interactive","interface","invoice","invoices","is","isLoading","it","items","items-center","items-end","its","itself","justify-between","keep","keeps","key","kind","kinds","label","leadership","ledger","length","lg","loading","login","m16.71","m7","m9","manage_ledger","marked","match","max","maxLength","mb-1","mb-3","me","means","member","members","min","min-w-0","minimum","mono","month","monthly","months","mt-1","mutationFn","my-tax","n","name","new","nobody","none","not","nothing","number","numeric","of","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onError","onOpenChange","onPaid","onReopen","onSuccess","once","open","options","or","order","outstanding","over","owe","owed","own","p","paid","paid_at","paid_from_wallet","patch","path","pay","payment_instructions","payment_reason","payments","payouts","per","pills","pl-16","placeholder","portrait","post","primary","put","px-3","px-card","py-2.5","py-3","qc","queryFn","queryKey","rate","react","react-router","reason","ref_type","ref_types","reference","refresh","registered","reminded","reminder_days","reopen","reopened","rest","return","right","rotate-90","round","rounded-lg","routes","rows","rx","ry","s","same","save","sent","series","set","setConfirm","setForm","setMonth","setOpen","setSettingsOpen","settings","settle","shows","site","size","size-4","sm","sm:grid-cols-2","sm:grid-cols-3","sm:grid-cols-4","so","space-y-4","space-y-5","space-y-6","src","step","still","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","success","switches","synced","t","tabular-nums","tax","taxed","tells","text-2xl","text-[13px]","text-muted","text-sm","text-subtle","text-xs","the","they","this","ticked","ticker","title","to","toggle","told","tone","took","totals","transition-transform","true","truncate","type","undefined","unpaid","unregistered_collected","until","up","useQueryClient","useState","used","user_id","value","variant","viewBox","view_ledger","void","w-32","w-40","w-44","w-56","wallets","warning","were","what","while","whose","widget","widgets","width","with","within","without","word","x","xl:grid-cols-4","xl:grid-cols-[1fr_380px]","yet","you","your"];
+export const classes = ["!data","!o","---","----------------------------------------------------------------------------","-----------------------------------------------------------------------------------------","------------------------------------------------------------------------------------------","-------------------------------------------------------------------------------------------------","@conduit/sdk","@tanstack/react-query","a","account","accountant","accounts","action","actions","align","all","amount","amounts","and","are","aren","aria-label","as","at","available_corporations","available_ref_types","be","been","bg-bg/40","bill","billed","bills","block","boolean","border","border-border","but","by","can","canManage","canView","can_close","character","character_id","characters","checked","children","className","close","closed","closed_at","collected","confirmLabel","const","contains","corp","corporation","corporations","count","counts","covers","current","currentColor","cursor-pointer","cx","cy","danger","dashboard","data","date","day","default","deleted","description","director","disabled","divide-border","divide-y","each","earned","else","enabled","estimate","every","export","eyebrow","false","far","few","figures","fill","fixed","fixes","flex","flex-wrap","font-medium","font-mono","font-semibold","footer","for","form","format","found","from","full","function","gap-2","gap-3","gap-4","gap-6","get","ghost","grid","h-16","h-28","h-40","h-48","h-fit","had","has","have","height","here","hint","how","href","icon","icons","id","if","import","in","in-game","info","inline","inline-flex","interactive","interface","invoice","invoices","is","isLoading","isn","it","items","items-center","items-end","its","itself","justify-between","keep","keeps","key","kind","kinds","label","leadership","ledger","length","lg","list-disc","loading","login","m16.71","m7","m9","manage_ledger","marked","match","max","maxLength","mb-1","mb-3","me","means","member","members","min","min-w-0","minimum","mono","month","monthly","months","mt-1","mutationFn","my-tax","n","name","new","nobody","none","not","nothing","number","numeric","of","off","on","onChange","onCheckedChange","onClick","onClose","onConfirm","onError","onOpenChange","onPaid","onReopen","onSuccess","once","ones","only","open","options","or","order","outstanding","over","owe","owed","own","p","paid","paid_at","paid_from_wallet","part","partial","patch","path","pay","payment_instructions","payment_reason","payments","payouts","per","pills","pl-16","pl-5","placeholder","portrait","post","previous_owner","primary","put","px-3","px-card","py-2.5","py-3","qc","queryFn","queryKey","rate","react","react-router","reason","ref_type","ref_types","reference","refresh","registered","reminded","reminder_days","removed","removed_at","reopen","reopened","rest","return","right","rotate-90","round","rounded-lg","routes","rows","rx","ry","s","same","save","see","sent","series","set","setConfirm","setForm","setMonth","setOpen","setSettingsOpen","settings","settle","shown","shows","since","site","size","size-4","sm","sm:grid-cols-2","sm:grid-cols-3","sm:grid-cols-4","so","sold","space-y-4","space-y-5","space-y-6","src","step","still","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","success","switches","synced","t","tabular-nums","taken","tax","taxed","tells","text-2xl","text-[13px]","text-muted","text-sm","text-subtle","text-xs","that","the","their","them","they","this","those","ticked","ticker","title","to","toggle","told","tone","took","totals","transition-transform","true","truncate","type","undefined","unpaid","unregistered_collected","until","up","useQueryClient","useState","used","user_id","value","variant","viewBox","view_ledger","viewer","void","w-32","w-40","w-44","w-56","wallets","warning","was","were","what","when","while","whoever","whose","widget","widgets","width","with","within","without","word","x","xl:grid-cols-4","xl:grid-cols-[1fr_380px]","yet","you","your"];

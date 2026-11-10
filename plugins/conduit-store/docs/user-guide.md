@@ -92,6 +92,9 @@ You do not have enough points yet.
 **The Buy button says "Limit reached".**
 You already ordered the most of this item you are allowed. Cancelled orders do not count towards the limit.
 
+**"The price of ... is now N points each".**
+The price changed after your page loaded it. Nothing was taken; look at the new price and order again if you still want it.
+
 **"Only N left" or "Sold out".**
 There is not enough stock. Officers may add more later.
 

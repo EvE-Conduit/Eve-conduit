@@ -325,3 +325,33 @@ def test_managers_switch_on_discord_pings(boss, customer, api_client):
     resp = api_client.call("put", "/api/pings/freight.contract_created", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="freight.contract_created").roles == ["123"]
+
+
+def test_a_members_only_service_doesnt_lend_its_rates_to_outsiders(service, customer, boss, offline):
+    """One owner, the same lane twice: cheap for a group of members, dearer for everyone. A contract is checked against
+    the service its pilot may use, not whichever comes first by name."""
+    members = Group.objects.create(name="Line members")
+    service.name = "A members' freight"  # first by name: it used to win for everyone
+    service.save()
+    service.groups.add(members)
+    public = Service.objects.create(name="Public freight", owner=boss.main_character, is_corporation=True, days_to_complete=3, public=True)
+    Route.objects.create(service=public, start_name="Jita 4-4", start_system_id=JITA, start_location_id=JITA_44, end_name="Amarr VIII",
+                         end_system_id=AMARR, end_location_id=AMARR_HUB, base_price=Decimal("50000000"))
+    customer.groups.add(members)
+    cheap = 1_000_000 + 5_000_000 + 900_000  # the members' rate for 10,000 m³
+    outsider = 95000001  # no character on the site
+    esi = FakeEsi({f"/corporations/{CORP_ID}/contracts": [
+        row(1, JITA_44, AMARR_HUB, cheap),  # a member in the group
+        row(2, JITA_44, AMARR_HUB, cheap, issuer=outsider),  # an outsider paying the members' rate
+        row(3, JITA_44, AMARR_HUB, 50_000_000, issuer=outsider),
+        row(4, PERIMETER, AMARR_HUB, 5_000_000, issuer=outsider),  # a lane only the members' service runs
+    ]})
+    contracts.sync_owner(boss.main_character.pk, client=esi)
+    by_id = {c.contract_id: c for c in Contract.objects.all()}
+    assert (by_id[1].service, codes(1)) == (service, [])
+    assert (by_id[2].service, codes(2)) == (public, ["reward_low"])
+    assert (by_id[3].service, codes(3)) == (public, [])
+    assert (by_id[4].service, codes(4)) == (service, ["not_entitled"])
+    # Checking again (after a route changes) says the same.
+    contracts.recheck(service)
+    assert codes(4) == ["not_entitled"] and codes(1) == []

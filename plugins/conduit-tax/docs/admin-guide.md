@@ -74,6 +74,16 @@ different. What the corporation took is exact.
 
 A month can be closed once it is over. The ledger shows "<month> is over and still open".
 
+Bills are fixed when the month is closed, so closing waits until every corporation's wallets have synced after the
+month ended (entries from its last hours arrive with that sync). If a corporation has not synced by two days after the
+month's end, the month can be closed anyway.
+
+If a taxed character was on a member's account and has been taken off it since the month began (removed by the member,
+or sold), the ledger says so above the chart: the character, what the corporation took from it, when it was removed and
+whose account it was on. Its tax is on nobody's bill. Nobody is billed for it automatically (a sold character leaves the
+same trace as one removed to avoid the bill): settle it with the member, or ask them to add the character again
+before you close the month.
+
 1. Pick the month.
 2. Click **Close month** and confirm.
 3. The rate and smallest bill are fixed for that month. Each registered member whose bill is at least the smallest
@@ -145,6 +155,13 @@ Also check **Corporations** and **What counts** in the settings.
 wallet access to every corporation in the ledger. Have someone with full access do it.
 
 **"A month can be closed once it's over".** Wait until the month has ended.
+
+**"The wallets of ... haven't synced since <month> ended".** Wait for the next wallet sync of the corporations named
+(the corporation sheet shows when each section last synced), then close the month. The message says from when it can
+be closed regardless.
+
+**A member shows "part only" and no bill.** They were also taxed in corporations whose wallets you cannot see. Their
+bill covers those too, so it is hidden from you; the figures shown are for the corporations you can see.
 
 **"Some members have already paid for this month; mark those payments as unpaid first".** Unmark the paid bills, then
 reopen.
