@@ -18,7 +18,8 @@ The page shows:
 - **How SRP works here**: your site's SRP policy, if the officers wrote one. Read it before claiming.
 - Three counters: **Waiting for review**, **Approved, not paid yet** and **Paid to you** (all time).
 - **Losses you can claim**: unclaimed losses from the last 30 days (your site may set a different number), with
-  **Ship**, **Where**, **When**, **Loss** value and the **Payout** the rules suggest.
+  **Ship**, **Where**, **When**, **Loss** value (ship and fitted modules) and the **Payout** the rules suggest. Only
+  ships are listed: a lost mobile depot or other deployable can't be claimed.
 - **My requests**: every request you sent, with **Ship**, **Fleet**, **Sent**, **Payout** and **Status**.
 
 You can only claim ships lost by your own characters, after the character was linked to your account. If a character
@@ -51,7 +52,7 @@ You can paste up to 10 links in 10 minutes. Links for losses that aren't yours a
 
 Open a request from **My requests**. It shows:
 
-- **Loss value** (ship and modules at average prices), **Rules suggest** and **Payout**;
+- **Loss value** (the ship and its fitted modules at average prices; cargo, drones and blueprint copies don't count), **Rules suggest** and **Payout**;
 - the full fitting and cargo, red for destroyed and green for dropped;
 - the fleet, FC, corporation, final blow and attackers;
 - the decision, with the reviewer's note.

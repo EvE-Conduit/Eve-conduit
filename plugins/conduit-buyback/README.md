@@ -41,7 +41,7 @@ the description, and every contract is checked against its quote before you acce
 - **Locations**: a name, a solar system and optionally the station or structure id, which makes contracts made
   anywhere else stand out. Known stations and structures can be picked by name.
 - **Public programs**: a program marked public gives quotes to anyone at `/public/p/buyback/<id>`, without an
-  account (30 quotes per visitor per 10 minutes). Public quotes belong to nobody; contracts for them are checked like
+  account (30 quotes of up to 200 lines per visitor per 10 minutes, from stored prices only). Public quotes belong to nobody; contracts for them are checked like
   any other.
 - **Prices** (permission `buyback.manage_all_programs`, which also runs every program) at the trade hub you pick,
   which programs use unless they pick their own:
@@ -61,7 +61,9 @@ the description, and every contract is checked against its quote before you acce
   more than 20 % above that average is suspect: if the item traded on at least 5 of those days, the average is used;
   if it rarely trades, the lower of the two is used and the item goes to manual review. Sellers see a badge saying
   which. Prices far *below* the average can be caught too (off by default: buy prices normally sit below the
-  average, and a low price only costs the seller). All four numbers are settings.
+  average, and a low price only costs the seller). All four numbers are settings. An item with no recent trading
+  to compare with (or whose history isn't loaded yet) and every blueprint go to manual review as well; a contract
+  holding a blueprint copy is flagged as a severe problem.
 - **Settings** also cover the tracking prefix, how long quotes without a contract are kept, all-or-nothing quotes,
   and whether only the seller and managers can open a quote.
 

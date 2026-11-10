@@ -11,7 +11,7 @@ from decimal import Decimal
 from conduit.esi.exceptions import EsiError
 
 from .models import BuybackSettings, Contract, Program, Quote
-from .services import prefix_for
+from .services import item_row, prefix_for
 
 log = logging.getLogger(__name__)
 
@@ -49,9 +49,20 @@ def check(c: Contract, quote: Quote | None, program: Program | None, duplicate: 
         for ln in quote.lines:
             if ln.get("accepted"):
                 wanted[ln["type_id"]] += ln["quantity"]
-        given, asked = Counter(), Counter()
-        for type_id, quantity, included in c.items:
+        given, asked, copies, assembled = Counter(), Counter(), set(), set()
+        for type_id, quantity, included, copy, single in map(item_row, c.items):
             (given if included else asked)[type_id] += quantity
+            if included and copy:
+                copies.add(type_id)
+            elif included and single:
+                assembled.add(type_id)
+        if copies:
+            # The quote priced the blueprint's market price, which is an original's; a copy is worth a fraction of it.
+            n = len(copies)
+            out.append(problem("blueprint_copy", f"Has {n} blueprint cop{'ies' if n != 1 else 'y'} where the quote priced "
+                                                 f"{'originals' if n != 1 else 'an original'}: worth far less than quoted."))
+        if assembled and program and not program.allow_unpacked and _not_blueprints(assembled):
+            out.append(problem("assembled", "Has assembled (unpacked) items, which this program doesn't buy.", severe=False))
         missing = sum(1 for t, q in wanted.items() if given[t] < q)
         extra = sum(1 for t, q in given.items() if q > wanted[t])
         if asked:
@@ -72,8 +83,18 @@ def check(c: Contract, quote: Quote | None, program: Program | None, duplicate: 
     if c.title.strip() != quote.tracking_number:
         out.append(problem("title", "The title has more than the tracking number in it.", severe=False))
     if quote.flagged:
-        out.append(problem("watchlist", "Has items to check by hand: on the manual review list, or priced far off their recent average."))
+        out.append(problem("watchlist", "Has items to check by hand: on the manual review list, blueprints, or priced without "
+                                        "a recent average to check against (or far off it)."))
     return sorted(out, key=lambda p: not p["severe"])
+
+
+def _not_blueprints(type_ids) -> bool:
+    """Any of the types isn't a blueprint (a researched original is a single item too, and that's fine)."""
+    from conduit.sde.models import ItemType
+
+    from .pricing import BLUEPRINT_CATEGORY
+
+    return ItemType.objects.filter(pk__in=type_ids).exclude(group__category_id=BLUEPRINT_CATEGORY).exists()
 
 
 def _rows(character, programs: list[Program], client) -> list[tuple[dict, str]]:
@@ -95,7 +116,9 @@ def _items(character, row: dict, source: str, client) -> list | None:
         if exc.status in (403, 404):  # gone or never visible: don't ask again
             return []
         raise
-    return [[r["type_id"], r["quantity"], bool(r.get("is_included", True))] for r in rows]
+    # raw_quantity -2 is a blueprint copy (-1: a single, unstacked item, such as a researched original).
+    return [[r["type_id"], r["quantity"], bool(r.get("is_included", True)), r.get("raw_quantity") == -2, bool(r.get("is_singleton"))]
+            for r in rows]
 
 
 def sync_owner(character_id: int, client=None) -> dict:

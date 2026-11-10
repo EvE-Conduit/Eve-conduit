@@ -97,7 +97,11 @@ service.
 - Courier contracts to the owner's other half (the character, for a corporation service) are tracked only when they
   run one of the routes, so the owner's own hauling stays out.
 
-Problems (red): wrong assignee, no route covers it, reward too low, volume over the limit, collateral over the limit,
+When several services of one owner run the same lane, a contract is checked against the first one its pilot may use
+(a public service or one open to every member takes anyone; one kept to states or groups only members in them). If
+the pilot may use none of them, the contract is checked against the first and flagged.
+
+Problems (red): wrong assignee, made by a pilot the service doesn't haul for, no route covers it, reward too low, volume over the limit, collateral over the limit,
 past its delivery deadline. Notes (yellow): reward higher than asked, fewer days to complete than the service asks,
 expired before anyone accepted it. A difference of 1 ISK or less in the reward is ignored.
 

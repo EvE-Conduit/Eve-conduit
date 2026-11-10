@@ -74,7 +74,7 @@ own characters, and the FC's or fleet creator's own FATs unless the in-game flee
 | **Description** | empty | Shown on the item card. |
 | **Price in points** | `100` | Required. 1 to 1,000,000. |
 | **Sort order** | `0` | Lower comes first. |
-| **In stock** | empty (unlimited) | Goes down with each order and back up when an order is cancelled. |
+| **In stock** | empty (unlimited) | Goes down with each order and back up when an order is cancelled. Saving the form applies what you changed to the stock as it is now: orders placed while the form was open stay counted. |
 | **Limit per member** | empty (no limit) | Most a member may order in total. Cancelled orders do not count. |
 | **For sale** / **Hidden** | For sale | Hidden items stay on past orders but cannot be bought. |
 
