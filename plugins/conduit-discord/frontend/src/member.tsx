@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import { Check, DiscordLogo, ExternalLink, Refresh, Settings, Unlink } from "./icons";
+import { Check, Clock, DiscordLogo, ExternalLink, Refresh, Settings, Unlink } from "./icons";
 import { BASE, type Me } from "./types";
 
 export function useMe() {
@@ -47,7 +47,14 @@ export function MemberPage() {
         title="Discord"
         icon={<DiscordLogo />}
         description="Link your Discord account to join the server. Your roles and nickname follow your groups and main character."
-        actions={canManage ? <Link to="/p/discord/admin"><Button><Settings /> Server setup</Button></Link> : undefined}
+        actions={
+          canManage || data?.can_invite_guests ? (
+            <div className="flex gap-2">
+              {data?.can_invite_guests && <Link to="/p/discord/guests"><Button><Clock /> Temporary access</Button></Link>}
+              {canManage && <Link to="/p/discord/admin"><Button><Settings /> Server setup</Button></Link>}
+            </div>
+          ) : undefined
+        }
       />
 
       {isLoading || !data ? (

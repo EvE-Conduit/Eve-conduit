@@ -53,6 +53,38 @@ Buttons:
 - Your nickname is set from a format your leadership chooses, for example `[TCORP] Pilot One`. If the format is
   empty, you can pick your own nickname on Discord. Nicknames are cut to Discord's 32-character limit.
 
+## Temporary access links
+
+If you have the permission, **Temporary access** in the menu (or the **Temporary access** button on the Discord
+page) lets you bring someone without an account here onto the server for a while.
+
+1. Press **New link**.
+2. Say what it's for (your guests see this), how long it lasts, and optionally how many people may use it.
+3. Press **Make link**, copy it and send it to your guests.
+
+What your guest does:
+
+1. They open the link and press **Join with Discord**.
+2. Discord asks them to confirm.
+3. They are on the server with the guest role, and the page tells them when their access ends.
+
+When the link runs out, everyone who came in through it is removed from the server, within a couple of minutes.
+
+On the **Temporary access** page each link shows how long it has left, how many times it was used and who came in
+through it.
+
+| Action | What it does |
+|---|---|
+| **Copy link** | Copies the link again |
+| **Withdraw** | The link stops working and its guests are removed from the server now |
+| **Remove** (next to a guest) | Removes that one guest; the link keeps working for others |
+
+Good to know:
+
+- Someone who is already on the server can't use a link. They are told so, and nothing changes for them.
+- If you lose the permission to hand out access, your links stop working and their guests are removed.
+- A guest who later becomes a member and links their Discord account here stays on the server.
+
 ## Notifications
 
 You get a notification (category **Discord**) titled "Your Discord account was unlinked" when a manager unlinks

@@ -27,3 +27,17 @@ def sync_all():
     if is_enabled("discord"):
         with allow_waiting():
             return services.sync_all()
+
+
+@shared_task(ignore_result=True)
+def end_guest_stays():
+    """Remove guests whose temporary link ran out or was withdrawn."""
+    from conduit.plugins.services import is_enabled
+
+    from . import guests
+
+    from .discord_api import allow_waiting
+
+    if is_enabled("discord"):
+        with allow_waiting():
+            return guests.end_due()

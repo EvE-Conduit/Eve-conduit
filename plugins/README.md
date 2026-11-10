@@ -8,7 +8,7 @@ results, group rules and ESI scopes.
 - [`conduit-moons`](conduit-moons): the Moon Mining Ledger: monthly moon mining per member, moon tax and payments.
 - [`conduit-recruitment`](conduit-recruitment): Recruitment: application forms, a review queue and accepting into groups.
 - [`conduit-srp`](conduit-srp): Ship Replacement: members claim losses from their killmails, reviewers approve and pay.
-- [`conduit-discord`](conduit-discord): Discord: link accounts and join the server, with roles and nicknames from groups and states.
+- [`conduit-discord`](conduit-discord): Discord: link accounts and join the server, with roles and nicknames from groups and states, and temporary access links for guests.
 - [`conduit-announcements`](conduit-announcements): Announcements: news for everyone or chosen states and groups, pinned, scheduled and notified.
 - [`conduit-fleets`](conduit-fleets): Fleets & FATs: attendance from the FC's in-game fleet or a FAT link, stats, and a FAT group rule.
 - [`conduit-skillplans`](conduit-skillplans): Skill Plans: shared and personal skill plans with each character's progress and training time, copied into the game.
