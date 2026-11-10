@@ -422,6 +422,8 @@ STATUS_TEXT = {
     "token_replaced": "characters here with a lost token (they get SeAT's)",
     "other_account": "characters on a different Conduit account (left there)",
     "owner_changed": "characters sold since (left alone)",
+    "owner_unknown": "characters left out: SeAT's owner details don't match the account here (they sign in to add them)",
+    "admin_account": "characters left out: they'd join an administrator's account (the administrator signs in to add them)",
     "characters_missing_scopes": "characters whose token lacks scopes Conduit wants",
 }
 
