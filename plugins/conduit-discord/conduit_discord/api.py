@@ -365,29 +365,33 @@ def put_guest_settings(request, payload: GuestSettingsIn):
         if len(ids) > 50:
             raise HttpError(400, "Choose at most 50 channels")
         _run(guests.set_channels, s, ids)
-    # Hide every other channel from the guest role now (also after a change of role). A server with many channels
-    # can take more calls than Discord allows in one go: the background job then finishes it.
+    # Nothing is changed on Discord for this. Only say what guests see through their roles besides those channels.
     seen: list[str] = []
-    hiding = False
-    if s.guest_channels and s.guest_role_id:
-        try:
-            seen = guests.hide_other_channels(s)
-        except discord_api.DiscordError:
-            hiding = True
-            tasks.hide_guest_channels.delay()
+    try:
+        seen = guests.also_seen(s)
+    except discord_api.DiscordError:
+        pass
     if was_on and not s.guest_enabled:
         tasks.end_guest_stays.delay()  # switched off: the guests still on the server go
-    # Channels guests can still see although they shouldn't; nobody is let in while there are any.
-    # With no temporary role, the guest role is what a link's end takes away, and a former guest left on the server
-    # sees what anyone without a role sees. With channels limited that can be more than they saw as a guest, so
-    # say which channels those are.
-    after: list[str] = []
-    if s.guest_enabled and s.guest_channels and s.guest_end_action == "role" and not s.guest_temp_role_id:
-        try:
-            after = guests.seen_without_roles(s)
-        except discord_api.DiscordError:
-            pass
-    return {**admin_out(), "guest_channels_seen": seen, "guest_channels_hiding": hiding, "guest_after_end_sees": after}
+    return {**admin_out(), "guest_channels_seen": seen}
+
+
+@router.post("/admin/guests/undo-channels")
+@require_perm("discord.manage_discord")
+def undo_guest_channels(request):
+    """Stop limiting channels and put every channel's settings back to what they were before the bot changed them."""
+    s = DiscordSettings.load()
+    if not s.configured:
+        raise HttpError(400, "Finish the setup first")
+    record("discord.guest_channels_undone", "put the Discord channel settings back as they were before temporary access changed them",
+           request=request, target_type="plugin", details={"plugin": "discord"})
+    try:
+        done = _run(guests.undo_channel_changes, s)
+    except discord_api.DiscordError:
+        # Rate limited part-way: channels are no longer limited, and the rest is finished in the background.
+        tasks.undo_guest_channels.delay()
+        return {**admin_out(), "undo": {"restored": 0, "failed": [], "running": True}}
+    return {**admin_out(), "undo": {**done, "running": False}}
 
 
 @router.get("/guests")

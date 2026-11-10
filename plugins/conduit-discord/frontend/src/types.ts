@@ -66,12 +66,8 @@ export interface Admin {
   /** The second redirect the Discord application needs, for guests. */
   guest_redirect_uri: string;
   guest_hours_ceiling: number;
-  /** After saving Temporary access: channels guests can still see although they shouldn't. */
+  /** After saving Temporary access: channels guests see through their roles, besides the ones links open. */
   guest_channels_seen?: string[];
-  /** After saving: hiding the other channels is still running in the background. */
-  guest_channels_hiding?: boolean;
-  /** After saving, on a site with no temporary role: what former guests see without the guest role, when channels are limited. */
-  guest_after_end_sees?: string[];
   invite_url: string | null;
   mappings: Mapping[];
   groups: { id: number; name: string }[];

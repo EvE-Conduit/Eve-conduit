@@ -43,6 +43,8 @@ class Visitors(FakeDiscord):
             {"id": C_DIRECTORS, "type": 0, "name": "directors", "position": 2, "parent_id": None, "permission_overwrites": private},
         ]
         self.locked: set[str] = set()  # channels where the bot may not change permissions
+        self.audit: list[dict] = []  # newest first, as Discord gives it
+        self.audit_allowed = True
 
     def __call__(self, request):
         if self.down and request.headers.get("authorization", "").startswith("Bot "):
@@ -62,15 +64,30 @@ class Visitors(FakeDiscord):
                 return httpx.Response(404, json={"message": "Unknown Member", "code": 10007})
             who["roles"] = [r for r in who["roles"] if r != m.group(2)] + ([m.group(2)] if request.method == "PUT" else [])
             return httpx.Response(204)
+        if path == f"/guilds/{GUILD}/audit-logs":
+            if not self.audit_allowed:
+                return httpx.Response(403, json={"message": "Missing Permissions", "code": 50013})
+            q = request.url.params
+            rows = [e for e in self.audit if str(e["action_type"]) == q["action_type"] and e["user_id"] == q["user_id"]
+                    and ("before" not in q or int(e["id"]) < int(q["before"]))]
+            return httpx.Response(200, json={"audit_log_entries": rows[:100]})
         m = re.fullmatch(r"/channels/(\d+)/permissions/(\d+)", path)
         if m:
             self.calls.append((request.method, path))
             channel = next(c for c in self.channels if c["id"] == m.group(1))
             if channel["id"] in self.locked:
                 return httpx.Response(403, json={"message": "Missing Permissions", "code": 50013})
+            old = next((o for o in channel["permission_overwrites"] if o["id"] == m.group(2)), None)
             rest = [o for o in channel["permission_overwrites"] if o["id"] != m.group(2)]
             if request.method == "PUT":
-                rest.append({"id": m.group(2), **json.loads(request.content)})
+                new = json.loads(request.content)
+                rest.append({"id": m.group(2), **new})
+                changes = [{"key": k, "new_value": new[k], **({"old_value": old[k]} if old else {})}
+                           for k in ("allow", "deny") if old is None or old[k] != new[k]]
+                if changes:
+                    self.audit.insert(0, {"id": str(900000000000000000 + len(self.audit)), "user_id": BOT, "target_id": channel["id"],
+                                          "action_type": 14 if old else 13, "changes": changes,
+                                          "options": {"id": m.group(2), "type": str(new["type"])}})
             channel["permission_overwrites"] = rest
             return httpx.Response(204)
         return super().__call__(request)
@@ -418,38 +435,30 @@ def choose(api_client, manager, channels):
     return resp.json()
 
 
-def test_guests_only_see_the_channels_their_link_opens(manager, discord, api_client):
-    offered = api_client_channels = None
+def test_a_link_opens_its_channels_to_its_guests_and_no_roles_settings_are_changed(manager, discord, api_client):
     api_client.force_login(manager)
     offered = api_client.call("get", f"{BASE}/admin/channels").json()
     assert [(c["name"], c["kind"], c["category"]) for c in offered] == [
         ("directors", "text", ""), ("general", "text", "Public"), ("diplo", "text", "Public"), ("Fleet", "voice", "Public")]
-    body = choose(api_client, manager, [C_DIPLO, C_VOICE])
-    assert [c["name"] for c in body["settings"]["guest_channels"]] == ["diplo", "Fleet"]
-    assert body["guest_channels_seen"] == [] and body["guest_channels_hiding"] is False
-    # Hidden from the guest role everywhere it could see; the private channel needed nothing.
-    hidden = {c["name"] for c in discord.channels if any(o["id"] == R_GUEST for o in c["permission_overwrites"])}
-    assert hidden == {"Public", "general", "diplo", "Fleet"}
+    body = choose(api_client, manager, [C_DIRECTORS, C_VOICE])
+    assert [c["name"] for c in body["settings"]["guest_channels"]] == ["directors", "Fleet"]
+    # Told what guests see through their roles besides; nothing is written to Discord.
+    assert body["guest_channels_seen"] == ["#general", "#diplo"]
+    assert not discord.audit
 
-    made = make_link(api_client, manager, channels=[C_DIPLO])
-    assert [c["name"] for c in made["channels"]] == ["diplo"]
+    made = make_link(api_client, manager, channels=[C_DIRECTORS])
+    assert [c["name"] for c in made["channels"]] == ["directors"]
     assert join(made["url"].rsplit("/", 1)[1]).status_code == 200
-    assert {c["name"] for c in discord.channels if discord.sees(VISITOR, c["id"])} == {"diplo"}
-
-    # A link that doesn't say which opens every channel offered.
-    discord.visitor = SECOND
-    everything = make_link(api_client, manager, label="Fleet night")
-    assert join(everything["url"].rsplit("/", 1)[1]).status_code == 200
-    assert {c["name"] for c in discord.channels if discord.sees(SECOND, c["id"])} == {"diplo", "Fleet"}
-
-    # Members are untouched: someone with no roles still sees the open channels.
-    discord.members["999"] = {"roles": [], "nick": None}
-    assert {c["name"] for c in discord.channels if discord.sees("999", c["id"])} == {"Public", "general", "diplo", "Fleet"}
+    # What anyone sees, and the private channel their link opened.
+    assert {c["name"] for c in discord.channels if discord.sees(VISITOR, c["id"])} == {"Public", "general", "diplo", "Fleet", "directors"}
+    # The only settings made are the guest's own.
+    assert {(e["options"]["id"], e["options"]["type"]) for e in discord.audit} == {(VISITOR, "1")}
 
     # Leaving takes the personal access along.
     GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
-    assert guests.end_due() == {"ended": 2, "waiting": 0}
-    assert not any(o["id"] in (VISITOR, SECOND) for c in discord.channels for o in c["permission_overwrites"])
+    assert guests.end_due() == {"ended": 1, "waiting": 0}
+    assert not discord.sees(VISITOR, C_DIRECTORS)
+    assert not any(o["id"] in (VISITOR, R_GUEST) for c in discord.channels for o in c["permission_overwrites"])
 
 
 def test_a_link_cant_open_a_channel_that_isnt_offered(manager, discord, api_client):
@@ -458,33 +467,6 @@ def test_a_link_cant_open_a_channel_that_isnt_offered(manager, discord, api_clie
     assert resp.status_code == 400 and "choose from the ones offered" in resp.json()["detail"]
     assert api_client.call("get", f"{BASE}/guests").json()["channels"] == [{"id": C_DIPLO, "name": "diplo", "kind": "text"}]
     assert api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "channels": ["700000000000000099"]}).status_code == 400
-
-
-def test_nobody_is_let_in_while_a_channel_cant_be_hidden(manager, discord, api_client):
-    discord.locked = {C_GENERAL}
-    body = choose(api_client, manager, [C_DIPLO])
-    assert body["guest_channels_seen"] == ["#general"]
-    problems = api_client.call("post", f"{BASE}/admin/check").json()["problems"]
-    assert any("#general" in p for p in problems)
-    token = make_link(api_client, manager)["url"].rsplit("/", 1)[1]
-    resp = join(token)
-    assert resp.status_code == 503 and left(discord) and not Guest.objects.exists()
-    discord.locked = set()
-    assert join(token).status_code == 200
-    assert {c["name"] for c in discord.channels if discord.sees(VISITOR, c["id"])} == {"diplo"}
-
-
-def test_a_channel_made_later_is_hidden_from_the_guests_who_are_here(manager, discord, api_client):
-    choose(api_client, manager, [C_DIPLO])
-    join(make_link(api_client, manager)["url"].rsplit("/", 1)[1])
-    discord.channels.append({"id": "700000000000000042", "type": 0, "name": "new-plans", "position": 9, "parent_id": None, "permission_overwrites": []})
-    assert discord.sees(VISITOR, "700000000000000042")
-    guests.end_due()
-    assert not discord.sees(VISITOR, "700000000000000042")
-    # Once everything is in order, looking costs two questions and changes nothing.
-    before = len(discord.calls)
-    guests.end_due()
-    assert [c for c in discord.calls[before:] if c[0] != "GET"] == []
 
 
 def test_a_guest_whose_channels_cant_be_opened_isnt_left_on_the_server(manager, discord, api_client):
@@ -502,13 +484,10 @@ def test_without_chosen_channels_nothing_on_the_server_is_changed(fc, discord, a
     assert not any(path.endswith("/channels") for _m, path in discord.calls)
 
 
-def test_saving_says_what_former_guests_will_see_when_they_stay(manager, discord, api_client):
-    body = choose(api_client, manager, [C_DIPLO])
-    # Left on the server without the guest role, they see what anyone without a role sees.
-    assert body["guest_after_end_sees"] == ["#general", "#diplo", "Fleet"]
-    assert any("without a role sees" in p for p in api_client.call("post", f"{BASE}/admin/check").json()["problems"])
+def test_end_action_and_guest_name_settings(manager, discord, api_client):
+    api_client.force_login(manager)
     body = api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "end_action": "kick"}).json()
-    assert body["guest_after_end_sees"] == [] and body["settings"]["guest_end_action"] == "kick"
+    assert body["settings"]["guest_end_action"] == "kick"
     assert api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "end_action": "burn"}).status_code == 400
     assert api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "nickname_format": "{who}"}).status_code == 400
     body = api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "nickname_format": "{name} (guest)"}).json()
@@ -557,24 +536,57 @@ def test_tempaccess_given_by_hand_is_left_and_removing_guests_still_removes_them
     assert sorted(discord.members[VISITOR]["roles"]) == sorted([R_GUEST, R_TEMP]) and SECOND not in discord.members
 
 
-def test_with_channels_limited_a_former_guest_sees_nothing(two_roles, discord, api_client):
-    # tempaccess was let into a channel by hand: that would win over the guest role's denial, so it goes.
+def test_choosing_channels_changes_nothing_about_the_roles(two_roles, discord, api_client):
     general = next(c for c in discord.channels if c["id"] == C_GENERAL)
     general["permission_overwrites"].append({"id": R_TEMP, "type": 0, "allow": str(discord_api.VIEW_CHANNEL), "deny": "0"})
-    body = choose(api_client, two_roles, [C_DIPLO, C_VOICE])
-    assert body["guest_channels_seen"] == [] and body["guest_after_end_sees"] == []
-    assert not any("without a role" in p for p in api_client.call("post", f"{BASE}/admin/check").json()["problems"])
-    made = make_link(api_client, two_roles, channels=[C_DIPLO])
-    assert join(made["url"].rsplit("/", 1)[1]).status_code == 200
-    assert {c["name"] for c in discord.channels if discord.sees(VISITOR, c["id"])} == {"diplo"}
+    import copy
+
+    before = copy.deepcopy(discord.channels)
+    choose(api_client, two_roles, [C_DIPLO, C_VOICE])
+    join(make_link(api_client, two_roles, channels=[C_DIPLO])["url"].rsplit("/", 1)[1])
+    guests.end_due()
     GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
     assert guests.end_due() == {"ended": 1, "waiting": 0}
-    assert discord.members[VISITOR]["roles"] == [R_GUEST]
-    assert not any(discord.sees(VISITOR, c["id"]) for c in discord.channels)
-    # Nothing more to change on a second look.
-    before = len(discord.calls)
-    assert guests.hide_other_channels(DiscordSettings.load()) == []
-    assert not any(m == "PUT" for m, _p in discord.calls[before:])
+    assert discord.channels == before and discord.members[VISITOR]["roles"] == [R_GUEST]
+    assert not any(e["options"]["type"] == "0" for e in discord.audit)
+
+
+def test_undoing_puts_every_channel_back_as_it_was(two_roles, discord, api_client):
+    import copy
+
+    # The guest role was allowed into one channel by hand, and has a setting of its own in another.
+    by = {c["id"]: c for c in discord.channels}
+    by[C_GENERAL]["permission_overwrites"].append({"id": R_GUEST, "type": 0, "allow": str(discord_api.VIEW_CHANNEL | 2048), "deny": "0"})
+    by[C_DIRECTORS]["permission_overwrites"].append({"id": R_GUEST, "type": 0, "allow": "0", "deny": "2048"})
+    # What 1.4.0 did to the temporary role: its View Channel was taken away.
+    by[C_DIPLO]["permission_overwrites"].append({"id": R_TEMP, "type": 0, "allow": str(discord_api.VIEW_CHANNEL), "deny": "0"})
+    original = copy.deepcopy(discord.channels)
+    discord_api.set_overwrite("bot-token", C_DIPLO, R_TEMP, member=False, allow=0, deny=0)
+    # And to the guest role: denied wherever it could see, twice over where a later look found more to do.
+    V = discord_api.VIEW_CHANNEL
+    discord_api.set_overwrite("bot-token", C_GENERAL, R_GUEST, member=False, allow=0, deny=V)
+    discord_api.set_overwrite("bot-token", C_GENERAL, R_GUEST, member=False, allow=2048, deny=V)
+    for cid in (C_CAT, C_DIPLO, C_VOICE):
+        discord_api.set_overwrite("bot-token", cid, R_GUEST, member=False, allow=0, deny=V)
+    choose(api_client, two_roles, [C_DIPLO, C_VOICE])
+    assert discord.channels != original
+    # A guest who is here keeps their own channels.
+    join(make_link(api_client, two_roles)["url"].rsplit("/", 1)[1])
+    api_client.force_login(two_roles)
+
+    discord.audit_allowed = False
+    resp = api_client.call("post", f"{BASE}/admin/guests/undo-channels")
+    assert resp.status_code == 409 and "View Audit Log" in resp.json()["detail"]
+    assert DiscordSettings.load().guest_channels  # nothing was changed yet
+    discord.audit_allowed = True
+    body = api_client.call("post", f"{BASE}/admin/guests/undo-channels").json()
+    assert body["undo"] == {"restored": 5, "failed": [], "running": False} and body["settings"]["guest_channels"] == []
+    strip = lambda rows: [{**c, "permission_overwrites": sorted((o for o in c["permission_overwrites"] if o["id"] not in (VISITOR,)), key=lambda o: o["id"])} for c in rows]  # noqa: E731
+    assert strip(discord.channels) == strip(original)
+    assert any(o["id"] == VISITOR for c in discord.channels for o in c["permission_overwrites"])
+    # Again changes nothing.
+    assert api_client.call("post", f"{BASE}/admin/guests/undo-channels").json()["undo"]["restored"] == 0
+    assert strip(discord.channels) == strip(original)
 
 
 def test_a_guest_who_links_their_account_stops_being_a_guest_at_once(two_roles, discord, api_client):
@@ -584,18 +596,8 @@ def test_a_guest_who_links_their_account_stops_being_a_guest_at_once(two_roles, 
     assert link_member(api_client, two_roles).status_code == 200
     guest = Guest.objects.get()
     assert guest.ended_reason == "member" and guest.ended_at is not None
-    assert R_GUEST not in discord.members[VISITOR]["roles"] and R_TEMP not in discord.members[VISITOR]["roles"]
+    assert R_GUEST in discord.members[VISITOR]["roles"] and R_TEMP not in discord.members[VISITOR]["roles"]
     assert discord.members[VISITOR]["nick"] != "[GUEST] guest1"
-
-
-def test_a_former_guest_who_becomes_a_member_loses_the_guest_role(two_roles, discord, api_client):
-    made = make_link(api_client, two_roles)
-    join(made["url"].rsplit("/", 1)[1])
-    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
-    guests.end_due()
-    assert discord.members[VISITOR]["roles"] == [R_GUEST]
-    assert link_member(api_client, two_roles).status_code == 200
-    assert R_GUEST not in discord.members[VISITOR]["roles"]
 
 
 def test_the_two_roles_have_to_differ(two_roles, discord, api_client):

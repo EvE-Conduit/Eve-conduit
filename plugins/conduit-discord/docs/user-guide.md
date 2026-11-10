@@ -60,8 +60,8 @@ page) lets you give someone without an account here guest access to the server f
 
 1. Press **New link**.
 2. Say what it's for (your guests see this), how long it lasts, and optionally how many people may use it.
-   If your leadership limits guests to certain channels, also pick which of them these guests see. They see
-   those and nothing else on the server.
+   If your leadership offers channels to open, also pick which of them this link opens to its guests. They get
+   into those on top of what guests normally see.
 3. Press **Make link**, copy it and send it to your guests.
 
 What your guest does:

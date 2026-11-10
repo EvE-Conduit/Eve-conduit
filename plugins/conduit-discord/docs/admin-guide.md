@@ -107,9 +107,9 @@ runs out, the temporary role is taken away and that access ends.
 
 ### Switching it on
 
-1. On Discord, make two roles, for example `tempaccess` and `Guest`, both below the bot's role. Let `tempaccess`
-   see the channels guests should, and `Guest` none of them. (If you choose the channels on this site, as described
-   below, the bot arranges that for you.)
+1. On Discord, make two roles, for example `tempaccess` and `Guest`, both below the bot's role. Make them only for
+   guests: don't reuse a role your members have. Let `tempaccess` see the channels every guest should, and `Guest`
+   none of them.
 2. In the Discord developer portal, open your application's **OAuth2** page and add the second redirect shown on
    **Server setup → Temporary access** (`https://<your site>/public/p/discord/guest`). Without it Discord refuses
    guests with "Invalid OAuth2 redirect_uri".
@@ -144,18 +144,11 @@ Whichever you choose:
 - Someone who was **already on the server** when they used a link is never removed from it. They get the roles for
   the time, and lose the temporary one again.
 - A temporary role someone **already had**, given by hand, is left with them.
-- A Discord account **linked to a member** here can't use a link: members have their own access. A guest, or former
-  guest, who links their account as a member keeps their place. Their guest access ends at that moment and the
-  guest role is taken away, since it would hide the members' channels from them. They keep either role only if
-  their groups give it to them.
+- A Discord account **linked to a member** here can't use a link: members have their own access. A guest who links
+  their account as a member keeps their place; their guest access ends at that moment.
 
-> **What a former guest sees.** They keep the guest role, so they see what that role sees. If you limit guests to
-> chosen channels (below), the bot hides every channel from the guest role, and a former guest sees nothing. If you
-> don't, set the guest role up on Discord so that it sees only what a former guest may.
->
-> **With no temporary role chosen** (sites set up before 1.4.0), the guest role is the one taken away, and a
-> former guest then sees what `@everyone` sees. With channels limited that can be **more** than they saw as a
-> guest; saving the settings and **Check connection** list those channels. Choosing a temporary role closes this.
+> **What a former guest sees.** They keep the guest role, so they see what that role sees on Discord. Set the
+> guest role up there to see only what a former guest may.
 
 | Situation | What happens |
 |---|---|
@@ -166,7 +159,7 @@ Whichever you choose:
 | The link's maker loses `discord.create_guest_links` | The link stops working and its guests' access ends |
 | Temporary access is switched off | Every link stops working and all guest access ends |
 | Discord can't be reached | The guest stays listed with the reason, and it is tried again every two minutes |
-| A channel can't be hidden from guests, or the link's channels can't be opened | Nobody is given access; what was already given is taken back |
+| The link's channels can't be opened to a guest | They aren't given access; what was already given is taken back |
 | The link has been used by as many people as it allows | It closes to newcomers; the guests it let in keep their access until it runs out |
 
 ### Extending a link
@@ -175,27 +168,32 @@ Whichever you choose:
 counted from now: with the default of 72 hours, a link with 10 hours left can get up to 62 more. A link that has
 ended can't be extended; make a new one.
 
-### Choosing which channels guests see
+### What guests see, and opening channels per link
 
-On **Server setup → Temporary access**, pick the channels under **Channels guests may be let into** and save.
+What a guest sees is what their two roles see on Discord. Set that up on Discord as for any role. **The plugin
+never changes a role's channel settings.**
 
-- The bot hides every channel from the guest role, by denying it **View Channel** there, and takes away any channel
-  setting that lets the temporary role in. It keeps doing so for channels made later, checked every two minutes
-  while guests are on the server.
+On top of that, a link can open chosen channels to its own guests. On **Server setup → Temporary access**, pick
+the channels under **Channels guests may be let into** and save.
+
 - Whoever makes a link picks which of the chosen channels it opens (all of them unless they say otherwise). Each
   guest is allowed into exactly those, personally, and that access is taken away again when their link ends.
 - A private channel can be chosen too: guests of a link that opens it get in although `@everyone` can't.
-- Members and other roles are not affected. Only the two roles for guests and the guests themselves get channel
-  settings.
+- This personal access is the only channel setting the bot makes. The bot needs **Manage Permissions** in the
+  chosen channels for it.
+- Saving tells you which other channels guests see through their roles, so you can change that on Discord if you
+  want to.
 
-If the bot isn't allowed to hide a channel, saving lists it and **Check connection** reports it. Give the bot's
-role **Manage Permissions** in that channel, or hide it from the guest and temporary roles by hand, and save again. **Nobody is
-let in through a link while a channel can't be hidden**: guests are told the server isn't ready.
+#### Undoing what versions 1.3.0 to 1.4.1 changed
 
-On a server with many channels the first save can take a minute; it carries on in the background.
+Those versions denied the guest role **View Channel** in every channel once channels were chosen, and 1.4.0 and
+1.4.1 also took **View Channel** away from the temporary role. From 1.4.2 nothing like that happens any more.
 
-With no channels chosen, the plugin changes nothing about channels: guests see what their two roles see on Discord, and former guests what the guest role sees.
-Choosing none later stops the hiding of new channels, but leaves the settings already made on Discord in place.
+**Undo channel changes** on **Server setup → Temporary access** puts a server back: every role's channel settings
+return to what they were before the bot first changed them, and no channels stay chosen. It reads the old
+settings from the server's audit log, which Discord keeps for 45 days, so give the bot's role **View Audit Log**
+first (you can take it away again afterwards). Settings changed by hand since are replaced. Guests who are on the
+server keep the channels their link opened until it ends.
 
 ### History
 

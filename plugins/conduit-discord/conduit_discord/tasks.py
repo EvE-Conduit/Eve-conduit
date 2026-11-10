@@ -44,8 +44,9 @@ def end_guest_stays():
 
 
 @shared_task(ignore_result=True, bind=True, max_retries=5)
-def hide_guest_channels(self):
-    """Hide every channel guests shouldn't see from the guest role (finishing what saving the settings started)."""
+def undo_guest_channels(self):
+    """Put the channel settings back to what they were before the bot changed them (finishing what the button
+    started when Discord rate limited it)."""
     from conduit.plugins.services import is_enabled
 
     from . import guests
@@ -54,11 +55,13 @@ def hide_guest_channels(self):
 
     if not is_enabled("discord"):
         return
-    s = DiscordSettings.load()
-    if not s.configured:
-        return
     try:
         with allow_waiting():
-            return guests.hide_other_channels(s)
+            return guests.undo_channel_changes(DiscordSettings.load())
     except DiscordError as exc:
         raise self.retry(countdown=60, exc=exc) from None
+
+
+@shared_task(ignore_result=True, bind=True, max_retries=5)
+def hide_guest_channels(self):
+    """Does nothing: the bot no longer changes roles' channel settings. Kept for jobs queued by an older version."""

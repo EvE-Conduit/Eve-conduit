@@ -195,7 +195,7 @@ function LinkCard({ link, showOwner, onRevoke, onExtend }: { link: GuestLink; sh
           Guests get <Badge tone="accent">@{link.role}</Badge>
           {link.channels.length > 0 && (
             <>
-              and see only {link.channels.map((c) => <Badge key={c.id} tone="neutral">{channelLabel(c)}</Badge>)}
+              and are let into {link.channels.map((c) => <Badge key={c.id} tone="neutral">{channelLabel(c)}</Badge>)}
             </>
           )}
         </div>
@@ -296,7 +296,7 @@ function NewLinkDialog({ open, onOpenChange, overview, onMade }: { open: boolean
           </Field>
         </div>
         {overview.channels.length > 0 && (
-          <Field label="Channels these guests see" hint={noChannel ? "Choose at least one." : "They see these and nothing else on the server."}>
+          <Field label="Channels this link opens" hint={noChannel ? "Choose at least one." : "Opened to them personally, on top of what their roles see."}>
             <div className="flex flex-wrap gap-1.5">
               {overview.channels.map((c) => (
                 <button
