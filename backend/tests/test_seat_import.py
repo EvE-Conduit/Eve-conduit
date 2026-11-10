@@ -276,3 +276,71 @@ def test_missing_or_odd_seat_dates_are_ignored(client, key):
     user = User.objects.get(pk=call(client, "post", "/api/v1/import/seat/users", key, data={"users": [odd]})
                             .json()["users"][0]["user_id"])
     assert user.last_login is None and user.date_joined.year >= 2026
+
+
+# --- an import key is not a way into someone's account -------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_naming_someones_character_does_not_add_characters_to_their_account(client, key):
+    """A made-up list (the victim's main without its owner hash, plus the caller's own alt) must not put the alt in
+    the victim's account: signing in with the alt would then sign in as the victim."""
+    victim = make_user(91000001, "Victim Main")
+    Character.objects.filter(pk=91000001).update(owner_hash="victims-real-hash")
+    def payload(claimed):
+        return {"users": [{"seat_id": 9, "name": "x", "main_character_id": 91000001, "characters": [
+            {"id": 91000001, "name": "Victim Main", "owner_hash": claimed},
+            {"id": 91000066, "name": "My Alt", "owner_hash": "my-alts-hash", "refresh_token": "rt", "scopes": []}]}]}
+
+    # Without the owner hash, nothing says whose the alt is: it is left out.
+    preview = call(client, "post", "/api/v1/import/seat/preview", key, data=payload("")).json()["users"][0]
+    assert preview["account"] is None
+    assert {c["id"]: c["status"] for c in preview["characters"]}[91000066] == "owner_unknown"
+    result = call(client, "post", "/api/v1/import/seat/users", key, data=payload("")).json()["users"][0]
+    assert result["created"] is False and result["user_id"] is None
+    assert {c["id"]: c["status"] for c in result["characters"]}[91000066] == "owner_unknown"
+    assert not Character.objects.filter(pk=91000066).exists()
+    # With a wrong one, the main reads as sold: the alt gets an account of its own, never the victim's.
+    result = call(client, "post", "/api/v1/import/seat/users", key, data=payload("a-guess")).json()["users"][0]
+    assert result["created"] is True and result["user_id"] != victim.pk
+    assert Character.objects.get(pk=91000066).user_id == result["user_id"]
+    assert set(victim.characters.values_list("pk", flat=True)) == {91000001}
+
+
+@pytest.mark.django_db
+def test_an_administrators_account_is_never_added_to(client, key):
+    admin = make_user(91000001, "Site Owner")
+    admin.is_superuser = True
+    admin.save()
+    Character.objects.filter(pk=91000001).update(owner_hash="hash-91000001")  # even with the right owner hash
+    payload = {"users": [seat_user(alts=[91000002])]}
+    result = call(client, "post", "/api/v1/import/seat/users", key, data=payload).json()["users"][0]
+    assert {c["id"]: c["status"] for c in result["characters"]} == {91000001: "exists", 91000002: "admin_account"}
+    assert not Character.objects.filter(pk=91000002).exists()
+
+
+@pytest.mark.django_db
+def test_importing_again_after_owner_hashes_were_filled_in_changes_nothing(client, key):
+    """SeAT had no owner hashes; the first sign-in or the token check filled them in here. A second run can't prove
+    the account by hash any more, and must not make a second account."""
+    account = _import_without_hashes(client, key)
+    Character.objects.filter(user=account).update(owner_hash="real-hash")
+    again = seat_user(alts=[91000002])
+    for c in again["characters"]:
+        c["owner_hash"] = ""
+    result = call(client, "post", "/api/v1/import/seat/users", key, data={"users": [again]}).json()["users"][0]
+    assert result["created"] is False
+    assert User.objects.count() == 1 and set(account.characters.values_list("pk", flat=True)) == {91000001, 91000002}
+
+
+@pytest.mark.django_db
+def test_squad_never_joins_a_group_that_grants_permissions(client, key):
+    from django.contrib.auth.models import Group, Permission
+
+    call(client, "post", "/api/v1/import/seat/users", key, data={"users": [seat_user()]})
+    group = Group.objects.create(name="Directors")
+    group.permissions.add(Permission.objects.get(codename="view_all_characters"))
+    resp = call(client, "post", "/api/v1/import/seat/squads", key,
+                data={"name": "Directors", "description": "", "hidden": False, "members": [91000001], "moderators": [91000001]})
+    assert resp.status_code >= 400 and "grants permissions" in resp.text
+    assert not group.user_set.exists()
