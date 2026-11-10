@@ -244,3 +244,35 @@ def test_verifying_imported_tokens_fills_in_missing_owner_hashes(client, key, mo
     monkeypatch.setattr(account_tasks, "PARALLEL", 1)
     account_tasks.verify_seat_tokens("run", [91000001, 91000002])
     assert set(Character.objects.values_list("owner_hash", flat=True)) == {"real-hash"}
+
+
+@pytest.mark.django_db
+def test_join_date_and_last_sign_in_come_from_seat(client, key):
+    from datetime import datetime, timezone
+
+    new = seat_user(name="New Pilot") | {"joined": "2019-03-04 05:06:07", "last_login": "2026-09-30 12:00:00"}
+    user = User.objects.get(pk=call(client, "post", "/api/v1/import/seat/users", key, data={"users": [new]})
+                            .json()["users"][0]["user_id"])
+    assert user.date_joined == datetime(2019, 3, 4, 5, 6, 7, tzinfo=timezone.utc)
+    assert user.last_login == datetime(2026, 9, 30, 12, tzinfo=timezone.utc)
+
+    # Only ever earlier joining and later signing in: an older SeAT sign-in leaves the newer one here alone.
+    User.objects.filter(pk=user.pk).update(last_login=datetime(2026, 10, 5, tzinfo=timezone.utc))
+    again = new | {"joined": "2021-01-01 00:00:00", "last_login": "2026-01-01 00:00:00"}
+    result = call(client, "post", "/api/v1/import/seat/users", key, data={"users": [again]}).json()["users"][0]
+    user.refresh_from_db()
+    assert not result["dates_carried"]
+    assert user.date_joined.year == 2019 and user.last_login == datetime(2026, 10, 5, tzinfo=timezone.utc)
+
+
+@pytest.mark.django_db
+def test_missing_or_odd_seat_dates_are_ignored(client, key):
+    from conduit.accounts.seat_import import seat_time
+
+    assert seat_time(None) is None and seat_time("") is None and seat_time("0000-00-00 00:00:00") is None
+    assert seat_time("not a date") is None and seat_time("2999-01-01 00:00:00") is None
+    assert seat_time("2020-05-06T07:08:09Z").year == 2020
+    odd = seat_user() | {"joined": "0000-00-00 00:00:00", "last_login": None}
+    user = User.objects.get(pk=call(client, "post", "/api/v1/import/seat/users", key, data={"users": [odd]})
+                            .json()["users"][0]["user_id"])
+    assert user.last_login is None and user.date_joined.year >= 2026

@@ -3,7 +3,8 @@
 Moves a SeAT install into EvE Conduit with **EvE-Conduit-SeAT-Import.exe**, a window you run on any Windows PC
 with a dump of SeAT's database. You pick the dump, tick the users to bring over and then:
 
-1. **Import** brings their accounts: users, characters, SSO tokens and squads.
+1. **Import** brings their accounts: users, characters, SSO tokens and squads, and when each user joined SeAT
+   and last signed in there.
 2. **Import character data** brings everything SeAT kept for their characters: wallet history, mail,
    killmails, contracts, skills, assets and the rest. See [3. Character data](#3-character-data).
 
@@ -74,6 +75,13 @@ to delete the dump.
 
 Importing the same users again is safe: anything already there is skipped. So you can test with a few users
 first and import the rest later.
+
+### Join dates and last sign-in
+
+Each account keeps the date the user joined SeAT and when they last signed in there, so group rules on how long
+someone has been a member and the Inactivity plugin see their real history, not the day of the move. A date only
+ever moves an account's join date earlier and its last sign-in later, so someone who already uses Conduit keeps
+their own newer sign-in.
 
 ### What happens to squads
 

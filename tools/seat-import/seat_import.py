@@ -68,6 +68,9 @@ class User:
     main_character_id: int
     active: bool
     characters: list = field(default_factory=list)
+    #: When the user registered in SeAT and last signed in there, as SeAT wrote them (UTC), or "".
+    joined: str = ""
+    last_login: str = ""
 
     def matches(self, text: str) -> bool:
         text = text.lower()
@@ -78,6 +81,8 @@ class User:
             "seat_id": self.seat_id,
             "name": self.name,
             "main_character_id": self.main_character_id,
+            "joined": self.joined or None,
+            "last_login": self.last_login or None,
             "characters": [
                 {
                     "id": c.id,
@@ -105,7 +110,8 @@ def seat_query(with_tokens: bool) -> str:
     """One query per kind of row, each row a tag and a JSON object, so names and descriptions need no escaping."""
     token = ", 'rt', t.refresh_token" if with_tokens else ""
     return f"""
-SELECT CONCAT('U\t', JSON_OBJECT('id', id, 'name', name, 'main', main_character_id, 'active', active)) FROM users;
+SELECT CONCAT('U\t', JSON_OBJECT('id', id, 'name', name, 'main', main_character_id, 'active', active,
+       'joined', created_at, 'last_login', last_login)) FROM users;
 SELECT CONCAT('C\t', JSON_OBJECT('id', t.character_id, 'user', t.user_id, 'name', COALESCE(ci.name, ''),
        'hash', t.character_owner_hash, 'scopes', t.scopes, 'deleted', t.deleted_at IS NOT NULL{token}))
   FROM refresh_tokens t LEFT JOIN character_infos ci ON ci.character_id = t.character_id;
@@ -127,7 +133,9 @@ def parse_seat(output: str) -> tuple[list[User], list[Squad]]:
 
 def assemble(rows: dict) -> tuple[list[User], list[Squad]]:
     """Users with their characters, and squads, from rows shaped like ``seat_query``'s (whatever they came from)."""
-    users = {r["id"]: User(r["id"], r["name"], int(r["main"] or 0), bool(r["active"])) for r in rows["U"]}
+    users = {r["id"]: User(r["id"], r["name"], int(r["main"] or 0), bool(r["active"]),
+                           joined=str(r.get("joined") or ""), last_login=str(r.get("last_login") or ""))
+             for r in rows["U"]}
     squads = {r["id"]: Squad(r["id"], r["name"], r["description"] or "", r["type"]) for r in rows["S"]}
     chars, members, mods = rows["C"], rows["M"], rows["O"]
 
@@ -183,7 +191,8 @@ def read_dump(path: str, with_tokens: bool) -> tuple[list[User], list[Squad]]:
     t = read_dump_tables(path)
     names = {r["character_id"]: r["name"] for r in t["character_infos"]}
     rows = {
-        "U": [{"id": r["id"], "name": r["name"], "main": r["main_character_id"], "active": r["active"]}
+        "U": [{"id": r["id"], "name": r["name"], "main": r["main_character_id"], "active": r["active"],
+               "joined": r.get("created_at"), "last_login": r.get("last_login")}
               for r in t["users"]],
         "C": [{"id": r["character_id"], "user": r["user_id"], "name": names.get(r["character_id"], ""),
                "hash": r["character_owner_hash"], "scopes": r["scopes"], "deleted": r["deleted_at"] is not None,

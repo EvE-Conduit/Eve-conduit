@@ -37,7 +37,8 @@ def seat_rows(with_tokens=True):
 
     return "\n".join([
         row("U", id=1, name="admin", main=0, active=1),  # SeAT's built-in admin: no characters
-        row("U", id=2, name="Seat Pilot", main=91000001, active=1),
+        row("U", id=2, name="Seat Pilot", main=91000001, active=1, joined="2018-07-01 09:00:00",
+            last_login="2026-10-02 20:00:00"),
         row("U", id=3, name="Second Pilot", main=91000005, active=1),
         row("U", id=4, name="Gone Pilot", main=91000009, active=0),
         char(91000001, 2, "Seat Pilot"),
@@ -126,6 +127,7 @@ def test_full_import_with_tokens(client, key, tmp_path, instant_verify):
     assert set(here.characters.values_list("pk", flat=True)) == {91000001, 91000002, 91000003}
     here.refresh_from_db()
     assert here.main_character_id == 91000003
+    assert here.date_joined.year == 2018 and here.last_login.day == 2  # SeAT's, as it is older and newer
     assert not Token.objects.filter(character_id=91000002).exists()  # SeAT had dropped it
     assert Token.objects.get(character_id=91000001).refresh_token == "rotated"  # checked, so refreshed
     assert User.objects.filter(main_character_id=91000005).exists()
@@ -324,6 +326,8 @@ def test_reads_a_mariadb_dump(tmp_path):
     assert [u.name for u in users] == ['O\'Neil, "Ace"', "Second Pilot"]
     ace = users[0]
     assert ace.active and not users[1].active
+    assert ace.last_login == "2026-10-01 10:00:00" and ace.joined == ""
+    assert ace.payload(False)["last_login"] == "2026-10-01 10:00:00" and ace.payload(False)["joined"] is None
     assert [(c.id, c.name, c.deleted) for c in ace.characters] == [
         (91000001, "O'Neil", False), (91000002, "Ünïcode Alt", True)]
     assert ace.characters[0].scopes == ["publicData", "esi-skills.read_skills.v1"]

@@ -6,6 +6,10 @@ does that straight away and reports which ones EVE no longer accepts.
 
 Characters already on this site stay with their current account: an import never moves a character or replaces a
 working token. Running the same import twice changes nothing the second time.
+
+When the user joined SeAT and last signed in there come along too: an account's join date only moves earlier and
+its last sign-in only later, so group rules on membership age and the inactivity plugin see the member's real
+history rather than the day of the move.
 """
 
 from dataclasses import dataclass, field
@@ -39,6 +43,36 @@ class SeatUser:
     name: str
     main_character_id: int
     characters: list[SeatCharacter]
+    joined: datetime | None = None
+    last_login: datetime | None = None
+
+
+def seat_time(value) -> datetime | None:
+    """A SeAT date ("2024-01-02 03:04:05", in UTC like SeAT keeps them) as an aware datetime; None for an empty,
+    zero, unreadable or future one."""
+    text = str(value or "").strip().replace("T", " ").removesuffix("Z")
+    if not text or text.startswith("0000"):
+        return None
+    try:
+        when = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    when = when.replace(tzinfo=dt_timezone.utc) if when.tzinfo is None else when.astimezone(dt_timezone.utc)
+    return None if when > datetime.now(dt_timezone.utc) else when
+
+
+def _carry_dates(user: User, u: SeatUser) -> bool:
+    """Move the account's join date back and its last sign-in forward to SeAT's, never the other way."""
+    changed = []
+    if u.joined and u.joined < user.date_joined:
+        user.date_joined = u.joined
+        changed.append("date_joined")
+    if u.last_login and (user.last_login is None or u.last_login > user.last_login):
+        user.last_login = u.last_login
+        changed.append("last_login")
+    if changed:
+        user.save(update_fields=changed)
+    return bool(changed)
 
 
 def wanted_scopes() -> set[str]:
@@ -106,7 +140,8 @@ def import_user(u: SeatUser) -> dict:
     if created:
         user = create_user(u.main_character_id)
 
-    result = {"seat_id": u.seat_id, "user_id": user.pk, "created": created, "characters": []}
+    result = {"seat_id": u.seat_id, "user_id": user.pk, "created": created, "characters": [],
+              "dates_carried": _carry_dates(user, u)}
     for c in u.characters:
         here = existing.get(c.id)
         if here is None:

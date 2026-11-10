@@ -488,6 +488,9 @@ class SeatUserIn(Schema):
     name: str
     main_character_id: int
     characters: list[SeatCharacterIn]
+    #: SeAT's users.created_at and users.last_login (UTC), so membership age and activity carry over.
+    joined: str | None = None
+    last_login: str | None = None
 
 
 class SeatUsersIn(Schema):
@@ -511,12 +514,13 @@ SEAT_BATCH_MAX = 100
 
 
 def _seat_users(payload: SeatUsersIn):
-    from conduit.accounts.seat_import import SeatCharacter, SeatUser
+    from conduit.accounts.seat_import import SeatCharacter, SeatUser, seat_time
 
     if len(payload.users) > SEAT_BATCH_MAX:
         raise HttpError(400, f"Send at most {SEAT_BATCH_MAX} users per request")
     return [
-        SeatUser(u.seat_id, u.name, u.main_character_id, [SeatCharacter(**c.dict()) for c in u.characters])
+        SeatUser(u.seat_id, u.name, u.main_character_id, [SeatCharacter(**c.dict()) for c in u.characters],
+                 joined=seat_time(u.joined), last_login=seat_time(u.last_login))
         for u in payload.users
     ]
 
