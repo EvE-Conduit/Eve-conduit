@@ -1,4 +1,5 @@
 export const BASE = "/api/p/discord";
+export const PUBLIC_BASE = "/api/public/p/discord";
 
 export interface Account {
   discord_id: string;
@@ -18,6 +19,8 @@ export interface Me {
   server: string;
   server_url: string | null;
   can_link: boolean;
+  /** May hand out temporary access links, and they are switched on. */
+  can_invite_guests?: boolean;
   account: Account | null;
   roles: string[];
   roles_due: string[];
@@ -45,8 +48,15 @@ export interface Admin {
     require_for_compliance: boolean;
     configured: boolean;
     last_full_sync: string | null;
+    guest_enabled: boolean;
+    guest_role_id: string;
+    guest_role_name: string;
+    guest_max_hours: number;
   };
   redirect_uri: string;
+  /** The second redirect the Discord application needs, for guests. */
+  guest_redirect_uri: string;
+  guest_hours_ceiling: number;
   invite_url: string | null;
   mappings: Mapping[];
   groups: { id: number; name: string }[];
@@ -85,4 +95,59 @@ export interface LinkedMember extends Account {
   role_names: string[];
   /** Main first, then the alts you're allowed to see. */
   characters?: LinkedCharacter[];
+}
+
+export type GuestLinkStatus = "active" | "expired" | "revoked" | "used_up" | "creator_lost";
+
+export interface GuestUser {
+  id: number;
+  discord_id: string;
+  username: string;
+  avatar: string;
+  joined_at: string;
+  ended_at: string | null;
+  /** expired, revoked, removed, creator_lost or member (they linked their account here since). */
+  ended_reason: string;
+  /** Why they couldn't be removed yet; tried again every couple of minutes. */
+  error: string;
+}
+
+export interface GuestLink {
+  id: number;
+  label: string;
+  url: string;
+  status: GuestLinkStatus;
+  created_at: string;
+  expires_at: string;
+  /** When it stopped (or will stop) working: withdrawn or run out. */
+  ended_at: string;
+  max_uses: number;
+  uses: number;
+  role: string;
+  created_by: { id: number; name: string } | null;
+  guests: GuestUser[];
+}
+
+export interface GuestOverview {
+  enabled: boolean;
+  can_manage: boolean;
+  max_hours: number;
+  role: string;
+  server: string;
+  links: GuestLink[];
+}
+
+/** What a guest sees about a link before joining. */
+export interface PublicGuestLink {
+  label: string;
+  server: string;
+  expires_at: string;
+  status: GuestLinkStatus;
+  invited_by: string | null;
+}
+
+export interface GuestJoined extends PublicGuestLink {
+  username: string;
+  avatar: string;
+  server_url: string;
 }

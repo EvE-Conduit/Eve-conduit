@@ -45,11 +45,13 @@ export function AdminPage() {
               { value: "setup", label: "Setup" },
               { value: "roles", label: "Roles", count: data.mappings.length, disabled: !data.settings.configured },
               { value: "members", label: "Members", count: data.stats.linked, disabled: !data.settings.configured },
+              { value: "guests", label: "Temporary access", disabled: !data.settings.configured },
             ]}
           >
             <TabPanel value="setup"><SetupTab data={data} /></TabPanel>
             <TabPanel value="roles"><RolesTab data={data} /></TabPanel>
             <TabPanel value="members"><MembersTab /></TabPanel>
+            <TabPanel value="guests"><GuestsTab data={data} /></TabPanel>
           </Tabs>
         </div>
       )}
@@ -355,6 +357,88 @@ function RolesTab({ data }: { data: Admin }) {
           <p>Roles change as soon as someone joins or leaves a group, their state changes or they pick another main, and everyone is checked again every 6 hours.</p>
           <p>Only mapped roles are touched. Roles you give by hand on Discord stay.</p>
           <p>The bot can only give roles below its own; drag its role up in Server Settings → Roles if a role shows "above the bot".</p>
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+// --- temporary access ----------------------------------------------------------------------------------------------------
+
+function GuestsTab({ data }: { data: Admin }) {
+  const qc = useQueryClient();
+  const s = data.settings;
+  const { data: check, isLoading, error } = useQuery({
+    queryKey: ["discord", "check"],
+    queryFn: () => api.post<CheckResult>(`${BASE}/admin/check`),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const [form, setForm] = useState({ enabled: s.guest_enabled, role_id: s.guest_role_id, max_hours: String(s.guest_max_hours) });
+  const roles = check?.roles ?? [];
+  const save = useMutation({
+    mutationFn: () => api.put<Admin>(`${BASE}/admin/guests`, {
+      enabled: form.enabled, role_id: form.role_id, max_hours: Number(form.max_hours) || 0,
+      role_name: roles.find((r) => r.id === form.role_id)?.name ?? s.guest_role_name,
+    }),
+    onSuccess: (d) => {
+      qc.setQueryData(KEY, d);
+      qc.invalidateQueries({ queryKey: ["discord"] });
+      toast.success(form.enabled ? "Saved" : "Saved; guests still on the server are being removed");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+      <Card>
+        <CardHeader
+          title="Temporary access links"
+          description="People with the permission hand out links. Whoever opens one signs in with Discord, joins the server with the guest role and is removed again when the link runs out."
+        />
+        <CardBody className="space-y-5">
+          <div className="border border-border px-3">
+            <SwitchRow
+              label="Temporary access links"
+              description="Off: nobody can make links, existing ones stop working and guests still on the server are removed."
+              checked={form.enabled}
+              onCheckedChange={(v) => set({ enabled: v })}
+            />
+          </div>
+          <Field label="Add this second redirect to the Discord application" hint="Developer portal → your application → OAuth2 → Redirects. Without it Discord refuses guests with “Invalid OAuth2 redirect_uri”.">
+            <CopyField value={data.guest_redirect_uri} />
+          </Field>
+          {error && <Alert tone="warning" title="Couldn't load the server's roles">{(error as Error).message}</Alert>}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Role guests get" hint="Make a role for guests on Discord and let it see only the channels guests should. It must be below the bot's role.">
+              <Select value={form.role_id} onChange={(e) => set({ role_id: e.target.value })} disabled={isLoading}>
+                <option value="">{isLoading ? "Loading roles…" : "Choose…"}</option>
+                {form.role_id && !roles.some((r) => r.id === form.role_id) && <option value={form.role_id}>@{s.guest_role_name || form.role_id}</option>}
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id} disabled={!r.assignable}>
+                    @{r.name}{r.assignable ? "" : " (above the bot)"}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Longest a link may last (hours)" hint={`Up to ${data.guest_hours_ceiling} hours (${data.guest_hours_ceiling / 24} days).`}>
+              <Input type="number" min={1} max={data.guest_hours_ceiling} value={form.max_hours} onChange={(e) => set({ max_hours: e.target.value })} className="max-w-32" />
+            </Field>
+          </div>
+        </CardBody>
+        <CardFooter className="justify-between">
+          <Link to="/p/discord/guests" className="text-sm text-accent-ink underline-offset-4 hover:underline">See the links and their guests</Link>
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
+        </CardFooter>
+      </Card>
+      <Card className="h-fit">
+        <CardHeader title="How guests are handled" />
+        <CardBody className="space-y-3 text-sm text-muted">
+          <p>Give <b>Can hand out temporary access to the Discord server</b> to the people who may make links (Administration → Access), for example fleet commanders, diplomats and recruiters.</p>
+          <p>Guests are removed within a couple of minutes of their link running out or being withdrawn, and when its maker loses that permission.</p>
+          <p>Someone who was already on the server can't come in as a guest, so nobody is ever removed who was there before.</p>
+          <p>A guest who links their Discord account as a member here keeps their place and only loses the guest role.</p>
         </CardBody>
       </Card>
     </div>

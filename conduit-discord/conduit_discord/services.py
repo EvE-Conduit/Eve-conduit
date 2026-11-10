@@ -335,8 +335,16 @@ def server_check(s: DiscordSettings | None = None) -> dict:
             problems.append("A mapped role no longer exists on the server; remove it from the role mapping.")
         elif r["position"] >= top:
             problems.append(f"The role {r['name']} is above the bot's own role, so the bot can't give it. Drag the bot's role above it in Server Settings → Roles.")
+    if s.guest_enabled:
+        r = by_id.get(s.guest_role_id)
+        if r is None:
+            problems.append("The role for temporary guests no longer exists on the server; choose another under Temporary access.")
+        elif r["position"] >= top or r.get("managed"):
+            problems.append(f"The guest role {r['name']} is above the bot's own role, so guests can't be given it. Drag the bot's role above it in Server Settings → Roles.")
+        elif r["name"] != s.guest_role_name:
+            s.guest_role_name = r["name"][:100]
     s.guild_name = g.get("name", "")[:100]
-    s.save(update_fields=["guild_name"])
+    s.save(update_fields=["guild_name", "guest_role_name"])
     # Refresh stored role names, which members see.
     for m in RoleMapping.objects.all():
         if m.role_id in by_id and m.role_name != by_id[m.role_id]["name"]:

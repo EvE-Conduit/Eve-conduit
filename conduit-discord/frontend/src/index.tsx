@@ -2,8 +2,10 @@ import { Badge, Button, definePlugin, Skeleton } from "@conduit/sdk";
 import { Link } from "react-router";
 
 import { AdminPage } from "./admin";
+import { GuestsPage } from "./guests";
 import { DiscordLogo } from "./icons";
 import { CallbackPage, MemberPage, useMe, useStartLink } from "./member";
+import { PublicGuestCallbackPage, PublicGuestPage } from "./public";
 
 /** On the dashboard: a nudge to link Discord, or where they stand once linked. */
 function DiscordWidget() {
@@ -43,7 +45,12 @@ export default definePlugin({
   routes: [
     { path: "", Component: MemberPage },
     { path: "callback", Component: CallbackPage },
+    { path: "guests", Component: GuestsPage },
     { path: "admin", Component: AdminPage },
+  ],
+  publicRoutes: [
+    { path: "guest/:token", Component: PublicGuestPage },
+    { path: "guest", Component: PublicGuestCallbackPage },
   ],
   widgets: [{ id: "link", title: "Discord", Component: DiscordWidget, size: "sm", order: 20 }],
 });

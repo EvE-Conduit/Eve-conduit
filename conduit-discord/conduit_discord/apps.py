@@ -22,3 +22,6 @@ class DiscordConfig(AppConfig):
         register_category("p.discord", "Discord")
         bus.register("discord.linked", "Discord linked", "A member linked their Discord account and joined the server", plugin="discord")
         bus.register("discord.unlinked", "Discord unlinked", "A member's Discord account was unlinked or removed from the server", plugin="discord")
+        bus.register("discord.guest_link_created", "Discord temporary link created", "Someone made a temporary Discord access link", plugin="discord")
+        bus.register("discord.guest_joined", "Discord temporary access used", "A guest joined the Discord server through a temporary link", plugin="discord")
+        bus.register("discord.guest_removed", "Discord temporary access ended", "A guest's temporary access to the Discord server ended", plugin="discord")
