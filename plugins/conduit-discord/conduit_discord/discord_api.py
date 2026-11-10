@@ -205,6 +205,12 @@ def set_overwrite(bot_token: str, channel_id: str, target_id: str, *, member: bo
          json={"type": 1 if member else 0, "allow": str(allow), "deny": str(deny)})
 
 
+def audit_log(bot_token: str, guild_id: str, *, user_id: str, action_type: int, before: str | None = None) -> list[dict]:
+    """Up to 100 entries of the server's audit log, newest first. The bot needs View Audit Log."""
+    query = {"user_id": user_id, "action_type": action_type, "limit": 100} | ({"before": before} if before else {})
+    return call("GET", f"/guilds/{guild_id}/audit-logs?{urlencode(query)}", bot_token=bot_token).get("audit_log_entries", [])
+
+
 def delete_overwrite(bot_token: str, channel_id: str, target_id: str) -> None:
     try:
         call("DELETE", f"/channels/{channel_id}/permissions/{target_id}", bot_token=bot_token)

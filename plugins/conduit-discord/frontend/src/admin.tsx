@@ -379,7 +379,6 @@ function GuestsTab({ data }: { data: Admin }) {
     enabled: s.guest_enabled, role_id: s.guest_role_id, temp_role_id: s.guest_temp_role_id, max_hours: String(s.guest_max_hours),
     end_action: s.guest_end_action, nickname_format: s.guest_nickname_format,
   });
-  const [after, setAfter] = useState<string[]>([]);
   const [channels, setChannels] = useState<string[]>(s.guest_channels.map((c) => c.id));
   const [seen, setSeen] = useState<string[]>([]);
   const offered = useQuery({ queryKey: ["discord", "channels"], queryFn: () => api.get<GuestChannel[]>(`${BASE}/admin/channels`), staleTime: 60_000, retry: false });
@@ -396,10 +395,21 @@ function GuestsTab({ data }: { data: Admin }) {
       qc.setQueryData(KEY, d);
       qc.invalidateQueries({ queryKey: ["discord"] });
       setSeen(d.guest_channels_seen ?? []);
-      setAfter(d.guest_after_end_sees ?? []);
-      if (d.guest_channels_seen?.length) toast.warning("Saved, but guests can still see some channels; see below");
-      else if (d.guest_channels_hiding) toast.success("Saved; the other channels are being hidden from guests, which takes a minute on a large server");
-      else toast.success(form.enabled ? "Saved" : "Saved; the guest access still running is being ended");
+      toast.success(form.enabled ? "Saved" : "Saved; the guest access still running is being ended");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const [ask, setAsk] = useState<"undo" | null>(null);
+  const undo = useMutation({
+    mutationFn: () => api.post<Admin & { undo: { restored: number; failed: string[]; running: boolean } }>(`${BASE}/admin/guests/undo-channels`),
+    onSuccess: (d) => {
+      qc.setQueryData(KEY, d);
+      qc.invalidateQueries({ queryKey: ["discord"] });
+      setChannels([]);
+      setSeen([]);
+      if (d.undo.running) toast.success("Channels are no longer limited; the settings are being put back in the background, which takes a few minutes");
+      else if (d.undo.failed.length) toast.warning(`Put back ${d.undo.restored} channel settings; couldn't change ${d.undo.failed.slice(0, 5).join(", ")}`);
+      else toast.success(d.undo.restored ? `Put back ${d.undo.restored} channel settings` : "Nothing to put back: the bot changed no channel settings");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -476,8 +486,8 @@ function GuestsTab({ data }: { data: Admin }) {
           <Field
             label="Channels guests may be let into"
             hint={channels.length
-              ? "The bot hides every channel from the guest role, also ones made later, so a former guest sees nothing. Whoever makes a link picks which of these it opens."
-              : "None chosen: guests see whatever their roles see on Discord, and afterwards what the guest role sees. Choose some and guests see only the channels their link opens."}
+              ? "Whoever makes a link picks which of these it opens to its guests, on top of what their roles see. Those guests are let in personally; no role's channel settings are changed."
+              : "None chosen: guests see what their roles see on Discord. Choose some and each link can open them to its guests, on top of that."}
           >
             {offered.error ? (
               <Alert tone="warning" title="Couldn't load the server's channels">{(offered.error as Error).message}</Alert>
@@ -506,33 +516,38 @@ function GuestsTab({ data }: { data: Admin }) {
               </div>
             )}
           </Field>
-          {after.length > 0 && (
-            <Alert tone="warning" title="Former guests will see more than guests do">
-              When a link ends, guests stay on the server without the guest role, and then see what anyone without a role sees:{" "}
-              {after.slice(0, 8).join(", ")}{after.length > 8 ? "…" : ""}. Choose a temporary role above, so they keep the guest role and see nothing; or hide those channels from @everyone on Discord.
-            </Alert>
-          )}
           {seen.length > 0 && (
-            <Alert tone="warning" title="Guests can still see channels they shouldn't">
-              The bot wasn't allowed to hide {seen.slice(0, 8).join(", ")}{seen.length > 8 ? "…" : ""}. Give its role <b>Manage Permissions</b> in those channels
-              (or hide them from the guest and temporary roles by hand) and save again. Nobody is let in through a link until this is sorted.
+            <Alert tone="info" title="Guests also see what their roles see">
+              Besides the channels their link opens, guests see {seen.slice(0, 8).join(", ")}{seen.length > 8 ? "…" : ""} through the roles they get.
+              Nothing is changed on Discord for this; set there what those roles may see.
             </Alert>
           )}
         </CardBody>
         <CardFooter className="justify-between">
           <Link to="/p/discord/guests" className="text-sm text-accent-ink underline-offset-4 hover:underline">See the links and their guests</Link>
-          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" loading={undo.isPending} onClick={() => setAsk("undo")}>Undo channel changes</Button>
+            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
+          </div>
         </CardFooter>
+        <ConfirmDialog
+          open={ask === "undo"}
+          onOpenChange={(o) => !o && setAsk(null)}
+          title="Put the channel settings back?"
+          description="For servers changed by versions 1.3.0 to 1.4.1, which hid channels from the guest role. No channels stay chosen, and every role's channel settings go back to what they were before the bot first changed them, read from the server's audit log (the last 45 days). The bot's role needs View Audit Log for this. Changes made by hand to those settings since are replaced."
+          confirmLabel="Put them back"
+          onConfirm={() => undo.mutateAsync().catch(() => undefined)}
+        />
       </Card>
       <Card className="h-fit">
         <CardHeader title="How guests are handled" />
         <CardBody className="space-y-3 text-sm text-muted">
           <p>Give <b>Can hand out temporary access to the Discord server</b> to the people who may make links (Administration → Access), for example fleet commanders, diplomats and recruiters.</p>
           <p>Guest access ends within a couple of minutes of a link running out, straight away when it is withdrawn, and when its maker loses that permission.</p>
-          <p>With channels chosen, a guest sees only the ones their link opens. Members and other roles aren't affected.</p>
+          <p>What guests see is what their two roles see on Discord. With channels chosen, a link also opens some of them to its guests personally. The bot never changes a role's channel settings.</p>
           <p>When a link ends, a guest keeps the guest role and loses the temporary one. A former guest can use a new link later.</p>
           <p>Someone already on the server can use a link too: they get the roles for the time, and are never removed from the server.</p>
-          <p>A Discord account linked to a member here can't use a link; a guest who becomes a member keeps their place and loses the guest role.</p>
+          <p>A Discord account linked to a member here can't use a link; a guest who becomes a member keeps their place.</p>
         </CardBody>
       </Card>
     </div>

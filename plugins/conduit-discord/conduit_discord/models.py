@@ -26,7 +26,7 @@ class DiscordSettings(models.Model):
     last_full_sync = models.DateTimeField(null=True, blank=True)
     #: Temporary access: people with discord.create_guest_links hand out links that let someone without an account
     #: here onto the server for a while. They get two roles. The guest role marks them as a guest and is kept for
-    #: good; it is the one hidden from every channel when channels are limited, so a former guest sees nothing.
+    #: good. It is only a role: the bot never changes what it sees in any channel.
     guest_enabled = models.BooleanField(default=False)
     guest_role_id = models.CharField(max_length=32, blank=True)
     guest_role_name = models.CharField(max_length=100, blank=True)
@@ -42,9 +42,8 @@ class DiscordSettings(models.Model):
     guest_end_action = models.CharField(max_length=8, default="role")
     #: How guests appear on the server; empty leaves their name alone. Placeholder: {name}.
     guest_nickname_format = models.CharField(max_length=60, default="[GUEST] {name}", blank=True)
-    #: The channels guests may be let into, as [{"id", "name", "kind"}]. While any are chosen the bot hides every
-    #: other channel from the guest role, and each link opens some of these to its guests. Empty: guests see
-    #: whatever the guest role sees on Discord.
+    #: The channels a link can open to its guests, as [{"id", "name", "kind"}]: each guest is let into their link's
+    #: channels personally, on top of what their roles see. No role's channel settings are changed.
     guest_channels = models.JSONField(default=list, blank=True)
 
     class Meta:
