@@ -375,3 +375,50 @@ def test_managers_set_discord_pings(user, api_client):
     resp = api_client.call("put", "/api/pings/fleets.created", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="fleets.created").roles == ["123"]
+
+
+def test_one_in_game_fleet_is_tracked_by_one_fleet(people, esi, api_client):
+    """Tracking the same in-game fleet from several fleets would give every pilot a FAT per fleet."""
+    esi.members = [{"character_id": 90000002, "ship_type_id": 587, "solar_system_id": 30000142}]
+    first = start(api_client, people["fc"], track_character=90000001)
+    assert first["tracking"]
+    second = start(api_client, people["fc"], track_character=90000001)
+    assert not second["tracking"] and "already tracked" in second["warning"]
+    assert Fat.objects.filter(character_id=90000002).count() == 1
+    resp = api_client.call("post", f"/api/p/fleets/{second['id']}/track", {"character": 90000001})
+    assert resp.status_code == 400 and "already tracked" in resp.json()["detail"]
+    # Once the first fleet has ended, the in-game fleet can be tracked again.
+    api_client.call("post", f"/api/p/fleets/{first['id']}/end")
+    assert api_client.call("post", f"/api/p/fleets/{second['id']}/track", {"character": 90000001}).status_code == 200
+
+
+def test_fats_from_your_own_fleets_link_dont_count(people, api_client):
+    """An FC registering on their own fleet's FAT link is the same as adding themselves by hand."""
+    fc, pilot = people["fc"], people["pilot"]
+    fleet = start(api_client, fc)
+    code = fleet["link"]["code"]
+    assert api_client.call("post", f"/api/p/fleets/fat/{code}", {"characters": [90000001]}).json() == {"added": 1}
+    api_client.call("post", f"/api/p/fleets/{fleet['id']}/fats", {"characters": [90000002]})
+    api_client.force_login(pilot)
+    assert api_client.call("post", f"/api/p/fleets/fat/{code}", {"characters": [90000003]}).json() == {"added": 1}
+    assert services.fleets_attended(fc, 30) == 0 and services.fleets_attended(pilot, 30) == 1
+    # The leaderboard and its CSV leave them out too.
+    assert [(m["name"], m["fats"]) for m in services.leaderboard(30)] == [("Pilot One", 1)]
+    # A FAT by hand from the FC for the FC's own character doesn't show either.
+    api_client.force_login(fc)
+    other = start(api_client, fc)
+    api_client.call("post", f"/api/p/fleets/{other['id']}/fats", {"characters": [90000001]})
+    assert [(m["name"], m["fats"]) for m in services.leaderboard(30)] == [("Pilot One", 1)]
+
+
+def test_only_the_tracking_characters_owner_switches_the_motd_on(people, esi, api_client):
+    """The MOTD is written with the FC's login: a fleet manager can take the lines out, not put them in."""
+    fleet = start(api_client, people["fc"], track_character=90000001, motd=False)
+    manager = make_user(90000009, "Manager Mo")
+    manager.user_permissions.add(Permission.objects.get(codename="manage_fleets"))
+    api_client.force_login(manager)
+    resp = api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": True})
+    assert resp.status_code == 403 and not esi.puts and not Fleet.objects.get(pk=fleet["id"]).motd
+    assert api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": False}).status_code == 200
+    api_client.force_login(people["fc"])
+    assert api_client.call("post", f"/api/p/fleets/{fleet['id']}/motd", {"on": True}).status_code == 200 and esi.puts

@@ -57,7 +57,7 @@ Press **Save** to apply.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Reminders** | 1 h and 15 min | Minute marks before form-up when reminders go out. Pick from 1 day, 12 h, 6 h, 2 h, 1 h, 30 min, 15 min and 5 min; at most six. With none picked, no reminders are sent. |
-| **Discord roles to ping** | none | Roles pre-selected for new ops with **Ping Discord** on. Each op can change them. Only shown once the Discord plugin is linked to your server. |
+| **Discord roles to ping** | none | Roles pre-selected for new ops with **Ping Discord** on. Each op can change them. Only shown once the Discord plugin is linked to your server. Once it is, an op (and this setting) only keeps roles the picker offers: managed roles and @everyone can't be pinged by typing their id into the API. |
 | **Keep finished ops for** | 14 days | How long finished and cancelled ops stay on the **Recent** tab (1 to 90). The **Calendar** tab still shows older ops. |
 
 ## Day-to-day operation
@@ -66,6 +66,8 @@ Press **Save** to apply.
 - An op can be up to 120 days ahead and run 15 minutes to 24 hours. The duration list offers 30 minutes to 8 hours.
 - **Edit** a moved op and everyone who answered Going or Maybe is told; reminders reset for the new time.
 - **Cancel op** tells everyone who answered and keeps the op on the calendar, crossed out.
+- Reminders and "moved" or "cancelled" notices skip people who answered but have since left the alliance or the
+  op's audience.
 - **Delete** removes an op silently. Use it for mistakes only.
 - Use **Who it's for** to keep stratops or leadership ops to the right states or groups.
 - **Everyone is expected** sends the posting notification and every reminder to the whole audience, even members who

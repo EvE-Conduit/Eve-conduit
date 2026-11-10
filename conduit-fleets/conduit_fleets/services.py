@@ -151,6 +151,10 @@ def start_tracking(fleet: Fleet, character_id: int, by, motd: bool = True) -> Fl
         raise FleetError(str(exc)) from None
     if info.get("role") != "fleet_commander":
         raise FleetError(f"{char.name} has to be the fleet boss (fleet commander) to read who is in the fleet")
+    # One in-game fleet, one fleet here: tracked from several, everyone in it would get a FAT per fleet.
+    other = Fleet.objects.filter(tracking=True, ended_at__isnull=True, esi_fleet_id=info["fleet_id"]).exclude(pk=fleet.pk).first()
+    if other is not None:
+        raise FleetError(f"That in-game fleet is already tracked by the fleet \"{other.name}\"; end that one or stop its tracking first")
     fleet.tracking_character = char
     fleet.esi_fleet_id = info["fleet_id"]
     fleet.tracking = True
@@ -380,14 +384,24 @@ def user_fats(user, days: int | None = None, type_names: list[str] | None = None
 def fleets_attended(user, days: int | None = None, type_names: list[str] | None = None, min_pilots: int = 1) -> int:
     """The user's FATs: one per fleet and FAT round they flew in with any character (two characters count once).
 
-    FATs someone added by hand for their own characters don't count (an FC could otherwise hand themselves
-    attendance), and with ``min_pilots`` only fleets with at least that many pilots count.
+    FATs someone gave their own characters don't count (an FC could otherwise hand themselves attendance): added
+    by hand, or registered on the FAT link of a fleet they run themselves. With ``min_pilots`` only fleets with at
+    least that many pilots count.
     """
-    qs = user_fats(user, days, type_names).exclude(via=Fat.Via.MANUAL, added_by=user)
+    own_link = Q(via=Fat.Via.LINK, added_by=user) & (Q(fleet__fc=user) | Q(fleet__created_by=user))
+    qs = user_fats(user, days, type_names).exclude(via=Fat.Via.MANUAL, added_by=user).exclude(own_link)
     if min_pilots > 1:
         big = Fleet.objects.annotate(pilots=Count("fats__character_id", distinct=True)).filter(pilots__gte=min_pilots).values("pk")
         qs = qs.filter(fleet_id__in=big)
     return qs.values("fleet_id", "round").distinct().count()
+
+
+def self_awarded(via: str, added_by_id, owner_id, fc_id, created_by_id) -> bool:
+    """A FAT its owner gave themselves: added by hand, or from the FAT link of a fleet they run. Such FATs don't
+    count as attendance (``fleets_attended`` leaves them out the same way)."""
+    if owner_id is None or added_by_id != owner_id:
+        return False
+    return via == Fat.Via.MANUAL or (via == Fat.Via.LINK and owner_id in (fc_id, created_by_id))
 
 
 def my_attendance(user) -> dict:
@@ -416,12 +430,16 @@ def my_attendance(user) -> dict:
 
 
 def leaderboard(days: int = 30, type_id: int | None = None) -> list[dict]:
-    """FATs and fleets per member (and per unregistered character) in the period."""
+    """FATs and fleets per member (and per unregistered character) in the period. FATs members gave their own
+    characters are left out, as in the group rule (``self_awarded``)."""
     fats = Fat.objects.filter(fleet__started_at__gte=timezone.now() - timedelta(days=days))
     if type_id:
         fats = fats.filter(fleet__fleet_type_id=type_id)
-    rows = list(fats.values("fleet_id", "round", "character_id", "character_name", "fleet__started_at"))
+    rows = list(fats.values("fleet_id", "round", "character_id", "character_name", "fleet__started_at", "via", "added_by_id",
+                            "fleet__fc_id", "fleet__created_by_id"))
     owners = dict(Character.objects.filter(pk__in={r["character_id"] for r in rows}).values_list("pk", "user_id"))
+    rows = [r for r in rows if not self_awarded(r["via"], r["added_by_id"], owners.get(r["character_id"]), r["fleet__fc_id"],
+                                                r["fleet__created_by_id"])]
     users = {u.pk: u for u in User.objects.filter(pk__in=set(owners.values())).select_related("main_character")}
     members: dict[str, dict] = {}
     for r in rows:

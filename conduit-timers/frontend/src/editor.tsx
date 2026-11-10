@@ -30,7 +30,11 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
   const pingRoles = form.ping_roles ?? settings?.default_ping_roles ?? [];
   const [mode, setMode] = useState<"left" | "exact">(t ? "exact" : "left");
   const [left, setLeft] = useState("");
-  const [exact, setExact] = useState(toLocalInput(t?.ends_at));
+  const [exact, setExactValue] = useState(toLocalInput(t?.ends_at));
+  // The field shows the time to the minute. Until it's changed, an edit saves the timer's own time (with its
+  // seconds), so fixing a typo in the notes doesn't move the timer and send its reminders again.
+  const [timeTouched, setTimeTouched] = useState(false);
+  const setExact = (v: string) => { setExactValue(v); setTimeTouched(true); };
   // "Time left" counts from when it was typed, so the saved time doesn't drift while the form is open.
   const [typedAt, setTypedAt] = useState(Date.now());
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -52,7 +56,8 @@ export function Editor({ timer: t, onClose }: { timer: Timer | null; onClose: ()
   };
 
   const seconds = mode === "left" ? parseTimeLeft(left) : null;
-  const endsAt = mode === "left" ? (seconds != null ? new Date(typedAt + seconds * 1000).toISOString() : null) : fromLocalInput(exact);
+  const typedEndsAt = mode === "left" ? (seconds != null ? new Date(typedAt + seconds * 1000).toISOString() : null) : fromLocalInput(exact);
+  const endsAt = t && !timeTouched && !(mode === "left" && left.trim()) ? t.ends_at : typedEndsAt;
   const ready = !!form.name.trim() && !!form.system && !!endsAt;
 
   const save = useMutation({

@@ -249,3 +249,68 @@ def test_managers_set_discord_pings(user, api_client):
     resp = api_client.call("put", "/api/pings/projects.created", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="projects.created").roles == ["123"]
+
+
+def test_projects_for_some_members_stay_out_of_public_webhooks(setup, api_client, monkeypatch):
+    """Webhooks often post where anyone can read: a project for a group goes out as private events, without its name."""
+    project, item, boss, pilot, other = setup
+    capitals = Group.objects.create(name="Capitals")
+    pilot.groups.add(capitals)
+    emitted = []
+    monkeypatch.setattr(bus, "emit", lambda name, **kw: emitted.append((name, kw)))
+    secret = services.save_project(None, {"name": "Secret titan", "location": "Keepstar X", "groups": [capitals.pk], "notify": False}, boss)
+    assert [name for name, _ in emitted] == ["projects.created_restricted"]
+    for name in ("projects.created_restricted", "projects.contribution_delivered_restricted", "projects.completed_restricted"):
+        assert bus.is_private(name)
+    emitted.clear()
+    part = services.add_item(secret, HURRICANE, 2, points_per_unit=10)
+    c = services.claim(part, pilot, 2)
+    services.deliver(c, pilot)
+    services.confirm(c, boss)
+    by_name = {name: kw for name, kw in emitted if name.startswith("projects.")}
+    assert set(by_name) == {"projects.contribution_delivered", "projects.contribution_delivered_restricted", "projects.completed_restricted"}
+    # The Corp Store pays from the public event: it keeps who and how much, and says nothing about the project.
+    public = by_name["projects.contribution_delivered"]
+    assert public["user_id"] == pilot.pk and public["points"] == 20 and public["contribution_id"] == c.pk
+    assert "Secret titan" not in str(public) and "Hurricane" not in str(public) and "Keepstar" not in str(public)
+    assert by_name["projects.contribution_delivered_restricted"]["project"] == "Secret titan"
+    # A project for everyone goes out as before.
+    emitted.clear()
+    services.save_project(None, {"name": "Open one", "notify": False}, boss)
+    assert [name for name, _ in emitted] == ["projects.created"]
+
+
+def test_a_stale_copy_cant_undo_what_happened_meanwhile(setup):
+    """Two managers on the same delivery, or a member clicking twice: each holds a copy loaded earlier."""
+    project, item, boss, pilot, other = setup
+    c = services.claim(item, pilot, 5)
+    services.deliver(c, pilot)
+    stale_reject, stale_deliver = (Contribution.objects.select_related("item__project").get(pk=c.pk) for _ in range(2))
+    services.confirm(Contribution.objects.get(pk=c.pk), boss)
+    # Sending it back after it was confirmed (and paid) would let it be delivered and paid again.
+    with pytest.raises(services.ProjectError, match="waiting for a manager"):
+        services.reject(stale_reject, boss, "not there")
+    assert Contribution.objects.get(pk=c.pk).status == Contribution.Status.CONFIRMED
+
+    c2 = services.claim(item, other, 5)
+    stale_release, stale_deliver = (Contribution.objects.select_related("item__project").get(pk=c2.pk) for _ in range(2))
+    services.deliver(Contribution.objects.select_related("item__project").get(pk=c2.pk), other)
+    before = Notification.objects.count()
+    with pytest.raises(services.ProjectError, match="delivered already"):
+        services.deliver(stale_deliver, other)
+    with pytest.raises(services.ProjectError, match="send it back first"):
+        services.release(stale_release, other)
+    assert Notification.objects.count() == before and Contribution.objects.get(pk=c2.pk).status == Contribution.Status.DELIVERED
+
+
+def test_pasted_lists_have_limits(setup, api_client):
+    import time
+
+    project, item, boss, pilot, _ = setup
+    started = time.perf_counter()
+    lines = services.parse_paste("a" + " " * 60_000 + "b\nTritanium x 10\nTritanium " + "9" * 5000)
+    assert time.perf_counter() - started < 1
+    assert ("Tritanium", 10) in lines and len(lines) == 3
+    api_client.force_login(boss)
+    resp = api_client.call("post", f"/api/p/projects/projects/{project.pk}/items/paste", {"text": "Tritanium 5\n" * 20_000})
+    assert resp.status_code == 400 and "too long" in resp.json()["detail"]

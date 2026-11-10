@@ -78,6 +78,9 @@ Op notifications come under the bell in the **Ops** category (`p.ops`).
 
 If the op is marked **Everyone is expected**, the whole audience is told when it's posted and gets every reminder.
 
+Reminders and "moved" or "cancelled" notices only go to people who may still see the op: someone who answered and
+then left the alliance, or the op's audience, isn't told any more.
+
 Your guild may also see op posts and pings in Discord. Those come from webhooks your admins set up, not from your
 answer.
 

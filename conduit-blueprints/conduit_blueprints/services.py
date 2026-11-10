@@ -650,9 +650,12 @@ def decline(r: Request, by, note: str = "", request=None) -> Request:
     return r
 
 
+@transaction.atomic
 def cancel(r: Request, user) -> Request:
     if r.user_id != user.pk:
         raise LibraryError("Not your request", 403)
+    # Re-read under a lock: a manager may have just delivered it, and a delivered loan must stay on the loans list.
+    r = Request.objects.select_for_update().get(pk=r.pk)
     _require(r, *Request.ACTIVE)
     r.status = Request.Status.CANCELLED
     r.save(update_fields=["status", "updated_at"])
@@ -678,7 +681,9 @@ def mark_returned(r: Request, by, request=None) -> Request:
     return r
 
 
+@transaction.atomic
 def extend(r: Request, by, due_at, request=None) -> Request:
+    r = Request.objects.select_for_update().get(pk=r.pk)
     _not_own(r, by)
     if not r.on_loan:
         raise LibraryError("Only a blueprint out on loan has a due date")
