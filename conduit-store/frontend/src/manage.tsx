@@ -92,7 +92,8 @@ function ItemDialog({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
   const type = d.type_id ? { id: d.type_id, name: d.type_name ?? `Type ${d.type_id}`, icon: d.icon } : null;
   const save = useMutation({
-    mutationFn: () => (d.id ? api.put(`${BASE}/items/${d.id}`, d) : api.post(`${BASE}/items`, d)),
+    // stock_was: what the stock was when the form opened, so orders placed meanwhile aren't undone by saving.
+    mutationFn: () => (d.id ? api.put(`${BASE}/items/${d.id}`, { ...d, stock_was: draft.stock }) : api.post(`${BASE}/items`, d)),
     onSuccess: () => {
       toast.success("Saved");
       qc.invalidateQueries({ queryKey: ["store"] });

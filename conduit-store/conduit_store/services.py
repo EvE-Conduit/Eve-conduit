@@ -104,6 +104,7 @@ def leaderboard(limit: int = 10) -> dict:
 # --- items -------------------------------------------------------------------------------------------------------
 
 
+@transaction.atomic
 def save_item(item: Item | None, data: dict, by, request=None) -> Item:
     name = str(data.get("name", "")).strip()[:100]
     if not name:
@@ -111,12 +112,22 @@ def save_item(item: Item | None, data: dict, by, request=None) -> Item:
     type_id = _int(data.get("type_id"), "Item type", minimum=1, maximum=2**31 - 1, optional=True)
     if type_id and not ItemType.objects.filter(pk=type_id).exists():
         raise StoreError("No such EVE item")
+    stock = _int(data.get("stock"), "Stock", optional=True)
+    stock_was = _int(data.get("stock_was"), "Stock", optional=True)
+    if item is not None:
+        # The row as it is now, locked like buying and cancelling lock it: orders placed while the form was open have
+        # taken from the stock since.
+        item = Item.objects.select_for_update().get(pk=item.pk)
+        if stock is not None and stock_was is not None and item.stock is not None:
+            # The form says what the stock was when it opened: what the officer changed is the difference, applied to
+            # today's stock. Untouched, the stock stays as the orders left it instead of going back up.
+            stock = max(item.stock + stock - stock_was, 0)
     item = item or Item()
     item.name = name
     item.description = str(data.get("description", "")).strip()[:4000]
     item.type_id = type_id
     item.price = _int(data.get("price"), "Price", minimum=1)
-    item.stock = _int(data.get("stock"), "Stock", optional=True)
+    item.stock = stock
     item.per_member_limit = _int(data.get("per_member_limit"), "Limit per member", minimum=1, optional=True)
     item.active = bool(data.get("active", True))
     item.order = _int(data.get("order") or 0, "Order", minimum=-10_000, maximum=10_000)
@@ -164,13 +175,16 @@ def bought(user, item: Item) -> int:
 
 
 @transaction.atomic
-def buy(user, item_id: int, quantity, request=None) -> Order:
+def buy(user, item_id: int, quantity, request=None, expected_price: int | None = None) -> Order:
     quantity = _int(quantity, "Quantity", minimum=1, maximum=1000)
     # Lock the buyer's row so two orders sent at once can't both spend the same points, and the item's for its stock.
     get_user_model().objects.select_for_update().filter(pk=user.pk).first()
     item = Item.objects.select_for_update().filter(pk=item_id, active=True).first()
     if item is None:
         raise StoreError("That item isn't in the store", 404)
+    if expected_price is not None and expected_price != item.price:
+        # The price changed after the page showed it: nobody pays a price they haven't seen.
+        raise StoreError(f"The price of {item.name} is now {item.price:,} points each; look again and order if it still suits you", 409)
     if item.stock is not None and item.stock < quantity:
         raise StoreError(f"Only {item.stock} left" if item.stock else "Sold out")
     if item.per_member_limit is not None and bought(user, item) + quantity > item.per_member_limit:

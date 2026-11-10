@@ -249,3 +249,34 @@ def test_managers_switch_on_discord_pings(api_client):
     resp = api_client.call("put", "/api/pings/store.order_placed", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="store.order_placed").roles == ["123"]
+
+
+def test_nobody_pays_a_price_they_didnt_see(setup, api_client):
+    """The page sends the price it showed; if an officer changed it meanwhile the order is refused, not charged."""
+    _, member, item = setup
+    services.award(member.pk, 500, "Start", "manual")
+    api_client.force_login(member)
+    Item.objects.filter(pk=item.pk).update(price=90)  # raised after the member opened the store
+    resp = api_client.call("post", "/api/p/store/orders", {"item_id": item.pk, "quantity": 1, "expected_price": 40})
+    assert resp.status_code == 409 and "now 90 points" in resp.json()["detail"]
+    assert services.balance(member) == 500 and not Order.objects.exists()
+    resp = api_client.call("post", "/api/p/store/orders", {"item_id": item.pk, "quantity": 1, "expected_price": 90})
+    assert resp.status_code == 200 and resp.json()["balance"] == 410
+    # Pages from before 1.0.3 don't send it and still work.
+    assert api_client.call("post", "/api/p/store/orders", {"item_id": item.pk, "quantity": 1}).json()["balance"] == 320
+
+
+def test_saving_an_item_doesnt_undo_orders_placed_meanwhile(setup, api_client):
+    officer, member, item = setup
+    services.award(member.pk, 500, "Start", "manual")
+    form = {"name": "Ferox", "price": 40, "stock": 3, "stock_was": 3}  # opened with 3 in stock
+    services.buy(member, item.pk, 2)  # ...then two were ordered
+    api_client.force_login(officer)
+    # Saved without touching the stock (a new price): the two stay sold.
+    resp = api_client.call("put", f"/api/p/store/items/{item.pk}", {**form, "price": 45})
+    assert resp.status_code == 200 and resp.json()["stock"] == 1 and resp.json()["price"] == 45
+    # Five more arrived: 3 -> 8 in the form is five on top of what's there now.
+    assert api_client.call("put", f"/api/p/store/items/{item.pk}", {**form, "stock": 8}).json()["stock"] == 6
+    # Without stock_was (older pages), and to or from unlimited, the number is taken as it is.
+    assert api_client.call("put", f"/api/p/store/items/{item.pk}", {"name": "Ferox", "price": 40, "stock": 10}).json()["stock"] == 10
+    assert api_client.call("put", f"/api/p/store/items/{item.pk}", {"name": "Ferox", "price": 40, "stock": None, "stock_was": 10}).json()["stock"] is None

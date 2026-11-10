@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import calendar
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -17,13 +17,18 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
 from conduit.accounts.models import Character
-from conduit.corp.models import MiningObservation, MoonExtraction, Structure
+from conduit.corp.models import CorpSyncStatus, MiningObservation, MoonExtraction, Structure
 from conduit.eve.models import EveCorporation, portrait_url
 from conduit.eve.tasks import names_for
 from conduit.sde.models import ItemType, type_icon_url
 from conduit.sheet.util import prices_by_type
 
 from .models import Invoice, LedgerMonth, MoonSettings
+
+
+#: How long after a month ends closing it waits for mining data that hasn't synced past the end. After that a
+#: corporation that stopped syncing (it left, or nobody's login can read its mining) no longer holds the month up.
+SYNC_GRACE = timedelta(days=2)
 
 
 class LedgerError(Exception):
@@ -54,6 +59,52 @@ def month_end(month: date) -> date:
 
 def label(month: date) -> str:
     return month.strftime("%B %Y")
+
+
+def _at(day: date) -> datetime:
+    """Midnight EVE time (UTC) at the start of ``day``."""
+    return datetime.combine(day, time.min, tzinfo=UTC)
+
+
+def unsynced_corporations(month: date) -> set[int]:
+    """The month's corporations whose mining hasn't synced since it ended: what was mined in its last hours may still
+    be missing, and a bill is fixed once the month is closed."""
+    chosen = MoonSettings.load().corporations
+    ids = set(chosen) if chosen else set(observations().filter(last_updated__gte=month, last_updated__lt=month_end(month))
+                                         .values_list("corporation_id", flat=True).distinct())
+    synced = set(CorpSyncStatus.objects.filter(section="mining", corporation_id__in=ids, last_success__gte=_at(month_end(month)))
+                 .values_list("corporation_id", flat=True))
+    return ids - synced
+
+
+def removed_characters(month: date, activity: dict[int, float], names: dict[int, str]) -> list[dict]:
+    """Characters that mined in the month and nobody has registered now, but that were on a member's account and taken
+    off it since the month began (removed by the member, or sold): ``activity`` is what each unregistered character
+    mined, in ISK. Their tax is on nobody's bill, so whoever closes the month is told.
+
+    This only warns. The audit log names who had the character, but it isn't an ownership history (a sold character
+    leaves the same trace as one taken off to dodge the bill, and old events are cleared away), so nobody is billed
+    from it automatically."""
+    from conduit.accounts.models import User
+    from conduit.audit.models import AuditEvent
+
+    found: dict[int, AuditEvent] = {}
+    for e in AuditEvent.objects.filter(action="character.removed", at__gte=_at(month)).order_by("at"):
+        cid = (e.details or {}).get("character_id")
+        if cid in activity:
+            found[cid] = e  # the latest removal
+    owner_of = {cid: e.details.get("user_id") or e.details.get("impersonating") or (e.actor_id if e.actor_type == AuditEvent.Actor.USER else None)
+                for cid, e in found.items()}
+    users = {u.pk: u for u in User.objects.filter(pk__in={o for o in owner_of.values() if o}).select_related("main_character")}
+    out = []
+    for cid, e in found.items():
+        owner = users.get(owner_of[cid])
+        out.append({
+            "character_id": cid, "name": names.get(cid) or e.details.get("name") or f"Character {cid}", "value": activity[cid],
+            "removed_at": e.at.isoformat(), "sold": bool(e.details.get("sold")),
+            "previous_owner": {"id": owner.pk, "name": owner.display_name} if owner else None,
+        })
+    return sorted(out, key=lambda r: -r["value"])
 
 
 def observations(viewer=None):
@@ -154,11 +205,15 @@ def ledger(month: date, user=None, viewer=None) -> dict:
         per_day[r.last_updated.isoformat()] += value
 
     invoices = {i.user_id: i for i in Invoice.objects.filter(month__month=month)} if closed else {}
+    # A viewer who can't see every corporation's mining doesn't see the bill of a member who mined in the others
+    # either: its total would say what the member mined there.
+    elsewhere = _mined_elsewhere(month, viewer) if viewer is not None else set()
     out_members = []
     for m in members.values():
         chars = sorted(m.pop("characters").values(), key=lambda c: -c["value"])
         value = sum(c["value"] for c in chars)
-        inv = invoices.get(m["user_id"])
+        partial = m["user_id"] in elsewhere
+        inv = None if partial else invoices.get(m["user_id"])
         out_members.append({
             **m,
             "characters": chars,
@@ -166,6 +221,8 @@ def ledger(month: date, user=None, viewer=None) -> dict:
             "quantity": sum(c["quantity"] for c in chars),
             "tax": float(inv.amount) if inv else float(_isk(value * float(rate) / 100)),
             "invoice": invoice_out(inv) if inv else None,
+            #: Also mined in corporations the viewer can't see: the figures are for the ones they can, the bill is hidden.
+            "partial": partial,
         })
     out_members.sort(key=lambda m: -m["value"])
 
@@ -182,6 +239,10 @@ def ledger(month: date, user=None, viewer=None) -> dict:
         "closed": closed is not None,
         "closed_at": closed.closed_at.isoformat() if closed else None,
         "can_close": closed is None and month_end(month) <= timezone.now().date(),
+        # For whoever runs the ledger, not on a member's own page.
+        "removed_characters": [] if user is not None else removed_characters(
+            month, {m["characters"][0]["id"]: m["value"] for m in out_members if not m["registered"]},
+            {m["characters"][0]["id"]: m["name"] for m in out_members if not m["registered"]}),
         "tax_rate": float(rate),
         "totals": {
             "value": total,
@@ -204,6 +265,13 @@ def ledger(month: date, user=None, viewer=None) -> dict:
             key=lambda o: -o["value"],
         ),
     }
+
+
+def _mined_elsewhere(month: date, viewer) -> set[int]:
+    """Members who mined in the month in corporations ``viewer`` can't see."""
+    hidden = (observations().filter(last_updated__gte=month, last_updated__lt=month_end(month))
+              .exclude(corporation_id__in=visible_corporations(viewer)).values_list("character_id", flat=True).distinct())
+    return set(Character.objects.filter(pk__in=set(hidden)).values_list("user_id", flat=True))
 
 
 def invoice_out(inv: Invoice) -> dict:
@@ -230,6 +298,13 @@ def close_month(month: date, by) -> LedgerMonth:
         raise LedgerError("A month can be closed once it's over")
     if LedgerMonth.objects.filter(month=month).exists():
         raise LedgerError(f"{label(month)} is already closed")
+    waiting = unsynced_corporations(month)
+    opens = _at(month_end(month)) + SYNC_GRACE
+    if waiting and timezone.now() < opens:
+        # What was mined in the month's last hours arrives with the next sync; bills made now would miss it for good.
+        names = ", ".join(EveCorporation.objects.filter(pk__in=waiting).order_by("name").values_list("name", flat=True)) or "some corporations"
+        raise LedgerError(f"The mining of {names} hasn't synced since {label(month)} ended, so its last days may be missing. "
+                          f"Close it after their next sync (or from {opens:%d %B %H:%M} EVE time, whether they have synced or not).")
     settings = MoonSettings.load()
     rows = observations().filter(last_updated__gte=month, last_updated__lt=month_end(month))
     prices = prices_by_type({r.type_id for r in rows})

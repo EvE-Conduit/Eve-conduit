@@ -57,6 +57,18 @@ def service_for(user, service_id: int) -> Service:
     return service
 
 
+def may_use(service: Service, character_id: int | None) -> bool:
+    """Whether the pilot who made a contract is someone the service hauls for. A public service, and one open to every
+    member, take anyone's contract; one kept to some states or groups only those of a member in them, whose character
+    is on the site."""
+    from conduit.accounts.models import Character
+
+    if service.public or not (service.states.exists() or service.groups.exists()):
+        return True
+    owner = Character.objects.filter(pk=character_id).select_related("user").first() if character_id else None
+    return owner is not None and usable(owner.user).filter(pk=service.pk).exists()
+
+
 # --- prices ---------------------------------------------------------------------------------------------------------
 
 

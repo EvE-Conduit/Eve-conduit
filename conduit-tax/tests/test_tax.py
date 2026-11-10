@@ -8,7 +8,8 @@ from django.utils import timezone
 
 from conduit.access.rules import RULE_TYPES
 from conduit.accounts.models import Character
-from conduit.corp.models import CorpJournalEntry, CorporationInfo
+from conduit.audit.models import AuditEvent
+from conduit.corp.models import CorpJournalEntry, CorporationInfo, CorpSyncStatus
 from conduit.eve.models import EveName
 from conduit.notify.models import Notification
 from conduit.plugins.services import set_enabled, sync_installed
@@ -39,6 +40,7 @@ def taxed(db, corp, last_month):
     set_enabled("tax", True)
     TaxSettings.objects.update_or_create(pk=1, defaults={"rate": 50})
     CorporationInfo.objects.create(corporation=corp, tax_rate=0.1)
+    CorpSyncStatus.objects.create(corporation=corp, section="wallets", last_success=timezone.now())  # synced since last month ended
     pilot = make_user(90000001, "Pilot One", corporation=corp)
     Character.objects.create(id=90000002, name="Pilot Alt", owner_hash="alt", user=pilot, corporation=corp)
     EveName.objects.create(id=91000777, name="Stranger", category="character")
@@ -275,3 +277,72 @@ def test_the_minimum_must_be_a_real_number(taxed, api_client, admin_user):
         resp = api_client.call("put", "/api/p/tax/settings", {"rate": 25, "minimum": bad, "ref_types": ["bounty_prizes"]})
         assert resp.status_code == 400, bad
     assert TaxSettings.load().minimum == 0
+
+
+def test_a_month_waits_for_the_wallets_to_sync_past_its_end(taxed, corp, last_month, admin_user, monkeypatch):
+    """Bills are fixed at closing: entries from the month's last hours that arrive with the next sync would be on
+    nobody's bill. So closing waits for that sync, for two days at most."""
+    end = services._at(services.month_end(last_month))
+    CorpSyncStatus.objects.update(last_success=end - timedelta(minutes=20))  # last synced just before midnight
+    monkeypatch.setattr(timezone, "now", lambda: end + timedelta(minutes=5))
+    with pytest.raises(services.LedgerError, match="Test Corp haven't synced since"):
+        services.close_month(last_month, admin_user)
+    assert not LedgerMonth.objects.exists()
+    # A corporation that stopped syncing doesn't hold the month up for ever.
+    monkeypatch.setattr(timezone, "now", lambda: end + services.SYNC_GRACE + timedelta(minutes=1))
+    services.close_month(last_month, admin_user)
+    services.reopen_month(last_month)
+    # Synced after the month ended: straight away.
+    CorpSyncStatus.objects.update(last_success=end + timedelta(minutes=3))
+    monkeypatch.setattr(timezone, "now", lambda: end + timedelta(minutes=5))
+    services.close_month(last_month, admin_user)
+    assert Invoice.objects.get().amount == 700_000
+
+
+def test_characters_taken_off_an_account_are_pointed_out(taxed, last_month, admin_user):
+    """An alt removed before the month is closed is "unregistered" and on nobody's bill. Whoever closes the month is
+    told which characters that happened to and whose they were; nobody is billed from the audit log."""
+    assert services.ledger(last_month)["removed_characters"] == []
+    Character.objects.filter(pk=90000002).delete()  # the member unlinked their alt...
+    AuditEvent.objects.create(action="character.removed", summary="Pilot One removed character Pilot Alt", actor_type="user",  # ...as the core records it
+                              actor_id=taxed.pk, actor_name="Pilot One", target_type="character", details={"character_id": 90000002, "name": "Pilot Alt"})
+    AuditEvent.objects.create(action="character.removed", summary="removed long ago", actor_type="user", actor_id=taxed.pk,
+                              at=services._at(last_month) - timedelta(days=1), details={"character_id": 91000777})  # before the month: not this
+    data = services.ledger(last_month)
+    (gone,) = data["removed_characters"]
+    assert (gone["character_id"], gone["collected"], gone["previous_owner"], gone["sold"]) == (90000002, 400_000.0, {"id": taxed.pk, "name": "Pilot One"}, False)
+    assert services.ledger(last_month, user=taxed)["removed_characters"] == []  # not on members' own pages
+    services.close_month(last_month, admin_user)
+    assert Invoice.objects.get().amount == 500_000  # the main only: the warning doesn't bill anyone
+    assert len(services.ledger(last_month)["removed_characters"]) == 1  # and stays on the closed month
+
+
+def test_a_bill_isnt_shown_to_someone_who_cant_see_all_it_covers(taxed, corp, last_month, api_client, admin_user):
+    """A bill adds up every corporation's tax. To a viewer who may see only some of them, its total would give away
+    what the member earned in the others."""
+    from django.contrib.auth.models import Permission
+
+    from conduit.eve.models import EveCorporation
+
+    elsewhere = EveCorporation.objects.create(id=98000002, name="Other Corp", ticker="OTHER")
+    CorpSyncStatus.objects.create(corporation=elsewhere, section="wallets", last_success=timezone.now())
+    day = datetime.combine(last_month + timedelta(days=5), time(12), tzinfo=UTC)
+    journal(elsewhere, day, "bounty_prizes", 6_000_000, CONCORD, 90000002)  # the alt rats in another corporation
+    services.close_month(last_month, admin_user)
+    assert Invoice.objects.get().amount == 3_700_000
+
+    officer = make_user(90000050, "Tax Officer", corporation=corp)
+    officer.user_permissions.add(*Permission.objects.filter(codename__in=["view_ledger", "view_own_corporation", "view_corporation_wallets"]))
+    api_client.force_login(type(officer).objects.get(pk=officer.pk))
+    data = api_client.call("get", f"/api/p/tax/ledger?month={last_month:%Y-%m}").json()
+    pilot = next(m for m in data["members"] if m["user_id"] == taxed.pk)
+    assert pilot["collected"] == 1_400_000 and pilot["partial"]
+    assert pilot["invoice"] is None and pilot["tax"] == 700_000  # their own corporation's share, not the 3.7M bill
+    assert data["totals"]["tax"] == 700_000 and data["totals"]["paid"] == 0
+    assert b"3700000" not in api_client.call("get", f"/api/p/tax/ledger.csv?month={last_month:%Y-%m}").content
+
+    # Someone who sees every corporation sees the bill.
+    api_client.force_login(ledger_admin(admin_user))
+    data = api_client.call("get", f"/api/p/tax/ledger?month={last_month:%Y-%m}").json()
+    pilot = next(m for m in data["members"] if m["user_id"] == taxed.pk)
+    assert pilot["invoice"]["amount"] == 3_700_000 and not pilot["partial"]

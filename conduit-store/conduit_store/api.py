@@ -58,11 +58,13 @@ def history(request):
 class BuyIn(Schema):
     item_id: int
     quantity: int = 1
+    #: The price per item the buyer was shown; the order is refused if it has changed since. Older pages don't send it.
+    expected_price: int | None = None
 
 
 @router.post("/orders")
 def buy(request, payload: BuyIn):
-    order = _run(services.buy, request.user, payload.item_id, payload.quantity, request=request)
+    order = _run(services.buy, request.user, payload.item_id, payload.quantity, request=request, expected_price=payload.expected_price)
     return {"order": services.order_out(order), "balance": services.balance(request.user)}
 
 
@@ -117,6 +119,8 @@ class ItemIn(Schema):
     type_id: int | None = None
     price: int
     stock: int | None = None
+    #: The stock the form was opened with; with it, a changed stock is applied as a difference (see ``save_item``).
+    stock_was: int | None = None
     per_member_limit: int | None = None
     active: bool = True
     order: int = 0

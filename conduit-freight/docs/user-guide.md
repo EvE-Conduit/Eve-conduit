@@ -63,6 +63,7 @@ up to about 15 minutes to show.
 Problems (red) usually mean the haulers will not take the contract as it is:
 
 - Made out to the wrong character or corporation.
+- Made by a pilot the service doesn't haul for (it is kept to certain members, and its rates are theirs).
 - Goes between places none of the service's routes cover.
 - Pays less than the route asks.
 - Volume or collateral over the route's limit.

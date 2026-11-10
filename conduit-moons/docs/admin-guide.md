@@ -85,6 +85,20 @@ Click **Save**. Saving is written to the audit log.
 
 A month can be closed once it is over. The ledger shows "<month> is over and still open".
 
+Bills are fixed when the month is closed, so closing waits until every corporation's mining has synced after the month
+ended (what was mined on its last day arrives with that sync). If a corporation has not synced by two days after the
+month's end, the month can be closed anyway. The message "The mining of ... hasn't synced since <month> ended" names
+the corporations it is waiting for.
+
+If a character that mined was on a member's account and has been taken off it since the month began (removed by the
+member, or sold), the ledger says so above the chart: the character, what it mined, when it was removed and whose
+account it was on. Its tax is on nobody's bill. Nobody is billed for it automatically (a sold character leaves the same
+trace as one removed to avoid the bill): settle it with the member, or ask them to add the character again before you
+close the month.
+
+A member who also mined in corporations you cannot see shows **part only** and no bill: the bill covers those
+corporations too, so it is hidden from you.
+
 1. Pick the month and click **Close month**.
 2. Confirm. The ore prices and the tax rate are fixed as they are now.
 3. Every registered member who mined gets a bill. Members with a bill above 0 get a notification "Moon tax for

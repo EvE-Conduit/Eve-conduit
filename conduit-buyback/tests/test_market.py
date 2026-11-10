@@ -70,6 +70,11 @@ def test_top_average():
     assert market.top_average([(d(9), 1000), (d(10), 10)], highest_first=True).quantize(d("0.01")) == d("9.20")
     assert market.top_average([(d(5), 10), (d(6), 1000)], highest_first=False).quantize(d("0.01")) == d("5.80")
     assert market.top_average([], True) == 0
+    # Minimum depth: one order never sets the price alone. A lone unit at 500 in front of the real orders at 1...
+    assert market.top_average([(d(500), 1), (d(1), 10)], highest_first=True) == d("250.5")
+    # ...and in a deep market the next order is a tick away, so nothing changes to speak of.
+    assert market.top_average([(d("4.00"), 1_000_000), (d("3.99"), 1_000_000)], True).quantize(d("0.01")) == d("4.00")
+    assert market.top_average([(d(7), 3)], True) == 7  # the only order there is
 
 
 def test_pull_reads_the_hub_and_zeroes_what_left(jita):
@@ -149,7 +154,10 @@ def test_guard_rules(db):
     assert market.check(Decimal(50), reliable, s).used == "current"  # below: only a loss for the seller
     s.guard_both_ways = True
     assert market.check(Decimal(50), reliable, s).used == "average"
-    assert market.check(Decimal(150), None, s).used == "current"  # nothing to compare with
+    # Nothing to compare with (never traded lately, or no history loaded): the price stands, for a manager to check.
+    assert market.check(Decimal(150), None, s).used == "unverified"
+    assert market.check(Decimal(150), PriceHistory(days=[[days_ago(20), 100, 5]]), s).used == "unverified"
+    assert market.check(Decimal(0), None, s).used == "current"  # no price at all: nothing to check
 
 
 def test_guarded_quotes(jita, program, seller, monkeypatch):
@@ -282,7 +290,8 @@ def test_every_market_in_use_is_read(amarr, program):
     # Jita 4-4 and The Forge share one read of the region; the closed program's market isn't read.
     assert sorted(c[0] for c in esi.calls) == [f"/markets/{FORGE}/orders", f"/markets/{DOMAIN}/orders"]
     buy = dict(ItemPrice.objects.filter(type_id=TRITANIUM).values_list("hub_id", "buy"))
-    assert buy == {JITA_44: Decimal("4.00"), AMARR_VIII: Decimal("9.00"), FORGE: Decimal("9.00")}
+    # The Forge has two orders: the better one doesn't set the price alone (minimum depth).
+    assert buy == {JITA_44: Decimal("4.00"), AMARR_VIII: Decimal("9.00"), FORGE: Decimal("6.50")}
     assert set(MarketRead.objects.values_list("hub_id", flat=True)) == {JITA_44, AMARR_VIII, FORGE}
     # Closed: its market's prices are forgotten.
     Program.objects.filter(name="Amarr").update(active=False)
@@ -313,3 +322,88 @@ def test_picking_a_programs_market(amarr, program, boss, api_client, monkeypatch
     assert [(m["name"], m["programs"]) for m in markets] == [("Jita 4-4", []), ("Amarr VIII", ["Ore buyback"])]
     # Back to the site's market.
     assert api_client.call("put", url, {**body, "hub_id": None}).json()["prices"]["hub"] == "Jita 4-4"
+
+
+# --- prices nobody can vouch for -----------------------------------------------------------------------------------
+
+
+def test_prices_without_history_go_to_a_manager(jita, program, seller, monkeypatch):
+    """An item that hasn't traded in the guard's window is the one a single order can move: its price isn't checked
+    against anything, so the quote is flagged instead of passing as clean."""
+    from test_buyback import OFFICER
+
+    esi = FakeEsi(history={OFFICER: []})  # ESI knows it, and it never traded
+    monkeypatch.setattr("conduit.esi.client.esi", lambda: esi)
+    ItemPrice.objects.filter(type_id=OFFICER).update(buy=Decimal("5000000000"))  # one propped-up buy order
+    out = services.quote(program, "Estamel's Shield 10", user=seller)
+    ln = out["lines"][0]
+    assert ln["guard"]["used"] == "unverified" and ln["watch"] and out["flagged"]
+    assert Quote.objects.get(tracking_number=out["quote"]["tracking_number"]).flagged
+
+
+def test_history_a_quote_didnt_wait_for_isnt_taken_as_fine(jita, program, seller, monkeypatch):
+    """Only so many histories are fetched while a quote waits. The items past that were priced unguarded: padding a
+    paste with new items got a manipulated one through."""
+    from conduit.sde.models import ItemType
+    from conduit_buyback import tasks
+    from test_buyback import OFFICER, OFFICER_GROUP
+
+    names = [f"Filler {chr(65 + i // 26)}{chr(65 + i % 26)}" for i in range(market.HISTORY_INLINE)]
+    for i, name in enumerate(names):  # lower type ids than the officer module, so they're fetched first
+        ItemType.objects.create(id=100 + i, group_id=OFFICER_GROUP, name=name, published=True, volume=1)
+        ItemPrice.objects.create(type_id=100 + i, buy=1, sell=1, updated_at=timezone.now())
+    traded = [{"date": days_ago(i), "average": 900_000_000, "volume": 10} for i in range(1, 8)]
+    esi = FakeEsi(history={OFFICER: traded})
+    monkeypatch.setattr("conduit.esi.client.esi", lambda: esi)
+    later = []
+    monkeypatch.setattr(tasks.fetch_history_later, "delay", lambda ids, region: later.append(ids))
+    ItemPrice.objects.filter(type_id=OFFICER).update(buy=Decimal("5000000000"))
+    out = services.quote(program, "Estamel's Shield 10\n" + "\n".join(f"{n} x 1" for n in names), user=seller)
+    ln = next(x for x in out["lines"] if x["type_id"] == OFFICER)
+    assert later == [[OFFICER]]
+    assert ln["guard"]["used"] == "unverified" and ln["watch"] and out["flagged"]
+
+
+def test_public_quotes_never_wait_for_esi(jita, program, client, monkeypatch):
+    """Visitors without an account get stored prices and history only: nothing is fetched while they wait, what's
+    missing is fetched in the background, and those lines go to a manager."""
+    from conduit_buyback import public_api, tasks
+
+    program.public = True
+    program.save()
+    esi = FakeEsi(history={TRITANIUM: []})
+    monkeypatch.setattr("conduit.esi.client.esi", lambda: esi)
+    later = []
+    monkeypatch.setattr(tasks.fetch_history_later, "delay", lambda ids, region: later.append(ids))
+    history(PYERITE, 10.0, 7)
+    url = f"/api/public/p/buyback/programs/{program.pk}/quote"
+    r = client.post(url, {"text": "Tritanium 10\nPyerite 10"}, content_type="application/json")
+    assert r.status_code == 200 and esi.calls == [] and later == [[TRITANIUM]]
+    by_type = {ln["type_id"]: ln for ln in r.json()["lines"]}
+    assert by_type[TRITANIUM]["watch"] and by_type[TRITANIUM]["guard"]["used"] == "unverified"
+    assert not by_type[PYERITE]["watch"] and r.json()["flagged"]
+
+    # Fewer lines than members get, and refused rather than cut short.
+    r = client.post(url, {"text": "\n".join(["Tritanium 1"] * 201)}, content_type="application/json")
+    assert r.status_code == 400 and "200 lines" in r.json()["detail"]
+    assert client.post(url, {"text": "x" * 40_001}, content_type="application/json").status_code == 422
+
+    # All visitors together have a budget too, whatever their addresses.
+    monkeypatch.setattr(public_api, "GLOBAL_LIMIT", 3)
+    codes = [client.post(url, {"text": "Pyerite 1"}, content_type="application/json", REMOTE_ADDR=f"203.0.113.{i}").status_code for i in range(3)]
+    assert codes == [200, 429, 429]  # two were used above
+
+
+def test_public_quotes_dont_wait_for_a_price_site_either(program, client, monkeypatch):
+    from conduit_buyback import tasks
+
+    program.public = True
+    program.save()
+    BuybackSettings.objects.update_or_create(pk=1, defaults={"price_source": "fuzzwork"})
+    ItemPrice.objects.filter(type_id=PYERITE).delete()
+    monkeypatch.setattr(prices, "fetch", lambda *a, **k: pytest.fail("fetched while the visitor waited"))
+    later = []
+    monkeypatch.setattr(tasks.fetch_prices_later, "delay", lambda ids, hub: later.append((ids, hub)))
+    r = client.post(f"/api/public/p/buyback/programs/{program.pk}/quote", {"text": "Tritanium 10\nPyerite 10"}, content_type="application/json")
+    assert r.status_code == 200 and later == [([PYERITE], JITA_44)]
+    assert [ln["accepted"] for ln in sorted(r.json()["lines"], key=lambda ln: ln["type_id"])] == [True, False]

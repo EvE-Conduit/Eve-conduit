@@ -409,7 +409,7 @@ def test_contracts_are_matched_and_checked(program, seller, boss, offline):
     })
     assert contracts.sync_owner(owner, client=esi) == {"seen": 3, "new": 3}
     ok, fake, wrong = (Contract.objects.get(contract_id=i) for i in (1, 2, 4))
-    assert ok.problems == [] and ok.quote.tracking_number == good and ok.program == program and ok.items == [[TRITANIUM, 1000, True]]
+    assert ok.problems == [] and ok.quote.tracking_number == good and ok.program == program and ok.items == [[TRITANIUM, 1000, True, False, False]]
     assert [p["code"] for p in fake.problems] == ["no_quote"] and fake.program == program
     assert [p["code"] for p in wrong.problems] == ["wrong_assignee", "price_high", "asks_items", "items_missing", "wrong_location",
                                                    "items_extra", "title"]
@@ -424,7 +424,7 @@ def test_contracts_are_matched_and_checked(program, seller, boss, offline):
     del esi.routes[f"/corporations/{CORP_ID}/contracts/1/items"]
     assert contracts.sync_owner(owner, client=esi)["new"] == 0
     ok.refresh_from_db()
-    assert ok.status == "finished" and ok.items == [[TRITANIUM, 1000, True]]
+    assert ok.status == "finished" and ok.items == [[TRITANIUM, 1000, True, False, False]]
     assert Notification.objects.filter(user=seller, level="success").count() == 1
 
     stats = services.statistics(program)
@@ -450,11 +450,103 @@ def test_unlinked_quotes_are_cleaned_up(program, seller, boss, offline):
 
     old = services.quote(program, "Tritanium 1", user=seller)["quote"]["tracking_number"]
     used = services.quote(program, "Tritanium 1", user=seller)["quote"]["tracking_number"]
-    Quote.objects.update(created_at=timezone.now() - timedelta(days=3))
+    Quote.objects.update(created_at=timezone.now() - timedelta(days=30))
     Contract.objects.create(contract_id=1, program=program, quote=Quote.objects.get(tracking_number=used), owner_id=CORP_ID, issuer_id=1,
                             assignee_id=CORP_ID, status="outstanding", date_issued=timezone.now())
     assert cleanup() == 1
     assert not Quote.objects.filter(tracking_number=old).exists() and Quote.objects.filter(tracking_number=used).exists()
+
+
+def test_cleanup_keeps_quotes_that_are_still_good(program, seller):
+    """Quotes are removed after 48 hours by default, but a program's are good for 7 days: a seller who contracts on
+    day 3 must still find the quote behind the tracking number."""
+    from conduit_buyback.tasks import cleanup
+
+    assert (BuybackSettings.load().unlinked_purge_hours, program.quote_valid_days, program.expiration_days) == (48, 7, 14)
+    fresh, due = (services.quote(program, "Tritanium 1", user=seller)["quote"]["tracking_number"] for _ in range(2))
+    Quote.objects.filter(tracking_number=fresh).update(created_at=timezone.now() - timedelta(days=3))
+    # Past the 7 days it's good for and the 14 a contract made on the last of them stays up.
+    Quote.objects.filter(tracking_number=due).update(created_at=timezone.now() - timedelta(days=22))
+    assert cleanup() == 1
+    assert Quote.objects.filter(tracking_number=fresh).exists() and not Quote.objects.filter(tracking_number=due).exists()
+    # No limit on the quote's age: kept as long as the longest limit a program can set.
+    Program.objects.filter(pk=program.pk).update(quote_valid_days=0)
+    Quote.objects.filter(tracking_number=fresh).update(created_at=timezone.now() - timedelta(days=60))
+    assert cleanup() == 0
+    Quote.objects.filter(tracking_number=fresh).update(created_at=timezone.now() - timedelta(days=105))
+    assert cleanup() == 1
+
+
+BPO = 687  # Rifter Blueprint
+
+
+@pytest.fixture
+def blueprint(sde):
+    ItemCategory.objects.create(id=9, name="Blueprint", published=True)
+    ItemGroup.objects.create(id=105, category_id=9, name="Frigate Blueprint", published=True)
+    ItemType.objects.create(id=BPO, group_id=105, name="Rifter Blueprint", published=True, volume=0.01)
+    ItemPrice.objects.create(type_id=BPO, buy=2_000_000, sell=2_500_000, updated_at=timezone.now())
+
+
+def test_blueprint_copies_are_caught(blueprint, program, seller, boss, offline):
+    """A copy has the original's type and name, so the quote prices an original: the quote goes to a manager, and a
+    contract holding a copy is a severe problem."""
+    out = services.quote(program, "Rifter Blueprint 1\nTritanium 1000", user=seller)
+    assert line_of(out, BPO)["watch"] and not line_of(out, TRITANIUM)["watch"] and out["flagged"]
+    tracking, price = out["quote"]["tracking_number"], out["quote"]["value"]
+    owner = boss.main_character.pk
+    copy = [{"record_id": 1, "type_id": BPO, "quantity": 1, "raw_quantity": -2, "is_included": True, "is_singleton": True},
+            {"record_id": 2, "type_id": TRITANIUM, "quantity": 1000, "is_included": True, "is_singleton": False}]
+    original = [{**copy[0], "raw_quantity": -1}, copy[1]]  # researched: a single item, but an original
+    esi = FakeEsi({f"/corporations/{CORP_ID}/contracts": [row(1, tracking, price), row(2, tracking, price)],
+                   f"/corporations/{CORP_ID}/contracts/1/items": copy, f"/corporations/{CORP_ID}/contracts/2/items": original})
+    contracts.sync_owner(owner, client=esi)
+    fake, real = Contract.objects.get(contract_id=1), Contract.objects.get(contract_id=2)
+    assert fake.items[0] == [BPO, 1, True, True, True]
+    assert [(p["code"], p["severe"]) for p in fake.problems] == [("blueprint_copy", True), ("watchlist", True)]
+    assert [p["code"] for p in real.problems] == ["duplicate", "watchlist"]  # no copy, and a lone original isn't "assembled"
+    shown = services.contract_out(fake, with_items=True)["items"]
+    assert [(i["type_id"], i["copy"]) for i in shown] == [(BPO, True), (TRITANIUM, False)]
+
+
+def test_contracts_read_before_copies_were_recorded_still_work(blueprint, program, seller):
+    q = Quote.objects.get(tracking_number=services.quote(program, "Tritanium 1000", user=seller)["quote"]["tracking_number"])
+    c = Contract.objects.create(contract_id=7, program=program, quote=q, owner_id=CORP_ID, issuer_id=1, assignee_id=CORP_ID, status="outstanding",
+                                title=q.tracking_number, price=q.value, start_location_id=STRUCTURE, date_issued=timezone.now(),
+                                items=[[TRITANIUM, 1000, True]])  # three fields, as stored before 1.2.5
+    assert contracts.check(c, q, program) == []
+    assert services.contract_out(c, with_items=True)["items"][0]["copy"] is False
+
+
+def test_assembled_items_in_a_contract_are_pointed_out(program, seller, boss, offline):
+    tracking = services.quote(program, "Rifter 1", user=seller)["quote"]["tracking_number"]
+    esi = FakeEsi({f"/corporations/{CORP_ID}/contracts": [row(1, tracking, 360_000)],
+                   f"/corporations/{CORP_ID}/contracts/1/items": [{"record_id": 1, "type_id": RIFTER, "quantity": 1, "raw_quantity": -1,
+                                                                    "is_included": True, "is_singleton": True}]})
+    contracts.sync_owner(boss.main_character.pk, client=esi)
+    assert [(p["code"], p["severe"]) for p in Contract.objects.get(contract_id=1).problems] == [("assembled", False)]
+
+
+def line_of(out, type_id):
+    return next(ln for ln in out["lines"] if ln["type_id"] == type_id)
+
+
+def test_split_price_with_one_side_missing(program):
+    """Nobody buying: half the sell orders' price, not all of it (one seller's asking price would be the quote)."""
+    program.price_type, program.tax = "split", 0
+    program.save()
+    ItemPrice.objects.filter(type_id=TRITANIUM).update(buy=0, sell=10)
+    assert line(appraise(program, "Tritanium 1"), TRITANIUM)["market_unit"] == 5.0
+    ItemPrice.objects.filter(type_id=TRITANIUM).update(buy=4, sell=0)
+    assert line(appraise(program, "Tritanium 1"), TRITANIUM)["market_unit"] == 4.0
+
+
+def test_a_quote_too_large_to_store_is_refused(program, seller, api_client):
+    ItemPrice.objects.filter(type_id=OFFICER).update(buy=900_000_000_000)
+    api_client.force_login(seller)
+    r = api_client.call("post", f"/api/p/buyback/programs/{program.pk}/quote", {"text": "Estamel's Shield 2000000000"})
+    assert r.status_code == 400 and "more than a quote can hold" in r.json()["detail"]
+    assert not Quote.objects.exists()
 
 
 # --- access and the API ------------------------------------------------------------------------------------------

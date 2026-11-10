@@ -115,9 +115,10 @@ def stale_before(settings: BuybackSettings | None = None):
     return timezone.now() - timedelta(hours=max(s.price_max_age_hours, 1))
 
 
-def get(type_ids, settings: BuybackSettings | None = None, hub: Hub | None = None) -> dict[int, ItemPrice]:
+def get(type_ids, settings: BuybackSettings | None = None, hub: Hub | None = None, fetch_now: bool = True) -> dict[int, ItemPrice]:
     """Prices for the types at the hub (the site's by default), fetching the ones missing or stale first. If the
-    source is down, stale prices are used rather than none; types never priced are left out."""
+    source is down, stale prices are used rather than none; types never priced are left out. Without ``fetch_now`` the
+    caller doesn't wait for the source: stored prices are used as they are and the rest is fetched in the background."""
     s = settings or BuybackSettings.load()
     hub = hub or site_hub(s)
     ids = {int(t) for t in type_ids}
@@ -131,7 +132,11 @@ def get(type_ids, settings: BuybackSettings | None = None, hub: Hub | None = Non
         return have
     cutoff = stale_before(s)
     todo = [t for t in ids if t not in have or have[t].updated_at < cutoff]
-    if todo:
+    if todo and not fetch_now:
+        from .tasks import fetch_prices_later
+
+        fetch_prices_later.delay(sorted(todo), hub.id)
+    elif todo:
         try:
             fetch(todo, s, hub=hub)
         except PriceError as exc:
