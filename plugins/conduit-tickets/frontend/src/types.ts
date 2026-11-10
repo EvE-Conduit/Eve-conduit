@@ -61,7 +61,7 @@ export interface Attachment {
   id: number;
   name: string;
   size: number;
-  state: "saved" | "too_big" | "unavailable";
+  state: "saved" | "too_big" | "unavailable" | "expired";
   image: boolean;
 }
 
@@ -88,6 +88,11 @@ export interface Settings {
   roles: DiscordRole[];
   invite_url: string | null;
   problems: string[];
+  /** Megabytes of attached files kept over all tickets (0: no limit), and how much is in use. */
+  file_storage_mb: number;
+  files_stored_mb: number;
+  /** Days files are kept after their ticket closed (0: for good). */
+  file_keep_days: number;
 }
 
 export interface PanelButton {

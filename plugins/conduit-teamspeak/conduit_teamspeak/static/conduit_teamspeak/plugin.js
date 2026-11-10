@@ -354,7 +354,7 @@ function ge({ data: t }) {
 								})
 							}), /* @__PURE__ */ L(h, {
 								label: "Query password",
-								hint: c.query_password_set ? "Set; leave empty to keep it." : "From the server.",
+								hint: c.query_password_set ? "Set; leave empty to keep it. Enter it again when the address, port or login changes." : "From the server.",
 								children: /* @__PURE__ */ L(g, {
 									type: "password",
 									value: l.query_password,

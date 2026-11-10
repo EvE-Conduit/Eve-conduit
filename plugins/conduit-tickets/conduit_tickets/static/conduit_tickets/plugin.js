@@ -341,14 +341,16 @@ function Y() {
 	let e = A(), { data: t } = k({
 		queryKey: ["tickets", "settings"],
 		queryFn: () => C.get(`${U}/settings`)
-	}), [o, s] = L(""), [c, p] = L([]);
+	}), [o, s] = L(""), [c, p] = L([]), [m, h] = L(""), [_, v] = L("");
 	I(() => {
-		t && (s(t.category_id), p(t.default_role_ids));
+		t && (s(t.category_id), p(t.default_role_ids), h(String(t.file_storage_mb)), v(String(t.file_keep_days)));
 	}, [t]);
-	let m = O({
+	let y = O({
 		mutationFn: () => C.put(`${U}/settings`, {
 			category_id: o,
-			default_role_ids: c
+			default_role_ids: c,
+			file_storage_mb: Number(m) || 0,
+			file_keep_days: Number(_) || 0
 		}),
 		onSuccess: (t) => {
 			e.setQueryData(["tickets", "settings"], t), E.success("Saved");
@@ -390,10 +392,30 @@ function Y() {
 							onChange: p
 						})
 					}),
+					/* @__PURE__ */ P(l, {
+						label: "Space for attached files (MB)",
+						hint: `Files from closed tickets are copied into the site's database. Once this much is stored, new files are only listed by name; nothing already saved is removed. 0 is no limit. In use: ${t.files_stored_mb} MB.`,
+						children: /* @__PURE__ */ P(u, {
+							type: "number",
+							min: 0,
+							value: m,
+							onChange: (e) => h(e.target.value)
+						})
+					}),
+					/* @__PURE__ */ P(l, {
+						label: "Keep attached files (days)",
+						hint: "Files are deleted this many days after their ticket closed; the transcript's text stays. 0 keeps them for good.",
+						children: /* @__PURE__ */ P(u, {
+							type: "number",
+							min: 0,
+							value: _,
+							onChange: (e) => v(e.target.value)
+						})
+					}),
 					/* @__PURE__ */ P(n, {
 						variant: "primary",
-						loading: m.isPending,
-						onClick: () => m.mutate(),
+						loading: y.isPending,
+						onClick: () => y.mutate(),
 						children: "Save"
 					})
 				]
@@ -891,7 +913,7 @@ function te({ a: e }) {
 		children: [
 			e.name,
 			": not kept (",
-			e.state === "too_big" ? "too large" : "no longer on Discord",
+			e.state === "too_big" ? "too large, or no space left for files" : e.state === "expired" ? "deleted after the keeping time" : "no longer on Discord",
 			")"
 		]
 	});
@@ -990,4 +1012,4 @@ var re = T({ routes: [
 //#endregion
 export { re as default };
 
-export const classes = ["!data","!noDiscord","!noMail","!o","@conduit/sdk","@tanstack/react-query","a","about","accent","act","action","actions","add","again","allow","already","also","alt","an","and","answer","anything","archive_error","archive_state","are","aren","aria-label","as","at","attachments","author","autoFocus","back","be","been","before","block","body","border","border-border","border-l-2","bot","both","break-all","break-words","but","button","buttons","by","can","can_mail","categories","category","category_id","change","changes","channel","channelName","channel_id","channels","children","choices","choose","chosenRoles","className","clicks","closed","closed_at","closed_by","confirmLabel","const","content","conversation","corporation","count","currentColor","data","decides","default","default_role_ids","defaults","definePlugin","deleted","description","didn","disabled","discord","divide-border","divide-y","done","download","each","edited_at","else","embeds","empty","enabled","endpoint_url","error","every","export","extends","eyebrow","few","files","fill","filter","flex","flex-1","flex-wrap","font-medium","font-normal","footer","for","from","function","game","gap-1","gap-2","gap-3","get","getNextPageParam","ghost","go","goes","h-48","has","hasNextPage","hasn","have","here","hint","hover:bg-hover","hover:text-accent-ink","hover:underline","href","i","icon","icons","id","if","image","import","in","info","initialPageParam","inline","inline-flex","interface","invite_url","is","isError","isFetching","isLoading","is_bot","it","items","items-center","its","justify-between","justify-end","kept","key","label","large","lazy","length","let","lg","linked","links","list","list-disc","load","loaded","loading","longer","lose","lost","m","m12","mail","mail_error","mail_sent","mailed","main","makes","marks","matched","matches","max-h-60","max-h-80","max-w-full","max-w-xs","maxLength","mb-4","member","members","message","messages","min-w-0","mine","ml-2","more","mt-1","mt-2","must","mutationFn","n","name","need","needs","neutral","new","no","noDiscord","noMail","none","noreferrer","not","nothing","notify","null","number","of","on","onChange","onClick","onClose","onConfirm","onError","onOpenChange","onSuccess","on_server","once","one","only","open","open_ticket","opened","opened_at","opened_by","opening","opens","options","or","outline","overflow-y-auto","own","p-0","p-3","page","pageParam","panel","panels","part","path","pending","people","permissions","pick","picked","ping","pinged","pings","pl-2","pl-4","placeholder","portrait","post","posted","posts","primary","private","problem","problems","put","puts","px-3","px-4","py-2","py-3","qc","queryFn","queryKey","re","reach","react","react-router","read","refetchInterval","rel","remove","removed","removing","rest","return","right-click","role","role_ids","roles","round","routes","rows","s","save","saved","search","see","sender","sent","sent_at","server","set","setButtons","setCategory","setChannel","setConfirm","setDeleting","setEditing","setFilter","setMessage","setOpening","setOut","setPicked","setQ","setRoles","setSubject","setText","setTitle","setVia","settings","site","size","size-3.5","size-4","sm","so","someone","space-y-1","space-y-2","space-y-3","space-y-4","src","staff","state","stay","stopping","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subject","such","syncing","t","taken","target","target_name","text","text-accent-ink","text-danger-fg","text-left","text-muted","text-sm","text-xs","than","that","the","their","themselves","then","there","these","they","this","through","ticked","ticket","tickets","title","to","toast","tone","too","too_big","top","transcript","truncate","two","type","unavailable","undefined","until","up","updated","url","use","useParams","useQuery","useQueryClient","useState","used","user_id","usesDiscord","usesMail","valid","value","variant","ve","via","viewBox","viewer","void","w-fit","w-full","warning","was","what","when","where","which","whitespace-nowrap","whitespace-pre-wrap","who","whose","with","you","your"];
+export const classes = ["!data","!noDiscord","!noMail","!o","@conduit/sdk","@tanstack/react-query","a","about","accent","act","action","actions","add","after","again","all","allow","already","also","alt","an","and","answer","anything","archive_error","archive_state","are","aren","aria-label","as","at","attached","attachments","author","autoFocus","back","be","been","before","block","body","border","border-border","border-l-2","bot","both","break-all","break-words","but","button","buttons","by","can","can_mail","categories","category","category_id","change","changes","channel","channelName","channel_id","channels","children","choices","choose","chosenRoles","className","clicks","closed","closed_at","closed_by","confirmLabel","const","content","conversation","copied","corporation","count","currentColor","data","days","decides","default","default_role_ids","defaults","definePlugin","deleted","description","didn","disabled","discord","divide-border","divide-y","done","download","each","edited_at","else","embeds","empty","enabled","endpoint_url","error","every","expired","export","extends","eyebrow","few","file_keep_days","file_storage_mb","files","files_stored_mb","fill","filter","flex","flex-1","flex-wrap","font-medium","font-normal","footer","for","from","function","game","gap-1","gap-2","gap-3","get","getNextPageParam","ghost","go","goes","h-48","has","hasNextPage","hasn","have","here","hint","hover:bg-hover","hover:text-accent-ink","hover:underline","how","href","i","icon","icons","id","if","image","import","in","info","initialPageParam","inline","inline-flex","interface","into","invite_url","is","isError","isFetching","isLoading","is_bot","it","items","items-center","its","justify-between","justify-end","keeping","keeps","kept","key","label","lazy","left","length","let","lg","linked","links","list","list-disc","listed","load","loaded","loading","longer","lose","lost","m","m12","mail","mail_error","mail_sent","mailed","main","makes","many","marks","matched","matches","max-h-60","max-h-80","max-w-full","max-w-xs","maxLength","mb-4","member","members","message","messages","min","min-w-0","mine","ml-2","more","mt-1","mt-2","much","must","mutationFn","n","name","need","needs","neutral","new","no","noDiscord","noMail","none","noreferrer","not","nothing","notify","null","number","of","on","onChange","onClick","onClose","onConfirm","onError","onOpenChange","onSuccess","on_server","once","one","only","open","open_ticket","opened","opened_at","opened_by","opening","opens","options","or","outline","over","overflow-y-auto","own","p-0","p-3","page","pageParam","panel","panels","part","path","pending","people","permissions","pick","picked","ping","pinged","pings","pl-2","pl-4","placeholder","portrait","post","posted","posts","primary","private","problem","problems","put","puts","px-3","px-4","py-2","py-3","qc","queryFn","queryKey","re","reach","react","react-router","read","refetchInterval","rel","remove","removed","removing","rest","return","right-click","role","role_ids","roles","round","routes","rows","s","save","saved","search","see","sender","sent","sent_at","server","set","setButtons","setCategory","setChannel","setConfirm","setDeleting","setEditing","setFilter","setKeepDays","setMessage","setOpening","setOut","setPicked","setQ","setRoles","setStorage","setSubject","setText","setTitle","setVia","settings","site","size","size-3.5","size-4","sm","so","someone","space","space-y-1","space-y-2","space-y-3","space-y-4","src","staff","state","stay","stopping","string","stroke","strokeLinecap","strokeLinejoin","strokeWidth","style","subject","such","syncing","t","taken","target","target_name","text","text-accent-ink","text-danger-fg","text-left","text-muted","text-sm","text-xs","than","that","the","their","them","themselves","then","there","these","they","this","through","ticked","ticket","tickets","time","title","to","toast","tone","too","too_big","top","transcript","truncate","two","type","unavailable","undefined","until","up","updated","url","use","useParams","useQuery","useQueryClient","useState","used","user_id","usesDiscord","usesMail","valid","value","variant","ve","via","viewBox","viewer","void","w-fit","w-full","warning","was","what","when","where","which","whitespace-nowrap","whitespace-pre-wrap","who","whose","with","you","your"];

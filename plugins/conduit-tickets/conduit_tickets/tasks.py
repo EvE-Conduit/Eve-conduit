@@ -1,3 +1,5 @@
+import logging
+
 from celery import shared_task
 
 
@@ -19,7 +21,11 @@ def archive_pending():
 
     if is_enabled("tickets"):
         for ticket_id in services.pending_archives():
-            services.archive_in_background(ticket_id)
+            try:
+                services.archive_in_background(ticket_id)
+            except Exception:  # one ticket that can't be saved must not keep the others waiting
+                logging.getLogger(__name__).exception("Couldn't save the transcript of ticket %s", ticket_id)
+        services.expire_files()
 
 
 @shared_task(ignore_result=True)

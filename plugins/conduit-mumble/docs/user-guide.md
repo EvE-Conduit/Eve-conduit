@@ -41,6 +41,7 @@ Your Mumble page shows **Server**, **Port** and **Username**, each with a copy b
 
 After your first login with the password, the server may remember your Mumble client certificate. That computer then
 gets in without the password, as Mumble normally works. Your page says whether your certificate is remembered.
+Setting a new password forgets it; it's remembered again the next time you log in with the password.
 
 ## Managing your account
 
@@ -73,8 +74,9 @@ Each link shows its status (**Active**, **Expired**, **Used up**, **Withdrawn** 
 and when they last connected.
 
 - **Copy link** copies it again while it is active.
-- **Withdraw** stops the link. Every login it handed out is cut off at their next connect.
-- **Cut off** next to a guest stops just that guest.
+- **Withdraw** stops the link. Guests who are connected are disconnected within about half a minute, and none of its
+  logins work any more.
+- **Cut off** next to a guest does the same for just that guest.
 
 Your links and their guests' logins also stop working if you lose the permission to hand out links or leave the site.
 
@@ -101,7 +103,7 @@ Check you are using the login name shown on your Mumble page, not your character
 click **New password**.
 
 **"too many failed logins; wait a few minutes".**
-After ten failed logins for one name, password logins are refused for ten minutes. If your computer's certificate is
+After ten failed logins for one account, password logins are refused for ten minutes. If your computer's certificate is
 remembered, it still gets you in.
 
 **I can't hear or join a channel I should.**

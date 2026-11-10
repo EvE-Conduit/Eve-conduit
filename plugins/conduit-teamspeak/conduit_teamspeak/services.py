@@ -18,11 +18,15 @@ sync does the same for any stamped identity no link accounts for. Identities the
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 import secrets
+import time
 from datetime import timedelta
 from urllib.parse import urlencode
 
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -121,19 +125,57 @@ def connect_url(s: TeamSpeakSettings, nickname: str, token: str | None = None) -
 # --- talking to the server -------------------------------------------------------------------------------------------
 
 
+#: One session at a time for the whole site. The server counts commands per address, not per connection, so two
+#: sessions each keeping to the pace (a few members' groups changing at once is enough) get the site's address banned
+#: for ten minutes, and nobody's groups are taken away meanwhile. The turn is kept in the cache, which every web and
+#: worker process shares; it lapses by itself if whoever held it died, and every command renews it.
+TURN_KEY, TURN_TTL = "teamspeak:query-turn", 60
+#: How long to wait for a turn: a web request gives up quickly, a background task can wait out a full sync.
+WEB_WAIT, TASK_WAIT = 4.0, 120.0
+_patient = contextvars.ContextVar("teamspeak_patient", default=False)
+
+
+@contextlib.contextmanager
+def patient():
+    """Let sessions opened inside wait longer for their turn (for background tasks, never for web requests)."""
+    token = _patient.set(True)
+    try:
+        yield
+    finally:
+        _patient.reset(token)
+
+
+def _take_turn() -> str:
+    mine = secrets.token_hex(8)
+    deadline = time.monotonic() + (TASK_WAIT if _patient.get() else WEB_WAIT)
+    while not cache.add(TURN_KEY, mine, timeout=TURN_TTL):
+        if time.monotonic() >= deadline:
+            raise ts3.Busy()
+        time.sleep(0.2)
+    return mine
+
+
+def _give_turn(mine: str) -> None:
+    if cache.get(TURN_KEY) == mine:
+        cache.delete(TURN_KEY)
+
+
 def connect(s: TeamSpeakSettings | None = None) -> ts3.Client:
-    """A logged-in query session on the virtual server. Callers close it (``with connect() as c:``)."""
+    """A logged-in query session on the virtual server, once it's this session's turn (``ts3.Busy`` if that takes
+    too long). Callers close it (``with connect() as c:``), which lets the next one in."""
     s = s or TeamSpeakSettings.load()
     if not s.configured:
         raise TeamSpeakError("TeamSpeak isn't set up on this site yet")
-    client = ts3.Client(s.query_host, s.query_port, throttle=0 if s.allowlisted else ts3.THROTTLE)
-    client.connect()
+    mine = _take_turn()
+    client = ts3.Client(s.query_host, s.query_port, throttle=0 if s.allowlisted else ts3.THROTTLE,
+                        on_command=lambda: cache.touch(TURN_KEY, TURN_TTL), on_close=lambda: _give_turn(mine))
     try:
+        client.connect()
         client.login(s.query_user, s.query_password)
         client.use(s.server_id)
         client.set_nickname()
-    except ts3.QueryError:
-        client.close()
+    except BaseException:
+        client.close()  # also gives the turn back
         raise
     return client
 
@@ -300,21 +342,44 @@ def _sync(client: ts3.Client, acct: TeamSpeakUser, s: TeamSpeakSettings, mapping
 def sync_user(user, s: TeamSpeakSettings | None = None, mappings: list[GroupMapping] | None = None, client: ts3.Client | None = None) -> str:
     """Bring one member's server groups up to date. Returns "" when it worked (or there's nothing to do), else what
     went wrong."""
+    return sync_user_result(user, s, mappings, client)[0]
+
+
+def sync_user_result(user, s: TeamSpeakSettings | None = None, mappings: list[GroupMapping] | None = None,
+                     client: ts3.Client | None = None) -> tuple[str, bool]:
+    """``sync_user``, plus whether it's worth trying again soon: the server couldn't be reached or refused, so the
+    member's groups on it may be out of date (someone who lost access may still have theirs)."""
     s = s or TeamSpeakSettings.load()
     acct = TeamSpeakUser.objects.filter(user=user).select_related("user").first()
-    if acct is None or acct.pending or not s.configured:
-        return ""
+    if acct is None or not s.configured:
+        return "", False
+    if acct.pending:
+        # Lost access before finishing the link: their key would still work on the server (and give the registered
+        # group), so it goes now rather than when the attempt expires.
+        if has_access(user):
+            return "", False
+        try:
+            if client is not None:
+                revoke_pending(client, acct, s)
+            else:
+                with connect(s) as session:
+                    revoke_pending(session, acct, s)
+        except ts3.QueryError as exc:
+            log.warning("Couldn't revoke the pending TeamSpeak link of %s: %s", user, exc)
+            return explain(exc), True
+        acct.delete()
+        return "", False
     if mappings is None:
         mappings = list(GroupMapping.objects.all())
     try:
         if client is not None:
-            return _sync(client, acct, s, mappings)
+            return _sync(client, acct, s, mappings), False
         with connect(s) as session:
-            return _sync(session, acct, s, mappings)
+            return _sync(session, acct, s, mappings), False
     except ts3.QueryError as exc:
         log.warning("TeamSpeak sync for %s failed: %s", user, exc)
         _set_status(acct, explain(exc))
-        return acct.sync_error
+        return acct.sync_error, True
 
 
 def sync_all() -> dict:
@@ -330,12 +395,20 @@ def sync_all() -> dict:
             for acct in linked:
                 if sync_user(acct.user, s, mappings, client):
                     failed += 1
+                    if client.broken:
+                        # The connection went (a timeout, say). Nothing more can be asked on it; the rest wait for
+                        # the next full sync instead of each being marked with the same error.
+                        raise ts3.ConnectionFailed("The connection to the server was lost")
                 else:
                     synced += 1
-            for acct in TeamSpeakUser.objects.filter(cldbid__isnull=True, created_at__lt=timezone.now() - PENDING_MAX_AGE):
-                revoke_pending(client, acct, s)
-                acct.delete()
-                expired += 1
+            stale = timezone.now() - PENDING_MAX_AGE
+            for acct in TeamSpeakUser.objects.filter(cldbid__isnull=True).select_related("user"):
+                # Attempts nobody finished in time, and those of people who lost access since: their keys still work
+                # on the server until they're deleted there.
+                if acct.created_at < stale or not has_access(acct.user):
+                    revoke_pending(client, acct, s)
+                    acct.delete()
+                    expired += 1
             sweep_stamped(client, s)
     except ts3.QueryError as exc:
         # The session itself failed (sync_user keeps per-member errors to itself): the rest didn't get their turn.

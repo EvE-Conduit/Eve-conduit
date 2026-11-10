@@ -176,12 +176,19 @@ def _parent_for(p: Page | None, parent_id: int | None, user) -> Page | None:
     if parent is None:
         raise WikiError("No such parent page")
     # A page can't sit under itself or one of its own children.
-    cur = parent
-    while cur is not None:
-        if p is not None and cur.pk == p.pk:
-            raise WikiError("A page can't be inside itself")
-        cur = cur.parent
+    if p is not None and p.pk in _lineage(parent):
+        raise WikiError("A page can't be inside itself")
     return parent
+
+
+def _lineage(page: Page) -> list[int]:
+    """The ids of a page and the pages above it. Stops at a page seen before, so a loop in the tree (older versions
+    let reordering make one) can't keep it walking for ever."""
+    ids, cur = [], page
+    while cur is not None and cur.pk not in ids:
+        ids.append(cur.pk)
+        cur = cur.parent
+    return ids
 
 
 def save(p: Page | None, by, *, title: str, body: str, slug: str | None = None, parent=UNSET, note: str = "",
@@ -204,6 +211,12 @@ def save(p: Page | None, by, *, title: str, body: str, slug: str | None = None, 
         p.title, p.body, p.parent = title[:200], body, parent_obj
         if slug is not None or new:
             p.slug = unique_slug(slug or "", title, exclude_pk=p.pk)
+        if new and states is None and groups is None and parent_obj is not None:
+            # Nobody chose who sees the new page (editors can't): it starts with its parent's audience, so a page
+            # written inside a section for a few isn't open to every member. Managers can change it afterwards.
+            inherited = (list(parent_obj.states.all()), list(parent_obj.groups.all()))
+            if any(inherited):
+                states, groups = [s.pk for s in inherited[0]], [g.pk for g in inherited[1]]
         if states is not None or groups is not None:
             state_objs = list(State.objects.filter(pk__in=states or []))
             group_objs = list(Group.objects.filter(pk__in=groups or []))
@@ -248,6 +261,10 @@ def reorder(user, parent_id: int | None, ids: list[int]) -> None:
     pages = {p.pk: p for p in visible_to(user).filter(pk__in=ids)}
     if len(pages) != len(set(ids)):
         raise WikiError("Some of those pages don't exist")
+    # None of them may be the new parent or a page above it: that would close the tree into a loop, and the pages in
+    # it would disappear from everyone's tree.
+    if parent is not None and set(ids) & set(_lineage(parent)):
+        raise WikiError("A page can't be inside itself")
     with transaction.atomic():
         for i, pk in enumerate(ids):
             Page.objects.filter(pk=pk).update(parent=parent, order=i + 1, updated_at=timezone.now())

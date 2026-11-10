@@ -208,3 +208,13 @@ def test_writers_switch_on_discord_pings(people, api_client):
     resp = api_client.call("put", "/api/pings/announcements.published_restricted", {"ping": True, "roles": ["123"]})
     assert resp.status_code == 200 and resp.json()["ping"] is True
     assert EventPing.objects.get(event="announcements.published_restricted").roles == ["123"]
+
+
+def test_times_without_a_zone_are_taken_as_utc(people, api_client):
+    """A date sent without a time zone used to fail with a server error when compared with now."""
+    a = post(api_client, people["writer"], publish_at="2020-01-01T10:00:00", expires_at="2099-01-01T10:00:00")
+    assert a["status"] == "live" and a["publish_at"].startswith("2020-01-01T10:00:00+00:00")
+    later = post(api_client, people["writer"], expires_at="2099-01-01T10:00:00")
+    assert later["expires_at"].startswith("2099-01-01T10:00:00+00:00")
+    resp = api_client.call("post", "/api/p/announcements", {"title": "Past", "expires_at": "2001-01-01T00:00:00"})
+    assert resp.status_code == 400

@@ -95,8 +95,9 @@ The ticket was closed. The channel is removed once its transcript is saved.
 No. Only tickets you opened yourself from a panel appear under **My tickets**.
 
 **Some files in my transcript say "not kept".**
-Files over 25 MB, or beyond 200 MB per ticket, are not copied ("too large"). Files already gone from Discord show
-"no longer on Discord".
+Files over 25 MB, beyond 200 MB per ticket, or beyond the space the site keeps for files are not copied ("too
+large, or no space left for files"). Files already gone from Discord show "no longer on Discord", and files the site
+only keeps for a while show "deleted after the keeping time".
 
 **Replies to an EVE mail ticket aren't on the site.**
 Replies sent in the game are not saved here.

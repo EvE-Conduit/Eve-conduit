@@ -68,6 +68,9 @@ Below the settings, a line sums up who will see the page.
 
 Managers see a **For <states and groups>** badge on pages with a limited audience.
 
+A new page written under a page with a limited audience starts with that audience, unless a manager picks another
+when creating it. Later changes to the parent don't carry over, and moving a page doesn't change who sees it.
+
 ## Day-to-day
 
 ### Moving a page
@@ -96,8 +99,8 @@ revision, so nothing is lost. Editors cannot restore locked pages.
 
 - Public pages are listed at `/public/p/wiki` and readable at `/public/p/wiki/<address>` without signing in.
 - They do not show who wrote or edited them.
-- On public pages, only images from the site itself load. Images from other sites become a link, so an outside image
-  cannot track who reads the page.
+- On every page, public or not, only images from the site itself load. Images from other sites become a link, so
+  an outside image cannot track who reads the page (anyone who can edit could otherwise collect readers' addresses).
 - Guests (the public state) get only the public pages.
 - **Public** and **Who sees it** are separate. A page limited to some states and groups but marked public can still be
   read by anyone at its public address.
@@ -153,5 +156,5 @@ The plugin has no scheduled jobs.
 | "That page is too long" | The text is over 200,000 characters. Split it into sub-pages. |
 | The address got `-2` added | Another page already uses that address. Pick a different one. |
 | A `[[Page Title]]` link goes nowhere | No page has that title's address yet. Write it, or fix the link. |
-| A public page shows no images | Only images from the site itself load on public pages. |
+| A page shows a link instead of an image | Only images from the site itself load; images hosted elsewhere become a link (since 1.0.2 on members' pages too). |
 | A restricted page's edits do not reach a webhook | Pick the `_restricted` events for that webhook by name. |

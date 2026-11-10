@@ -130,6 +130,8 @@ def save(a: Announcement | None, by, *, title: str, body: str, tone: str, pinned
         raise AnnouncementError("Give it a title")
     if tone not in Announcement.Tone.values:
         raise AnnouncementError("Unknown tone")
+    # A time sent without a zone is taken as UTC (EVE time), rather than failing when it's compared further down.
+    publish_at, expires_at = _aware(publish_at), _aware(expires_at)
     if expires_at and expires_at <= (publish_at or timezone.now()):
         raise AnnouncementError("It has to end after it's published")
     state_objs = list(State.objects.filter(pk__in=states))
@@ -152,6 +154,12 @@ def save(a: Announcement | None, by, *, title: str, body: str, tone: str, pinned
     if a.publish_at <= timezone.now():
         announce(a)
     return a
+
+
+def _aware(when):
+    from datetime import UTC
+
+    return timezone.make_aware(when, UTC) if when is not None and timezone.is_naive(when) else when
 
 
 def announce(a: Announcement) -> bool:

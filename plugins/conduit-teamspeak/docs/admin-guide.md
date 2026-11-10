@@ -62,7 +62,7 @@ Open **Server setup → Setup** and fill in the three steps.
 | **Query port** | `10011` | The raw ServerQuery port. |
 | **Server id** | `1` | The virtual server to manage. `1` unless the host runs several. |
 | **Query login** | empty | The ServerQuery login name. |
-| **Query password** | empty | Stored encrypted. Leave empty to keep the stored password. |
+| **Query password** | empty | Stored encrypted. Leave empty to keep the stored password. It has to be entered again whenever the query address, port or login changes: the stored one is never sent anywhere else. |
 | **This site is on the server's query allow list** | off | Tick once the site's address is in `query_ip_allowlist.txt`. Off: the site spaces commands out to stay under the server's flood limit, so syncing everyone takes longer. |
 
 Press **Save and check the connection**. This saves the form, connects, and reads the server's name, version and
@@ -109,6 +109,12 @@ to. If the server group list is out of date, press **Save and check the connecti
   the server stay.
 - A member without access loses all of those groups, and is kicked if **Kick people who lose access** is on.
 - The site also sets each member's client description from **Nickname and description**.
+- The site talks to the server in one session at a time, whoever asked: the server's flood limit counts commands
+  per address, and two sessions at once could get the site banned for ten minutes.
+- A sync after a group or state change that can't reach the server is tried again after 1, 2, 4, 8 and 15 minutes
+  (when the site runs background workers); after that the 6-hourly full sync has it.
+- Someone who started linking and lost access before finishing loses their key at once, and the linked members'
+  group if they had used it already.
 
 Syncs run:
 
@@ -178,7 +184,7 @@ Audit log entries (**Administration → Logs → Audit**):
 
 | Job | Schedule | What it does |
 | --- | --- | --- |
-| `conduit_teamspeak.tasks.sync_all` | Every 6 hours | Syncs every linked member. Cancels link attempts older than 24 hours and deletes their keys. Removes the linked members' group from identities that used a site key but are not linked. |
+| `conduit_teamspeak.tasks.sync_all` | Every 6 hours | Syncs every linked member. Cancels link attempts older than 24 hours, and those of people who lost access since, and deletes their keys. Removes the linked members' group from identities that used a site key but are not linked. |
 | `conduit_teamspeak.tasks.sync_user` | On group, state and main-character changes | Syncs one member. |
 
 Both do nothing while the plugin is switched off.
@@ -196,4 +202,6 @@ Both do nothing while the plugin is switched off.
 | "Pick a server group from the server's groups ..." | Refresh the list with **Save and check the connection**. |
 | A member shows **Problem** with "The identity is gone from the server's database" | Unlink the member; they link again. |
 | "That TeamSpeak identity is already linked to another member" | Unlink the identity from the other member first. |
+| "The site is busy talking to the TeamSpeak server; try again in a moment" | The site talks to the server in one session at a time (the server's flood limit counts per address). A full sync is running; try again when it's done. Background syncs wait their turn by themselves. |
+| "Couldn't connect to the TeamSpeak server's query port (...)" or "The query address isn't a ServerQuery port" | Check **Query address** and **Query port** under Setup, and that the site can reach them. The messages don't repeat the address because members see them too. |
 | Full syncs are slow | Allow-list the site and tick the allow-list switch. |

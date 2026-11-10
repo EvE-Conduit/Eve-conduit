@@ -11,7 +11,8 @@ def resync(event):
     from .tasks import sync_user
 
     user_id = event.payload.get("user_id")
-    if user_id and is_enabled("teamspeak") and TeamSpeakUser.objects.filter(user_id=user_id, cldbid__isnull=False).exists():
+    # Pending links too: someone who lost access must not keep a key that still works on the server.
+    if user_id and is_enabled("teamspeak") and TeamSpeakUser.objects.filter(user_id=user_id).exists():
         sync_user.delay(user_id)
 
 

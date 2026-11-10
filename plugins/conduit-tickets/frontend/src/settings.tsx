@@ -11,14 +11,18 @@ export function SettingsPage() {
   const { data } = useQuery({ queryKey: ["tickets", "settings"], queryFn: () => api.get<Settings>(`${BASE}/settings`) });
   const [category, setCategory] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
+  const [storage, setStorage] = useState("");
+  const [keepDays, setKeepDays] = useState("");
   useEffect(() => {
     if (data) {
       setCategory(data.category_id);
       setRoles(data.default_role_ids);
+      setStorage(String(data.file_storage_mb));
+      setKeepDays(String(data.file_keep_days));
     }
   }, [data]);
   const save = useMutation({
-    mutationFn: () => api.put<Settings>(`${BASE}/settings`, { category_id: category, default_role_ids: roles }),
+    mutationFn: () => api.put<Settings>(`${BASE}/settings`, { category_id: category, default_role_ids: roles, file_storage_mb: Number(storage) || 0, file_keep_days: Number(keepDays) || 0 }),
     onSuccess: (s) => {
       qc.setQueryData(["tickets", "settings"], s);
       toast.success("Saved");
@@ -44,6 +48,12 @@ export function SettingsPage() {
               </Field>
               <Field label="Default Discord roles" hint="Optional. Ticked when someone opens a ticket; they can change it for that ticket.">
                 <RoleChips roles={data.roles} value={roles} onChange={setRoles} />
+              </Field>
+              <Field label="Space for attached files (MB)" hint={`Files from closed tickets are copied into the site's database. Once this much is stored, new files are only listed by name; nothing already saved is removed. 0 is no limit. In use: ${data.files_stored_mb} MB.`}>
+                <Input type="number" min={0} value={storage} onChange={(e) => setStorage(e.target.value)} />
+              </Field>
+              <Field label="Keep attached files (days)" hint="Files are deleted this many days after their ticket closed; the transcript's text stays. 0 keeps them for good.">
+                <Input type="number" min={0} value={keepDays} onChange={(e) => setKeepDays(e.target.value)} />
               </Field>
               <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
             </CardBody>

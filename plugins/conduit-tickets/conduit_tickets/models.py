@@ -11,6 +11,12 @@ class TicketSettings(models.Model):
     default_role_ids = models.JSONField(default=list, blank=True)
     #: The Discord application's public key, read from Discord. Clicks on panels are checked against it.
     public_key = models.CharField(max_length=64, blank=True)
+    #: Megabytes of attached files kept in the database over all tickets. Once that much is stored, further files
+    #: are only listed by name. 0 is no limit. Nothing already saved is removed when this is lowered.
+    file_storage_mb = models.PositiveIntegerField(default=5000)
+    #: Attached files are deleted this many days after their ticket closed (the transcript's text stays). 0 keeps
+    #: them for good.
+    file_keep_days = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name_plural = "Ticket settings"
@@ -132,7 +138,8 @@ class TicketMessage(models.Model):
 class TicketAttachment(models.Model):
     """A file attached to a message. Kept in the database, the one place every install backs up."""
 
-    SAVED, TOO_BIG, UNAVAILABLE = "saved", "too_big", "unavailable"
+    #: Expired: saved once, then deleted after the keeping time from Settings.
+    SAVED, TOO_BIG, UNAVAILABLE, EXPIRED = "saved", "too_big", "unavailable", "expired"
 
     message = models.ForeignKey(TicketMessage, on_delete=models.CASCADE, related_name="files")
     attachment_id = models.CharField(max_length=32)

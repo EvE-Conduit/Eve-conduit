@@ -1,6 +1,6 @@
 [project]
 name = "conduit-tickets"
-version = "1.2.0"
+version = "1.2.1"
 description = "Discord Tickets: reach a member you pick through a private Discord channel, an EVE mail or both, or let people open their own from a panel with buttons."
 authors = [{ name = "EvE Conduit" }]
 requires-python = ">=3.12"

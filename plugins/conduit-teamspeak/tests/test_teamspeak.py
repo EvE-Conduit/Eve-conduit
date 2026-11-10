@@ -209,7 +209,17 @@ def test_client_reads_rows_until_the_error_line():
             ts3.Client("ts.example.com", 10011).connect()
     finally:
         socket.create_connection = real
-    assert "ts.example.com:10011" in str(exc.value)
+    # Members see these messages too: neither the query address nor what answered there is in them.
+    assert "ts.example.com" not in str(exc.value) and "10011" not in str(exc.value) and "refused" not in str(exc.value)
+    c = ts3.Client("ts.example.com", 10011, throttle=0)
+    c._sock = Sock([b"SSH-2.0-OpenSSH_9.6\n"])
+    socket.create_connection = lambda *a, **k: c._sock
+    try:
+        with pytest.raises(ts3.ConnectionFailed) as exc:
+            c.connect()
+    finally:
+        socket.create_connection = real
+    assert "SSH" not in str(exc.value) and "ts.example.com" not in str(exc.value)
 
 
 # --- linking -------------------------------------------------------------------------------------------------------------
@@ -538,3 +548,165 @@ def test_new_states_get_access_by_default(db, django_capture_on_commit_callbacks
         guest = State.objects.create(name="Guest", priority=-5, public=True)
     assert st.permissions.filter(codename="access_teamspeak").exists()
     assert not guest.permissions.filter(codename="access_teamspeak").exists()
+
+
+# --- regressions --------------------------------------------------------------------------------------------------------
+
+
+def test_a_session_that_timed_out_is_not_used_again():
+    """After a timeout the answer may still arrive, and would be read as the answer to the next command: the socket
+    is closed and the session refuses anything further."""
+
+    class Sock:
+        def __init__(self):
+            self.sent, self.closed = b"", False
+
+        def sendall(self, data):
+            self.sent += data
+
+        def recv(self, n):
+            raise TimeoutError
+
+        def close(self):
+            self.closed = True
+
+    closed = []
+    c = ts3.Client("h", 1, throttle=0, on_close=lambda: closed.append(1))
+    sock = c._sock = Sock()
+    with pytest.raises(ts3.ConnectionFailed):
+        c.command("clientdbinfo", {"cldbid": 1})
+    assert c.broken and sock.closed and c._sock is None
+    with pytest.raises(ts3.ConnectionFailed):
+        c.command("servergroupsbyclientid", {"cldbid": 2})
+    assert sock.sent == b"clientdbinfo cldbid=1\n", "nothing more went out"
+    c.close()
+    c.close()
+    assert closed == [1], "the turn is given back once"
+
+
+def test_only_one_session_talks_to_the_server_at_a_time(db, monkeypatch):
+    """The server's flood limit is per address: a second session waits for the first to finish, or gives up."""
+    from django.core.cache import cache
+
+    TeamSpeakSettings.objects.update_or_create(pk=1, defaults={"query_host": "ts.example.com", "query_user": "conduit", "query_password": "secret"})
+    monkeypatch.setattr(ts3.Client, "connect", lambda self: None)
+    monkeypatch.setattr(ts3.Client, "command", lambda self, *a, **k: [])
+    monkeypatch.setattr(services, "WEB_WAIT", 0.3)
+    first = services.connect()
+    assert cache.get(services.TURN_KEY)
+    with pytest.raises(ts3.Busy) as exc:
+        services.connect()
+    assert isinstance(exc.value, ts3.QueryError) and "busy" in services.explain(exc.value)
+    first.close()
+    assert cache.get(services.TURN_KEY) is None
+    with services.connect():
+        pass
+    assert cache.get(services.TURN_KEY) is None
+    # A session that can't log in gives its turn back too.
+    def refuse(self, *a, **k):
+        raise ts3.QueryError(520, "invalid loginname or password")
+
+    monkeypatch.setattr(ts3.Client, "command", refuse)
+    with pytest.raises(ts3.QueryError):
+        services.connect()
+    assert cache.get(services.TURN_KEY) is None
+
+
+def test_a_sync_that_could_not_reach_the_server_is_tried_again(setup, server, api_client, monkeypatch):
+    from conduit_teamspeak import tasks
+
+    pilot, _ = setup
+    link(api_client, server, pilot)
+    assert services.sync_user_result(pilot) == ("", False)
+
+    def down(s=None):
+        raise ts3.Busy()
+
+    monkeypatch.setattr(services, "connect", down)
+    error, again = services.sync_user_result(pilot)
+    assert "busy" in error and again
+    # The background task asks to be run again, later each time, and gives up after RETRIES.
+    asked = []
+
+    class Again(Exception):
+        pass
+
+    def retry(countdown=None, **kwargs):
+        asked.append(countdown)
+        return Again()
+
+    monkeypatch.setattr(tasks.sync_user, "retry", retry)
+    for retries, expected in ((0, 60), (3, 480), (4, 900)):
+        tasks.sync_user.push_request(is_eager=False, retries=retries)
+        try:
+            with pytest.raises(Again):
+                tasks.sync_user.run(pilot.pk)
+        finally:
+            tasks.sync_user.pop_request()
+    assert asked == [60, 480, 900]
+    tasks.sync_user.push_request(is_eager=False, retries=tasks.RETRIES)
+    try:
+        tasks.sync_user.run(pilot.pk)
+    finally:
+        tasks.sync_user.pop_request()
+    assert len(asked) == 3
+
+
+def test_a_full_sync_stops_when_the_connection_is_lost(setup, server, api_client, corp):
+    pilot, _ = setup
+    link(api_client, server, pilot)
+    other = make_user(90000002, "Pilot Two", corporation=corp)
+    other.user_permissions.add(Permission.objects.get(codename="access_teamspeak"))
+    link(api_client, server, other, cldbid=101, uid="def=", nickname="Pilot Two")
+    real, asked = server.command, []
+
+    def command(name, params=None, options=()):
+        if name == "clientdbinfo":
+            asked.append(params["cldbid"])
+            server.broken = True
+            raise ts3.ConnectionFailed("The server didn't answer in time")
+        return real(name, params, options)
+
+    server.command = command
+    assert services.sync_all() == {"synced": 0, "failed": 2, "expired": 0}
+    assert len(asked) == 1, "the second member isn't asked about on a dead connection"
+    assert TeamSpeakUser.objects.exclude(sync_error="").count() == 1
+
+
+def test_a_pending_key_goes_when_its_owner_loses_access(setup, server, api_client, django_capture_on_commit_callbacks):
+    """Someone who started linking and then lost access must not keep a key that still works on the server."""
+    pilot, caps = setup
+    api_client.force_login(pilot)
+    key = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    assert key in server.keys
+    assert services.sync_all()["expired"] == 0 and key in server.keys  # still has access: left alone
+    pilot.user_permissions.clear()
+    pilot = type(pilot).objects.get(pk=pilot.pk)
+    # Straight away when their groups or state change...
+    with django_capture_on_commit_callbacks(execute=True):
+        add_member(pilot, caps, "admin")
+    assert key not in server.keys and not TeamSpeakUser.objects.filter(user=pilot).exists()
+    # ...and at the next full sync otherwise, also when the key was used already.
+    pilot.user_permissions.add(Permission.objects.get(codename="access_teamspeak"))
+    api_client.force_login(type(pilot).objects.get(pk=pilot.pk))
+    key = api_client.call("post", "/api/p/teamspeak/link").json()["privilege_key"]
+    server.add_client(100, "abc=", "Pilot One")
+    server.use_key(key, 100)
+    pilot.user_permissions.clear()
+    assert services.sync_all()["expired"] == 1
+    assert server.clients[100]["groups"] == set() and not TeamSpeakUser.objects.exists()
+
+
+def test_the_stored_password_never_goes_to_another_address(setup, server, api_client, admin_user):
+    api_client.force_login(admin_user)
+    body = {"query_host": "ts.example.com", "query_port": 10011, "query_user": "conduit", "query_password": "", "nickname_format": "{character}"}
+    assert api_client.call("put", "/api/p/teamspeak/admin/settings", body).status_code == 200  # nothing moved
+    for change in ({"query_host": "evil.example.net"}, {"query_port": 4444}, {"query_user": "other"}):
+        resp = api_client.call("put", "/api/p/teamspeak/admin/settings", {**body, **change})
+        assert resp.status_code == 400 and "password again" in resp.json()["detail"]
+    s = TeamSpeakSettings.load()
+    assert (s.query_host, s.query_port, s.query_user, s.query_password) == ("ts.example.com", 10011, "conduit", "secret")
+    resp = api_client.call("put", "/api/p/teamspeak/admin/settings", {**body, "query_host": "new.example.com", "query_password": "fresh"})
+    assert resp.status_code == 200
+    s = TeamSpeakSettings.load()
+    assert (s.query_host, s.query_password) == ("new.example.com", "fresh")

@@ -59,6 +59,8 @@ on.
 |---|---|---|
 | **Category id** | Empty | Discord category for new ticket channels. With Developer Mode on, right-click the category and **Copy Channel ID**. Empty puts channels at the top of the server. If the category has its own permissions, the bot must be allowed to manage channels there. |
 | **Default Discord roles** | None | Roles ticked when someone opens a ticket. They can change it for that ticket. |
+| **Space for attached files (MB)** | `5000` | How much of attached files the site keeps in its database over all tickets. Once that much is stored, new files are only listed by name; nothing already saved is removed, also when you lower it. `0` is no limit. The field shows how much is in use. |
+| **Keep attached files (days)** | `0` | Files are deleted this many days after their ticket closed; the transcript's text and the files' names stay. `0` keeps them for good. Setting it deletes the files of tickets already closed longer ago, within 15 minutes. |
 
 The Settings page lists anything in the way, for example:
 
@@ -105,7 +107,11 @@ Transcripts:
 
 - Click **Transcript** (or the subject) to read one. Every read is recorded in the audit log.
 - Attached files are copied into the database (so they are in every backup), up to 25 MB per file and 200 MB per
-  ticket. Larger files are listed by name only. PNG, JPEG, GIF and WebP images show in the page; other files download.
+  ticket, 500 MB over all the tickets one person opened from panels, and the space set under Settings in total. Files
+  beyond that are listed by name only. PNG, JPEG, GIF and WebP images show in the page; other files download.
+- What is written in a channel after its ticket closed (while it waits to be removed) is in the transcript for staff,
+  but isn't shown to the person who opened the ticket from a panel: they were taken out of the channel by then.
+- If something in a channel can't be saved, the ticket says so and the others are still saved.
 - A channel deleted by hand on Discord before the ticket closes has no transcript.
 - Mail tickets show the mail that was sent, but not replies in the game.
 - All times are shown in EVE time. Times the bot posts on Discord show in each reader's own time zone.

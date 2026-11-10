@@ -190,3 +190,41 @@ def test_search_and_plain_text(people, api_client):
     assert [h["title"] for h in group["hits"]] == ["Doctrines"]
     assert group["hits"][0]["url"] == "/p/wiki/doctrines" and "Ferox" in group["hits"][0]["subtitle"]
     assert services.plain("Fly the **Ferox** and read [[Fleet Rules|the rules]] and [[Comms]].") == "Fly the Ferox and read the rules and Comms."
+
+
+# --- regressions -------------------------------------------------------------------------------------------------------
+
+
+def test_reordering_cannot_put_a_page_inside_itself(people, api_client):
+    root = write(api_client, people["editor"], title="Guides")
+    child = write(api_client, people["editor"], title="PvP", parent=root["id"])
+    api_client.force_login(people["manager"])
+    assert api_client.call("post", f"{BASE}/reorder", {"parent": root["id"], "ids": [root["id"]]}).status_code == 400
+    assert api_client.call("post", f"{BASE}/reorder", {"parent": child["id"], "ids": [root["id"]]}).status_code == 400
+    assert Page.objects.get(pk=root["id"]).parent_id is None
+    assert [n["slug"] for n in api_client.call("get", BASE).json()["tree"]] == ["guides"]
+    assert api_client.call("post", f"{BASE}/reorder", {"parent": root["id"], "ids": [child["id"]]}).status_code == 200
+
+
+def test_a_loop_left_in_the_tree_does_not_hang_saving(people, api_client):
+    """Older versions could store a page as its own parent; writing under it must still come back."""
+    root = write(api_client, people["editor"], title="Guides")
+    Page.objects.filter(pk=root["id"]).update(parent=root["id"])
+    assert services._lineage(Page.objects.get(pk=root["id"])) == [root["id"]]
+    new = write(api_client, people["editor"], title="Under the loop", parent=root["id"])
+    assert new["parent"] == root["id"]
+
+
+def test_a_page_under_a_restricted_one_starts_with_its_audience(people, api_client):
+    leaders = Group.objects.create(name="Leadership")
+    people["editor"].groups.add(leaders)
+    section = write(api_client, people["manager"], title="Leadership notes", groups=[leaders.pk], states=[])
+    note = write(api_client, people["editor"], title="Spy list", parent=section["id"])
+    assert list(Page.objects.get(pk=note["id"]).groups.all()) == [leaders]
+    api_client.force_login(people["reader"])
+    assert api_client.call("get", f"{BASE}/pages/spy-list").status_code == 404
+    # A manager who says "everyone" gets everyone; a page under an open one stays open.
+    open_note = write(api_client, people["manager"], title="Open note", parent=section["id"], groups=[], states=[])
+    assert not Page.objects.get(pk=open_note["id"]).groups.exists()
+    top = write(api_client, people["editor"], title="Guides")
+    assert not Page.objects.get(pk=write(api_client, people["editor"], title="PvP", parent=top["id"])["id"]).groups.exists()

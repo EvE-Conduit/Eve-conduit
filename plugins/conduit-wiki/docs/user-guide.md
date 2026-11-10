@@ -81,11 +81,11 @@ was created.
 | `\| a \| b \|` | Table |
 | ```` ``` ```` | Code block |
 | `[link](https://...)` | Link |
-| `![image](https://...)` | Image. Only `https` addresses. |
+| `![image](https://...)` | Image. Only `https` addresses on this site; an image hosted elsewhere shows as a link. |
 | `[[Page Title]]` or `[[Page Title\|label]]` | Link to the wiki page saved under that title, whether it exists yet or not |
 
-Images load lazily and without a referrer. On public pages, only images from the site itself show; others become a
-link.
+Only images from the site itself show (lazily and without a referrer); images from other sites become a link, so
+they can't track who reads the page.
 
 ### Restore an old revision
 
@@ -118,7 +118,7 @@ You do not have `wiki.edit_pages`, or the page is **Locked**. Ask a wiki manager
 Only wiki managers can move an existing page. You choose the parent when you create a page.
 
 **My image does not show.**
-Use an `https://` address. On public pages, only images hosted on the site itself show.
+Use an `https://` address. Only images hosted on the site itself show; others become a link.
 
 **A `[[link]]` goes to an empty page.**
 No page has that title yet. The link points to the address made from the title. Write the page, or fix the title in

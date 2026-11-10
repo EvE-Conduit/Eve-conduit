@@ -2,8 +2,8 @@
 // can't run scripts. Supports headings (with anchors for the table of contents), paragraphs, - and 1. lists (nested
 // by indenting), task lists, > quotes, ``` code blocks, | tables |, --- rules, **bold**, *italic*, ~~struck~~,
 // `code`, [links](https://...), ![images](https://...) and [[Page Title]] or [[Page Title|label]] links to other pages.
-// Images load lazily and without a referrer; on public pages only this site's own images load (an image from
-// elsewhere would tell its host who reads the page), the rest show as a link.
+// Only this site's own images load, lazily and without a referrer: an image from elsewhere would tell its host who
+// reads the page and from where, and anyone who can edit a page could put one there. The rest show as a link.
 import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -81,8 +81,6 @@ interface Ctx {
   /** Where [[wiki links]] go: "/p/wiki" or "/public/p/wiki". */
   linkBase: string;
   ids: Map<string, number>;
-  /** Public pages: only this site's images load. */
-  sameSiteImages: boolean;
 }
 
 function inline(text: string, key: string, ctx: Ctx): ReactNode[] {
@@ -97,7 +95,7 @@ function inline(text: string, key: string, ctx: Ctx): ReactNode[] {
     if (token.startsWith("![")) {
       const [, alt, src] = token.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/) ?? [];
       const safe = src && src.startsWith("https://") ? src : null;
-      if (safe && ctx.sameSiteImages && !sameSite(safe)) {
+      if (safe && !sameSite(safe)) {
         out.push(
           <a key={k} href={safe} target="_blank" rel="noreferrer" className="text-accent-ink underline underline-offset-4 hover:no-underline">
             {alt || "Image"}
@@ -331,8 +329,8 @@ function Blocks({ text, ctx }: { text: string; ctx: Ctx }) {
   return <>{out}</>;
 }
 
-export function Markdown({ text, linkBase, className = "", sameSiteImages = false }: { text: string; linkBase: string; className?: string; sameSiteImages?: boolean }) {
-  const ctx: Ctx = { linkBase, ids: new Map(), sameSiteImages };
+export function Markdown({ text, linkBase, className = "" }: { text: string; linkBase: string; className?: string }) {
+  const ctx: Ctx = { linkBase, ids: new Map() };
   return (
     <div className={`space-y-4 text-[15px] leading-relaxed text-muted [&_p]:text-muted ${className}`}>
       <Blocks text={text} ctx={ctx} />

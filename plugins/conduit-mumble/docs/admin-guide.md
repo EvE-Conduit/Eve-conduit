@@ -80,15 +80,34 @@ Other options in `authenticator.ini`:
 | `[conduit] timeout` | `10` | Seconds to wait for the site before refusing a login |
 | `[ice] host`, `port` | `127.0.0.1`, `6502` | Where the Ice interface listens |
 | `[ice] slice` | Empty | Path to `Murmur.ice`; empty looks in the usual places |
-| `[ice] watchdog` | `30` | Seconds between checks that the server is there; also tells the site it is alive |
+| `[ice] watchdog` | `30` | Seconds between checks: the authenticator attaches to the server again (a restarted Mumble server forgets it), asks the site who of the people connected has to go, and tells the site it is alive |
 | `[murmur] servers` | Empty | Virtual server ids to attach to; empty means every running server |
 | `[user] avatars` | `true` | Use character portraits from EVE's image server as Mumble avatars |
+| `[user] kick` | `true` | Disconnect people who lose access while connected (authenticator 1.1.0 and newer) |
 | `[log] level` | `info` | `debug`, `info`, `warning` or `error` |
 
 The **Authenticator** stat at the top shows **Running** (called within the last 10 minutes), **Silent** or
 **Never seen**, with the last call and version. Until it runs, nobody can sign in with an account from this site.
 
 Names the site doesn't know fall through to the server's own users, so `SuperUser` keeps working.
+
+**Close the server to people without a login.** Because of that fall-through, and whenever the authenticator isn't
+running, the Mumble server lets anyone in under a name nobody registered, as it does out of the box. They get none of
+your groups, so what they can do is up to the server's ACLs: on the root channel (Edit → ACL), take **Enter** and
+**Traverse** away from `@all` and give them to `@auth` plus the groups you map (or set a server password). Without
+that, someone refused under their own name can still come in under another.
+
+**Who gets disconnected.** A login is checked when someone connects. From authenticator 1.1.0 on, the authenticator
+also asks the site every `watchdog` seconds about everyone connected and disconnects, with a short reason:
+
+- members who lost `mumble.access_mumble` (left the alliance, changed state, account switched off);
+- members whose Mumble account was deleted (only those who connected since the authenticator last started);
+- guests whose link expired, was withdrawn, whose maker can no longer hand out links, or who were cut off.
+
+So it takes up to one `watchdog` interval (30 seconds by default). Nobody is disconnected while the site can't be
+reached. Mumble groups still only change at the next connect. **An authenticator older than 1.1.0 doesn't do this**:
+download the new one from Setup and restart it after updating the plugin (the **Authenticator** stat shows the
+version that last called).
 
 ### 3. Mapping groups
 
@@ -122,8 +141,10 @@ main has one already; then the second login is deleted.
 ## Security
 
 - Passwords are stored hashed. The password is only shown once, when made.
-- Ten failed logins for one name refuse password logins for that name for ten minutes. A matching remembered
-  certificate still gets in.
+- Ten failed logins for one account refuse password logins for it for ten minutes, however the name was spelled. A
+  matching remembered certificate still gets in.
+- A new password (the member's own, or a manager's reset) forgets the remembered certificate; it's remembered again
+  at the next password login.
 - A visitor can make at most 5 guest logins per 10 minutes from one IP address.
 
 ## Events and notifications
@@ -177,6 +198,10 @@ The authenticator isn't reaching the site, or Ice isn't on. See above.
 
 **A member is refused with "no access".**
 Their state or groups lack `mumble.access_mumble`.
+
+**Someone who lost access is still on comms.**
+The authenticator next to the Mumble server is older than 1.1.0 (see the **Authenticator** stat), has `[user] kick`
+off, or can't reach the site. Download the current one from Setup and restart it.
 
 **Groups don't apply.**
 Mapping changes apply at the next connect. Check the group name matches the ACL group exactly.
