@@ -11,8 +11,7 @@ imported while it still has members here, and their next live sync gives EVE's o
 
 from datetime import date, timezone
 
-from conduit.corp.models import (CorpContract, CorpIndustryJob, CorpJournalEntry, CorpMarketOrder, CorpTransaction,
-                                 MiningObservation, WalletDivision)
+from conduit.corp.models import CorpContract, CorpIndustryJob, CorpMarketOrder, MiningObservation, WalletDivision
 from conduit.esi.exceptions import EsiError
 
 from ..esi import SeatEsi, drop_none, esi_dt, route
