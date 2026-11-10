@@ -324,7 +324,8 @@ class App:
         ids = [c.id for u in chosen for c in u.characters]
         if not messagebox.askyesno(
                 TITLE, f"Bring over everything SeAT has for the {len(ids)} characters of the {len(chosen)} ticked "
-                       "users: wallet history, mail, killmails, contracts, skills, assets and the rest?\n\n"
+                       "users: wallet history, mail, killmails, contracts, skills, assets and the rest? Their "
+                       "corporations' wallets, contracts, industry, market, mining and killmails come too.\n\n"
                        "Import their accounts first. This needs a full dump of SeAT's database; the tables Conduit "
                        "needs are sent to it compressed, which can take a while for a big dump.\n\n"
                        "Running it again later is safe: nothing is added twice."):

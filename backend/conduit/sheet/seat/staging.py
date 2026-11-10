@@ -138,6 +138,21 @@ class Staging:
             out += [Row(r) for r in self.db.execute(sql, chunk)]
         return out
 
+    def distinct(self, table: str, column: str) -> set:
+        """Every non-empty value of ``column`` in ``table``; empty if the dump didn't have either."""
+        if table not in self.columns or column not in self.columns[table]:
+            return set()
+        return {r[0] for r in self.db.execute(f"SELECT DISTINCT {_q(column)} FROM {_q(table)}") if r[0] not in (None, "")}
+
+    def latest(self, table: str, column: str, **where):
+        """The largest ``column`` among the rows matching ``where`` (SeAT's dates sort as text), or None."""
+        if table not in self.columns or column not in self.columns[table]:
+            return None
+        sql = f"SELECT MAX({_q(column)}) FROM {_q(table)}"
+        if where:
+            sql += " WHERE " + " AND ".join(f"{_q(k)} = ?" for k in where)
+        return self.db.execute(sql, tuple(where.values())).fetchone()[0]
+
     def character_ids(self) -> set[int]:
         """Every character SeAT held a token for (live or not)."""
         return {r[0] for r in self.db.execute("SELECT character_id FROM refresh_tokens")} if self.has("refresh_tokens") else set()

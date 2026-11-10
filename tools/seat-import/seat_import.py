@@ -680,6 +680,8 @@ def upload_history(conduit: Conduit, dump_path: str, say, character_ids=None, se
         state = conduit.call("GET", f"/import/seat/history/{run_id}")
         summary = state.get("summary") or {}
         line = f"  {state['status']}: {summary.get('done', 0)}/{summary.get('characters', '?')} characters"
+        if summary.get("corporations"):
+            line += f", {summary.get('corporations_done', 0)}/{summary['corporations']} corporations"
         if line != last:
             say(line)
             last = line
@@ -691,12 +693,16 @@ def upload_history(conduit: Conduit, dump_path: str, say, character_ids=None, se
 
 def history_lines(summary: dict) -> list[str]:
     lines = [f"Character data imported for {summary['characters']} characters."]
+    if summary.get("corporations"):
+        lines.append(f"Corporation data imported for {summary['corporations']} corporations (the ones with members "
+                     "in Conduit).")
     if summary.get("not_here"):
         lines.append(f"  {summary['not_here']} characters in SeAT aren't in Conduit (their accounts weren't imported).")
     for key, c in sorted(summary.get("sections", {}).items()):
         lines.append(f"  {key:14} {c['imported']:>6} imported  {c['skipped']:>6} already from EVE  {c['errors']:>4} errors")
     for err in summary.get("errors", [])[:20]:
-        lines.append(f"  ! {err.get('name', err['character'])}: {err['section']}: {err['error']}")
+        lines.append(f"  ! {err.get('name') or err.get('corporation') or err.get('character')}: {err['section']}: "
+                     f"{err['error']}")
     return lines
 
 
