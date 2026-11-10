@@ -36,6 +36,7 @@ results, group rules and ESI scopes.
 - [`conduit-pi`](conduit-pi): Planetary Industry: every colony of a member's characters with extractor countdowns, output and its value, expiry reminders, and a corporation view of products and idle colonies.
 - [`conduit-tracking`](conduit-tracking): Activity Tracking: follow a member and all their alts for 1 to 60 days, with a report of the systems they were in, the ships they flew, what they earned and when they played.
 - [`conduit-tickets`](conduit-tickets): Discord Tickets: reach a member you pick through a private Discord channel, an EVE mail or both, or let people open their own from a panel with buttons, with the Discord roles you choose, transcripts and an audit trail.
+- [`conduit-secretsanta`](conduit-secretsanta): Secret Santa: members sign up with the character that should get the gift and a wish list, a stored draw that respects couples kept apart, each sees only who they give to, gifts marked sent and received with an anonymous thank-you, and reminders.
 - How plugins hook into the core (events, notifications, per-user settings, search, group rules) is in
   [docs/platform.md](../docs/platform.md). The plugin contract is `conduit.plugins.Plugin` in
   `backend/conduit/plugins/base.py`; front ends use `definePlugin` from `@conduit/sdk`.

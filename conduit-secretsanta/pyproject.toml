@@ -1,0 +1,28 @@
+[project]
+name = "conduit-secretsanta"
+version = "1.0.0"
+description = "Secret Santa: members sign up with the character that should get the gift, a draw pairs everyone up, and each sees only who they give to."
+authors = [{ name = "EvE Conduit" }]
+requires-python = ">=3.12"
+# The EvE Conduit version it needs is [tool.conduit] min_conduit (checked before installing).
+dependencies = ["conduit"]
+
+[project.entry-points."conduit.plugins"]
+secretsanta = "conduit_secretsanta.plugin:SecretSantaPlugin"
+
+# How the plugin appears in the catalog (Administration -> Plugins -> Browse). See ../scripts/build_catalog.py.
+[tool.conduit]
+name = "Secret Santa"
+icon = "gift"
+category = "Community"
+min_conduit = "0.5.55"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["conduit_secretsanta*"]
+
+[tool.setuptools.package-data]
+conduit_secretsanta = ["static/**/*"]
