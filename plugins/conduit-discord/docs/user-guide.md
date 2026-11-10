@@ -60,6 +60,8 @@ page) lets you bring someone without an account here onto the server for a while
 
 1. Press **New link**.
 2. Say what it's for (your guests see this), how long it lasts, and optionally how many people may use it.
+   If your leadership limits guests to certain channels, also pick which of them these guests see. They see
+   those and nothing else on the server.
 3. Press **Make link**, copy it and send it to your guests.
 
 What your guest does:

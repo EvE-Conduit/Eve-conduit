@@ -16,7 +16,8 @@ groups, state and main character.
 - **Temporary access** (permission `discord.create_guest_links`, switched on under Server setup): make a link for
   someone without an account here, lasting a set number of hours and optionally limited to a number of people.
   Whoever opens it signs in with Discord and joins the server with the guest role, and is removed again when the
-  link runs out or is withdrawn. Nobody who was already on the server is ever removed by a link.
+  link runs out or is withdrawn. Nobody who was already on the server is ever removed by a link. A Discord manager
+  can choose the channels guests may be let into; each link then opens some of them and its guests see nothing else.
 - **Server setup** (permission `discord.manage_discord`): step-by-step setup of the Discord application, the bot and
   the server, with a connection check that lists anything in the way (missing bot permissions, roles above the
   bot's own). Map groups and states to Discord roles, and see every linked member with their roles and the last
