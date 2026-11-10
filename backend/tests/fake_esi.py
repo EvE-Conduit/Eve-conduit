@@ -1,11 +1,20 @@
 """A stand-in for EsiClient that serves canned responses by path."""
 
 import re
+from datetime import datetime, timedelta, timezone
 
 from conduit.esi.client import EsiResponse
 from conduit.esi.exceptions import EsiError
 
 CID = 90000001
+
+
+def days_ago(n: int) -> str:
+    """An ESI timestamp n days back at 10:00, for data that only counts while it's recent (the wallet's 30 days)."""
+    day = datetime.now(timezone.utc) - timedelta(days=n)
+    return day.strftime("%Y-%m-%dT10:00:00Z")
+
+
 SDE_TYPES = {
     587: ("Rifter", 25, 6),  # (name, group, category)
     3300: ("Gunnery", 255, 16),
@@ -43,11 +52,11 @@ ROUTES = {
     ],
     rf"/characters/{CID}/wallet": 1234567.89,
     rf"/characters/{CID}/wallet/journal": [
-        {"id": 11, "date": "2026-10-05T10:00:00Z", "ref_type": "bounty_prizes", "amount": 500000.0, "balance": 1234567.89, "description": "Bounty", "first_party_id": 1000125, "second_party_id": CID},
-        {"id": 10, "date": "2026-10-04T10:00:00Z", "ref_type": "market_transaction", "amount": -100000.0, "balance": 734567.89, "description": "Market", "first_party_id": CID, "second_party_id": 2112000000},
+        {"id": 11, "date": days_ago(5), "ref_type": "bounty_prizes", "amount": 500000.0, "balance": 1234567.89, "description": "Bounty", "first_party_id": 1000125, "second_party_id": CID},
+        {"id": 10, "date": days_ago(6), "ref_type": "market_transaction", "amount": -100000.0, "balance": 734567.89, "description": "Market", "first_party_id": CID, "second_party_id": 2112000000},
     ],
     rf"/characters/{CID}/wallet/transactions": [
-        {"transaction_id": 5, "date": "2026-10-04T10:00:00Z", "type_id": 34, "quantity": 1000, "unit_price": 100.0, "is_buy": True, "is_personal": True,
+        {"transaction_id": 5, "date": days_ago(6), "type_id": 34, "quantity": 1000, "unit_price": 100.0, "is_buy": True, "is_personal": True,
          "client_id": 2112000000, "location_id": 60003760, "journal_ref_id": 10},
     ],
     rf"/characters/{CID}/assets": [
