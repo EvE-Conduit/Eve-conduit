@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class CapitalsPlugin(Plugin):
     id = "capitals"
     name = "Capital Registry"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "Who can fly and who owns each capital class, where the hulls are parked, jump skills and clones."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-capitals"

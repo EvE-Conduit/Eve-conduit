@@ -17,7 +17,8 @@ Your site administrators choose which of these count:
 
 - **Signed in to the site**: when you last signed in to EvE Conduit. A sign-in lasts a long time, so this only
   changes when you sign in again.
-- **Played EVE**: when any of your characters last logged in or out of EVE. A character online now counts as now.
+- **Played EVE**: when any of your characters last logged in or out of EVE. A character online now counts as now (while its
+  data is syncing; a character whose login stopped working counts from its last known login or logout).
 - **Flew in a fleet**: your last fleet participation (FAT), from the Fleets & FATs plugin. FATs you added by hand for
   your own characters don't count.
 
@@ -83,7 +84,8 @@ Needs `inactivity.view_inactivity`. The page has the tabs **Members**, **Leave o
 3. The table shows **Member** (main character and corporation), **Status** (**Active**, **Inactive N days** or
    **On leave until** a date), **Last active**, **Signed in to the site**, **Played** and **Last fleet**.
 4. Click **CSV** to download the current view.
-5. With `inactivity.manage_leave`, click **Check now** to work everyone out again. This does not send notifications.
+5. With `inactivity.manage_leave`, click **Check now** to work everyone out again. This does not send notifications; anyone it
+   flags is still named in the next daily notification.
 
 "Checked" shows when the list was last worked out. The list is updated once a day.
 

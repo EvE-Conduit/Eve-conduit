@@ -48,7 +48,7 @@ apply. Saving works everyone out again without sending notifications, and is rec
 | --- | --- | --- |
 | **Inactive after (days)** | 30 | Members with no activity for this many days are inactive. 1 to 3650. |
 | **Signed in to the site** | On | Counts the member's last sign-in to EvE Conduit. Sign-ins last a long time, so keep another signal on. |
-| **Played EVE** | On | Counts their characters' last EVE login or logout, from character sheets and corporation member tracking. A character online now counts as now. |
+| **Played EVE** | On | Counts their characters' last EVE login or logout, from character sheets and corporation member tracking. A character online now counts as now, as long as its character sheet overview synced in the last 3 hours and its login still works; otherwise its last login and logout count. |
 | **Flew in a fleet** | On | Counts their last FAT from Fleets & FATs. FATs a member added by hand for their own characters don't count. Has no effect unless Fleets & FATs is installed and on. |
 
 At least one signal must be on. A member is active while the latest switched-on signal is within the limit. Activity
@@ -83,7 +83,8 @@ Guests (public states) are never checked. Members outside the chosen states and 
 - Dashboard widget **Inactivity**: inactive count, how many are on leave, and how much leave is waiting.
 
 The CSV has the columns Member, Corporation, Last active, Days inactive, Inactive, On leave until, Signed in to the
-site, Played and Last fleet.
+site, Played and Last fleet. Text that a spreadsheet would run as a formula (a corporation name starting with `=`,
+`+`, `-` or `@`) is written with a leading apostrophe.
 
 ## The daily check
 
@@ -97,7 +98,8 @@ At 07:20 (server time, UTC) the plugin:
 5. If **Tell members when they're flagged** is on, notifies each newly flagged member.
 
 A member is named once. They are named again only after they've been active in between. **Check now** and saving the
-settings do the same work without notifying anyone. Posting, cancelling or deciding a leave updates that member
+settings do the same work without notifying anyone; whoever they flag is still named by the next daily check (and
+gets their own notice then, if that is on). Posting, cancelling or deciding a leave updates that member
 straight away.
 
 ## Group rules

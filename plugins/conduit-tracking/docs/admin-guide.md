@@ -36,7 +36,12 @@ It appears in the HR tier of the Administration permission picker.
 
 Like Member Audit, the permission only reaches members whose characters the tracker's character sheet permissions
 reach (all characters, their alliance's or their corporation's). A tracker without any character sheet permission sees
-"You can't see anyone else's characters" when searching. Nobody can track themselves or see a tracking of themselves.
+"You can't see anyone else's characters" when searching.
+
+The reach is per character, not per member. A tracking only follows the member's characters that whoever started it
+may view, and each reader's report only holds the characters that reader may view. A corporation director tracking a
+member whose main is in another corporation gets the alt in their own corporation and nothing about the main. If the
+starter's account is deleted, the tracking stops following anyone. Nobody can track themselves or see a tracking of themselves.
 
 The **Not on the site yet** part of **New members** only lists corporations whose member list the tracker may see on
 the corporation sheet.
@@ -62,7 +67,14 @@ See the user guide for starting trackings, reading reports, stopping and deletin
   and stop being followed.
 - Characters that can't be followed are listed at the top of the report with a reason: **Missing ESI scopes**,
   **Login no longer works** or **ESI error**. Ask the member to log in again with that character if needed.
-- Reports are kept until someone deletes them.
+- A character that moved to another account only counts up to the last time it was seen on the member's account;
+  its new owner's wallet, mining and kills are not in the report.
+- The mining ledger is per EVE day, so the day a tracking started on is left out (unless it started at 00:00).
+- Reports are kept until whoever started them, or an administrator, deletes them. Another tracker gets "Only whoever
+  started this tracking, or an administrator, can delete it". When the starter's account is gone, any tracker who can
+  see the report may delete it.
+- When ESI asks Conduit to slow down in the middle of a round, the next round starts with the tracking it stopped
+  at, so the same trackings are not always the ones left out.
 
 ## Notifications
 

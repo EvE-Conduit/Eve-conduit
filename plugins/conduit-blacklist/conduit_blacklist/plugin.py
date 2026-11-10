@@ -6,7 +6,7 @@ from conduit.plugins import NavItem, Plugin
 class BlacklistPlugin(Plugin):
     id = "blacklist"
     name = "Blacklist"
-    version = "1.0.1"
+    version = "1.0.2"
     description = "Characters, corporations and alliances you don't want, with notes, and a warning when one links a character or applies."
     author = "EvE Conduit"
     url = "https://github.com/EvE-Conduit/plugins/tree/main/conduit-blacklist"

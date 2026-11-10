@@ -111,9 +111,15 @@ Recorded in the audit log (**Administration** → **Logs** → **Audit**):
 | Entry added | `blacklist.added` |
 | Entry changed | `blacklist.changed` |
 | Entry removed (with its kind and reason) | `blacklist.removed` |
+| Note added to an entry | `blacklist.note_added` |
+| Warning marked as dealt with | `blacklist.match_resolved` |
+| Warning reopened | `blacklist.match_reopened` |
 
-Notes and marking warnings as dealt with are not audited, but notes show their author and the warnings list shows
-who dealt with each one. Removing an entry deletes its notes and warnings.
+Removing an entry deletes its notes and warnings.
+
+Nobody handles a warning about themselves. Someone with `blacklist.view_blacklist` whose own account or character
+matched an entry is not sent that warning, does not see it in **Warnings**, the counts, the entry's page or the
+dashboard widget, and cannot mark it as dealt with or reopen it. Everyone else with the permission still does.
 
 Every API route needs `blacklist.view_blacklist` (adding, changing, removing and the name lookup need
 `blacklist.manage_blacklist`). Search returns nothing to people without the view permission.

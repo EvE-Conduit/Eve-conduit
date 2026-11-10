@@ -8,7 +8,8 @@ flew, what they earned and when they played.
 ## Who you can track
 
 You can only track members whose characters your character sheet permissions reach (all characters, your alliance's,
-or your corporation's). You can never track yourself, and you never see a tracking of yourself.
+or your corporation's). Only those characters are followed: an alt of the member that your permissions don't reach
+isn't polled and isn't in your report. You can never track yourself, and you never see a tracking of yourself.
 
 ## Where to find it
 
@@ -83,16 +84,19 @@ How to read the numbers:
   trouble), are not counted.
 - A system flown straight through or a quick ship swap can be missed.
 - Location data only starts when the tracking does. ESI has no history of where a character was.
-- Wallet, mining and killmail data cover the same period, from what Conduit already syncs.
+- Wallet, mining and killmail data cover the same period, from what Conduit already syncs. The mining ledger is per
+  EVE day, so the day the tracking started on is left out.
+- A character that moved to another account only counts up to when it left.
 - ISK moved between the member's own characters is neither earned nor spent.
 
 ## Stopping and deleting
 
 - **Stop** (running trackings only): polling stops now, the report so far is kept.
-- **Delete**: everything this tracking recorded is deleted for good. The member's wallet, mining and killmails stay on
+- **Delete** (only for whoever started the tracking, and administrators): everything this tracking recorded is
+  deleted for good. The member's wallet, mining and killmails stay on
   their character sheets.
 
-Reports are kept until someone deletes them.
+Reports are kept until whoever started them (or an administrator) deletes them.
 
 ## Notifications
 

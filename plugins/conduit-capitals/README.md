@@ -27,7 +27,8 @@ Who can fly and who owns each capital class, where the hulls are parked, and who
   class) and by member (each member's characters per class, opening all their alts' capitals). Filter by
   corporation, state and group. It only covers the characters the viewer may read through the character sheet
   permissions (`sheet.view_corporation_characters`, `sheet.view_alliance_characters` or `sheet.view_all_characters`),
-  and seeing where someone's hulls are goes in the snooper log like opening their assets. A dashboard widget shows the
+  and what it tells about someone else's character (hulls, what they can fly, where they and their clones are) goes
+  in the snooper log like opening that tab of their sheet. A dashboard widget shows the
   counts per class.
 - **Group rules:** "Can fly a capital" (a class or any capital, on the main, any or every character) and "Owns a
   capital" (at least N of a class, on the main or any character, optionally leaving out hulls marked not available),

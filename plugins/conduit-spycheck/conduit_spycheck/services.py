@@ -80,6 +80,11 @@ def others(viewer):
     return viewable_characters(viewer).exclude(user=viewer)
 
 
+def own_ids(viewer) -> set[int]:
+    """The viewer's own characters' EVE ids: a watch on one of them is about the viewer."""
+    return set(Character.objects.filter(user=viewer).values_list("pk", flat=True))
+
+
 def visible(viewer):
     """Findings on the characters the viewer's sheet permissions reach, as Member Audit narrows its searches. Never
     the viewer's own characters (nor ones they owned at the last scan): nobody reviews findings on themselves."""
@@ -201,10 +206,14 @@ def collect(chars: list[tuple], watched: dict[int, Watched], s: SpySettings) -> 
     if "contract" not in skip:
         contracts = (Contract.objects.filter(character_id__in=char_ids)
                      .filter(Q(issuer_id__in=ids) | Q(issuer_corporation_id__in=ids) | Q(assignee_id__in=ids) | Q(acceptor_id__in=ids))
-                     .values_list("character_id", "issuer_id", "issuer_corporation_id", "assignee_id", "acceptor_id", "price", "reward", "date_issued"))
-        for cid, issuer, issuer_corp, assignee, acceptor, price, reward, issued in contracts:
+                     .values_list("character_id", "issuer_id", "issuer_corporation_id", "assignee_id", "acceptor_id", "price", "reward",
+                                  "date_issued", "date_accepted"))
+        for cid, issuer, issuer_corp, assignee, acceptor, price, reward, issued, accepted in contracts:
+            # A contract is as new as the last thing that happened to it: one put up long ago and accepted today is
+            # today's news (it brings a dismissed finding back), not the day it was issued.
+            last = max(issued, accepted) if accepted else issued
             for eid in {issuer, issuer_corp, assignee, acceptor} & ids:
-                add(cid, eid, "contract", 1, (price or 0) + (reward or 0), issued, issued)
+                add(cid, eid, "contract", 1, (price or 0) + (reward or 0), issued, last)
 
     if "mail" not in skip:
         # Like Member Audit: the text match narrows it down and the loop checks the ids properly.
@@ -383,6 +392,9 @@ def _resolve_name(eve_id: int) -> EveName:
 def add_watch(eve_id: int, reason: str, by, request=None) -> WatchEntry:
     if eve_id <= 0:
         raise SpyCheckError("Pick who to watch")
+    if eve_id in own_ids(by):
+        # Said before looking at the list, so it doesn't tell them whether they're on it already.
+        raise SpyCheckError("You can't put your own characters on the watch list; someone else has to")
     if WatchEntry.objects.filter(eve_id=eve_id).exists():
         raise SpyCheckError("They're already on the watch list")
     name = _resolve_name(eve_id)
@@ -393,20 +405,23 @@ def add_watch(eve_id: int, reason: str, by, request=None) -> WatchEntry:
 
 
 def remove_watch(w: WatchEntry, by, request=None) -> None:
+    if w.eve_id in own_ids(by):
+        raise SpyCheckError("Not found", status=404)  # a watch on themselves isn't there for them
     record("spycheck.watch_removed", f"removed {w.name} from the Spy Check watch list", request=request, actor=by, target=w,
            target_type="plugin", details={"eve_id": w.eve_id, "kind": w.kind})
     w.delete()
 
 
-def find_entities(q: str) -> list[dict]:
-    """Characters, corporations and alliances the synced data has mentioned, to pick one to watch."""
+def find_entities(q: str, viewer=None) -> list[dict]:
+    """Characters, corporations and alliances the synced data has mentioned, to pick one to watch. The viewer's own
+    characters never show as watched (whether they are is not theirs to know)."""
     from conduit.search.providers import ranked
     from conduit.sheet.contacts.api import entity_image
 
     q = q.strip()[:200]
     if len(q) < 3:
         return []
-    watched = set(WatchEntry.objects.values_list("eve_id", flat=True))
+    watched = set(WatchEntry.objects.values_list("eve_id", flat=True)) - (own_ids(viewer) if viewer is not None else set())
     hits = [(n.id, n.name, n.category) for n in ranked(EveName.objects.filter(name__icontains=q, category__in=WatchEntry.Kind.values), "name", q)[:10]]
     if not any(name.lower() == q.lower() for _, name, _ in hits):
         hits = _esi_exact(q) + hits
@@ -441,12 +456,15 @@ def watch_out(w: Watched, entry: WatchEntry | None = None) -> dict:
             "created_at": entry.created_at.isoformat() if entry else None}
 
 
-def watch_list() -> dict:
+def watch_list(viewer) -> dict:
+    """The watch list as ``viewer`` may see it: no entry for one of their own characters, and the count of new
+    findings per entity only over the findings they may see (so never findings on themselves)."""
     s = SpySettings.load()
-    local = list(WatchEntry.objects.select_related("added_by__main_character"))
-    open_ = dict(Finding.objects.filter(state=Finding.State.NEW).values("entity_id").order_by().annotate(n=Count("id")).values_list("entity_id", "n"))
+    mine = own_ids(viewer)
+    local = [e for e in WatchEntry.objects.select_related("added_by__main_character") if e.eve_id not in mine]
+    open_ = dict(visible(viewer).filter(state=Finding.State.NEW).values("entity_id").order_by().annotate(n=Count("id")).values_list("entity_id", "n"))
     items = [{**watch_out(Watched(e.eve_id, e.kind, e.name, Finding.Source.WATCH, e.reason), e), "open": open_.get(e.eve_id, 0)} for e in local]
-    blacklist = [{**watch_out(w), "open": open_.get(w.eve_id, 0)} for w in _blacklist_entries(s)]
+    blacklist = [{**watch_out(w), "open": open_.get(w.eve_id, 0)} for w in _blacklist_entries(s) if w.eve_id not in mine]
     return {"items": items, "blacklist": blacklist, "blacklist_available": blacklist_available(), "use_blacklist": s.use_blacklist}
 
 
@@ -585,8 +603,10 @@ def summary(viewer) -> dict:
         "new": counts.get("new", 0), "acknowledged": counts.get("acknowledged", 0), "dismissed": counts.get("dismissed", 0),
         "members": visible(viewer).filter(state=Finding.State.NEW).values("user").distinct().count(),
         "by_kind": by_kind,
-        "watched": len(watched_entities(s)),
-        "last_scan_at": _iso(s.last_scan_at), "last_scan_characters": s.last_scan_characters, "last_scan_new": s.last_scan_new,
+        # Both as the viewer may see them: not a watch on their own character, nor findings out of their reach.
+        "watched": len(set(watched_entities(s)) - own_ids(viewer)),
+        "last_scan_at": _iso(s.last_scan_at), "last_scan_characters": s.last_scan_characters,
+        "last_scan_new": visible(viewer).filter(flagged_at=s.last_scan_at).count() if s.last_scan_at else 0,
         "blacklist_available": blacklist_available(),
     }
 

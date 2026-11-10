@@ -466,19 +466,25 @@ def award_out(a: Award) -> dict:
     }
 
 
-def awards(user=None, limit: int = 200) -> list[dict]:
-    qs = Award.objects.select_related("user__main_character")
+def _hidden_from(viewer) -> set[int]:
+    """Members who hid themselves: their medals aren't shown to anyone but themselves, like their place on the boards."""
+    return hidden_user_ids() - ({viewer.pk} if viewer is not None else set())
+
+
+def awards(user=None, limit: int = 200, viewer=None) -> list[dict]:
+    """Medals handed out (or one member's), as ``viewer`` may see them: not those of members who hid themselves."""
+    qs = Award.objects.select_related("user__main_character").exclude(user_id__in=_hidden_from(viewer))
     if user is not None:
         qs = qs.filter(user=user)
     return [award_out(a) for a in qs[:limit]]
 
 
-def hall_of_fame(limit: int = 50) -> list[dict]:
-    """Members with the most medals, gold first."""
+def hall_of_fame(limit: int = 50, viewer=None) -> list[dict]:
+    """Members with the most medals, gold first. Members who hid themselves are left out (except for themselves)."""
     from conduit.accounts.models import User
 
     tally: dict[int, dict] = defaultdict(lambda: {"gold": 0, "silver": 0, "bronze": 0})
-    for uid, rank in Award.objects.values_list("user_id", "rank"):
+    for uid, rank in Award.objects.exclude(user_id__in=_hidden_from(viewer)).values_list("user_id", "rank"):
         tally[uid][{1: "gold", 2: "silver", 3: "bronze"}[rank]] += 1
     users = {u.pk: u for u in User.objects.filter(pk__in=tally).select_related("main_character")}
     rows = [{"user_id": uid, "name": users[uid].display_name, "portrait": portrait_url(users[uid].main_character_id, 64) if users[uid].main_character_id else "", **t}

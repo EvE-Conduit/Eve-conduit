@@ -100,5 +100,5 @@ def stop(request, session_id: int):
 @router.delete("/sessions/{session_id}")
 @require_perm(PERM)
 def delete(request, session_id: int):
-    services.delete(_session(request, session_id), request.user, request=request)
+    _run(services.delete, _session(request, session_id), request.user, request=request)
     return {"ok": True}
