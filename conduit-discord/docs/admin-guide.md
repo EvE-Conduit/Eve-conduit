@@ -99,66 +99,110 @@ Without mappings, linked members join the server with no roles.
 
 ## Temporary access links
 
-Someone without an account here (a diplomat, a guest on a fleet, a recruit) can be let onto the server for a while.
-A person with `discord.create_guest_links` makes a link under **Discord → Temporary access** and sends it to them.
-Whoever opens it signs in with Discord and is added to the server with the guest role. When the link runs out they
-are removed again.
+Someone without an account here (a diplomat, a guest on a fleet, a recruit) can be given guest access to the server
+for a while. A person with `discord.create_guest_links` makes a link under **Discord → Temporary access** and sends
+it to them. Whoever opens it signs in with Discord and gets two roles on the server: the **temporary role** (for
+example `tempaccess`), which they have while the link runs, and the **guest role**, which they keep. When the link
+runs out, the temporary role is taken away and that access ends.
 
 ### Switching it on
 
-1. On Discord, make a role for guests (for example `Guest`) and let it see only the channels guests should. Keep it
-   below the bot's role.
+1. On Discord, make two roles, for example `tempaccess` and `Guest`, both below the bot's role. Let `tempaccess`
+   see the channels guests should, and `Guest` none of them. (If you choose the channels on this site, as described
+   below, the bot arranges that for you.)
 2. In the Discord developer portal, open your application's **OAuth2** page and add the second redirect shown on
    **Server setup → Temporary access** (`https://<your site>/public/p/discord/guest`). Without it Discord refuses
    guests with "Invalid OAuth2 redirect_uri".
-3. On **Server setup → Temporary access**, choose the guest role, set the longest a link may last (72 hours by
+3. On **Server setup → Temporary access**, choose the temporary role and the guest role, set the longest a link may last (72 hours by
    default, 720 at most), switch **Temporary access links** on and save.
 4. Give `discord.create_guest_links` to the people who may hand out links, under **Administration → Access**.
 
-**Check connection** warns when the guest role was deleted or sits above the bot's role.
+**Check connection** warns when one of the two roles was deleted or sits above the bot's role.
+
+### Settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Temporary access links** | Off | Lets people with `discord.create_guest_links` make links. Switching it off ends all guest access still running. |
+| **Temporary role** | none | The role a guest has while their link runs, and loses when it ends. Without one, the guest role is taken away instead. |
+| **Guest role** | none | Guests get it too and keep it afterwards, so it shows who has been a guest. Required while links are on. It can't be the same role as the temporary one. |
+| **Longest a link may last (hours)** | 72 | Also the furthest ahead a link can be extended to, counted from now. Up to 720. |
+| **When a link ends** | Take the temporary role away | **Take the temporary role away; they stay, with the guest role**, or **Remove them from the server**. |
+| **Guests appear as** | `[GUEST] {name}` | The guest's nickname on the server; `{name}` is their Discord name. Empty leaves names alone. Their old name is put back when their access ends. |
+| **Channels guests may be let into** | none | See below. |
+
+### When a link ends
+
+By default guests **lose the temporary role and stay on the server with the guest role**. Their nickname goes back
+to what it was, and any channels the link opened to them close. They can come back through a new link, which
+gives them the temporary role again.
+
+Choose **Remove them from the server** to have people who joined through a link taken off the server when it ends.
+
+Whichever you choose:
+
+- Someone who was **already on the server** when they used a link is never removed from it. They get the roles for
+  the time, and lose the temporary one again.
+- A temporary role someone **already had**, given by hand, is left with them.
+- A Discord account **linked to a member** here can't use a link: members have their own access. A guest, or former
+  guest, who links their account as a member keeps their place. Their guest access ends at that moment and the
+  guest role is taken away, since it would hide the members' channels from them. They keep either role only if
+  their groups give it to them.
+
+> **What a former guest sees.** They keep the guest role, so they see what that role sees. If you limit guests to
+> chosen channels (below), the bot hides every channel from the guest role, and a former guest sees nothing. If you
+> don't, set the guest role up on Discord so that it sees only what a former guest may.
+>
+> **With no temporary role chosen** (sites set up before 1.4.0), the guest role is the one taken away, and a
+> former guest then sees what `@everyone` sees. With channels limited that can be **more** than they saw as a
+> guest; saving the settings and **Check connection** list those channels. Choosing a temporary role closes this.
+
+| Situation | What happens |
+|---|---|
+| The link runs out | Its guests' access ends within a couple of minutes |
+| The link is extended | Nothing changes for its guests; they keep their access for the extra time |
+| The link is withdrawn | Its guests' access ends straight away |
+| **End access** next to one guest | That guest's access ends; the link keeps working for others |
+| The link's maker loses `discord.create_guest_links` | The link stops working and its guests' access ends |
+| Temporary access is switched off | Every link stops working and all guest access ends |
+| Discord can't be reached | The guest stays listed with the reason, and it is tried again every two minutes |
+| A channel can't be hidden from guests, or the link's channels can't be opened | Nobody is given access; what was already given is taken back |
+| The link has been used by as many people as it allows | It closes to newcomers; the guests it let in keep their access until it runs out |
+
+### Extending a link
+
+**Extend** on a running link adds time to it. A link can never end later than the longest a new link could last,
+counted from now: with the default of 72 hours, a link with 10 hours left can get up to 62 more. A link that has
+ended can't be extended; make a new one.
 
 ### Choosing which channels guests see
 
 On **Server setup → Temporary access**, pick the channels under **Channels guests may be let into** and save.
 
-- The bot hides every other channel from the guest role, by denying it **View Channel** there. It keeps doing so
-  for channels made later, checked every two minutes while guests are on the server.
+- The bot hides every channel from the guest role, by denying it **View Channel** there, and takes away any channel
+  setting that lets the temporary role in. It keeps doing so for channels made later, checked every two minutes
+  while guests are on the server.
 - Whoever makes a link picks which of the chosen channels it opens (all of them unless they say otherwise). Each
-  guest is allowed into exactly those, personally, and that access is taken away again when they leave.
+  guest is allowed into exactly those, personally, and that access is taken away again when their link ends.
 - A private channel can be chosen too: guests of a link that opens it get in although `@everyone` can't.
-- Members and other roles are not affected. Only the guest role and the guests themselves get channel settings.
+- Members and other roles are not affected. Only the two roles for guests and the guests themselves get channel
+  settings.
 
 If the bot isn't allowed to hide a channel, saving lists it and **Check connection** reports it. Give the bot's
-role **Manage Permissions** in that channel, or hide it from the guest role by hand, and save again. **Nobody is
+role **Manage Permissions** in that channel, or hide it from the guest and temporary roles by hand, and save again. **Nobody is
 let in through a link while a channel can't be hidden**: guests are told the server isn't ready.
 
 On a server with many channels the first save can take a minute; it carries on in the background.
 
-With no channels chosen, the plugin changes nothing about channels: guests see what the guest role sees on Discord.
+With no channels chosen, the plugin changes nothing about channels: guests see what their two roles see on Discord, and former guests what the guest role sees.
 Choosing none later stops the hiding of new channels, but leaves the settings already made on Discord in place.
 
-### What happens to guests
+### History
 
-| Situation | What happens |
-|---|---|
-| The link runs out | Its guests are removed from the server within a couple of minutes |
-| The link is withdrawn | Its guests are removed straight away |
-| One guest is removed from the link's list | That guest is removed; the link keeps working for others |
-| The link's maker loses `discord.create_guest_links` | The link stops working and its guests are removed |
-| Temporary access is switched off | Every link stops working and all guests are removed |
-| Discord can't be reached | The guest stays listed with the reason, and removing is tried again every two minutes |
-| A channel can't be hidden from guests, or the link's channels can't be opened | Nobody is added; a guest who was already added is taken off again |
-| The link has been used by as many people as it allows | It closes to newcomers; the guests it let in stay until it runs out |
-
-Three rules keep links from doing harm:
-
-- Someone who is already on the server can't come in as a guest, so nobody who was there before is ever removed
-  because a link ended.
-- A Discord account linked to a member here is refused: members have their own access.
-- A guest who links their Discord account as a member later keeps their place and only loses the guest role.
-
-Guests get the guest role and nothing else: no nickname, no mapped roles. People with only
-`discord.create_guest_links` see their own links; Discord managers see everyone's and can withdraw any.
+**Discord → Temporary access → History** lists everyone who came through a link, newest first: their Discord name
+and id, the link, who invited them, when they joined and when and why their access ended. Search by Discord name or
+id, the link's label, or who made it. People with only `discord.create_guest_links` see the guests of their own
+links; Discord managers see everyone's. Links and their guests are kept; nothing is deleted when a link ends.
 
 The site learns a guest's Discord name, id and avatar, and keeps them with the link.
 
@@ -213,8 +257,8 @@ Audit log entries (**Administration → Logs → Audit**):
 | Settings saved (notes when a new secret or token was set) | `discord.settings` |
 | Role mappings saved | `discord.mappings` |
 | Temporary access switched on or off, or its settings changed | `discord.guest_settings` |
-| Temporary link made / withdrawn | `discord.guest_link`, `discord.guest_link_revoked` |
-| One guest removed by hand | `discord.guest_removed` |
+| Temporary link made / extended / withdrawn | `discord.guest_link`, `discord.guest_link_extended`, `discord.guest_link_revoked` |
+| One guest's access ended by hand | `discord.guest_removed` |
 | **Sync everyone** | `discord.sync` |
 
 ## Background jobs

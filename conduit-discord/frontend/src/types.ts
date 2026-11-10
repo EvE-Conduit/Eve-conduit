@@ -51,9 +51,16 @@ export interface Admin {
     guest_enabled: boolean;
     guest_role_id: string;
     guest_role_name: string;
+    /** The role guests have while their link lasts; "" when the site has only a guest role. */
+    guest_temp_role_id: string;
+    guest_temp_role_name: string;
     guest_max_hours: number;
     /** Channels guests may be let into; empty when channels aren't limited. */
     guest_channels: GuestChannel[];
+    /** When a link ends: guests lose the temporary role and stay ("role"), or are removed from the server ("kick"). */
+    guest_end_action: "role" | "kick";
+    /** How guests appear, with {name}; empty leaves their name alone. */
+    guest_nickname_format: string;
   };
   redirect_uri: string;
   /** The second redirect the Discord application needs, for guests. */
@@ -63,6 +70,8 @@ export interface Admin {
   guest_channels_seen?: string[];
   /** After saving: hiding the other channels is still running in the background. */
   guest_channels_hiding?: boolean;
+  /** After saving, on a site with no temporary role: what former guests see without the guest role, when channels are limited. */
+  guest_after_end_sees?: string[];
   invite_url: string | null;
   mappings: Mapping[];
   groups: { id: number; name: string }[];
@@ -122,8 +131,16 @@ export interface GuestUser {
   ended_at: string | null;
   /** expired, revoked, removed, creator_lost or member (they linked their account here since). */
   ended_reason: string;
-  /** Why they couldn't be removed yet; tried again every couple of minutes. */
+  /** Why their stay couldn't be ended yet; tried again every couple of minutes. */
   error: string;
+  /** On the server before using the link, so never removed from it. */
+  was_on_server: boolean;
+}
+
+/** A row of the history: a guest with the link they came through. */
+export interface GuestVisit extends GuestUser {
+  link: { id: number; label: string; role: string; channels: GuestChannel[]; expires_at: string };
+  invited_by: string | null;
 }
 
 export interface GuestLink {
@@ -148,7 +165,12 @@ export interface GuestOverview {
   enabled: boolean;
   can_manage: boolean;
   max_hours: number;
+  /** The role guests have for the time. */
   role: string;
+  /** The role they keep afterwards; null when the site has only a guest role, which is then taken away. */
+  kept_role: string | null;
+  /** Whether guests are removed from the server when a link ends ("kick") or only lose the role ("role"). */
+  end_action: "role" | "kick";
   /** The channels a link can open; empty when channels aren't limited. */
   channels: GuestChannel[];
   server: string;
@@ -161,6 +183,8 @@ export interface PublicGuestLink {
   server: string;
   expires_at: string;
   status: GuestLinkStatus;
+  /** Guests are removed from the server when the link ends; otherwise they only lose the guest role. */
+  leaves: boolean;
   invited_by: string | null;
 }
 

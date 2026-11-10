@@ -18,7 +18,7 @@ from tests.conftest import make_user
 
 from test_discord import BOT, GUILD, ME, R_CAPS, R_HIGH, FakeDiscord, link as link_member, setup  # noqa: F401
 
-R_GUEST = "400000000000000009"
+R_GUEST, R_TEMP = "400000000000000009", "400000000000000008"
 VISITOR, SECOND = "600000000000000001", "600000000000000002"
 C_CAT, C_GENERAL, C_DIPLO, C_VOICE, C_DIRECTORS = (f"70000000000000000{n}" for n in range(1, 6))
 PUBLIC, BASE = "/api/public/p/discord", "/api/p/discord"
@@ -32,6 +32,7 @@ class Visitors(FakeDiscord):
         self.visitor = VISITOR
         self.down = False
         self.roles.append({"id": R_GUEST, "name": "Guest", "position": 1, "permissions": "0", "color": 0})
+        self.roles.append({"id": R_TEMP, "name": "tempaccess", "position": 1, "permissions": "0", "color": 0})
         self.roles[0]["permissions"] = str(discord_api.VIEW_CHANNEL | discord_api.CONNECT)  # @everyone sees channels
         private = [{"id": GUILD, "type": 0, "allow": "0", "deny": str(discord_api.VIEW_CHANNEL)}]
         self.channels = [
@@ -53,6 +54,14 @@ class Visitors(FakeDiscord):
         if path == f"/guilds/{GUILD}/channels":
             self.calls.append((request.method, path))
             return httpx.Response(200, json=self.channels)
+        m = re.fullmatch(rf"/guilds/{GUILD}/members/(\d+)/roles/(\d+)", path)
+        if m:
+            self.calls.append((request.method, path))
+            who = self.members.get(m.group(1))
+            if who is None:
+                return httpx.Response(404, json={"message": "Unknown Member", "code": 10007})
+            who["roles"] = [r for r in who["roles"] if r != m.group(2)] + ([m.group(2)] if request.method == "PUT" else [])
+            return httpx.Response(204)
         m = re.fullmatch(r"/channels/(\d+)/permissions/(\d+)", path)
         if m:
             self.calls.append((request.method, path))
@@ -103,6 +112,12 @@ def fc(setup):  # noqa: F811
     return pilot
 
 
+def left(discord, who=None) -> bool:
+    """Whether their stay is over on Discord: off the server, or on it without the guest role."""
+    who = who or VISITOR
+    return who not in discord.members or R_GUEST not in discord.members[who]["roles"]
+
+
 def make_link(api_client, fc, **over):
     api_client.force_login(fc)
     resp = api_client.call("post", f"{BASE}/guests", {"label": "Diplo meeting", "hours": 4, **over})
@@ -134,7 +149,7 @@ def test_a_guest_joins_with_the_guest_role_and_leaves_when_the_link_runs_out(fc,
     resp = join(token)
     assert resp.status_code == 200, resp.content
     assert resp.json()["username"] == "guest1" and resp.json()["server_url"].endswith(GUILD)
-    assert discord.members[VISITOR] == {"roles": [R_GUEST], "nick": None}
+    assert discord.members[VISITOR] == {"roles": [R_GUEST], "nick": "[GUEST] guest1"}
     guest = Guest.objects.get()
     assert guest.discord_id == VISITOR and guest.ended_at is None
 
@@ -144,13 +159,13 @@ def test_a_guest_joins_with_the_guest_role_and_leaves_when_the_link_runs_out(fc,
 
     GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
     assert guests.end_due() == {"ended": 1, "waiting": 0}
-    assert VISITOR not in discord.members
+    assert left(discord)
     guest.refresh_from_db()
     assert guest.ended_reason == "expired" and guest.ended_at
     assert guests.end_due() == {"ended": 0, "waiting": 0}
     # And the link is closed to newcomers.
     discord.visitor = SECOND
-    assert join(token).status_code == 410 and SECOND not in discord.members
+    assert join(token).status_code == 410 and left(discord, SECOND)
 
 
 def test_only_people_with_the_permission_make_links_and_only_while_switched_on(fc, discord, api_client):
@@ -174,21 +189,112 @@ def test_the_uses_limit_holds(fc, discord, api_client):
     assert join(token).status_code == 200
     discord.visitor = SECOND
     resp = join(token)
-    assert resp.status_code == 410 and SECOND not in discord.members
+    assert resp.status_code == 410 and left(discord, SECOND)
     assert Client().get(f"{PUBLIC}/guest/{token}").json()["status"] == "used_up"
     # Used up isn't over: the guest it let in stays until it runs out.
-    assert guests.end_due() == {"ended": 0, "waiting": 0} and VISITOR in discord.members
+    assert guests.end_due() == {"ended": 0, "waiting": 0} and not left(discord)
 
 
-def test_someone_already_on_the_server_is_never_recorded_so_never_removed(fc, discord, api_client):
-    discord.members[VISITOR] = {"roles": [R_HIGH], "nick": None}
+def test_someone_already_on_the_server_gets_the_role_for_a_while_and_is_never_removed(fc, discord, api_client):
+    DiscordSettings.objects.update(guest_end_action="kick")  # even when guests are removed
+    discord.members[VISITOR] = {"roles": [R_HIGH], "nick": "Old Friend"}
     token = make_link(api_client, fc)["url"].rsplit("/", 1)[1]
-    resp = join(token)
-    assert resp.status_code == 409 and "already on the server" in resp.json()["detail"]
-    assert not Guest.objects.exists() and discord.members[VISITOR]["roles"] == [R_HIGH]
+    assert join(token).status_code == 200
+    assert discord.members[VISITOR] == {"roles": [R_HIGH, R_GUEST], "nick": "[GUEST] guest1"}
+    guest = Guest.objects.get()
+    assert guest.was_on_server and not guest.had_role and guest.previous_nick == "Old Friend"
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    assert guests.end_due() == {"ended": 1, "waiting": 0}
+    assert discord.members[VISITOR] == {"roles": [R_HIGH], "nick": "Old Friend"}
+
+
+def test_a_guest_role_given_by_hand_is_left_alone(fc, discord, api_client):
+    discord.members[VISITOR] = {"roles": [R_GUEST], "nick": None}
+    token = make_link(api_client, fc)["url"].rsplit("/", 1)[1]
+    assert join(token).status_code == 200 and Guest.objects.get().had_role
     GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
     guests.end_due()
-    assert VISITOR in discord.members
+    assert discord.members[VISITOR]["roles"] == [R_GUEST] and discord.members[VISITOR]["nick"] is None
+
+
+def test_when_a_link_ends_guests_lose_the_role_or_are_removed_as_the_site_chose(fc, discord, api_client):
+    token = make_link(api_client, fc)["url"].rsplit("/", 1)[1]
+    join(token)
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    guests.end_due()
+    # By default they stay on the server, without the guest role and under their own name again.
+    assert discord.members[VISITOR] == {"roles": [], "nick": None}
+    assert Client().get(f"{PUBLIC}/guest/{token}").json()["leaves"] is False
+
+    # They can come back through a new link, and with "remove" chosen a newcomer is taken off the server.
+    DiscordSettings.objects.update(guest_end_action="kick")
+    token = make_link(api_client, fc, label="Second visit")["url"].rsplit("/", 1)[1]
+    assert Client().get(f"{PUBLIC}/guest/{token}").json()["leaves"] is True
+    assert join(token).status_code == 200 and R_GUEST in discord.members[VISITOR]["roles"]
+    discord.visitor = SECOND
+    assert join(token).status_code == 200
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    assert guests.end_due() == {"ended": 2, "waiting": 0}
+    assert discord.members[VISITOR] == {"roles": [], "nick": None}  # was here before this link: stays
+    assert SECOND not in discord.members  # came in through it: removed
+
+
+def test_guest_names(fc, discord, api_client):
+    assert guests.guest_nickname("[GUEST] {name}", "x" * 40) == ("[GUEST] " + "x" * 40)[:32]
+    assert guests.guest_nickname("", "Jane") is None and guests.guest_nickname("{nope}", "Jane") is None
+    DiscordSettings.objects.update(guest_nickname_format="")
+    join(make_link(api_client, fc)["url"].rsplit("/", 1)[1])
+    assert discord.members[VISITOR]["nick"] is None and not Guest.objects.get().nick_set
+
+
+def test_a_running_link_can_be_given_more_time(fc, discord, api_client):
+    made = make_link(api_client, fc, hours=4)
+    join(made["url"].rsplit("/", 1)[1])
+    api_client.force_login(fc)
+    resp = api_client.call("post", f"{BASE}/guests/{made['id']}/extend", {"hours": 8})
+    assert resp.status_code == 200, resp.content
+    link = GuestLink.objects.get()
+    assert timedelta(hours=11, minutes=59) < link.expires_at - timezone.now() < timedelta(hours=12, minutes=1)
+    assert guests.end_due() == {"ended": 0, "waiting": 0} and not left(discord)
+    assert AuditEvent.objects.filter(action="discord.guest_link_extended").exists()
+    # Never beyond the longest a link may last, counted from now.
+    resp = api_client.call("post", f"{BASE}/guests/{made['id']}/extend", {"hours": 61})
+    assert resp.status_code == 400 and "at most 72 hours from now" in resp.json()["detail"]
+    assert api_client.call("post", f"{BASE}/guests/{made['id']}/extend", {"hours": 0}).status_code == 400
+    # Somebody else's link can't be extended, nor one that has ended.
+    other = make_user(90000002, "Pilot Two")
+    other.user_permissions.add(Permission.objects.get(codename="create_guest_links"))
+    api_client.force_login(other)
+    assert api_client.call("post", f"{BASE}/guests/{made['id']}/extend", {"hours": 1}).status_code == 404
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    api_client.force_login(fc)
+    resp = api_client.call("post", f"{BASE}/guests/{made['id']}/extend", {"hours": 1})
+    assert resp.status_code == 400 and "has ended" in resp.json()["detail"]
+
+
+def test_history_lists_who_came_through_which_link(fc, discord, api_client):
+    first = make_link(api_client, fc, label="Diplo meeting")
+    join(first["url"].rsplit("/", 1)[1])
+    discord.visitor = SECOND
+    join(make_link(api_client, fc, label="Fleet night")["url"].rsplit("/", 1)[1])
+    api_client.force_login(fc)
+    body = api_client.call("get", f"{BASE}/guests/history").json()
+    assert body["count"] == 2 and [r["link"]["label"] for r in body["items"]] == ["Fleet night", "Diplo meeting"]
+    assert body["items"][0]["invited_by"] == "Pilot One" and body["items"][0]["username"] == "guest2"
+    assert [r["username"] for r in api_client.call("get", f"{BASE}/guests/history?q=diplo").json()["items"]] == ["guest1"]
+    assert api_client.call("get", f"{BASE}/guests/history?q={SECOND}").json()["count"] == 1
+    assert api_client.call("get", f"{BASE}/guests/history?q=guest1").json()["count"] == 1
+    # Someone else who may make links sees only their own guests; a manager sees everyone's.
+    other = make_user(90000002, "Pilot Two")
+    other.user_permissions.add(Permission.objects.get(codename="create_guest_links"))
+    api_client.force_login(other)
+    assert api_client.call("get", f"{BASE}/guests/history").json()["count"] == 0
+    other.user_permissions.add(Permission.objects.get(codename="manage_discord"))
+    api_client.force_login(type(other).objects.get(pk=other.pk))
+    assert api_client.call("get", f"{BASE}/guests/history").json()["count"] == 2
+    nobody = make_user(90000004, "Pilot Four")
+    api_client.force_login(nobody)
+    assert api_client.call("get", f"{BASE}/guests/history").status_code == 403
 
 
 def test_a_members_own_discord_account_cant_come_in_as_a_guest(fc, discord, api_client):
@@ -213,7 +319,7 @@ def test_withdrawing_a_link_removes_its_guests_and_only_its_maker_or_a_manager_m
     assert len(api_client.call("get", f"{BASE}/guests").json()["links"]) == 1
     resp = api_client.call("delete", f"{BASE}/guests/{made['id']}")
     assert resp.status_code == 200 and resp.json()["status"] == "revoked" and resp.json()["waiting"] == 0
-    assert VISITOR not in discord.members and Guest.objects.get().ended_reason == "revoked"
+    assert left(discord) and Guest.objects.get().ended_reason == "revoked"
     assert AuditEvent.objects.filter(action="discord.guest_link_revoked").exists()
 
 
@@ -226,7 +332,7 @@ def test_one_guest_can_be_removed_and_the_link_keeps_working(fc, discord, api_cl
     first = Guest.objects.get(discord_id=VISITOR)
     api_client.force_login(fc)
     resp = api_client.call("delete", f"{BASE}/guests/users/{first.pk}")
-    assert resp.status_code == 200 and VISITOR not in discord.members and SECOND in discord.members
+    assert resp.status_code == 200 and left(discord) and not left(discord, SECOND)
     assert [g["ended_reason"] for g in resp.json()["guests"]] == ["removed", ""]
 
 
@@ -239,7 +345,7 @@ def test_a_guest_stays_recorded_until_discord_can_be_reached(fc, discord, api_cl
     guest = Guest.objects.get()
     assert guest.ended_at is None and guest.error
     discord.down = False
-    assert guests.end_due() == {"ended": 1, "waiting": 0} and VISITOR not in discord.members
+    assert guests.end_due() == {"ended": 1, "waiting": 0} and left(discord)
 
 
 def test_guests_go_when_the_maker_may_no_longer_hand_out_access(fc, discord, api_client):
@@ -247,7 +353,7 @@ def test_guests_go_when_the_maker_may_no_longer_hand_out_access(fc, discord, api
     join(made["url"].rsplit("/", 1)[1])
     fc.user_permissions.remove(Permission.objects.get(codename="create_guest_links"))
     assert guests.end_due() == {"ended": 1, "waiting": 0}
-    assert Guest.objects.get().ended_reason == "creator_lost" and VISITOR not in discord.members
+    assert Guest.objects.get().ended_reason == "creator_lost" and left(discord)
 
 
 def test_a_guest_who_became_a_member_keeps_their_place_and_loses_the_guest_role(fc, discord, api_client):
@@ -267,7 +373,7 @@ def test_the_answer_from_discord_only_counts_in_the_browser_that_asked(fc, disco
     url = asker.post(f"{PUBLIC}/guest/{token}/start", content_type="application/json").json()["url"]
     state = re.search(r"state=([^&]+)", url).group(1)
     resp = Client().post(f"{PUBLIC}/guest-finish", {"code": "good-code", "state": state}, content_type="application/json")
-    assert resp.status_code == 400 and not Guest.objects.exists() and VISITOR not in discord.members
+    assert resp.status_code == 400 and not Guest.objects.exists() and left(discord)
     assert Client().get(f"{PUBLIC}/guest/nope").status_code == 404
 
 
@@ -293,7 +399,7 @@ def test_setting_it_up(fc, discord, api_client):
     join(token)
     api_client.force_login(fc)
     api_client.call("put", f"{BASE}/admin/guests", {"enabled": False, "role_id": R_GUEST, "max_hours": 24})
-    assert VISITOR not in discord.members and Client().get(f"{PUBLIC}/guest/{token}").status_code == 404
+    assert left(discord) and Client().get(f"{PUBLIC}/guest/{token}").status_code == 404
 
 
 # --- only the channels chosen ---------------------------------------------------------------------------------------
@@ -362,7 +468,7 @@ def test_nobody_is_let_in_while_a_channel_cant_be_hidden(manager, discord, api_c
     assert any("#general" in p for p in problems)
     token = make_link(api_client, manager)["url"].rsplit("/", 1)[1]
     resp = join(token)
-    assert resp.status_code == 503 and VISITOR not in discord.members and not Guest.objects.exists()
+    assert resp.status_code == 503 and left(discord) and not Guest.objects.exists()
     discord.locked = set()
     assert join(token).status_code == 200
     assert {c["name"] for c in discord.channels if discord.sees(VISITOR, c["id"])} == {"diplo"}
@@ -386,7 +492,7 @@ def test_a_guest_whose_channels_cant_be_opened_isnt_left_on_the_server(manager, 
     token = make_link(api_client, manager)["url"].rsplit("/", 1)[1]
     discord.locked = {C_DIPLO}  # hidden already, but the bot can't open it to anyone now
     resp = join(token)
-    assert resp.status_code == 502 and VISITOR not in discord.members and not Guest.objects.exists()
+    assert resp.status_code == 502 and left(discord) and not Guest.objects.exists()
 
 
 def test_without_chosen_channels_nothing_on_the_server_is_changed(fc, discord, api_client):
@@ -394,3 +500,111 @@ def test_without_chosen_channels_nothing_on_the_server_is_changed(fc, discord, a
     assert made["channels"] == [] and join(made["url"].rsplit("/", 1)[1]).status_code == 200
     assert all(c["permission_overwrites"] in ([], c["permission_overwrites"]) and not any(o["id"] in (R_GUEST, VISITOR) for o in c["permission_overwrites"]) for c in discord.channels)
     assert not any(path.endswith("/channels") for _m, path in discord.calls)
+
+
+def test_saving_says_what_former_guests_will_see_when_they_stay(manager, discord, api_client):
+    body = choose(api_client, manager, [C_DIPLO])
+    # Left on the server without the guest role, they see what anyone without a role sees.
+    assert body["guest_after_end_sees"] == ["#general", "#diplo", "Fleet"]
+    assert any("without a role sees" in p for p in api_client.call("post", f"{BASE}/admin/check").json()["problems"])
+    body = api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "end_action": "kick"}).json()
+    assert body["guest_after_end_sees"] == [] and body["settings"]["guest_end_action"] == "kick"
+    assert api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "end_action": "burn"}).status_code == 400
+    assert api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "nickname_format": "{who}"}).status_code == 400
+    body = api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, "nickname_format": "{name} (guest)"}).json()
+    assert body["settings"]["guest_nickname_format"] == "{name} (guest)" and body["settings"]["guest_end_action"] == "kick"
+
+
+# --- two roles: the guest role is kept, tempaccess is for the time ---------------------------------------------------
+
+
+@pytest.fixture
+def two_roles(manager):
+    DiscordSettings.objects.update(guest_temp_role_id=R_TEMP, guest_temp_role_name="tempaccess")
+    return manager
+
+
+def test_guests_get_both_roles_and_keep_the_guest_role_when_the_link_ends(two_roles, discord, api_client):
+    made = make_link(api_client, two_roles)
+    assert made["role"] == "tempaccess"
+    overview = api_client.call("get", f"{BASE}/guests").json()
+    assert overview["role"] == "tempaccess" and overview["kept_role"] == "Guest"
+    assert join(made["url"].rsplit("/", 1)[1]).status_code == 200
+    assert discord.members[VISITOR] == {"roles": [R_GUEST, R_TEMP], "nick": "[GUEST] guest1"}
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    assert guests.end_due() == {"ended": 1, "waiting": 0}
+    assert discord.members[VISITOR] == {"roles": [R_GUEST], "nick": None}
+
+    # A former guest comes back through a new link, and loses only tempaccess again.
+    again = make_link(api_client, two_roles, label="Second visit")
+    assert join(again["url"].rsplit("/", 1)[1]).status_code == 200
+    assert sorted(discord.members[VISITOR]["roles"]) == sorted([R_GUEST, R_TEMP])
+    api_client.force_login(two_roles)
+    assert api_client.call("delete", f"{BASE}/guests/{again['id']}").status_code == 200
+    assert discord.members[VISITOR]["roles"] == [R_GUEST]
+    assert Guest.objects.filter(ended_at__isnull=False).count() == 2
+
+
+def test_tempaccess_given_by_hand_is_left_and_removing_guests_still_removes_them(two_roles, discord, api_client):
+    discord.members[VISITOR] = {"roles": [R_TEMP], "nick": None}
+    made = make_link(api_client, two_roles)
+    join(made["url"].rsplit("/", 1)[1])
+    discord.visitor = SECOND
+    DiscordSettings.objects.update(guest_end_action="kick")
+    join(made["url"].rsplit("/", 1)[1])
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    assert guests.end_due() == {"ended": 2, "waiting": 0}
+    assert sorted(discord.members[VISITOR]["roles"]) == sorted([R_GUEST, R_TEMP]) and SECOND not in discord.members
+
+
+def test_with_channels_limited_a_former_guest_sees_nothing(two_roles, discord, api_client):
+    # tempaccess was let into a channel by hand: that would win over the guest role's denial, so it goes.
+    general = next(c for c in discord.channels if c["id"] == C_GENERAL)
+    general["permission_overwrites"].append({"id": R_TEMP, "type": 0, "allow": str(discord_api.VIEW_CHANNEL), "deny": "0"})
+    body = choose(api_client, two_roles, [C_DIPLO, C_VOICE])
+    assert body["guest_channels_seen"] == [] and body["guest_after_end_sees"] == []
+    assert not any("without a role" in p for p in api_client.call("post", f"{BASE}/admin/check").json()["problems"])
+    made = make_link(api_client, two_roles, channels=[C_DIPLO])
+    assert join(made["url"].rsplit("/", 1)[1]).status_code == 200
+    assert {c["name"] for c in discord.channels if discord.sees(VISITOR, c["id"])} == {"diplo"}
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    assert guests.end_due() == {"ended": 1, "waiting": 0}
+    assert discord.members[VISITOR]["roles"] == [R_GUEST]
+    assert not any(discord.sees(VISITOR, c["id"]) for c in discord.channels)
+    # Nothing more to change on a second look.
+    before = len(discord.calls)
+    assert guests.hide_other_channels(DiscordSettings.load()) == []
+    assert not any(m == "PUT" for m, _p in discord.calls[before:])
+
+
+def test_a_guest_who_links_their_account_stops_being_a_guest_at_once(two_roles, discord, api_client):
+    made = make_link(api_client, two_roles)
+    assert join(made["url"].rsplit("/", 1)[1]).status_code == 200
+    # The pilot signs in with that same Discord account as a member.
+    assert link_member(api_client, two_roles).status_code == 200
+    guest = Guest.objects.get()
+    assert guest.ended_reason == "member" and guest.ended_at is not None
+    assert R_GUEST not in discord.members[VISITOR]["roles"] and R_TEMP not in discord.members[VISITOR]["roles"]
+    assert discord.members[VISITOR]["nick"] != "[GUEST] guest1"
+
+
+def test_a_former_guest_who_becomes_a_member_loses_the_guest_role(two_roles, discord, api_client):
+    made = make_link(api_client, two_roles)
+    join(made["url"].rsplit("/", 1)[1])
+    GuestLink.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
+    guests.end_due()
+    assert discord.members[VISITOR]["roles"] == [R_GUEST]
+    assert link_member(api_client, two_roles).status_code == 200
+    assert R_GUEST not in discord.members[VISITOR]["roles"]
+
+
+def test_the_two_roles_have_to_differ(two_roles, discord, api_client):
+    api_client.force_login(two_roles)
+    put = lambda **body: api_client.call("put", f"{BASE}/admin/guests", {"enabled": True, "role_id": R_GUEST, **body})  # noqa: E731
+    assert put(temp_role_id=R_GUEST).status_code == 400 and put(temp_role_id=GUILD).status_code == 400
+    assert put().json()["settings"]["guest_temp_role_id"] == R_TEMP  # not said: left as it is
+    body = put(temp_role_id=R_TEMP, temp_role_name="tempaccess").json()
+    assert body["settings"]["guest_temp_role_name"] == "tempaccess"
+    DiscordSettings.objects.update(guest_temp_role_id="400000000000000077")
+    assert any("temporary role" in p for p in api_client.call("post", f"{BASE}/admin/check").json()["problems"])
+    assert put(temp_role_id="").json()["settings"]["guest_temp_role_id"] == ""

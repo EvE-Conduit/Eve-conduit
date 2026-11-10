@@ -170,6 +170,19 @@ def modify_member(bot_token: str, guild_id: str, user_id: str, **changes) -> Non
     call("PATCH", f"/guilds/{guild_id}/members/{user_id}", bot_token=bot_token, json=changes)
 
 
+def add_role(bot_token: str, guild_id: str, user_id: str, role_id: str) -> None:
+    call("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", bot_token=bot_token)
+
+
+def remove_role(bot_token: str, guild_id: str, user_id: str, role_id: str) -> None:
+    """Take one role away; someone who has left the server, or a role that is gone, counts as done."""
+    try:
+        call("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", bot_token=bot_token)
+    except DiscordError as exc:
+        if exc.status != 404:
+            raise
+
+
 def kick(bot_token: str, guild_id: str, user_id: str) -> None:
     try:
         call("DELETE", f"/guilds/{guild_id}/members/{user_id}", bot_token=bot_token)
