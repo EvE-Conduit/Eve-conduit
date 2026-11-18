@@ -15,7 +15,6 @@ dist/
 
 # Editors and local tools
 **/.ipynb_checkpoints/
-.claude/
 .design-scratch/
 backend/updates/
 
